@@ -1,25 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
   validateDirectoryIsolation,
-} from './engine/fs-adapter';
+} from "./engine/fs-adapter";
 import {
   clearAllConvenienceMetadata,
   listRememberedProjectBindings,
   RememberedProjectBinding,
   removeRememberedProjectBinding,
   saveRememberedProjectBinding,
-} from './engine/idb-store';
+} from "./engine/idb-store";
 import {
   restoreRevisionToFolder,
   restoreSelectedFilesToFolder,
-} from './engine/recovery-service';
-import {
-  captureRevision,
-  ReviewStaleError,
-} from './engine/revision-service';
-import { scanBranchChanges } from './engine/scanner';
+} from "./engine/recovery-service";
+import { captureRevision, ReviewStaleError } from "./engine/revision-service";
+import { scanBranchChanges } from "./engine/scanner";
 import {
   FileSpecificNote,
   MAIN_BRANCH_ID,
@@ -27,28 +24,42 @@ import {
   RestoreResult,
   ScanResult,
   VaultState,
-} from './engine/types';
+} from "./engine/types";
 import {
   formatRevisionNumber,
   initializeProjectVault,
   openExistingVault,
   verifyRevisionObjects,
-} from './engine/vault-service';
-import { ProjectConnectView } from './components/ProjectConnectView';
-import { ChangesCaptureView } from './components/ChangesCaptureView';
-import { HistoryRecoveryView } from './components/HistoryRecoveryView';
-import { DiagnosticsView } from './components/DiagnosticsView';
-import { supportsFileSystemAccessApi } from './utils/format';
+} from "./engine/vault-service";
+import { ProjectConnectView } from "./components/ProjectConnectView";
+import { ChangesCaptureView } from "./components/ChangesCaptureView";
+import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
+import { DiagnosticsView } from "./components/DiagnosticsView";
+import {
+  GitBranch,
+  FolderOpen,
+  History,
+  Settings,
+  ScanLine,
+  HardDrive,
+} from "lucide-react";
+import { IntegrityNotice, Notice, OperationProgress } from "./components/ui";
+import { supportsFileSystemAccessApi } from "./utils/format";
 
-type ActiveTab = 'connect' | 'changes' | 'history' | 'diagnostics';
+type ActiveTab = "connect" | "changes" | "history" | "diagnostics";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('connect');
-  const [rememberedBindings, setRememberedBindings] = useState<RememberedProjectBinding[]>([]);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("connect");
+  const [rememberedBindings, setRememberedBindings] = useState<
+    RememberedProjectBinding[]
+  >([]);
 
   // Active workspace adapters and state
-  const [vaultDir, setVaultDir] = useState<FileSystemDirectoryAdapter | null>(null);
-  const [workingDir, setWorkingDir] = useState<FileSystemDirectoryAdapter | null>(null);
+  const [vaultDir, setVaultDir] = useState<FileSystemDirectoryAdapter | null>(
+    null,
+  );
+  const [workingDir, setWorkingDir] =
+    useState<FileSystemDirectoryAdapter | null>(null);
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
   const [activeBranchId, setActiveBranchId] = useState<string>(MAIN_BRANCH_ID);
 
@@ -61,7 +72,7 @@ export default function App() {
   const [isVerifyingAll, setIsVerifyingAll] = useState<boolean>(false);
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
   const [statusBanner, setStatusBanner] = useState<{
-    type: 'success' | 'error' | 'info';
+    type: "success" | "error" | "info";
     message: string;
   } | null>(null);
 
@@ -94,35 +105,39 @@ export default function App() {
     async (
       targetWorkingDir: FileSystemDirectoryAdapter,
       currentVaultState: VaultState,
-      branchId: string
+      branchId: string,
     ) => {
       const abort = new AbortController();
       abortControllerRef.current = abort;
       setIsScanning(true);
       setProgress({
-        phase: 'scanning_source',
+        phase: "scanning_source",
         processedFiles: 0,
         totalFiles: 0,
         processedBytes: 0,
         totalBytes: 0,
-        message: 'Scanning working folder and computing SHA-256 digests...',
+        message: "Scanning working folder and computing SHA-256 digests...",
       });
 
       try {
         const headRevId = currentVaultState.branchHeads[branchId] ?? null;
         const headRev = headRevId
-          ? currentVaultState.revisions.find((r) => r.manifest.revisionId === headRevId) ?? null
+          ? (currentVaultState.revisions.find(
+              (r) => r.manifest.revisionId === headRevId,
+            ) ?? null)
           : null;
 
         const res = await scanBranchChanges(
           targetWorkingDir,
           branchId,
-          headRev && headRev.integrityStatus !== 'corrupted' ? headRev.manifest : null,
+          headRev && headRev.integrityStatus !== "corrupted"
+            ? headRev.manifest
+            : null,
           {
             signal: abort.signal,
             onProgress: (path, count, bytes) => {
               setProgress({
-                phase: 'scanning_source',
+                phase: "scanning_source",
                 currentFile: path,
                 processedFiles: count,
                 totalFiles: count,
@@ -131,7 +146,7 @@ export default function App() {
                 message: `Hashing ${path}...`,
               });
             },
-          }
+          },
         );
         setScanResult(res);
         return res;
@@ -141,17 +156,18 @@ export default function App() {
         abortControllerRef.current = null;
       }
     },
-    []
+    [],
   );
 
   const persistRealBinding = async (
     state: VaultState,
     vDir: FileSystemDirectoryAdapter,
-    wDir: FileSystemDirectoryAdapter | null
+    wDir: FileSystemDirectoryAdapter | null,
   ) => {
-    if (vDir.kind !== 'real') return;
+    if (vDir.kind !== "real") return;
     const realV = vDir as RealFileSystemAdapter;
-    const realW = wDir && wDir.kind === 'real' ? (wDir as RealFileSystemAdapter) : null;
+    const realW =
+      wDir && wDir.kind === "real" ? (wDir as RealFileSystemAdapter) : null;
 
     const binding: RememberedProjectBinding = {
       projectId: state.project.projectId,
@@ -170,22 +186,26 @@ export default function App() {
   const handleCreateRealProject = async (
     projectName: string,
     selectedWorkingDir: FileSystemDirectoryAdapter,
-    selectedVaultDir: FileSystemDirectoryAdapter
+    selectedVaultDir: FileSystemDirectoryAdapter,
   ) => {
     setStatusBanner(null);
-    const wPerm = await selectedWorkingDir.requestPermission('read');
-    if (wPerm !== 'granted') {
-      throw new Error('Read permission was not granted for the CAD working folder.');
+    const wPerm = await selectedWorkingDir.requestPermission("read");
+    if (wPerm !== "granted") {
+      throw new Error(
+        "Read permission was not granted for the CAD working folder.",
+      );
     }
-    const vPerm = await selectedVaultDir.requestPermission('readwrite');
-    if (vPerm !== 'granted') {
-      throw new Error('Read/write permission was not granted for the revision vault folder.');
+    const vPerm = await selectedVaultDir.requestPermission("readwrite");
+    if (vPerm !== "granted") {
+      throw new Error(
+        "Read/write permission was not granted for the revision vault folder.",
+      );
     }
 
     const state = await initializeProjectVault(
       selectedWorkingDir,
       selectedVaultDir,
-      projectName
+      projectName,
     );
 
     setVaultDir(selectedVaultDir);
@@ -197,33 +217,37 @@ export default function App() {
     await persistRealBinding(state, selectedVaultDir, selectedWorkingDir);
     await runScan(selectedWorkingDir, state, MAIN_BRANCH_ID);
     setStatusBanner({
-      type: 'success',
+      type: "success",
       message: `Initialized vault "${selectedVaultDir.name}" for project "${state.project.name}" and completed initial working folder scan.`,
     });
-    setActiveTab('changes');
+    setActiveTab("changes");
   };
 
   // 2. Open Existing Real Vault
   const handleOpenRealVault = async (
     selectedVaultDir: FileSystemDirectoryAdapter,
-    selectedWorkingDir: FileSystemDirectoryAdapter | null
+    selectedWorkingDir: FileSystemDirectoryAdapter | null,
   ) => {
     setStatusBanner(null);
-    const vPerm = await selectedVaultDir.requestPermission('readwrite');
-    if (vPerm !== 'granted') {
-      throw new Error('Read/write permission is required to open the revision vault.');
+    const vPerm = await selectedVaultDir.requestPermission("readwrite");
+    if (vPerm !== "granted") {
+      throw new Error(
+        "Read/write permission is required to open the revision vault.",
+      );
     }
 
     if (selectedWorkingDir) {
-      const wPerm = await selectedWorkingDir.requestPermission('read');
-      if (wPerm !== 'granted') {
-        throw new Error('Read permission was not granted for the attached working folder.');
+      const wPerm = await selectedWorkingDir.requestPermission("read");
+      if (wPerm !== "granted") {
+        throw new Error(
+          "Read permission was not granted for the attached working folder.",
+        );
       }
       await validateDirectoryIsolation(
         selectedWorkingDir,
         selectedVaultDir,
-        'Working folder',
-        'Revision vault'
+        "Working folder",
+        "Revision vault",
       );
     }
 
@@ -239,26 +263,28 @@ export default function App() {
     if (selectedWorkingDir) {
       await runScan(selectedWorkingDir, state, MAIN_BRANCH_ID);
       setStatusBanner({
-        type: 'success',
+        type: "success",
         message: `Reopened vault "${state.project.name}" (${state.revisions.length} committed revision(s)) and scanned attached working folder.`,
       });
-      setActiveTab('changes');
+      setActiveTab(state.revisions.length ? "history" : "changes");
     } else {
       setScanResult(null);
       setStatusBanner({
-        type: 'info',
+        type: "info",
         message: `Reconstructed project "${state.project.name}" (${state.revisions.length} committed revision(s)) directly from vault files. Reattach a working folder explicitly to scan or save new changes.`,
       });
-      setActiveTab(state.revisions.length > 0 ? 'history' : 'changes');
+      setActiveTab(state.revisions.length > 0 ? "history" : "changes");
     }
   };
 
   // 3. Reconnect Remembered Project from IndexedDB
-  const handleReconnectRemembered = async (binding: RememberedProjectBinding) => {
+  const handleReconnectRemembered = async (
+    binding: RememberedProjectBinding,
+  ) => {
     setStatusBanner(null);
     if (!binding.vaultHandle) {
       throw new Error(
-        'Saved binding does not have a directory handle. Please reopen the vault folder manually.'
+        "Saved binding does not have a directory handle. Please reopen the vault folder manually.",
       );
     }
     const vAdapter = new RealFileSystemAdapter(binding.vaultHandle);
@@ -274,14 +300,14 @@ export default function App() {
     try {
       const res = await runScan(workingDir, vaultState, activeBranchId);
       setStatusBanner({
-        type: 'info',
+        type: "info",
         message: res.hasChanges
           ? `Scan complete: +${res.added.length} added, ~${res.modified.length} modified, -${res.deleted.length} deleted, ${res.unchanged.length} unchanged.`
-          : 'Scan complete: Working folder matches the latest saved revision (no changes).',
+          : "Scan complete: Working folder matches the latest saved revision (no changes).",
       });
     } catch (err) {
       setStatusBanner({
-        type: 'error',
+        type: "error",
         message: err instanceof Error ? err.message : String(err),
       });
     }
@@ -301,37 +327,37 @@ export default function App() {
     setIsCapturing(true);
 
     try {
-      const { revision, vaultState: updatedState, cacheWarning } = await captureRevision(
-        workingDir,
-        vaultDir,
-        {
-          branchId: activeBranchId,
-          summary: params.summary,
-          notes: params.notes,
-          fileNotes: params.fileNotes,
-          reviewedChangesSignature: params.reviewedChangesSignature,
-          signal: abort.signal,
-          onProgress: (p) => setProgress(p),
-        }
-      );
+      const {
+        revision,
+        vaultState: updatedState,
+        cacheWarning,
+      } = await captureRevision(workingDir, vaultDir, {
+        branchId: activeBranchId,
+        summary: params.summary,
+        notes: params.notes,
+        fileNotes: params.fileNotes,
+        reviewedChangesSignature: params.reviewedChangesSignature,
+        signal: abort.signal,
+        onProgress: (p) => setProgress(p),
+      });
 
       setVaultState(updatedState);
       await runScan(workingDir, updatedState, activeBranchId);
 
       setStatusBanner({
-        type: 'success',
+        type: "success",
         message: `Published and verified ${formatRevisionNumber(
-          revision.manifest.displayNumber
+          revision.manifest.displayNumber,
         )} ("${revision.manifest.summary}") with ${
           revision.manifest.files.length
-        } files.${cacheWarning ? ` (${cacheWarning})` : ''}`,
+        } files.${cacheWarning ? ` (${cacheWarning})` : ""}`,
       });
     } catch (err) {
       if (err instanceof ReviewStaleError) {
         setScanResult(err.freshScan);
       }
       setStatusBanner({
-        type: 'error',
+        type: "error",
         message: err instanceof Error ? err.message : String(err),
       });
       throw err;
@@ -349,8 +375,8 @@ export default function App() {
 
     if (!supportsFileSystemAccessApi()) {
       setStatusBanner({
-        type: 'error',
-        message: 'Directory picker is unavailable in this browser context.',
+        type: "error",
+        message: "Directory picker is unavailable in this browser context.",
       });
       return;
     }
@@ -359,58 +385,65 @@ export default function App() {
       const picker = (
         window as unknown as {
           showDirectoryPicker: (opts?: {
-            mode?: 'read' | 'readwrite';
+            mode?: "read" | "readwrite";
           }) => Promise<FileSystemDirectoryHandle>;
         }
       ).showDirectoryPicker;
-      const handle = await picker({ mode: 'read' });
+      const handle = await picker({ mode: "read" });
       const newWDir = new RealFileSystemAdapter(handle);
-      await validateDirectoryIsolation(newWDir, vaultDir, 'Working folder', 'Revision vault');
+      await validateDirectoryIsolation(
+        newWDir,
+        vaultDir,
+        "Working folder",
+        "Revision vault",
+      );
 
       setWorkingDir(newWDir);
       await persistRealBinding(vaultState, vaultDir, newWDir);
       await runScan(newWDir, vaultState, activeBranchId);
       setStatusBanner({
-        type: 'success',
+        type: "success",
         message: `Reattached working folder "${newWDir.name}" and completed a fresh SHA-256 scan.`,
       });
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setStatusBanner({
-        type: 'error',
+        type: "error",
         message: err instanceof Error ? err.message : String(err),
       });
     }
   };
 
   // 7. Pick Destination Folder Helper for Recovery
-  const pickRecoveryDestinationFolder = async (): Promise<FileSystemDirectoryAdapter | null> => {
-    if (!supportsFileSystemAccessApi()) {
-      setStatusBanner({
-        type: 'error',
-        message: 'Directory picker is unavailable in this browser context.',
-      });
-      return null;
-    }
-    try {
-      const picker = (
-        window as unknown as {
-          showDirectoryPicker: (opts?: {
-            mode?: 'read' | 'readwrite';
-          }) => Promise<FileSystemDirectoryHandle>;
-        }
-      ).showDirectoryPicker;
-      const handle = await picker({ mode: 'readwrite' });
-      return new RealFileSystemAdapter(handle);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return null;
-      setStatusBanner({
-        type: 'error',
-        message: err instanceof Error ? err.message : String(err),
-      });
-      return null;
-    }
-  };
+  const pickRecoveryDestinationFolder =
+    async (): Promise<FileSystemDirectoryAdapter | null> => {
+      if (!supportsFileSystemAccessApi()) {
+        setStatusBanner({
+          type: "error",
+          message: "Directory picker is unavailable in this browser context.",
+        });
+        return null;
+      }
+      try {
+        const picker = (
+          window as unknown as {
+            showDirectoryPicker: (opts?: {
+              mode?: "read" | "readwrite";
+            }) => Promise<FileSystemDirectoryHandle>;
+          }
+        ).showDirectoryPicker;
+        const handle = await picker({ mode: "readwrite" });
+        return new RealFileSystemAdapter(handle);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError")
+          return null;
+        setStatusBanner({
+          type: "error",
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      }
+    };
 
   // 8A. Restore Full Project Copy
   const handleRestoreFullProject = async (revisionId: string) => {
@@ -441,17 +474,17 @@ export default function App() {
               ...prev,
               revisions: prev.revisions.map((r) =>
                 r.manifest.revisionId === revisionId
-                  ? { ...r, integrityStatus: 'objects_verified' }
-                  : r
+                  ? { ...r, integrityStatus: "objects_verified" }
+                  : r,
               ),
             }
-          : prev
+          : prev,
       );
 
       setLastRestoreReport({ result });
     } catch (err) {
       setStatusBanner({
-        type: 'error',
+        type: "error",
         message: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -462,15 +495,19 @@ export default function App() {
   };
 
   // 8B. Restore Selected Files as a Copy
-  const handleRestoreSelectedFiles = async (revisionId: string, selectedPaths: string[]) => {
+  const handleRestoreSelectedFiles = async (
+    revisionId: string,
+    selectedPaths: string[],
+  ) => {
     if (!vaultDir || !vaultState) return;
     setStatusBanner(null);
     setLastRestoreReport(null);
 
     if (selectedPaths.length === 0) {
       setStatusBanner({
-        type: 'error',
-        message: 'Select at least one file in the revision inventory before restoring selected files.',
+        type: "error",
+        message:
+          "Select at least one file in the revision inventory before restoring selected files.",
       });
       return;
     }
@@ -496,7 +533,7 @@ export default function App() {
       setLastRestoreReport({ result });
     } catch (err) {
       setStatusBanner({
-        type: 'error',
+        type: "error",
         message: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -508,56 +545,86 @@ export default function App() {
 
   // 9. Verify single or all revision objects
   const handleVerifySingleRevisionObjects = async (revisionId: string) => {
-    if (!vaultDir || !vaultState) return;
-    setStatusBanner(null);
-    const rev = vaultState.revisions.find((r) => r.manifest.revisionId === revisionId);
-    if (!rev) return;
-
-    const verified = await verifyRevisionObjects(vaultDir, rev);
-    const nextRevs = vaultState.revisions.map((r) =>
-      r.manifest.revisionId === revisionId ? verified : r
-    );
-    setVaultState({ ...vaultState, revisions: nextRevs });
-
-    if (verified.integrityStatus === 'objects_verified') {
-      setStatusBanner({
-        type: 'success',
-        message: `All ${verified.manifest.files.length} content objects for ${formatRevisionNumber(
-          verified.manifest.displayNumber
-        )} verified byte-for-byte in the vault.`,
-      });
-    } else {
-      setStatusBanner({
-        type: 'error',
-        message: `Integrity check failed for ${formatRevisionNumber(
-          verified.manifest.displayNumber
-        )}: ${verified.integrityErrors.join('; ')}`,
-      });
-    }
+    await handleVerifyObjects([revisionId]);
   };
 
-  const handleVerifyAllObjects = async () => {
+  const handleVerifyObjects = async (revisionIds: string[]) => {
     if (!vaultDir || !vaultState) return;
+    const abort = new AbortController();
+    abortControllerRef.current = abort;
     setIsVerifyingAll(true);
     setStatusBanner(null);
+    const targets = vaultState.revisions.filter((r) =>
+      revisionIds.includes(r.manifest.revisionId),
+    );
+    const totalFiles = targets.reduce((n, r) => n + r.manifest.files.length, 0);
+    const totalBytes = targets.reduce(
+      (n, r) => n + r.manifest.files.reduce((s, f) => s + f.size, 0),
+      0,
+    );
+    let processedFiles = 0;
+    let processedBytes = 0;
     try {
       const updated = [];
       let anyCorrupt = false;
-      for (const rev of vaultState.revisions) {
-        const v = await verifyRevisionObjects(vaultDir, rev);
-        if (v.integrityStatus === 'corrupted') anyCorrupt = true;
+      for (const rev of targets) {
+        if (abort.signal.aborted)
+          throw new DOMException("Verification cancelled.", "AbortError");
+        setProgress({
+          phase: "verifying_objects",
+          message: `Checking file contents in ${formatRevisionNumber(rev.manifest.displayNumber)}…`,
+          processedFiles,
+          totalFiles,
+          processedBytes,
+          totalBytes,
+        });
+        const v = await verifyRevisionObjects(vaultDir, rev, abort.signal);
+        if (v.integrityStatus === "corrupted") anyCorrupt = true;
         updated.push(v);
+        if (v.integrityStatus === "objects_verified") {
+          processedFiles += v.manifest.files.length;
+          processedBytes += v.manifest.files.reduce((n, f) => n + f.size, 0);
+        }
+        setVaultState((prev) =>
+          prev
+            ? {
+                ...prev,
+                revisions: prev.revisions.map((r) =>
+                  r.manifest.revisionId === v.manifest.revisionId ? v : r,
+                ),
+              }
+            : prev,
+        );
       }
-      setVaultState({ ...vaultState, revisions: updated });
       setStatusBanner({
-        type: anyCorrupt ? 'error' : 'success',
+        type: anyCorrupt ? "error" : "success",
         message: anyCorrupt
-          ? 'One or more revisions failed object integrity verification.'
+          ? "One or more revisions failed object integrity verification."
           : `Verified all content objects across ${updated.length} committed revision(s).`,
+      });
+    } catch (err) {
+      setStatusBanner({
+        type:
+          err instanceof DOMException && err.name === "AbortError"
+            ? "info"
+            : "error",
+        message:
+          err instanceof DOMException && err.name === "AbortError"
+            ? "Verification cancelled. Completed checks have been retained."
+            : err instanceof Error
+              ? err.message
+              : String(err),
       });
     } finally {
       setIsVerifyingAll(false);
+      setProgress(null);
+      abortControllerRef.current = null;
     }
+  };
+  const handleVerifyAllObjects = async () => {
+    await handleVerifyObjects(
+      vaultState?.revisions.map((r) => r.manifest.revisionId) ?? [],
+    );
   };
 
   // 10. Clear Browser Convenience Handles & Reload Vault Only
@@ -571,162 +638,222 @@ export default function App() {
     const reopened = await openExistingVault(vaultDir);
     setVaultState(reopened);
     setStatusBanner({
-      type: 'success',
+      type: "success",
       message: `Cleared remembered browser handles and reloaded "${reopened.project.name}" (${reopened.revisions.length} revision(s)) directly from vault files. Working folder is detached until you click "Reattach Working Folder".`,
     });
-    setActiveTab('changes');
+    setActiveTab("history");
   };
 
   const handleCancelOperation = () => {
     abortControllerRef.current?.abort();
   };
 
+  const busy = isScanning || isCapturing || isRestoring || isVerifyingAll;
+  const navigate = (tab: ActiveTab) => {
+    if (!busy) setActiveTab(tab);
+  };
+  const activeBranch = vaultState?.branches.find(
+    (b) => b.branchId === activeBranchId,
+  );
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      {/* Strict 3-Zone Top Bar Contract */}
-      <header className="flex items-center justify-between gap-8 px-6 py-4 bg-white border-b border-slate-200">
-        {/* Zone 1: Single text element wordmark */}
+    <div className="app-shell">
+      <aside className="navigation-rail">
         <a
-          href="#top"
+          className="wordmark"
+          aria-label="cAdtree projects"
+          href="#projects"
           onClick={(e) => {
             e.preventDefault();
-            setActiveTab(vaultState ? 'changes' : 'connect');
+            navigate("connect");
           }}
-          className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0"
         >
-          cAdtree
+          <svg
+            width="29"
+            height="31"
+            viewBox="0 0 29 31"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M8 25V7M8 18C8 12 21 18 21 7"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+            <circle cx="8" cy="25" r="3" fill="currentColor" />
+            <circle cx="8" cy="6" r="3" fill="currentColor" />
+            <circle cx="21" cy="6" r="3" fill="currentColor" />
+          </svg>
+          <span>
+            cAdtree<span className="wordmark-dot">.</span>
+          </span>
         </a>
-
-        {/* Zone 2: 4 concise single-line text navigation links */}
-        <nav
-          aria-label="Primary navigation"
-          className="flex items-center gap-6 text-sm font-medium text-slate-600 overflow-x-auto"
-        >
+        <p className="rail-caption">DESIGN. RECORD. EVOLVE.</p>
+        <nav aria-label="Primary navigation">
           <button
-            type="button"
-            onClick={() => setActiveTab('connect')}
-            className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 py-1 ${
-              activeTab === 'connect'
-                ? 'text-slate-900 underline underline-offset-8 decoration-2'
-                : ''
-            }`}
+            aria-label="Projects"
+            disabled={busy}
+            aria-current={activeTab === "connect" ? "page" : undefined}
+            onClick={() => navigate("connect")}
           >
-            Projects
+            <FolderOpen size={18} />
+            <span>Projects</span>
+          </button>
+          <div className="rail-divider" />
+          <p className="rail-section-label">WORKSPACE</p>
+          <button
+            aria-label="History"
+            disabled={!vaultState || busy}
+            aria-current={activeTab === "history" ? "page" : undefined}
+            onClick={() => navigate("history")}
+          >
+            <History size={18} />
+            <span>History</span>
           </button>
           <button
-            type="button"
-            disabled={!vaultState}
-            onClick={() => setActiveTab('changes')}
-            className={`hover:text-slate-900 disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 py-1 ${
-              activeTab === 'changes'
-                ? 'text-slate-900 underline underline-offset-8 decoration-2'
-                : ''
-            }`}
+            aria-label="Changes"
+            disabled={!vaultState || busy}
+            aria-current={activeTab === "changes" ? "page" : undefined}
+            onClick={() => navigate("changes")}
           >
-            Changes &amp; Capture
+            <ScanLine size={18} />
+            <span>Changes</span>
+            {scanResult?.hasChanges ? <i className="nav-change-dot" /> : null}
           </button>
           <button
-            type="button"
-            disabled={!vaultState}
-            onClick={() => setActiveTab('history')}
-            className={`hover:text-slate-900 disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 py-1 ${
-              activeTab === 'history'
-                ? 'text-slate-900 underline underline-offset-8 decoration-2'
-                : ''
-            }`}
+            aria-label="Settings"
+            disabled={!vaultState || busy}
+            aria-current={activeTab === "diagnostics" ? "page" : undefined}
+            onClick={() => navigate("diagnostics")}
           >
-            History &amp; Recovery
-          </button>
-          <button
-            type="button"
-            disabled={!vaultState}
-            onClick={() => setActiveTab('diagnostics')}
-            className={`hover:text-slate-900 disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 py-1 ${
-              activeTab === 'diagnostics'
-                ? 'text-slate-900 underline underline-offset-8 decoration-2'
-                : ''
-            }`}
-          >
-            Vault Integrity
+            <Settings size={18} />
+            <span>Settings</span>
           </button>
         </nav>
-
-        {/* Zone 3: 1 primary action */}
-        <div className="flex items-center shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('connect')}
-            className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md transition-colors whitespace-nowrap shrink-0"
-          >
-            {vaultState ? 'Switch Project' : 'Connect Vault'}
-          </button>
+        <div className="rail-bottom">
+          <HardDrive size={17} />
+          <div>
+            <strong>Local by design</strong>
+            <p>Your files. Your storage.</p>
+          </div>
         </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main className="flex-1">
-        {activeTab === 'connect' || !vaultState || !vaultDir ? (
-          <ProjectConnectView
-            rememberedBindings={rememberedBindings}
-            onCreateRealProject={handleCreateRealProject}
-            onOpenRealVault={handleOpenRealVault}
-            onReconnectRemembered={handleReconnectRemembered}
-            onRemoveRemembered={async (id) => {
-              await removeRememberedProjectBinding(id);
-              await refreshRememberedList();
-            }}
-            onClearAllConvenienceMetadata={async () => {
-              await clearAllConvenienceMetadata();
-              await refreshRememberedList();
-            }}
-          />
-        ) : activeTab === 'changes' ? (
-          <ChangesCaptureView
-            vaultState={vaultState}
-            activeBranchId={activeBranchId}
-            workingFolderName={workingDir ? workingDir.name : null}
-            vaultFolderName={vaultDir.name}
-            scanResult={scanResult}
-            isScanStale={isScanStale}
-            isScanning={isScanning}
-            isCapturing={isCapturing}
-            progress={progress}
-            statusBanner={statusBanner}
-            onScan={handleScanCurrent}
-            onCapture={handleCaptureRevision}
-            onCancelOperation={handleCancelOperation}
-            onReattachWorkingFolder={handleReattachWorkingFolder}
-          />
-        ) : activeTab === 'history' ? (
-          <HistoryRecoveryView
-            vaultState={vaultState}
-            activeBranchId={activeBranchId}
-            isRestoring={isRestoring}
-            progress={progress}
-            lastRestoreReport={lastRestoreReport}
-            statusBanner={statusBanner}
-            onRestoreFullProject={handleRestoreFullProject}
-            onRestoreSelectedFiles={handleRestoreSelectedFiles}
-            onVerifySingleRevisionObjects={handleVerifySingleRevisionObjects}
-            onCancelOperation={handleCancelOperation}
-          />
-        ) : (
-          <DiagnosticsView
-            vaultState={vaultState}
-            isVerifyingAll={isVerifyingAll}
-            onVerifyAllObjects={handleVerifyAllObjects}
-            onSimulateClearMetadataAndReopenVault={handleSimulateClearMetadataAndReopenVault}
-          />
-        )}
-      </main>
-
-      {/* Quiet Footer */}
-      <footer className="border-t border-slate-200 bg-white px-6 py-4 text-xs text-slate-500 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <span>cAdtree · Local-First CAD Version Control</span>
-        <span>
-          Your designs. Your versions. Your storage. · Local SHA-256 content addressing
-        </span>
-      </footer>
+      </aside>
+      <div className="workspace-shell">
+        <header className="workspace-header">
+          <div className="workspace-context">
+            <span className="workspace-symbol">
+              <FolderOpen size={17} />
+            </span>
+            <strong>{vaultState?.project.name ?? "Your workspace"}</strong>
+            {vaultState ? (
+              <span className="current-branch">
+                <GitBranch size={14} />
+                {activeBranch?.name ?? "Unknown branch"}
+              </span>
+            ) : null}
+          </div>
+          <span className="local-indicator">
+            <i />
+            Local workspace
+          </span>
+        </header>
+        <main id="main-content">
+          {isVerifyingAll ? (
+            <div className="global-feedback">
+              <OperationProgress
+                progress={progress}
+                onCancel={handleCancelOperation}
+              />
+            </div>
+          ) : null}
+          {statusBanner ? (
+            <div className="global-feedback">
+              <Notice
+                type={statusBanner.type}
+                onDismiss={() => setStatusBanner(null)}
+              >
+                {statusBanner.message}
+              </Notice>
+            </div>
+          ) : null}
+          {vaultState ? (
+            <div className="global-integrity">
+              <IntegrityNotice state={vaultState} />
+            </div>
+          ) : null}
+          {activeTab === "connect" || !vaultState || !vaultDir ? (
+            <ProjectConnectView
+              rememberedBindings={rememberedBindings}
+              onCreateRealProject={handleCreateRealProject}
+              onOpenRealVault={handleOpenRealVault}
+              onReconnectRemembered={handleReconnectRemembered}
+              onRemoveRemembered={async (id) => {
+                await removeRememberedProjectBinding(id);
+                await refreshRememberedList();
+              }}
+              onClearAllConvenienceMetadata={async () => {
+                await clearAllConvenienceMetadata();
+                await refreshRememberedList();
+              }}
+            />
+          ) : null}
+          {vaultState && vaultDir ? (
+            <div key={vaultState.project.projectId}>
+              <div hidden={activeTab !== "changes"}>
+                <ChangesCaptureView
+                  vaultState={vaultState}
+                  activeBranchId={activeBranchId}
+                  workingFolderName={workingDir?.name ?? null}
+                  vaultFolderName={vaultDir.name}
+                  scanResult={scanResult}
+                  isScanStale={isScanStale}
+                  isScanning={isScanning}
+                  isCapturing={isCapturing}
+                  progress={progress}
+                  statusBanner={null}
+                  onScan={handleScanCurrent}
+                  onCapture={handleCaptureRevision}
+                  onCancelOperation={handleCancelOperation}
+                  onReattachWorkingFolder={handleReattachWorkingFolder}
+                />
+              </div>
+              <div hidden={activeTab !== "history"}>
+                <HistoryRecoveryView
+                  vaultState={vaultState}
+                  activeBranchId={activeBranchId}
+                  isRestoring={isRestoring}
+                  progress={progress}
+                  lastRestoreReport={lastRestoreReport}
+                  statusBanner={null}
+                  onRestoreFullProject={handleRestoreFullProject}
+                  onRestoreSelectedFiles={handleRestoreSelectedFiles}
+                  onVerifySingleRevisionObjects={
+                    handleVerifySingleRevisionObjects
+                  }
+                  onCancelOperation={handleCancelOperation}
+                  onGoToChanges={() => navigate("changes")}
+                />
+              </div>
+              <div hidden={activeTab !== "diagnostics"}>
+                <DiagnosticsView
+                  vaultState={vaultState}
+                  isVerifyingAll={isVerifyingAll}
+                  onVerifyAllObjects={handleVerifyAllObjects}
+                  onSimulateClearMetadataAndReopenVault={
+                    handleSimulateClearMetadataAndReopenVault
+                  }
+                  workingFolderName={workingDir?.name ?? null}
+                  vaultFolderName={vaultDir.name}
+                  onReattachWorkingFolder={handleReattachWorkingFolder}
+                />
+              </div>
+            </div>
+          ) : null}
+        </main>
+        <footer className="workspace-footer">
+          <span>cAdtree · CAD project history</span>
+          <span>Complete revisions. Separate recovery copies.</span>
+        </footer>
+      </div>
     </div>
   );
 }

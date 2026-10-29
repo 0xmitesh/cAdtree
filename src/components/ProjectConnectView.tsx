@@ -1,464 +1,375 @@
-import React, { useState } from 'react';
+import { useState } from "react";
 import {
+  ArrowUpRight,
   FolderOpen,
   FolderPlus,
   HardDrive,
-  AlertTriangle,
-  ExternalLink,
-  RefreshCw,
-  Trash2,
-} from 'lucide-react';
+  Plus,
+} from "lucide-react";
 import {
-  FileSystemDirectoryAdapter,
+  type FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
-} from '../engine/fs-adapter';
-import { RememberedProjectBinding } from '../engine/idb-store';
+} from "../engine/fs-adapter";
+import type { RememberedProjectBinding } from "../engine/idb-store";
 import {
   formatTimestamp,
   isEmbeddedIframe,
   supportsFileSystemAccessApi,
-} from '../utils/format';
+} from "../utils/format";
+import { Modal, Notice } from "./ui";
 
 export interface ProjectConnectViewProps {
   rememberedBindings: RememberedProjectBinding[];
   onCreateRealProject: (
-    projectName: string,
-    workingDir: FileSystemDirectoryAdapter,
-    vaultDir: FileSystemDirectoryAdapter
+    name: string,
+    working: FileSystemDirectoryAdapter,
+    vault: FileSystemDirectoryAdapter,
   ) => Promise<void>;
   onOpenRealVault: (
-    vaultDir: FileSystemDirectoryAdapter,
-    workingDir: FileSystemDirectoryAdapter | null
+    vault: FileSystemDirectoryAdapter,
+    working: FileSystemDirectoryAdapter | null,
   ) => Promise<void>;
   onReconnectRemembered: (binding: RememberedProjectBinding) => Promise<void>;
-  onRemoveRemembered: (projectId: string) => Promise<void>;
+  onRemoveRemembered: (id: string) => Promise<void>;
   onClearAllConvenienceMetadata: () => Promise<void>;
 }
-
-export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
+export function ProjectConnectView({
   rememberedBindings,
   onCreateRealProject,
   onOpenRealVault,
   onReconnectRemembered,
   onRemoveRemembered,
-  onClearAllConvenienceMetadata,
-}) => {
-  const [newProjectName, setNewProjectName] = useState('');
-  const [createWorkingDir, setCreateWorkingDir] = useState<RealFileSystemAdapter | null>(null);
-  const [createVaultDir, setCreateVaultDir] = useState<RealFileSystemAdapter | null>(null);
-
-  const [openVaultDir, setOpenVaultDir] = useState<RealFileSystemAdapter | null>(null);
-  const [openWorkingDir, setOpenWorkingDir] = useState<RealFileSystemAdapter | null>(null);
-
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
-
-  const embedded = isEmbeddedIframe();
-  const fsSupported = supportsFileSystemAccessApi();
-
-  const pickDirectory = async (
-    mode: 'read' | 'readwrite',
-    purposeLabel: string
-  ): Promise<RealFileSystemAdapter | null> => {
-    setErrorMsg(null);
-    if (!fsSupported) {
-      setErrorMsg(
-        `Cannot select ${purposeLabel}: This browser does not support the File System Access API (window.showDirectoryPicker). Please use Google Chrome or Microsoft Edge on Windows or desktop.`
-      );
-      return null;
-    }
+}: ProjectConnectViewProps) {
+  const [flow, setFlow] = useState<"create" | "open" | null>(null);
+  const [name, setName] = useState("");
+  const [working, setWorking] = useState<RealFileSystemAdapter | null>(null);
+  const [vault, setVault] = useState<RealFileSystemAdapter | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [forget, setForget] = useState<RememberedProjectBinding | null>(null);
+  const start = (kind: "create" | "open") => {
+    setFlow(kind);
+    setName("");
+    setWorking(null);
+    setVault(null);
+    setError("");
+  };
+  const pick = async (mode: "read" | "readwrite") => {
     try {
-      const picker = (
+      if (!supportsFileSystemAccessApi())
+        throw new Error(
+          "Use Chrome or Edge in a standalone tab to connect local folders.",
+        );
+      const handle = await (
         window as unknown as {
-          showDirectoryPicker: (opts?: {
-            mode?: 'read' | 'readwrite';
+          showDirectoryPicker: (o: {
+            mode: string;
           }) => Promise<FileSystemDirectoryHandle>;
         }
-      ).showDirectoryPicker;
-      const handle = await picker({ mode });
+      ).showDirectoryPicker({ mode });
       return new RealFileSystemAdapter(handle);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        return null;
-      }
-      if (err instanceof DOMException && err.name === 'SecurityError') {
-        setErrorMsg(
-          `Browser blocked directory selection (${purposeLabel}) because this page is running inside an embedded preview frame. Open cAdtree in a standalone top-level browser tab to select local folders.`
-        );
-        return null;
-      }
-      setErrorMsg(
-        `Failed to select ${purposeLabel}: ${err instanceof Error ? err.message : String(err)}`
-      );
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return null;
+      setError(e instanceof Error ? e.message : String(e));
       return null;
     }
   };
-
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    if (!newProjectName.trim()) {
-      setErrorMsg('Enter a project name before creating the vault.');
-      return;
-    }
-    if (!createWorkingDir) {
-      setErrorMsg('Select an existing CAD working folder first.');
-      return;
-    }
-    if (!createVaultDir) {
-      setErrorMsg('Select a separate empty revision vault folder first.');
-      return;
-    }
-    setBusyAction('create');
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError("");
     try {
-      await onCreateRealProject(newProjectName.trim(), createWorkingDir, createVaultDir);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
+      await action();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusyAction(null);
+      setBusy(false);
     }
   };
-
-  const handleOpenVaultSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    if (!openVaultDir) {
-      setErrorMsg('Select an existing cAdtree revision vault directory.');
-      return;
-    }
-    setBusyAction('open');
-    try {
-      await onOpenRealVault(openVaultDir, openWorkingDir);
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 space-y-10">
-      {/* Hero / Tagline */}
-      <section className="space-y-2 border-b border-slate-200 pb-6">
-        <p className="text-xs font-medium text-slate-500">
-          Local-First CAD Version Control &amp; Verified Recovery
-        </p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 text-balance">
-          Your designs. Your versions. Your storage.
-        </h1>
-        <p className="text-base text-slate-600 max-w-3xl leading-relaxed">
-          Preserve saved native CAD project states into a separate local revision vault, record
-          file-specific and overall engineering reasons, and recover verified snapshots or selected
-          files into fresh folders without modifying active working files.
-        </p>
-      </section>
-
-      {/* Environment & Standalone Browser Capability Notice */}
-      {(embedded || !fsSupported) && (
-        <section
-          aria-label="Browser environment notice"
-          className="bg-amber-50/80 border border-amber-200 rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
-        >
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-amber-900 font-semibold text-sm">
-              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>
-                {embedded
-                  ? 'Embedded Preview Detected — Open in Standalone Tab for Local Folder Access'
-                  : 'File System Access API Unavailable in Current Browser'}
-              </span>
-            </div>
-            <p className="text-xs text-amber-800 leading-relaxed max-w-3xl">
-              {embedded
-                ? 'Chromium restricts local folder pickers inside cross-origin preview frames. Open cAdtree in a standalone Chrome or Edge tab to connect your local CAD working folder and revision vault.'
-                : 'Local folder access requires Google Chrome or Microsoft Edge over HTTPS or localhost.'}
-            </p>
-          </div>
+    <div className="page projects-page">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">YOUR LOCAL WORKSPACE</p>
+          <h1>
+            Projects<span className="heading-dot">.</span>
+          </h1>
+          <p>Good engineering deserves a clear history.</p>
+        </div>
+        <button className="button primary" onClick={() => start("create")}>
+          <Plus size={17} />
+          New project
+        </button>
+      </div>
+      {isEmbeddedIframe() || !supportsFileSystemAccessApi() ? (
+        <Notice>
+          Local folder connections need a standalone Chrome or Edge tab.{" "}
           <a
-            href={typeof window !== 'undefined' ? window.location.href : '#'}
+            href={window.location.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-amber-950 bg-white border border-amber-300 rounded-md hover:bg-amber-100 transition-colors whitespace-nowrap shrink-0"
           >
-            <span>Open in Standalone Tab</span>
-            <ExternalLink className="w-3.5 h-3.5" />
+            Open standalone ↗
           </a>
-        </section>
-      )}
-
-      {/* Error Banner */}
-      {errorMsg && (
-        <div
-          role="alert"
-          className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-900 flex items-start gap-3"
-        >
-          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-semibold">Operation Blocked</p>
-            <p className="text-xs text-red-800 leading-relaxed">{errorMsg}</p>
-          </div>
+        </Notice>
+      ) : null}
+      {error && !flow ? <Notice type="error">{error}</Notice> : null}
+      <section className="recent-projects">
+        <div className="section-heading">
+          <h2>Recent projects</h2>
+          <span className="muted">
+            {rememberedBindings.length
+              ? "Saved on this browser"
+              : "All your work stays local"}
+          </span>
         </div>
-      )}
-
-      {/* Two Distinct Primary Actions: Create Project & Open Existing Vault */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-        {/* Action 1: Create Project */}
-        <form
-          onSubmit={handleCreateSubmit}
-          className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between space-y-6"
-        >
-          <div className="space-y-5">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <FolderPlus className="w-5 h-5 text-slate-700" />
-                  <span>01. Create project</span>
-                </h2>
-                <span className="text-xs text-slate-500 font-mono">New Revision Vault</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Select an existing CAD project working folder (read access) and initialize a
-                dedicated empty revision vault folder (read/write access).
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                htmlFor="create-project-name"
-                className="block text-xs font-semibold text-slate-700"
-              >
-                Project Name
-              </label>
-              <input
-                id="create-project-name"
-                type="text"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                placeholder="e.g. Hydraulic Valve Manifold"
-                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-900"
-              />
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-4 py-2.5 border-b border-slate-100">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800">
-                    1. CAD Working Folder (Read Access)
-                  </p>
-                  <p className="text-xs text-slate-500 font-mono truncate">
-                    {createWorkingDir ? (
-                      `Selected: ${createWorkingDir.name}`
-                    ) : (
-                      'Not selected · Save & close CAD files before capture'
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const dir = await pickDirectory('read', 'CAD Working Folder');
-                    if (dir) {
-                      setCreateWorkingDir(dir);
-                      if (!newProjectName.trim()) {
-                        setNewProjectName(dir.name);
-                      }
-                    }
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap shrink-0"
-                >
-                  Select Working Folder
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 py-2.5 border-b border-slate-100">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800">
-                    2. Revision Vault Folder (Read/Write Access)
-                  </p>
-                  <p className="text-xs text-slate-500 font-mono truncate">
-                    {createVaultDir
-                      ? `Selected: ${createVaultDir.name}`
-                      : 'Must be an empty, separate directory outside Working Folder'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const dir = await pickDirectory('readwrite', 'Revision Vault Folder');
-                    if (dir) setCreateVaultDir(dir);
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap shrink-0"
-                >
-                  Select Empty Vault
-                </button>
-              </div>
-            </div>
+        {rememberedBindings.length ? (
+          <div className="project-list">
+            {[...rememberedBindings]
+              .sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))
+              .map((item) => (
+                <article className="project-row" key={item.projectId}>
+                  <div className="project-icon">
+                    <FolderOpen size={24} />
+                  </div>
+                  <div className="project-copy">
+                    <h3>{item.projectName}</h3>
+                    <p>Last opened {formatTimestamp(item.lastOpenedAt)}</p>
+                    <span className="small muted">
+                      {item.vaultFolderName
+                        ? "Vault: " + item.vaultFolderName + " · "
+                        : ""}
+                      Folder access checked when opened
+                    </span>
+                  </div>
+                  <button
+                    className="button secondary"
+                    disabled={busy}
+                    onClick={() => run(() => onReconnectRemembered(item))}
+                  >
+                    Open
+                    <ArrowUpRight size={15} />
+                  </button>
+                  <button
+                    className="text-button forget"
+                    disabled={busy}
+                    onClick={() => setForget(item)}
+                  >
+                    Forget
+                  </button>
+                </article>
+              ))}
           </div>
-
-          <button
-            type="submit"
-            disabled={busyAction !== null}
-            className="w-full py-2.5 px-4 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-md transition-colors whitespace-nowrap"
-          >
-            {busyAction === 'create' ? 'Initializing Vault...' : 'Create Project & Initialize Vault'}
-          </button>
-        </form>
-
-        {/* Action 2: Open Existing Vault */}
-        <form
-          onSubmit={handleOpenVaultSubmit}
-          className="bg-white border border-slate-200 rounded-lg p-6 flex flex-col justify-between space-y-6"
-        >
-          <div className="space-y-5">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <FolderOpen className="w-5 h-5 text-slate-700" />
-                  <span>02. Open existing vault</span>
-                </h2>
-                <span className="text-xs text-slate-500 font-mono">Reopen Repository</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Reopen an existing cAdtree revision vault. Project identity, branches, revision
-                history, and notes are reconstructed directly from committed vault records even if
-                browser data was cleared.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-4 py-2.5 border-b border-slate-100">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800">
-                    1. Existing Vault Directory (Required)
-                  </p>
-                  <p className="text-xs text-slate-500 font-mono truncate">
-                    {openVaultDir
-                      ? `Selected: ${openVaultDir.name}`
-                      : 'Select folder containing project.json & revisions/'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const dir = await pickDirectory('readwrite', 'Existing Vault Directory');
-                    if (dir) setOpenVaultDir(dir);
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap shrink-0"
-                >
-                  Select Existing Vault
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 py-2.5 border-b border-slate-100">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-800">
-                    2. Working Folder for Main (Optional on Reopen)
-                  </p>
-                  <p className="text-xs text-slate-500 font-mono truncate">
-                    {openWorkingDir
-                      ? `Selected: ${openWorkingDir.name}`
-                      : 'Can also be reattached explicitly after opening history'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const dir = await pickDirectory('read', 'CAD Working Folder');
-                    if (dir) setOpenWorkingDir(dir);
-                  }}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap shrink-0"
-                >
-                  Attach Working Folder
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={busyAction !== null}
-            className="w-full py-2.5 px-4 text-xs font-semibold text-slate-900 bg-white border border-slate-900 hover:bg-slate-50 disabled:opacity-50 rounded-md transition-colors whitespace-nowrap"
-          >
-            {busyAction === 'open' ? 'Reconstructing Vault History...' : 'Open Existing Vault'}
-          </button>
-        </form>
-      </section>
-
-      {/* Remembered Projects in IndexedDB */}
-      <section className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-              <HardDrive className="w-4 h-4 text-slate-700" />
-              <span>Remembered Local Projects</span>
-            </h2>
-            <p className="text-xs text-slate-500">
-              Directory handles saved in browser storage for quick reconnection. Permissions are
-              rechecked on reuse. Clearing this list never deletes your vault history.
-            </p>
-          </div>
-          {rememberedBindings.length > 0 && (
-            <button
-              type="button"
-              onClick={onClearAllConvenienceMetadata}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition-colors whitespace-nowrap shrink-0"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear Remembered Handles</span>
-            </button>
-          )}
-        </div>
-
-        {rememberedBindings.length === 0 ? (
-          <p className="text-xs text-slate-500 py-2">
-            No remembered projects stored in this browser yet. Create a new project or open an
-            existing vault above.
-          </p>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {rememberedBindings.map((item) => (
-              <div
-                key={item.projectId}
-                className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-0.5">
-                  <p className="text-sm font-semibold text-slate-900">{item.projectName}</p>
-                  <p className="text-xs text-slate-500 font-mono tabular-nums">
-                    ID: {item.projectId} · Vault: {item.vaultFolderName} · Working:{' '}
-                    {Object.values(item.workingFolderNames)[0] ?? 'Unattached'} · Last opened:{' '}
-                    {formatTimestamp(item.lastOpenedAt)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setErrorMsg(null);
-                      try {
-                        await onReconnectRemembered(item);
-                      } catch (err) {
-                        setErrorMsg(err instanceof Error ? err.message : String(err));
-                      }
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Reconnect &amp; Verify Permissions</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove remembered project ${item.projectName}`}
-                    onClick={() => onRemoveRemembered(item.projectId)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-md transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="projects-empty">
+            <div className="empty-project-art" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <i />
+            </div>
+            <h2>A home for every design decision</h2>
+            <p>
+              Connect a CAD working folder, save milestones, and recover a
+              separate copy whenever you need it.
+            </p>
+            <button className="button primary" onClick={() => start("create")}>
+              <Plus size={16} />
+              Create your first project
+            </button>
           </div>
         )}
       </section>
+      <div className="project-entry-points">
+        <button onClick={() => start("create")}>
+          <FolderPlus size={22} />
+          <span>
+            <strong>Start a new project</strong>
+            <small>
+              Connect a working folder and a separate revision vault.
+            </small>
+          </span>
+          <Plus size={17} />
+        </button>
+        <button onClick={() => start("open")}>
+          <HardDrive size={22} />
+          <span>
+            <strong>Open existing vault</strong>
+            <small>Pick up from history saved on your own storage.</small>
+          </span>
+          <ArrowUpRight size={17} />
+        </button>
+      </div>
+      <p className="local-note">
+        <HardDrive size={15} />
+        Your project files and revision vault stay on your computer.
+      </p>
+      {flow ? (
+        <Modal
+          title={flow === "create" ? "New project" : "Open existing vault"}
+          onClose={() => setFlow(null)}
+          busy={busy}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!vault || (flow === "create" && (!working || !name.trim()))) {
+                setError(
+                  "Choose the required folders and enter a project name.",
+                );
+                return;
+              }
+              run(async () => {
+                if (flow === "create")
+                  await onCreateRealProject(name.trim(), working!, vault);
+                else await onOpenRealVault(vault, working);
+                setFlow(null);
+              });
+            }}
+          >
+            <fieldset disabled={busy}>
+              <p className="muted">
+                {flow === "create"
+                  ? "Your working folder holds your CAD files. A separate vault stores complete saved revisions."
+                  : "Open the folder you previously chose as a revision vault. You can connect a working folder now or later."}
+              </p>
+              {error ? <Notice type="error">{error}</Notice> : null}
+              {flow === "create" ? (
+                <label className="field">
+                  <span>Project name</span>
+                  <input
+                    autoFocus
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Linear actuator"
+                  />
+                </label>
+              ) : null}
+              {flow === "create" ? (
+                <div className="folder-field">
+                  <div>
+                    <strong>CAD working folder</strong>
+                    <p>
+                      {working?.name ?? "Read access to your saved CAD files"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={async () => {
+                      const dir = await pick("read");
+                      if (dir) {
+                        setWorking(dir);
+                        if (!name) setName(dir.name);
+                      }
+                    }}
+                  >
+                    {working ? "Change" : "Choose folder"}
+                  </button>
+                </div>
+              ) : null}
+              <div className="folder-field">
+                <div>
+                  <strong>
+                    {flow === "create"
+                      ? "Separate empty vault"
+                      : "Revision vault"}
+                  </strong>
+                  <p>
+                    {vault?.name ??
+                      (flow === "create"
+                        ? "An empty folder outside your working folder. We need permission to save revisions here."
+                        : "Permission is checked before opening your history.")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={async () => {
+                    const dir = await pick("readwrite");
+                    if (dir) setVault(dir);
+                  }}
+                >
+                  {vault ? "Change" : "Choose vault"}
+                </button>
+              </div>
+              {flow === "open" ? (
+                <div className="folder-field">
+                  <div>
+                    <strong>
+                      Working folder <span className="muted">(optional)</span>
+                    </strong>
+                    <p>
+                      {working?.name ??
+                        "Connect later to scan and save changes."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={async () => {
+                      const dir = await pick("read");
+                      if (dir) setWorking(dir);
+                    }}
+                  >
+                    {working ? "Change" : "Connect"}
+                  </button>
+                </div>
+              ) : null}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => setFlow(null)}
+                >
+                  Cancel
+                </button>
+                <button className="button primary">
+                  {busy
+                    ? "Opening…"
+                    : flow === "create"
+                      ? "Create project"
+                      : "Open project"}
+                </button>
+              </div>
+            </fieldset>
+          </form>
+        </Modal>
+      ) : null}
+      {forget ? (
+        <Modal
+          title="Forget this project?"
+          onClose={() => setForget(null)}
+          busy={busy}
+        >
+          <p>
+            Remove “{forget.projectName}” from this browser’s recent projects.
+            Your CAD files and saved revisions stay in their folders.
+          </p>
+          {error ? <Notice type="error">{error}</Notice> : null}
+          <div className="modal-actions">
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setForget(null)}
+            >
+              Keep project
+            </button>
+            <button
+              className="button secondary danger"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  await onRemoveRemembered(forget.projectId);
+                  setForget(null);
+                })
+              }
+            >
+              Forget project
+            </button>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
-};
+}
