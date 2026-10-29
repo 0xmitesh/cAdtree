@@ -21,6 +21,13 @@ export interface GraphNode {
 }
 export interface RevisionGraph {
   nodes: GraphNode[];
+  branches: {
+    id: string;
+    name: string;
+    color: string;
+    headIds: string[];
+    current: boolean;
+  }[];
   edges: { child: string; parent: string; color: string }[];
   warnings: string[];
   lanes: number;
@@ -111,6 +118,7 @@ export function layoutRevisions(
     queue.sort(compare);
   }
   const lanes = new Map<string, number>();
+  const branchEntries = new Set<string>();
   let nextLane = Math.max(1, branchLane.size);
   for (const id of ordered) {
     const revision = records.get(id)!;
@@ -123,6 +131,11 @@ export function layoutRevisions(
         .filter((s) => records.get(s)!.manifest.branchId === bid)
         .sort(compare);
       lane = siblings[0] === id ? lanes.get(pid)! : nextLane++;
+    } else {
+      // Disconnected records and independent entries into the same branch must
+      // not sit on a path that would imply an unrecorded parent relationship.
+      if (branchEntries.has(bid)) lane = nextLane++;
+      branchEntries.add(bid);
     }
     lanes.set(id, lane);
   }
@@ -176,6 +189,20 @@ export function layoutRevisions(
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   return {
     nodes,
+    branches: branches.map((branch, index) => ({
+      id: branch.branchId,
+      name: branch.name,
+      color: branchColors[index % branchColors.length],
+      current: branch.branchId === activeBranchId,
+      headIds: [
+        ...new Set([
+          ...(state.branchHeads[branch.branchId]
+            ? [state.branchHeads[branch.branchId]!]
+            : []),
+          ...(state.competingHeads[branch.branchId] ?? []),
+        ]),
+      ].filter((id) => records.has(id)),
+    })),
     edges: [...parent].map(([child, pid]) => ({
       child,
       parent: pid,

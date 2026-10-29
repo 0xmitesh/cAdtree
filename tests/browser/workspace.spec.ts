@@ -30,7 +30,7 @@ for (const viewport of [
     ).toBeVisible();
     await page.getByRole("button", { name: "Graph", exact: true }).click();
     await page.getByRole("button", { name: /Rev 002: Refine/ }).focus();
-    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowDown");
     await expect(
       page.getByRole("heading", {
         name: "Add bearing retainer and update drawing",
@@ -94,7 +94,7 @@ for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {
     if (scenario === "long") {
       const latest = page.getByRole("button", { name: /Rev 120:/ });
       await latest.focus();
-      await page.keyboard.press("End");
+      await page.keyboard.press("Home");
       await expect(
         page.getByRole("heading", {
           name: "Initial assembly and component set",

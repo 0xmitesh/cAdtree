@@ -12,6 +12,10 @@ The engine, storage schema, checksums, isolation rules, no-overwrite protections
 
 ## Verification
 
+The supplied GitMastery screenshot informed a follow-up graph refinement: revision numbers inside circular nodes, parent-pointing arrowheads, dedicated branch lanes with turns near shared ancestors, and an ancestry-only branch toolbar with labels at recorded heads. The diagram reads from earlier ancestors at the top to later revisions below; List remains newest first. Missing or damaged parent chains start separate lanes. This uses an original React/SVG implementation in the existing light visual system.
+
+After this refinement, all 27 automated tests, TypeScript checks, and the production build pass. Browser visual verification remains subject to the permission limitation below.
+
 - `npm ci`: reproducible dependency install using the added lockfile. The pre-existing esbuild peer conflict with Vite 8 was corrected.
 - `npm test`: engine acceptance tests plus graph and React DOM integration tests.
 - `npm run lint`: TypeScript check.

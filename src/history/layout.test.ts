@@ -75,3 +75,18 @@ test("120 revisions retain every node and all parent edges", () => {
   assert.equal(graph.lanes, 1);
   assert.equal(graph.nodes[119].row, 119);
 });
+test("disconnected records use distinct lanes rather than appearing on an unrelated parent path", () => {
+  const state = historyState(4);
+  state.revisions[2].manifest.parentRevisionId = "missing";
+  const graph = layoutRevisions(state, "branch-main");
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  assert.notEqual(nodes.get("r2")!.lane, nodes.get("r3")!.lane);
+  assert.equal(nodes.get("r3")!.lane, nodes.get("r4")!.lane);
+  assert.deepEqual(
+    graph.edges.map((edge) => [edge.child, edge.parent]),
+    [
+      ["r2", "r1"],
+      ["r4", "r3"],
+    ],
+  );
+});

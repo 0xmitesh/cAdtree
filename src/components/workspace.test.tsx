@@ -28,6 +28,43 @@ import {
 } from "../engine/recovery-service";
 
 afterEach(cleanup);
+test("diagram labels and arrowheads follow parent identity, with ancestors above children", () => {
+  const state = scenarioState("branches");
+  const ui = render(
+    <HistoryRecoveryView {...historyProps({ vaultState: state })} />,
+  );
+  assert.ok(ui.getByText("R001"));
+  assert.ok(ui.getByText("R008"));
+  const arrows = [
+    ...ui.container.querySelectorAll<SVGPathElement>("path[data-parent]"),
+  ];
+  assert.equal(arrows.length, 7);
+  for (const arrow of arrows) {
+    const marker = arrow.getAttribute("marker-end")!;
+    assert.match(marker, /^url\(#.*-parent-\d+\)$/);
+    assert.ok(ui.container.querySelector('[id="' + marker.slice(5, -1) + '"]'));
+    const coordinates = arrow
+      .getAttribute("d")!
+      .match(/-?\d+(?:\.\d+)?/g)!
+      .map(Number);
+    assert.ok(
+      coordinates[1] > coordinates.at(-1)!,
+      "arrow points upward toward the recorded parent",
+    );
+  }
+  const main = ui.getByRole("button", { name: "Main" });
+  fireEvent.click(main);
+  assert.equal(main.getAttribute("aria-pressed"), "true");
+  assert.equal(
+    ui
+      .getByRole("button", { name: "Main head at Rev 006" })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  assert.ok(
+    ui.getByRole("heading", { name: "Review assembly for manufacture" }),
+  );
+});
 test("branch highlighting and zoom controls change only viewing state", () => {
   const state = scenarioState("branches");
   const before = JSON.stringify(state);
@@ -181,7 +218,7 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   const baseline = ui.getByRole("button", { name: /Rev 001: Initial/ });
   fireEvent.click(baseline);
   assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
-  fireEvent.keyDown(baseline, { key: "ArrowUp" });
+  fireEvent.keyDown(baseline, { key: "ArrowDown" });
   assert.equal(
     ui
       .getByRole("button", { name: /Rev 002: Refine/ })
