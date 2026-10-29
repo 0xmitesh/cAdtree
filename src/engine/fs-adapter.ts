@@ -8,6 +8,11 @@ export interface FileStat {
   lastModified: number;
 }
 
+export interface WriteOptions {
+  signal?: AbortSignal;
+  exclusive?: boolean;
+}
+
 export interface FileSystemDirectoryAdapter {
   readonly name: string;
   readonly kind: 'real' | 'memory';
@@ -16,7 +21,10 @@ export interface FileSystemDirectoryAdapter {
   isSameEntry(other: FileSystemDirectoryAdapter): Promise<boolean>;
   resolveRelativePath(possibleDescendant: FileSystemDirectoryAdapter): Promise<string[] | null>;
   listEntries(): Promise<DirectoryEntryInfo[]>;
-  getDirectory(pathSegments: string[], options?: { create?: boolean }): Promise<FileSystemDirectoryAdapter>;
+  getDirectory(
+    pathSegments: string[],
+    options?: { create?: boolean; exclusiveCheck?: boolean }
+  ): Promise<FileSystemDirectoryAdapter>;
   hasDirectory(pathSegments: string[]): Promise<boolean>;
   hasFile(pathSegments: string[]): Promise<boolean>;
   statFile(pathSegments: string[]): Promise<FileStat>;
@@ -26,10 +34,18 @@ export interface FileSystemDirectoryAdapter {
   writeFileStream(
     pathSegments: string[],
     stream: ReadableStream<Uint8Array>,
-    signal?: AbortSignal
+    signalOrOptions?: AbortSignal | WriteOptions
   ): Promise<{ bytesWritten: number }>;
-  writeFileBytes(pathSegments: string[], data: Uint8Array): Promise<void>;
-  writeFileText(pathSegments: string[], text: string): Promise<void>;
+  writeFileBytes(
+    pathSegments: string[],
+    data: Uint8Array,
+    options?: { exclusive?: boolean }
+  ): Promise<void>;
+  writeFileText(
+    pathSegments: string[],
+    text: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void>;
   removeEntry(pathSegments: string[], options?: { recursive?: boolean }): Promise<void>;
 }
 
@@ -65,11 +81,15 @@ export function splitAndValidatePath(relativePath: string): string[] {
       throw new Error(`Unsafe path "${relativePath}": directory traversal segments are forbidden.`);
     }
     if (segment.endsWith(' ') || segment.endsWith('.')) {
-      throw new Error(`Unsafe path "${relativePath}": segment "${segment}" ends with space or period (invalid on Windows).`);
+      throw new Error(
+        `Unsafe path "${relativePath}": segment "${segment}" ends with space or period (invalid on Windows).`
+      );
     }
     const baseUpper = segment.split('.')[0].toUpperCase();
     if (WINDOWS_RESERVED_NAMES.has(baseUpper)) {
-      throw new Error(`Unsafe path "${relativePath}": "${segment}" is a reserved Windows device name.`);
+      throw new Error(
+        `Unsafe path "${relativePath}": "${segment}" is a reserved Windows device name.`
+      );
     }
   }
 
@@ -149,8 +169,20 @@ export async function validateDirectoryIsolation(
   }
 }
 
+function normalizeWriteOptions(signalOrOptions?: AbortSignal | WriteOptions): WriteOptions {
+  if (!signalOrOptions) return {};
+  if ('aborted' in signalOrOptions) {
+    return { signal: signalOrOptions };
+  }
+  return signalOrOptions;
+}
+
 /**
  * Browser File System Access API implementation of FileSystemDirectoryAdapter.
+ * Note on exclusive writes: the WHATWG File System Access API does not expose an OS-kernel
+ * atomic O_CREAT|O_EXCL flag on getFileHandle(). When exclusive=true is requested,
+ * RealFileSystemAdapter checks for existing file/directory entries immediately prior to
+ * creating the file handle, eliminating in-app overwrites and narrowing external races.
  */
 export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
   readonly kind = 'real' as const;
@@ -226,12 +258,28 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
 
   async getDirectory(
     pathSegments: string[],
-    options?: { create?: boolean }
+    options?: { create?: boolean; exclusiveCheck?: boolean }
   ): Promise<FileSystemDirectoryAdapter> {
     if (pathSegments.length === 0) return this;
     splitAndValidatePath(pathSegments.join('/'));
     let curr = this.handle;
-    for (const seg of pathSegments) {
+    for (let i = 0; i < pathSegments.length; i++) {
+      const seg = pathSegments[i];
+      if (options?.exclusiveCheck && options?.create) {
+        // Ensure a file does not already occupy this path segment
+        try {
+          await curr.getFileHandle(seg, { create: false });
+          throw new Error(
+            `Destination conflict: a file already exists at directory path "${pathSegments
+              .slice(0, i + 1)
+              .join('/')}"`
+          );
+        } catch (err) {
+          if (err instanceof Error && err.message.startsWith('Destination conflict:')) {
+            throw err;
+          }
+        }
+      }
       curr = await curr.getDirectoryHandle(seg, { create: Boolean(options?.create) });
     }
     return new RealFileSystemAdapter(curr);
@@ -288,12 +336,33 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     return file.text();
   }
 
+  private async assertNoExistingEntry(
+    dir: FileSystemDirectoryHandle,
+    leafName: string,
+    relPath: string
+  ): Promise<void> {
+    // Check exact match or case-insensitive collision in parent directory
+    const iterable = dir as unknown as AsyncIterable<[string, FileSystemHandle]>;
+    const targetLower = leafName.toLowerCase();
+    for await (const [existingName] of iterable) {
+      if (existingName === leafName || existingName.toLowerCase() === targetLower) {
+        throw new Error(
+          `Destination conflict: "${relPath}" already exists (collides with "${existingName}"). Recovery refuses to overwrite existing files.`
+        );
+      }
+    }
+  }
+
   async writeFileStream(
     pathSegments: string[],
     stream: ReadableStream<Uint8Array>,
-    signal?: AbortSignal
+    signalOrOptions?: AbortSignal | WriteOptions
   ): Promise<{ bytesWritten: number }> {
+    const { signal, exclusive } = normalizeWriteOptions(signalOrOptions);
     const { dir, leafName } = await this.resolveParentDir(pathSegments, true);
+    if (exclusive) {
+      await this.assertNoExistingEntry(dir, leafName, pathSegments.join('/'));
+    }
     const fileHandle = await dir.getFileHandle(leafName, { create: true });
     const writable = await fileHandle.createWritable();
     const reader = stream.getReader();
@@ -326,8 +395,15 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     }
   }
 
-  async writeFileBytes(pathSegments: string[], data: Uint8Array): Promise<void> {
+  async writeFileBytes(
+    pathSegments: string[],
+    data: Uint8Array,
+    options?: { exclusive?: boolean }
+  ): Promise<void> {
     const { dir, leafName } = await this.resolveParentDir(pathSegments, true);
+    if (options?.exclusive) {
+      await this.assertNoExistingEntry(dir, leafName, pathSegments.join('/'));
+    }
     const fileHandle = await dir.getFileHandle(leafName, { create: true });
     const writable = await fileHandle.createWritable();
     try {
@@ -343,8 +419,12 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     }
   }
 
-  async writeFileText(pathSegments: string[], text: string): Promise<void> {
-    await this.writeFileBytes(pathSegments, new TextEncoder().encode(text));
+  async writeFileText(
+    pathSegments: string[],
+    text: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void> {
+    await this.writeFileBytes(pathSegments, new TextEncoder().encode(text), options);
   }
 
   async removeEntry(pathSegments: string[], options?: { recursive?: boolean }): Promise<void> {
@@ -354,9 +434,8 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
 }
 
 /**
- * Deterministic in-memory filesystem adapter for automated engine tests and the
- * explicitly-labelled Fixture Lab. Supports fault injection, permission states,
- * and streaming chunk reads/writes.
+ * Deterministic in-memory filesystem adapter for automated engine tests.
+ * Supports fault injection, permission states, exclusive write checks, and streaming chunk reads/writes.
  */
 interface MemoryFileNode {
   kind: 'file';
@@ -375,6 +454,7 @@ interface MemoryDirNode {
 }
 
 export interface MemoryFaultHooks {
+  onBeforeListEntries?: (fullPath: string) => void | Promise<void>;
   onBeforeRead?: (fullPath: string) => void | Promise<void>;
   onBeforeWrite?: (fullPath: string) => void | Promise<void>;
   onAfterWrite?: (fullPath: string) => void | Promise<void>;
@@ -415,7 +495,10 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     Object.assign(this.hooks, hooks);
   }
 
-  markFileUnreadable(pathSegments: string[], reason = 'Simulated permission/lock read failure'): void {
+  markFileUnreadable(
+    pathSegments: string[],
+    reason = 'Simulated permission/lock read failure'
+  ): void {
     const { dir, leafName } = this.resolveParentNode(pathSegments, false);
     const entry = dir.children.get(leafName);
     if (!entry || entry.kind !== 'file') {
@@ -426,13 +509,17 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
 
   private assertReadPermission(): void {
     if (this.hooks.readPermission && this.hooks.readPermission !== 'granted') {
-      throw new Error(`Permission denied: read access is ${this.hooks.readPermission} on "${this.name}".`);
+      throw new Error(
+        `Permission denied: read access is ${this.hooks.readPermission} on "${this.name}".`
+      );
     }
   }
 
   private assertWritePermission(): void {
     if (this.hooks.writePermission && this.hooks.writePermission !== 'granted') {
-      throw new Error(`Permission denied: write access is ${this.hooks.writePermission} on "${this.name}".`);
+      throw new Error(
+        `Permission denied: write access is ${this.hooks.writePermission} on "${this.name}".`
+      );
     }
   }
 
@@ -452,7 +539,9 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     return this.node.id === other.node.id;
   }
 
-  async resolveRelativePath(possibleDescendant: FileSystemDirectoryAdapter): Promise<string[] | null> {
+  async resolveRelativePath(
+    possibleDescendant: FileSystemDirectoryAdapter
+  ): Promise<string[] | null> {
     if (!(possibleDescendant instanceof InMemoryFileSystemAdapter)) {
       throw new Error('Cannot resolve path across different adapter types.');
     }
@@ -513,8 +602,20 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     return { dir: curr, leafName: pathSegments[pathSegments.length - 1] };
   }
 
+  private assertExclusiveInDir(dir: MemoryDirNode, leafName: string, relPath: string): void {
+    const targetLower = leafName.toLowerCase();
+    for (const [existingName] of dir.children.entries()) {
+      if (existingName === leafName || existingName.toLowerCase() === targetLower) {
+        throw new Error(
+          `Destination conflict: "${relPath}" already exists (collides with "${existingName}"). Recovery refuses to overwrite existing files.`
+        );
+      }
+    }
+  }
+
   async listEntries(): Promise<DirectoryEntryInfo[]> {
     this.assertReadPermission();
+    await this.hooks.onBeforeListEntries?.(this.getFullPath([]));
     const list: DirectoryEntryInfo[] = [];
     for (const [name, child] of this.node.children.entries()) {
       list.push({ name, kind: child.kind });
@@ -525,7 +626,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
 
   async getDirectory(
     pathSegments: string[],
-    options?: { create?: boolean }
+    options?: { create?: boolean; exclusiveCheck?: boolean }
   ): Promise<FileSystemDirectoryAdapter> {
     this.assertReadPermission();
     if (options?.create) {
@@ -534,11 +635,25 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     if (pathSegments.length === 0) return this;
     splitAndValidatePath(pathSegments.join('/'));
     let curr = this.node;
-    for (const seg of pathSegments) {
+    for (let i = 0; i < pathSegments.length; i++) {
+      const seg = pathSegments[i];
       let next = curr.children.get(seg);
       if (!next) {
         if (!options?.create) {
           throw new Error(`Directory "${seg}" not found.`);
+        }
+        // Check case-insensitive collision with a file when exclusiveCheck is enabled
+        if (options?.exclusiveCheck) {
+          const segLower = seg.toLowerCase();
+          for (const [existingName, existingNode] of curr.children.entries()) {
+            if (existingName.toLowerCase() === segLower && existingNode.kind === 'file') {
+              throw new Error(
+                `Destination conflict: a file "${existingName}" already exists at directory path "${pathSegments
+                  .slice(0, i + 1)
+                  .join('/')}"`
+              );
+            }
+          }
         }
         next = {
           kind: 'directory',
@@ -549,7 +664,11 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
         };
         curr.children.set(seg, next);
       } else if (next.kind !== 'directory') {
-        throw new Error(`"${seg}" is a file, not a directory.`);
+        throw new Error(
+          `Destination conflict: "${pathSegments
+            .slice(0, i + 1)
+            .join('/')}" is a file, not a directory.`
+        );
       }
       curr = next;
     }
@@ -646,16 +765,21 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
   async writeFileStream(
     pathSegments: string[],
     stream: ReadableStream<Uint8Array>,
-    signal?: AbortSignal
+    signalOrOptions?: AbortSignal | WriteOptions
   ): Promise<{ bytesWritten: number }> {
     this.assertWritePermission();
+    const { signal, exclusive } = normalizeWriteOptions(signalOrOptions);
     const fullPath = this.getFullPath(pathSegments);
     await this.hooks.onBeforeWrite?.(fullPath);
 
     const { dir, leafName } = this.resolveParentNode(pathSegments, true);
-    const existing = dir.children.get(leafName);
-    if (existing && existing.kind === 'directory') {
-      throw new Error(`Cannot overwrite directory "${leafName}" with a file.`);
+    if (exclusive) {
+      this.assertExclusiveInDir(dir, leafName, pathSegments.join('/'));
+    } else {
+      const existing = dir.children.get(leafName);
+      if (existing && existing.kind === 'directory') {
+        throw new Error(`Cannot overwrite directory "${leafName}" with a file.`);
+      }
     }
 
     const chunks: Uint8Array[] = [];
@@ -679,6 +803,11 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
       reader.releaseLock();
     }
 
+    // Re-check exclusive right before committing to map in case onBeforeWrite or stream pull mutated target
+    if (exclusive) {
+      this.assertExclusiveInDir(dir, leafName, pathSegments.join('/'));
+    }
+
     const combined = new Uint8Array(total);
     let offset = 0;
     for (const c of chunks) {
@@ -697,15 +826,23 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     return { bytesWritten: total };
   }
 
-  async writeFileBytes(pathSegments: string[], data: Uint8Array): Promise<void> {
+  async writeFileBytes(
+    pathSegments: string[],
+    data: Uint8Array,
+    options?: { exclusive?: boolean }
+  ): Promise<void> {
     this.assertWritePermission();
     const fullPath = this.getFullPath(pathSegments);
     await this.hooks.onBeforeWrite?.(fullPath);
 
     const { dir, leafName } = this.resolveParentNode(pathSegments, true);
-    const existing = dir.children.get(leafName);
-    if (existing && existing.kind === 'directory') {
-      throw new Error(`Cannot overwrite directory "${leafName}" with a file.`);
+    if (options?.exclusive) {
+      this.assertExclusiveInDir(dir, leafName, pathSegments.join('/'));
+    } else {
+      const existing = dir.children.get(leafName);
+      if (existing && existing.kind === 'directory') {
+        throw new Error(`Cannot overwrite directory "${leafName}" with a file.`);
+      }
     }
 
     dir.children.set(leafName, {
@@ -718,8 +855,12 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     await this.hooks.onAfterWrite?.(fullPath);
   }
 
-  async writeFileText(pathSegments: string[], text: string): Promise<void> {
-    await this.writeFileBytes(pathSegments, new TextEncoder().encode(text));
+  async writeFileText(
+    pathSegments: string[],
+    text: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void> {
+    await this.writeFileBytes(pathSegments, new TextEncoder().encode(text), options);
   }
 
   async removeEntry(pathSegments: string[], options?: { recursive?: boolean }): Promise<void> {

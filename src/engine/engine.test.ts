@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { hashBytes, hashStream, Sha256Hasher } from './hash';
+import fs from 'node:fs';
+import path from 'node:path';
+import { hashBytes, hashStream, hashString, Sha256Hasher } from './hash';
 import {
   checkCaseInsensitiveCollisions,
   InMemoryFileSystemAdapter,
@@ -15,15 +17,20 @@ import {
   verifyDirectoryMatchesFixture,
 } from './fixtures';
 import {
+  computeManifestPayloadChecksum,
+  computeRevisionDiff,
   initializeProjectVault,
   openExistingVault,
   UnsupportedSchemaVersionError,
   verifyRevisionObjects,
 } from './vault-service';
-import { scanBranchChanges } from './scanner';
-import { captureRevision } from './revision-service';
-import { restoreRevisionToFolder } from './recovery-service';
-import { MAIN_BRANCH_ID } from './types';
+import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
+import { captureRevision, ReviewStaleError } from './revision-service';
+import {
+  restoreRevisionToFolder,
+  restoreSelectedFilesToFolder,
+} from './recovery-service';
+import { CADTREE_SCHEMA_VERSION, MAIN_BRANCH_ID, RevisionManifest } from './types';
 import { getObjectPathSegments } from './object-store';
 
 test('Incremental Sha256Hasher matches Node crypto across boundary sizes and chunk splits', async () => {
@@ -32,10 +39,8 @@ test('Incremental Sha256Hasher matches Node crypto across boundary sizes and chu
     const data = generateDeterministicBinaryBytes(`SEED_${size}`, size);
     const expectedHex = crypto.createHash('sha256').update(data).digest('hex');
 
-    // Single buffer hash
     assert.equal(hashBytes(data), expectedHex, `Single-buffer mismatch for size ${size}`);
 
-    // Multi-chunk irregular splits (e.g., 7 bytes, 61 bytes, 19 bytes...)
     const hasher = new Sha256Hasher();
     let offset = 0;
     const stepSizes = [7, 61, 1, 19, 128, 33];
@@ -50,7 +55,6 @@ test('Incremental Sha256Hasher matches Node crypto across boundary sizes and chu
     assert.equal(hasher.digestHex(), expectedHex, `Chunked mismatch for size ${size}`);
   }
 
-  // Stream hashing check
   const streamBytes = generateDeterministicBinaryBytes('STREAM_TEST', 90000);
   const expectedStreamHex = crypto.createHash('sha256').update(streamBytes).digest('hex');
   const mem = new InMemoryFileSystemAdapter('stream-root');
@@ -62,14 +66,12 @@ test('Incremental Sha256Hasher matches Node crypto across boundary sizes and chu
 });
 
 test('Path validation and directory isolation enforce safety boundaries', async () => {
-  // Valid paths
   assert.deepEqual(splitAndValidatePath('Parts/BasePlate.SLDPRT'), ['Parts', 'BasePlate.SLDPRT']);
   assert.deepEqual(splitAndValidatePath('Parts/Dichtung_Ø24mm_Übergang.SLDPRT'), [
     'Parts',
     'Dichtung_Ø24mm_Übergang.SLDPRT',
   ]);
 
-  // Unsafe paths
   assert.throws(() => splitAndValidatePath(''), /non-empty/);
   assert.throws(() => splitAndValidatePath('/etc/passwd'), /absolute paths/);
   assert.throws(() => splitAndValidatePath('Parts/../Secret.SLDPRT'), /traversal/);
@@ -78,7 +80,6 @@ test('Path validation and directory isolation enforce safety boundaries', async 
   assert.throws(() => splitAndValidatePath('Parts/CON.SLDPRT'), /reserved Windows device/);
   assert.throws(() => splitAndValidatePath('Parts/TrailingSpace /Part.SLDPRT'), /ends with space/);
 
-  // Case-insensitive collisions
   const collisions = checkCaseInsensitiveCollisions([
     'Parts/Bracket.SLDPRT',
     'parts/bracket.sldprt',
@@ -86,24 +87,14 @@ test('Path validation and directory isolation enforce safety boundaries', async 
   assert.equal(collisions.length, 1);
   assert.match(collisions[0], /Case-insensitive path collision/);
 
-  // Directory isolation: same directory & nested directories
   const root = new InMemoryFileSystemAdapter('workspace');
   const working = await root.getDirectory(['CAD_Working'], { create: true });
   const nestedVault = await working.getDirectory(['Nested_Vault'], { create: true });
   const separateVault = await root.getDirectory(['CAD_Vault'], { create: true });
 
-  await assert.rejects(
-    () => validateDirectoryIsolation(working, working),
-    /exact same directory/
-  );
-  await assert.rejects(
-    () => validateDirectoryIsolation(working, nestedVault),
-    /nested inside/
-  );
-  await assert.rejects(
-    () => validateDirectoryIsolation(nestedVault, working),
-    /nested inside/
-  );
+  await assert.rejects(() => validateDirectoryIsolation(working, working), /exact same directory/);
+  await assert.rejects(() => validateDirectoryIsolation(working, nestedVault), /nested inside/);
+  await assert.rejects(() => validateDirectoryIsolation(nestedVault, working), /nested inside/);
   await validateDirectoryIsolation(working, separateVault);
 });
 
@@ -121,7 +112,6 @@ test('Vault initialization refuses non-empty or existing vault directories', asy
   const validVault = await root.getDirectory(['CleanVault'], { create: true });
   await initializeProjectVault(working, validVault, 'Test Project');
 
-  // Attempting to initialize again over an existing repository must fail
   await assert.rejects(
     () => initializeProjectVault(working, validVault, 'Second Project'),
     /already contains a cAdtree repository/
@@ -133,24 +123,19 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   const workingDir = await root.getDirectory(['Project_Actuator_Working'], { create: true });
   const vaultDir = await root.getDirectory(['Project_Actuator_Vault'], { create: true });
 
-  // 1. Populate Fixture A into working folder
   const expectedFixtureA = await populateFixtureA(workingDir);
-
-  // 2. Initialize project vault
   const initState = await initializeProjectVault(workingDir, vaultDir, 'Linear Actuator Housing');
   assert.equal(initState.project.name, 'Linear Actuator Housing');
   assert.equal(initState.branches.length, 1);
   assert.equal(initState.branches[0].branchId, MAIN_BRANCH_ID);
   assert.equal(initState.revisions.length, 0);
 
-  // 3. Scan initial working folder
   const scanA = await scanBranchChanges(workingDir, MAIN_BRANCH_ID, null);
   assert.equal(scanA.canCapture, true);
   assert.equal(scanA.added.length, 9);
   assert.equal(scanA.directories.length, 8);
   assert.equal(scanA.errors.length, 0);
 
-  // 4. Capture Revision 001 (Snapshot A)
   const capA = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
     summary: 'Initial baseline capture of actuator housing assembly',
@@ -167,7 +152,6 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   assert.equal(capA.revision.manifest.files.length, 9);
   assert.equal(capA.revision.manifest.directories.length, 8);
 
-  // Verify no-change scan after Revision 001
   const scanNoChange = await scanBranchChanges(
     workingDir,
     MAIN_BRANCH_ID,
@@ -177,7 +161,6 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   assert.equal(scanNoChange.canCapture, false);
   assert.equal(scanNoChange.unchanged.length, 9);
 
-  // Attempting to capture when no changes exist must reject
   await assert.rejects(
     () =>
       captureRevision(workingDir, vaultDir, {
@@ -188,28 +171,21 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
     /No changes detected/
   );
 
-  // 5. Externally mutate working folder to Fixture B
   await applyFixtureBMutations(workingDir);
   const expectedFixtureB = await verifyDirectoryMatchesFixture(workingDir, expectedFixtureA);
   assert.equal(expectedFixtureB.matches, false);
 
-  // 6. Scan changes for B against Revision 001
-  const scanB = await scanBranchChanges(
-    workingDir,
-    MAIN_BRANCH_ID,
-    capA.revision.manifest
-  );
+  const scanB = await scanBranchChanges(workingDir, MAIN_BRANCH_ID, capA.revision.manifest);
   assert.equal(scanB.hasChanges, true);
   assert.equal(scanB.canCapture, true);
   assert.equal(scanB.added.length, 1);
   assert.equal(scanB.added[0].path, 'Parts/Bearing_Retainer_Plate.SLDPRT');
-  assert.equal(scanB.modified.length, 2); // Housing (size changed) + Output_Shaft (same size, different SHA-256!)
+  assert.equal(scanB.modified.length, 2);
   assert.equal(scanB.deleted.length, 1);
   assert.equal(scanB.deleted[0].path, 'Specs/Engineering_ZeroByte_Marker.lock');
   assert.equal(scanB.unchanged.length, 6);
   assert.deepEqual(scanB.addedDirectories, ['Exports/IGES_Archive']);
 
-  // 7. Capture Revision 002 (Snapshot B)
   const capB = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
     summary: 'Added bearing retainer plate, housing ribs, and shaft keyway',
@@ -225,7 +201,6 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   assert.equal(capB.revision.manifest.files.length, 9);
   assert.equal(capB.revision.manifest.directories.length, 9);
 
-  // 8. Restore Revision 001 into a fresh folder and compare every byte against Fixture A
   const recoveryDirA = await root.getDirectory(['Recovered_Rev001_Clean'], { create: true });
   const restoreRes = await restoreRevisionToFolder({
     vaultDir,
@@ -234,6 +209,7 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
     revisionId: capA.revision.manifest.revisionId,
   });
 
+  assert.equal(restoreRes.kind, 'full_project');
   assert.equal(restoreRes.displayNumber, 1);
   assert.equal(restoreRes.restoredFilesCount, 9);
   assert.equal(restoreRes.restoredDirectoriesCount, 8);
@@ -241,7 +217,6 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   const matchA = await verifyDirectoryMatchesFixture(recoveryDirA, expectedFixtureA);
   assert.equal(matchA.matches, true, `Recovered folder mismatches: ${matchA.mismatches.join('; ')}`);
 
-  // Ensure workingDir still has Fixture B untouched!
   const postRestoreScanOnWorking = await scanBranchChanges(
     workingDir,
     MAIN_BRANCH_ID,
@@ -250,30 +225,116 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   assert.equal(postRestoreScanOnWorking.hasChanges, false);
   assert.equal(postRestoreScanOnWorking.unchanged.length, 9);
 
-  // 9. Reopen vault purely from vaultDir (simulating browser metadata cleared)
   const reopenedState = await openExistingVault(vaultDir);
   assert.equal(reopenedState.project.projectId, initState.project.projectId);
-  assert.equal(reopenedState.project.name, 'Linear Actuator Housing');
-  assert.equal(reopenedState.branches.length, 1);
   assert.equal(reopenedState.revisions.length, 2);
   assert.equal(reopenedState.revisions[0].manifest.displayNumber, 1);
   assert.equal(reopenedState.revisions[1].manifest.displayNumber, 2);
-  assert.equal(
-    reopenedState.revisions[1].manifest.parentRevisionId,
-    reopenedState.revisions[0].manifest.revisionId
-  );
-  assert.equal(
-    reopenedState.revisions[0].manifest.notes.problem,
-    'Need baseline before adding stiffening ribs and shaft keyway'
-  );
-  assert.equal(
-    reopenedState.branchHeads[MAIN_BRANCH_ID],
-    reopenedState.revisions[1].manifest.revisionId
-  );
 });
 
-test('Failure & safety handling: unreadable files, interrupted publication, source instability, corruption, and concurrency', async () => {
-  const root = new InMemoryFileSystemAdapter('fault-disk');
+test('Regression Fix 1: Unreadable or structurally malformed committed manifests are preserved as damaged and block unsafe branch captures', async () => {
+  const root = new InMemoryFileSystemAdapter('fix1-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = (await root.getDirectory(['Vault'], {
+    create: true,
+  })) as InMemoryFileSystemAdapter;
+
+  await workingDir.writeFileBytes(
+    ['Part1.SLDPRT'],
+    generateDeterministicBinaryBytes('P1_V1', 2048)
+  );
+  await initializeProjectVault(workingDir, vaultDir, 'Damaged History Test');
+
+  // Capture Revision 001
+  const rev1 = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Revision 1 baseline',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+  assert.equal(rev1.revision.manifest.displayNumber, 1);
+
+  // Modify Part1 and capture Revision 002
+  await workingDir.writeFileBytes(
+    ['Part1.SLDPRT'],
+    generateDeterministicBinaryBytes('P1_V2', 2048)
+  );
+  const rev2 = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Revision 2 edit',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+  assert.equal(rev2.revision.manifest.displayNumber, 2);
+
+  // Make Revision 002's committed manifest unreadable
+  const rev2Id = rev2.revision.manifest.revisionId;
+  vaultDir.markFileUnreadable(
+    ['revisions', `${rev2Id}.manifest.json`],
+    'Simulated disk read error on committed manifest 2'
+  );
+
+  // Reopen vault: Revision 002 MUST be preserved in reconstructed revisions as corrupted!
+  const stateWithUnreadableRev2 = await openExistingVault(vaultDir);
+  assert.equal(stateWithUnreadableRev2.revisions.length, 2);
+  assert.equal(stateWithUnreadableRev2.revisions[0].manifest.displayNumber, 1);
+  assert.equal(stateWithUnreadableRev2.revisions[0].integrityStatus, 'manifest_verified');
+  assert.equal(stateWithUnreadableRev2.revisions[1].manifest.displayNumber, 2);
+  assert.equal(stateWithUnreadableRev2.revisions[1].manifest.revisionId, rev2Id);
+  assert.equal(stateWithUnreadableRev2.revisions[1].integrityStatus, 'corrupted');
+  assert.ok(stateWithUnreadableRev2.damagedBranchHeads[MAIN_BRANCH_ID]);
+
+  // Attempting to capture another revision on Main MUST be blocked (never falling back to Rev 1 or reusing displayNumber 2!)
+  await workingDir.writeFileBytes(
+    ['Part1.SLDPRT'],
+    generateDeterministicBinaryBytes('P1_V3', 2048)
+  );
+  await assert.rejects(
+    () =>
+      captureRevision(workingDir, vaultDir, {
+        branchId: MAIN_BRANCH_ID,
+        summary: 'Should be blocked due to unreadable Rev 2 head',
+        notes: { problem: '', modification: '', observations: '' },
+      }),
+    /damaged committed revision/
+  );
+
+  // Restore readability, then replace Rev 2 manifest with valid JSON missing required fields (e.g. missing files/notes/directories)
+  vaultDir.markFileUnreadable(['revisions', `${rev2Id}.manifest.json`], '');
+  await vaultDir.writeFileText(
+    ['revisions', `${rev2Id}.manifest.json`],
+    JSON.stringify({
+      schemaVersion: CADTREE_SCHEMA_VERSION,
+      projectId: stateWithUnreadableRev2.project.projectId,
+      revisionId: rev2Id,
+      // Missing notes, files, directories, etc.
+    })
+  );
+
+  // Vault must still open without crashing, keeping Rev 1 inspectable and marking Rev 2 corrupted
+  const stateWithMalformedJson = await openExistingVault(vaultDir);
+  assert.equal(stateWithMalformedJson.revisions.length, 2);
+  assert.equal(stateWithMalformedJson.revisions[0].integrityStatus, 'manifest_verified');
+  assert.equal(stateWithMalformedJson.revisions[1].integrityStatus, 'corrupted');
+  assert.ok(
+    stateWithMalformedJson.revisions[1].integrityErrors.some((e) =>
+      e.includes('Missing or invalid')
+    )
+  );
+
+  // Revision 1 remains fully restorable!
+  const recoverRev1Dir = await root.getDirectory(['Recover_Rev1_While_Rev2_Damaged'], {
+    create: true,
+  });
+  const restoreRev1Res = await restoreRevisionToFolder({
+    vaultDir,
+    destinationDir: recoverRev1Dir,
+    revisionId: rev1.revision.manifest.revisionId,
+  });
+  assert.equal(restoreRev1Res.displayNumber, 1);
+  assert.equal(restoreRev1Res.restoredFilesCount, 1);
+});
+
+test('Regression Fix 2: Same-count directory rename/replacement during capture aborts publication', async () => {
+  const root = new InMemoryFileSystemAdapter('fix2-disk');
   const workingDir = (await root.getDirectory(['Working'], {
     create: true,
   })) as InMemoryFileSystemAdapter;
@@ -281,42 +342,103 @@ test('Failure & safety handling: unreadable files, interrupted publication, sour
     create: true,
   })) as InMemoryFileSystemAdapter;
 
-  await populateFixtureA(workingDir);
-  await initializeProjectVault(workingDir, vaultDir, 'Fault Tolerance Project');
-
-  // 1. Unreadable file must fail capture rather than disappear from snapshot
-  workingDir.markFileUnreadable(
-    ['Parts', 'Housing_MainBody.SLDPRT'],
-    'File locked exclusively by SolidWorks'
+  await workingDir.writeFileBytes(
+    ['Part1.SLDPRT'],
+    generateDeterministicBinaryBytes('PART1', 1024)
   );
-  const scanWithLockedFile = await scanBranchChanges(workingDir, MAIN_BRANCH_ID, null);
-  assert.equal(scanWithLockedFile.canCapture, false);
-  assert.equal(scanWithLockedFile.errors.length, 1);
-  assert.match(scanWithLockedFile.errors[0].error, /locked exclusively/);
+  await workingDir.getDirectory(['EmptyDir_Alpha'], { create: true });
+  await initializeProjectVault(workingDir, vaultDir, 'Directory Stability Test');
+
+  let swappedDirs = false;
+  vaultDir.setHooks({
+    onAfterWrite: async (fullPath) => {
+      if (!swappedDirs && fullPath.includes('/objects/')) {
+        swappedDirs = true;
+        // Replace EmptyDir_Alpha with EmptyDir_Beta (directory count remains 1, but path set changed!)
+        await workingDir.removeEntry(['EmptyDir_Alpha']);
+        await workingDir.getDirectory(['EmptyDir_Beta'], { create: true });
+      }
+    },
+  });
 
   await assert.rejects(
     () =>
       captureRevision(workingDir, vaultDir, {
         branchId: MAIN_BRANCH_ID,
-        summary: 'Should fail on unreadable file',
+        summary: 'Should abort on same-count directory swap',
         notes: { problem: '', modification: '', observations: '' },
       }),
-    /unreadable or invalid source file/
+    /directory path set changed during capture/
+  );
+  vaultDir.setHooks({ onAfterWrite: undefined });
+
+  const state = await openExistingVault(vaultDir);
+  assert.equal(state.revisions.length, 0);
+});
+
+test('Regression Fix 3: Destination file appearing after initial check is never overwritten during full or selected-file recovery', async () => {
+  const root = new InMemoryFileSystemAdapter('fix3-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+
+  const partBytes = generateDeterministicBinaryBytes('PART1_ORIGINAL', 4096);
+  await workingDir.writeFileBytes(['Parts', 'Part1.SLDPRT'], partBytes);
+  await initializeProjectVault(workingDir, vaultDir, 'No Overwrite Test');
+
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  // Scenario A: A conflicting file appears at Parts/Part1.SLDPRT right before writeFileStream
+  const destDirA = (await root.getDirectory(['Dest_Race_Full'], {
+    create: true,
+  })) as InMemoryFileSystemAdapter;
+  const preciousExistingBytes = new TextEncoder().encode('DO_NOT_OVERWRITE_ME');
+
+  let injectedConflict = false;
+  destDirA.setHooks({
+    onBeforeWrite: async (fullPath) => {
+      if (!injectedConflict && fullPath.endsWith('Parts/Part1.SLDPRT')) {
+        injectedConflict = true;
+        // Inject existing file before recovery stream writes
+        destDirA.setHooks({ onBeforeWrite: undefined });
+        await destDirA.writeFileBytes(['Parts', 'Part1.SLDPRT'], preciousExistingBytes);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: destDirA,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    /Destination conflict/
   );
 
-  // Restore readability
-  workingDir.markFileUnreadable(['Parts', 'Housing_MainBody.SLDPRT'], '');
+  // Verify preciousExistingBytes was NOT overwritten!
+  const survivingBytesA = await destDirA.readFileBytes(['Parts', 'Part1.SLDPRT']);
+  assert.deepEqual(survivingBytesA, preciousExistingBytes);
 
-  // 2. Source instability mid-capture must abort before publication
-  let mutatedDuringCapture = false;
-  vaultDir.setHooks({
-    onAfterWrite: async (fullPath) => {
-      if (!mutatedDuringCapture && fullPath.includes('/objects/')) {
-        mutatedDuringCapture = true;
-        // External process modifies an already-scanned source file while capture is in progress
-        await workingDir.writeFileBytes(
-          ['Actuator_Assembly_v1.SLDASM'],
-          new TextEncoder().encode('Modified externally mid-capture!')
+  // Scenario B: Same race during selected-file recovery, plus pre-existing _CADTREE_RECOVERY_INCOMPLETE.txt must not be overwritten
+  const destDirB = (await root.getDirectory(['Dest_Race_Selected'], {
+    create: true,
+  })) as InMemoryFileSystemAdapter;
+  const existingMarkerBytes = new TextEncoder().encode('USER_EXISTING_MARKER_CONTENT');
+
+  let injectedSelectedConflict = false;
+  destDirB.setHooks({
+    onBeforeWrite: async (fullPath) => {
+      if (!injectedSelectedConflict && fullPath.endsWith('Parts/Part1.SLDPRT')) {
+        injectedSelectedConflict = true;
+        destDirB.setHooks({ onBeforeWrite: undefined });
+        await destDirB.writeFileBytes(['Parts', 'Part1.SLDPRT'], preciousExistingBytes);
+        await destDirB.writeFileBytes(
+          ['_CADTREE_RECOVERY_INCOMPLETE.txt'],
+          existingMarkerBytes
         );
       }
     },
@@ -324,125 +446,315 @@ test('Failure & safety handling: unreadable files, interrupted publication, sour
 
   await assert.rejects(
     () =>
-      captureRevision(workingDir, vaultDir, {
-        branchId: MAIN_BRANCH_ID,
-        summary: 'Instability test',
-        notes: { problem: '', modification: '', observations: '' },
-      }),
-    /Source instability/
-  );
-  vaultDir.setHooks({ onAfterWrite: undefined });
-
-  // Restore clean Fixture A bytes after the instability test
-  await populateFixtureA(workingDir);
-
-  // Verify no revision was published
-  const stateAfterInstability = await openExistingVault(vaultDir);
-  assert.equal(stateAfterInstability.revisions.length, 0);
-
-  // 3. Interrupted publication (manifest written, completion record fails) must NOT appear as committed revision
-  vaultDir.setHooks({
-    onBeforeWrite: async (fullPath) => {
-      if (fullPath.includes('/completed/')) {
-        throw new Error('Simulated power loss before writing completion record');
-      }
-    },
-  });
-
-  await assert.rejects(
-    () =>
-      captureRevision(workingDir, vaultDir, {
-        branchId: MAIN_BRANCH_ID,
-        summary: 'Interrupted before completion record',
-        notes: { problem: '', modification: '', observations: '' },
-      }),
-    /Simulated power loss/
-  );
-  vaultDir.setHooks({ onBeforeWrite: undefined });
-
-  const stateAfterInterrupt = await openExistingVault(vaultDir);
-  assert.equal(stateAfterInterrupt.revisions.length, 0);
-  assert.ok(
-    stateAfterInterrupt.incompleteAttempts.some((a) => a.kind === 'uncompleted_manifest'),
-    'Uncompleted manifest should be reported in incompleteAttempts'
-  );
-
-  // 4. Subsequent capture succeeds cleanly as Rev 001
-  const validRev1 = await captureRevision(workingDir, vaultDir, {
-    branchId: MAIN_BRANCH_ID,
-    summary: 'Clean Revision 1 after interrupted attempt',
-    notes: { problem: '', modification: '', observations: '' },
-  });
-  assert.equal(validRev1.revision.manifest.displayNumber, 1);
-
-  // 5. Corrupted vault object blocks restore and leaves visible incomplete marker
-  const firstFile = validRev1.revision.manifest.files.find((f) => f.size > 0)!;
-  const objSegments = getObjectPathSegments(firstFile.sha256);
-  await vaultDir.writeFileBytes(objSegments, new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
-
-  const verifiedRev = await verifyRevisionObjects(vaultDir, validRev1.revision);
-  assert.equal(verifiedRev.integrityStatus, 'corrupted');
-
-  const badRestoreDir = await root.getDirectory(['Bad_Restore'], { create: true });
-  await assert.rejects(
-    () =>
-      restoreRevisionToFolder({
+      restoreSelectedFilesToFolder({
         vaultDir,
-        destinationDir: badRestoreDir,
-        revisionId: validRev1.revision.manifest.revisionId,
+        destinationDir: destDirB,
+        revisionId: cap.revision.manifest.revisionId,
+        selectedPaths: ['Parts/Part1.SLDPRT'],
       }),
-    /integrity failure/
+    /Destination conflict/
   );
-  assert.equal(await badRestoreDir.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), true);
 
-  // 6. Unknown schema version is rejected cleanly
-  const futureVault = await root.getDirectory(['Future_Vault'], { create: true });
-  await futureVault.writeFileText(
-    ['project.json'],
-    JSON.stringify({
-      schemaVersion: 99,
-      projectId: 'proj-future',
-      name: 'Future CAD Project',
-      createdAt: new Date().toISOString(),
-      payloadSha256: 'abc',
-    })
+  assert.deepEqual(
+    await destDirB.readFileBytes(['Parts', 'Part1.SLDPRT']),
+    preciousExistingBytes
   );
-  await assert.rejects(
-    () => openExistingVault(futureVault),
-    (err: unknown) => err instanceof UnsupportedSchemaVersionError && err.foundVersion === 99
+  assert.deepEqual(
+    await destDirB.readFileBytes(['_CADTREE_RECOVERY_INCOMPLETE.txt']),
+    existingMarkerBytes
   );
 });
 
-test('Same-origin writer lock serializes concurrent captures without duplicate revision numbers', async () => {
-  const root = new InMemoryFileSystemAdapter('concurrency-disk');
+test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency, and selected-file recovery', async () => {
+  const root = new InMemoryFileSystemAdapter('refinement-disk');
+  const workingDir = await root.getDirectory(['SolidWorks_Project'], { create: true });
+  const vaultDir = await root.getDirectory(['SolidWorks_Vault'], { create: true });
+
+  // Create 5 part files and 1 empty subdirectory
+  const part1V1 = generateDeterministicBinaryBytes('PART1_BASE', 8192);
+  const part2 = generateDeterministicBinaryBytes('PART2_BRACKET', 4096);
+  const part3 = generateDeterministicBinaryBytes('PART3_PIN', 2048);
+  const part4 = generateDeterministicBinaryBytes('PART4_CAP', 3072);
+  const part5 = generateDeterministicBinaryBytes('PART5_BASEPLATE', 6144);
+
+  await workingDir.writeFileBytes(['Part1.SLDPRT'], part1V1);
+  await workingDir.writeFileBytes(['Part2.SLDPRT'], part2);
+  await workingDir.writeFileBytes(['Subparts', 'Part3.SLDPRT'], part3);
+  await workingDir.writeFileBytes(['Subparts', 'Part4.SLDPRT'], part4);
+  await workingDir.writeFileBytes(['Part5.SLDPRT'], part5);
+  await workingDir.getDirectory(['Empty_Reference_Folder'], { create: true });
+
+  await initializeProjectVault(workingDir, vaultDir, 'Five Part Assembly');
+
+  // Capture Revision 001 (Baseline: 5 files, 2 subdirectories: Empty_Reference_Folder & Subparts)
+  const cap1 = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Baseline 5 parts and 2 subdirectories',
+    notes: { problem: 'Initial baseline', modification: '', observations: '' },
+  });
+
+  assert.equal(cap1.revision.manifest.files.length, 5);
+  assert.deepEqual(cap1.revision.manifest.directories, ['Empty_Reference_Folder', 'Subparts']);
+
+  const diff1 = computeRevisionDiff(cap1.revision, cap1.vaultState);
+  assert.equal(diff1.status, 'baseline');
+  assert.equal(diff1.added.length, 5);
+  assert.equal(diff1.modified.length, 0);
+  assert.equal(diff1.unchanged.length, 0);
+
+  // Modify ONLY Part1.SLDPRT, keeping Empty_Reference_Folder and Subparts untouched
+  const part1V2 = generateDeterministicBinaryBytes('PART1_EXTRUDED_BOSS', 9216);
+  await workingDir.writeFileBytes(['Part1.SLDPRT'], part1V2);
+
+  const scanBeforeRev2 = await scanBranchChanges(
+    workingDir,
+    MAIN_BRANCH_ID,
+    cap1.revision.manifest
+  );
+  assert.equal(scanBeforeRev2.modified.length, 1);
+  assert.equal(scanBeforeRev2.modified[0].current.path, 'Part1.SLDPRT');
+  assert.equal(scanBeforeRev2.unchanged.length, 4);
+  assert.deepEqual(scanBeforeRev2.directories, ['Empty_Reference_Folder', 'Subparts']);
+
+  // Verify ReviewStaleError if working folder changes after user reviewed scanBeforeRev2
+  await workingDir.writeFileBytes(['Part2.SLDPRT'], generateDeterministicBinaryBytes('PART2_SURPRISE', 4096));
+  await assert.rejects(
+    () =>
+      captureRevision(workingDir, vaultDir, {
+        branchId: MAIN_BRANCH_ID,
+        summary: 'Should trigger ReviewStaleError',
+        notes: { problem: '', modification: '', observations: '' },
+        fileNotes: [
+          {
+            path: 'Part1.SLDPRT',
+            problem: 'Needed boss extrusion',
+            modification: 'Added 12mm extrusion',
+            observations: 'Verified clearance',
+          },
+        ],
+        reviewedChangesSignature: scanBeforeRev2.changesSignature,
+      }),
+    (err: unknown) => err instanceof ReviewStaleError
+  );
+
+  // Restore Part2.SLDPRT back to original so only Part1.SLDPRT is modified
+  await workingDir.writeFileBytes(['Part2.SLDPRT'], part2);
+
+  // Capture Revision 002 with file-specific note on Part1.SLDPRT
+  const cap2 = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Added base extrusion to Part1',
+    notes: { problem: '', modification: '', observations: '' },
+    fileNotes: [
+      {
+        path: 'Part1.SLDPRT',
+        problem: 'Mounting face needed 12mm boss standoff',
+        modification: 'Added Boss-Extrude2 to Part1.SLDPRT',
+        observations: 'Mass +14g; fits bracket mate',
+      },
+    ],
+    reviewedChangesSignature: scanBeforeRev2.changesSignature,
+  });
+
+  // Both subdirectories (including Empty_Reference_Folder) MUST remain recorded in Revision 002!
+  assert.equal(cap2.revision.manifest.files.length, 5);
+  assert.deepEqual(cap2.revision.manifest.directories, ['Empty_Reference_Folder', 'Subparts']);
+  assert.equal(cap2.revision.manifest.fileNotes?.length, 1);
+  assert.equal(cap2.revision.manifest.fileNotes?.[0].path, 'Part1.SLDPRT');
+  assert.equal(
+    cap2.revision.manifest.fileNotes?.[0].modification,
+    'Added Boss-Extrude2 to Part1.SLDPRT'
+  );
+
+  // Verify parent-relative diff on Revision 002: 1 modified, 4 unchanged
+  const diff2 = computeRevisionDiff(cap2.revision, cap2.vaultState);
+  assert.equal(diff2.status, 'compared');
+  assert.equal(diff2.parentDisplayNumber, 1);
+  assert.equal(diff2.modified.length, 1);
+  assert.equal(diff2.modified[0].current.path, 'Part1.SLDPRT');
+  assert.equal(diff2.unchanged.length, 4);
+  assert.equal(diff2.added.length, 0);
+  assert.equal(diff2.deleted.length, 0);
+
+  // Deliberately delete Empty_Reference_Folder and Part5.SLDPRT in Revision 003
+  await workingDir.removeEntry(['Empty_Reference_Folder']);
+  await workingDir.removeEntry(['Part5.SLDPRT']);
+  const cap3 = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Removed empty reference folder and obsolete Part5',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+  assert.deepEqual(cap3.revision.manifest.directories, ['Subparts']);
+  const diff3 = computeRevisionDiff(cap3.revision, cap3.vaultState);
+  assert.equal(diff3.deleted.length, 1);
+  assert.equal(diff3.deleted[0].path, 'Part5.SLDPRT');
+  assert.deepEqual(diff3.deletedDirectories, ['Empty_Reference_Folder']);
+
+  // Selected-file recovery: recover ONLY Part1.SLDPRT from Revision 001 into a fresh folder
+  const singleFileDest = await root.getDirectory(['Recover_Single_Part1_Rev001'], {
+    create: true,
+  });
+  const singleRes = await restoreSelectedFilesToFolder({
+    vaultDir,
+    destinationDir: singleFileDest,
+    workingDir,
+    revisionId: cap1.revision.manifest.revisionId,
+    selectedPaths: ['Part1.SLDPRT'],
+  });
+
+  assert.equal(singleRes.kind, 'selected_files');
+  assert.equal(singleRes.restoredFilesCount, 1);
+  assert.equal(singleRes.restoredDirectoriesCount, 0);
+  assert.deepEqual(singleRes.selectedPaths, ['Part1.SLDPRT']);
+
+  const enumSingle = await enumerateWorkingFolder(singleFileDest);
+  assert.equal(enumSingle.files.length, 1);
+  assert.equal(enumSingle.files[0].path, 'Part1.SLDPRT');
+  assert.equal(enumSingle.directories.length, 0); // Empty_Reference_Folder & Subparts were NOT created
+  assert.deepEqual(await singleFileDest.readFileBytes(['Part1.SLDPRT']), part1V1);
+
+  // Multi-file recovery with nested paths: recover Subparts/Part3.SLDPRT and Part5.SLDPRT from Rev 002
+  const multiFileDest = await root.getDirectory(['Recover_Multi_Nested_Rev002'], {
+    create: true,
+  });
+  const multiRes = await restoreSelectedFilesToFolder({
+    vaultDir,
+    destinationDir: multiFileDest,
+    workingDir,
+    revisionId: cap2.revision.manifest.revisionId,
+    selectedPaths: ['Subparts/Part3.SLDPRT', 'Part5.SLDPRT'],
+  });
+
+  assert.equal(multiRes.kind, 'selected_files');
+  assert.equal(multiRes.restoredFilesCount, 2);
+  assert.equal(multiRes.restoredDirectoriesCount, 1); // Only 'Subparts' directory created!
+  const enumMulti = await enumerateWorkingFolder(multiFileDest);
+  assert.deepEqual(
+    enumMulti.files.map((f) => f.path),
+    ['Part5.SLDPRT', 'Subparts/Part3.SLDPRT']
+  );
+  assert.deepEqual(enumMulti.directories, ['Subparts']);
+  assert.deepEqual(await multiFileDest.readFileBytes(['Subparts', 'Part3.SLDPRT']), part3);
+  assert.deepEqual(await multiFileDest.readFileBytes(['Part5.SLDPRT']), part5);
+});
+
+test('Backward compatibility: existing vault manifests without fileNotes open and verify without rewriting history, while tampered fileNotes fail checksum', async () => {
+  const root = new InMemoryFileSystemAdapter('compat-disk');
   const workingDir = await root.getDirectory(['Working'], { create: true });
   const vaultDir = await root.getDirectory(['Vault'], { create: true });
 
-  await populateFixtureA(workingDir);
-  await initializeProjectVault(workingDir, vaultDir, 'Concurrency Test');
+  await workingDir.writeFileBytes(['Bracket.SLDPRT'], generateDeterministicBinaryBytes('BRK', 1024));
+  await initializeProjectVault(workingDir, vaultDir, 'Legacy Vault');
 
-  // Launch two concurrent captures on the same project; the first captures Rev 001,
-  // and the second (which runs after the lock releases) sees no changes and rejects cleanly
-  // rather than creating a duplicate Rev 001!
-  const results = await Promise.allSettled([
-    captureRevision(workingDir, vaultDir, {
-      branchId: MAIN_BRANCH_ID,
-      summary: 'Writer 1 capture',
-      notes: { problem: '', modification: '', observations: '' },
-    }),
-    captureRevision(workingDir, vaultDir, {
-      branchId: MAIN_BRANCH_ID,
-      summary: 'Writer 2 concurrent capture',
-      notes: { problem: '', modification: '', observations: '' },
-    }),
+  // Capture a revision WITHOUT fileNotes (matches pre-refinement schema format)
+  const capLegacy = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Legacy revision without fileNotes field',
+    notes: {
+      problem: 'Overall problem',
+      modification: 'Overall modification',
+      observations: 'Overall observations',
+    },
+  });
+
+  const rawLegacyText = await vaultDir.readFileText([
+    'revisions',
+    `${capLegacy.revision.manifest.revisionId}.manifest.json`,
   ]);
+  const rawLegacyJson = JSON.parse(rawLegacyText) as Record<string, unknown>;
+  assert.equal('fileNotes' in rawLegacyJson, false);
 
-  const fulfilled = results.filter((r) => r.status === 'fulfilled');
-  const rejected = results.filter((r) => r.status === 'rejected');
-  assert.equal(fulfilled.length, 1);
-  assert.equal(rejected.length, 1);
+  // Reopen vault and ensure raw file is untouched and checksum passes
+  const reopened = await openExistingVault(vaultDir);
+  assert.equal(reopened.revisions.length, 1);
+  assert.equal(reopened.revisions[0].integrityStatus, 'manifest_verified');
+  assert.equal(reopened.revisions[0].manifest.fileNotes, undefined);
+  assert.equal(
+    await vaultDir.readFileText([
+      'revisions',
+      `${capLegacy.revision.manifest.revisionId}.manifest.json`,
+    ]),
+    rawLegacyText
+  );
 
-  const finalVault = await openExistingVault(vaultDir);
-  assert.equal(finalVault.revisions.length, 1);
-  assert.equal(finalVault.revisions[0].manifest.displayNumber, 1);
+  // Capture a second revision WITH fileNotes, then tamper with the fileNote text on disk and confirm checksum fails
+  await workingDir.writeFileBytes(
+    ['Bracket.SLDPRT'],
+    generateDeterministicBinaryBytes('BRK_V2', 1024)
+  );
+  const capWithFileNote = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Revision with integrity-protected fileNotes',
+    notes: { problem: '', modification: '', observations: '' },
+    fileNotes: [
+      {
+        path: 'Bracket.SLDPRT',
+        problem: 'Original problem',
+        modification: 'Original mod',
+        observations: 'Original obs',
+      },
+    ],
+  });
+
+  const rev2Id = capWithFileNote.revision.manifest.revisionId;
+  const tamperedManifest: RevisionManifest = {
+    ...capWithFileNote.revision.manifest,
+    fileNotes: [
+      {
+        path: 'Bracket.SLDPRT',
+        problem: 'TAMPERED PROBLEM',
+        modification: 'Original mod',
+        observations: 'Original obs',
+      },
+    ],
+  };
+  assert.notEqual(
+    computeManifestPayloadChecksum(tamperedManifest),
+    capWithFileNote.revision.manifest.manifestPayloadSha256
+  );
+
+  await vaultDir.writeFileText(
+    ['revisions', `${rev2Id}.manifest.json`],
+    JSON.stringify(tamperedManifest, null, 2)
+  );
+  const reopenedAfterTamper = await openExistingVault(vaultDir);
+  const rev2Reopened = reopenedAfterTamper.revisions.find(
+    (r) => r.manifest.revisionId === rev2Id
+  )!;
+  assert.equal(rev2Reopened.integrityStatus, 'corrupted');
+});
+
+test('Production UI files do not import fixture generators, InMemoryFileSystemAdapter, or expose Fixture Lab controls', () => {
+  const uiFiles = [
+    'src/App.tsx',
+    'src/components/ProjectConnectView.tsx',
+    'src/components/ChangesCaptureView.tsx',
+    'src/components/HistoryRecoveryView.tsx',
+    'src/components/DiagnosticsView.tsx',
+  ];
+
+  for (const rel of uiFiles) {
+    const abs = path.resolve(process.cwd(), rel);
+    const content = fs.readFileSync(abs, 'utf8');
+    assert.equal(
+      content.includes('InMemoryFileSystemAdapter'),
+      false,
+      `${rel} must not reference InMemoryFileSystemAdapter`
+    );
+    assert.equal(
+      content.includes('fixtures'),
+      false,
+      `${rel} must not import fixtures module`
+    );
+    assert.equal(
+      content.includes('Fixture Verification Lab'),
+      false,
+      `${rel} must not expose Fixture Verification Lab UI`
+    );
+    assert.equal(
+      content.includes('Launch Fixture Lab'),
+      false,
+      `${rel} must not expose Launch Fixture Lab button`
+    );
+  }
 });

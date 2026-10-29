@@ -34,6 +34,13 @@ export interface RevisionNotes {
   observations: string;
 }
 
+export interface FileSpecificNote {
+  path: string;
+  problem: string;
+  modification: string;
+  observations: string;
+}
+
 export interface RevisionManifest {
   schemaVersion: number;
   projectId: string;
@@ -45,6 +52,7 @@ export interface RevisionManifest {
   captureCompletedAt: string;
   summary: string;
   notes: RevisionNotes;
+  fileNotes?: FileSpecificNote[];
   directories: string[];
   files: FileEntry[];
   manifestPayloadSha256: string;
@@ -86,6 +94,7 @@ export interface ScanResult {
   hasChanges: boolean;
   canCapture: boolean;
   totalBytes: number;
+  changesSignature: string;
 }
 
 export type RevisionIntegrityStatus =
@@ -98,6 +107,20 @@ export interface ReconstructedRevision {
   completion: CompletionRecord;
   integrityStatus: RevisionIntegrityStatus;
   integrityErrors: string[];
+}
+
+export interface RevisionDiffResult {
+  status: 'baseline' | 'compared' | 'unavailable';
+  unavailableReason?: string;
+  parentRevisionId: string | null;
+  parentDisplayNumber: number | null;
+  added: FileEntry[];
+  modified: ModifiedFileChange[];
+  deleted: FileEntry[];
+  unchanged: FileEntry[];
+  addedDirectories: string[];
+  deletedDirectories: string[];
+  unchangedDirectories: string[];
 }
 
 export interface CorruptedVaultRecord {
@@ -119,6 +142,7 @@ export interface VaultState {
   revisions: ReconstructedRevision[];
   branchHeads: Record<string, string | null>;
   competingHeads: Record<string, string[]>;
+  damagedBranchHeads: Record<string, string>;
   incompleteAttempts: IncompleteAttemptRecord[];
   corruptedRecords: CorruptedVaultRecord[];
 }
@@ -147,13 +171,17 @@ export interface CaptureRevisionInput {
   branchId: string;
   summary: string;
   notes: RevisionNotes;
+  fileNotes?: FileSpecificNote[];
+  reviewedChangesSignature?: string;
   onProgress?: (progress: ProgressUpdate) => void;
   signal?: AbortSignal;
 }
 
 export interface RestoreResult {
+  kind: 'full_project' | 'selected_files';
   revisionId: string;
   displayNumber: number;
+  selectedPaths?: string[];
   restoredFilesCount: number;
   restoredDirectoriesCount: number;
   verifiedBytes: number;

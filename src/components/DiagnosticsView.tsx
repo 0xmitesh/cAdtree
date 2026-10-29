@@ -3,7 +3,6 @@ import {
   ShieldCheck,
   AlertTriangle,
   Database,
-  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { VaultState } from '../engine/types';
@@ -12,21 +11,20 @@ import { formatTimestamp, shortHash } from '../utils/format';
 
 export interface DiagnosticsViewProps {
   vaultState: VaultState;
-  adapterMode: 'real' | 'memory';
   isVerifyingAll: boolean;
   onVerifyAllObjects: () => Promise<void>;
   onSimulateClearMetadataAndReopenVault: () => Promise<void>;
-  onInjectIncompleteManifestFault?: () => Promise<void>;
 }
 
 export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
   vaultState,
-  adapterMode,
   isVerifyingAll,
   onVerifyAllObjects,
   onSimulateClearMetadataAndReopenVault,
-  onInjectIncompleteManifestFault,
 }) => {
+  const damagedBranchesCount = Object.keys(vaultState.damagedBranchHeads).length;
+  const competingBranchesCount = Object.keys(vaultState.competingHeads).length;
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
       {/* Header */}
@@ -38,11 +36,11 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
             {shortHash(vaultState.project.payloadSha256, 16)}
           </p>
           <h1 className="text-xl font-bold text-slate-900">
-            Vault Integrity, Metadata Independence &amp; Interrupted Work Diagnostics
+            Vault Integrity &amp; Repository Diagnostics
           </h1>
           <p className="text-xs text-slate-600 max-w-3xl">
             Verify stored binary objects against their SHA-256 digests, inspect uncommitted staging
-            artifacts, and test reopening the vault after clearing all browser IndexedDB metadata.
+            artifacts, and verify that vault history reopens cleanly without browser storage.
           </p>
         </div>
 
@@ -67,17 +65,16 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
           <div className="space-y-1 max-w-3xl">
             <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2 text-balance">
               <Database className="w-4 h-4 text-slate-700 shrink-0" />
-              <span>Test Vault Reopen After Clearing Browser Metadata</span>
+              <span>Reload Vault Without Browser Convenience Metadata</span>
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed">
               Project identity, branches, revision history, and engineering notes live inside the
               vault files (<code className="font-mono">project.json</code>,{' '}
               <code className="font-mono">branches/</code>,{' '}
               <code className="font-mono">revisions/</code>,{' '}
-              <code className="font-mono">completed/</code>). Clicking this action clears IndexedDB
-              convenience handles, drops the in-memory UI state, and reconstructs the project purely
-              from the vault directory. Working folder connection is intentionally detached until
-              explicitly reattached.
+              <code className="font-mono">completed/</code>). This action clears remembered handles
+              in IndexedDB and reloads the project purely from the vault directory. Working folder
+              connection is detached until explicitly reattached.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -87,18 +84,8 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Wipe Browser Metadata &amp; Reopen Vault Only</span>
+              <span>Clear Browser Handles &amp; Reload Vault</span>
             </button>
-            {adapterMode === 'memory' && onInjectIncompleteManifestFault && (
-              <button
-                type="button"
-                onClick={onInjectIncompleteManifestFault}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-md transition-colors whitespace-nowrap"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Simulate Interrupted Publication Attempt</span>
-              </button>
-            )}
           </div>
         </div>
       </section>
@@ -133,21 +120,29 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
 
         <section className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-900">
-            Corrupted Records &amp; Competing Heads ({vaultState.corruptedRecords.length})
+            Corrupted Records &amp; Branch Head Safety (
+            {vaultState.corruptedRecords.length + damagedBranchesCount + competingBranchesCount})
           </h2>
           <p className="text-xs text-slate-500">
-            Committed revisions with missing or modified content remain visible as damaged and are
-            blocked from restoration or use as a parent baseline.
+            Committed revisions with missing or damaged manifests/objects remain visible as damaged
+            and block new captures on affected branches until resolved.
           </p>
           {vaultState.corruptedRecords.length === 0 &&
-          Object.keys(vaultState.competingHeads).length === 0 ? (
+          damagedBranchesCount === 0 &&
+          competingBranchesCount === 0 ? (
             <p className="text-xs text-emerald-700 font-mono py-2">
-              Zero corrupted records or competing branch heads detected.
+              Zero corrupted records, damaged heads, or competing branch heads detected.
             </p>
           ) : (
             <ul className="divide-y divide-slate-100 text-xs">
+              {Object.entries(vaultState.damagedBranchHeads).map(([branchId, msg]) => (
+                <li key={`damaged-${branchId}`} className="py-2.5 text-red-800">
+                  <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
+                  {msg}
+                </li>
+              ))}
               {Object.entries(vaultState.competingHeads).map(([branchId, heads]) => (
-                <li key={branchId} className="py-2.5 text-red-800">
+                <li key={`competing-${branchId}`} className="py-2.5 text-red-800">
                   <AlertTriangle className="w-3.5 h-3.5 inline mr-1" />
                   Competing heads on branch {branchId}: {heads.join(', ')} (New writes blocked)
                 </li>
@@ -197,6 +192,8 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
                     <td className="py-2.5 px-3 text-slate-600">
                       {rev.manifest.parentRevisionId
                         ? shortHash(rev.manifest.parentRevisionId, 14)
+                        : rev.integrityStatus === 'corrupted'
+                        ? 'UNKNOWN (Damaged)'
                         : 'ROOT (null)'}
                     </td>
                     <td className="py-2.5 px-3 text-slate-600">

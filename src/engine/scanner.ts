@@ -3,7 +3,7 @@ import {
   FileSystemDirectoryAdapter,
   splitAndValidatePath,
 } from './fs-adapter';
-import { hashStream } from './hash';
+import { hashStream, hashString } from './hash';
 import {
   FileEntry,
   ModifiedFileChange,
@@ -19,6 +19,11 @@ export interface EnumerateWorkingFolderResult {
   totalBytes: number;
 }
 
+/**
+ * Recursively enumerates all files and subdirectories under `workingDir`.
+ * Subdirectory counts and paths exclude the selected working folder root itself,
+ * and empty subdirectories are preserved in `directories`.
+ */
 export async function enumerateWorkingFolder(
   workingDir: FileSystemDirectoryAdapter,
   options?: {
@@ -31,7 +36,10 @@ export async function enumerateWorkingFolder(
   const errors: ScanErrorEntry[] = [];
   let totalBytes = 0;
 
-  async function walk(currentDir: FileSystemDirectoryAdapter, prefixSegments: string[]): Promise<void> {
+  async function walk(
+    currentDir: FileSystemDirectoryAdapter,
+    prefixSegments: string[]
+  ): Promise<void> {
     if (options?.signal?.aborted) {
       throw new DOMException('Scan cancelled by user.', 'AbortError');
     }
@@ -136,6 +144,30 @@ export async function enumerateWorkingFolder(
   };
 }
 
+export function computeChangesSignature(params: {
+  baselineRevisionId: string | null;
+  added: FileEntry[];
+  modified: ModifiedFileChange[];
+  deleted: FileEntry[];
+  addedDirectories: string[];
+  deletedDirectories: string[];
+}): string {
+  const payload = JSON.stringify({
+    baselineRevisionId: params.baselineRevisionId,
+    added: params.added.map((f) => ({ path: f.path, sha256: f.sha256, size: f.size })),
+    modified: params.modified.map((m) => ({
+      path: m.current.path,
+      prevSha256: m.previous.sha256,
+      currSha256: m.current.sha256,
+      size: m.current.size,
+    })),
+    deleted: params.deleted.map((f) => ({ path: f.path, sha256: f.sha256 })),
+    addedDirectories: params.addedDirectories,
+    deletedDirectories: params.deletedDirectories,
+  });
+  return hashString(payload);
+}
+
 /**
  * Compares the selected branch's working folder against its baseline revision
  * (latest saved revision on that branch, or starting revision if the branch has no saves yet).
@@ -206,11 +238,21 @@ export async function scanBranchChanges(
     (isFirstSnapshot && (enumerated.files.length > 0 || enumerated.directories.length > 0));
 
   const canCapture = enumerated.errors.length === 0 && hasFileOrDirDelta;
+  const baselineRevisionId = baselineManifest ? baselineManifest.revisionId : null;
+
+  const changesSignature = computeChangesSignature({
+    baselineRevisionId,
+    added,
+    modified,
+    deleted,
+    addedDirectories,
+    deletedDirectories,
+  });
 
   return {
     scannedAt,
     branchId,
-    baselineRevisionId: baselineManifest ? baselineManifest.revisionId : null,
+    baselineRevisionId,
     baselineDisplayNumber: baselineManifest ? baselineManifest.displayNumber : null,
     added,
     modified,
@@ -223,5 +265,6 @@ export async function scanBranchChanges(
     hasChanges: hasFileOrDirDelta,
     canCapture,
     totalBytes: enumerated.totalBytes,
+    changesSignature,
   };
 }

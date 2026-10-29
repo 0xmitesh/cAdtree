@@ -1,16 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FileSystemDirectoryAdapter,
-  InMemoryFileSystemAdapter,
   RealFileSystemAdapter,
   validateDirectoryIsolation,
 } from './engine/fs-adapter';
-import {
-  applyFixtureBMutations,
-  ExpectedFixtureSnapshot,
-  populateFixtureA,
-  verifyDirectoryMatchesFixture,
-} from './engine/fixtures';
 import {
   clearAllConvenienceMetadata,
   listRememberedProjectBindings,
@@ -18,10 +11,17 @@ import {
   removeRememberedProjectBinding,
   saveRememberedProjectBinding,
 } from './engine/idb-store';
-import { restoreRevisionToFolder } from './engine/recovery-service';
-import { captureRevision } from './engine/revision-service';
+import {
+  restoreRevisionToFolder,
+  restoreSelectedFilesToFolder,
+} from './engine/recovery-service';
+import {
+  captureRevision,
+  ReviewStaleError,
+} from './engine/revision-service';
 import { scanBranchChanges } from './engine/scanner';
 import {
+  FileSpecificNote,
   MAIN_BRANCH_ID,
   ProgressUpdate,
   RestoreResult,
@@ -67,14 +67,8 @@ export default function App() {
 
   const [lastRestoreReport, setLastRestoreReport] = useState<{
     result: RestoreResult;
-    fixtureComparison?: { matches: boolean; mismatches: string[] };
   } | null>(null);
 
-  // Fixture Lab references (only populated when user explicitly launches Fixture Lab)
-  const memoryRootRef = useRef<InMemoryFileSystemAdapter | null>(null);
-  const memoryWorkingRef = useRef<InMemoryFileSystemAdapter | null>(null);
-  const expectedFixtureARef = useRef<ExpectedFixtureSnapshot | null>(null);
-  const simulatedLockActiveRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const refreshRememberedList = useCallback(async () => {
@@ -123,7 +117,7 @@ export default function App() {
         const res = await scanBranchChanges(
           targetWorkingDir,
           branchId,
-          headRev ? headRev.manifest : null,
+          headRev && headRev.integrityStatus !== 'corrupted' ? headRev.manifest : null,
           {
             signal: abort.signal,
             onProgress: (path, count, bytes) => {
@@ -263,7 +257,9 @@ export default function App() {
   const handleReconnectRemembered = async (binding: RememberedProjectBinding) => {
     setStatusBanner(null);
     if (!binding.vaultHandle) {
-      throw new Error('Saved binding does not have a directory handle. Please reopen the vault folder manually.');
+      throw new Error(
+        'Saved binding does not have a directory handle. Please reopen the vault folder manually.'
+      );
     }
     const vAdapter = new RealFileSystemAdapter(binding.vaultHandle);
     const wHandle = binding.branchWorkingHandles[MAIN_BRANCH_ID];
@@ -271,55 +267,7 @@ export default function App() {
     await handleOpenRealVault(vAdapter, wAdapter);
   };
 
-  // 4. Launch Labelled Fixture Lab (In-Memory Engine Verification)
-  const handleLaunchFixtureSandbox = useCallback(async () => {
-    setStatusBanner(null);
-    const memRoot = new InMemoryFileSystemAdapter('fixture-sandbox-root');
-    const memWorking = (await memRoot.getDirectory(['Actuator_CAD_Working'], {
-      create: true,
-    })) as InMemoryFileSystemAdapter;
-    const memVault = (await memRoot.getDirectory(['Actuator_Revision_Vault'], {
-      create: true,
-    })) as InMemoryFileSystemAdapter;
-
-    const fixtureA = await populateFixtureA(memWorking);
-    const state = await initializeProjectVault(
-      memWorking,
-      memVault,
-      'Linear Actuator Assembly (Fixture Lab)'
-    );
-
-    memoryRootRef.current = memRoot;
-    memoryWorkingRef.current = memWorking;
-    expectedFixtureARef.current = fixtureA;
-    simulatedLockActiveRef.current = false;
-
-    setVaultDir(memVault);
-    setWorkingDir(memWorking);
-    setVaultState(state);
-    setActiveBranchId(MAIN_BRANCH_ID);
-    setLastRestoreReport(null);
-
-    await runScan(memWorking, state, MAIN_BRANCH_ID);
-    setStatusBanner({
-      type: 'info',
-      message:
-        'Fixture Lab active (In-Memory Adapter). Populated 9 binary CAD fixture files and 8 directories (including empty folders and Unicode names) into Actuator_CAD_Working.',
-    });
-    setActiveTab('changes');
-  }, [runScan]);
-
-  // Support ?autostart=1 query param to jump into Fixture Lab for automated inspection
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('autostart') === '1' && !vaultState) {
-        handleLaunchFixtureSandbox();
-      }
-    }
-  }, [handleLaunchFixtureSandbox, vaultState]);
-
-  // 5. Scan Working Folder
+  // 4. Scan Working Folder
   const handleScanCurrent = async () => {
     if (!workingDir || !vaultState) return;
     setStatusBanner(null);
@@ -339,11 +287,13 @@ export default function App() {
     }
   };
 
-  // 6. Capture Revision
-  const handleCaptureRevision = async (
-    summary: string,
-    notes: { problem: string; modification: string; observations: string }
-  ) => {
+  // 5. Capture Revision
+  const handleCaptureRevision = async (params: {
+    summary: string;
+    notes: { problem: string; modification: string; observations: string };
+    fileNotes: FileSpecificNote[];
+    reviewedChangesSignature: string;
+  }) => {
     if (!workingDir || !vaultDir || !vaultState) return;
     setStatusBanner(null);
     const abort = new AbortController();
@@ -356,8 +306,10 @@ export default function App() {
         vaultDir,
         {
           branchId: activeBranchId,
-          summary,
-          notes,
+          summary: params.summary,
+          notes: params.notes,
+          fileNotes: params.fileNotes,
+          reviewedChangesSignature: params.reviewedChangesSignature,
           signal: abort.signal,
           onProgress: (p) => setProgress(p),
         }
@@ -375,6 +327,9 @@ export default function App() {
         } files.${cacheWarning ? ` (${cacheWarning})` : ''}`,
       });
     } catch (err) {
+      if (err instanceof ReviewStaleError) {
+        setScanResult(err.freshScan);
+      }
       setStatusBanner({
         type: 'error',
         message: err instanceof Error ? err.message : String(err),
@@ -387,27 +342,10 @@ export default function App() {
     }
   };
 
-  // 7. Reattach Working Folder explicitly
+  // 6. Reattach Working Folder explicitly
   const handleReattachWorkingFolder = async () => {
     if (!vaultDir || !vaultState) return;
     setStatusBanner(null);
-
-    if (vaultDir.kind === 'memory') {
-      if (!memoryWorkingRef.current) return;
-      await validateDirectoryIsolation(
-        memoryWorkingRef.current,
-        vaultDir,
-        'Working folder',
-        'Revision vault'
-      );
-      setWorkingDir(memoryWorkingRef.current);
-      await runScan(memoryWorkingRef.current, vaultState, activeBranchId);
-      setStatusBanner({
-        type: 'success',
-        message: `Explicitly reattached working folder "${memoryWorkingRef.current.name}" and completed fresh scan.`,
-      });
-      return;
-    }
 
     if (!supportsFileSystemAccessApi()) {
       setStatusBanner({
@@ -420,7 +358,9 @@ export default function App() {
     try {
       const picker = (
         window as unknown as {
-          showDirectoryPicker: (opts?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
+          showDirectoryPicker: (opts?: {
+            mode?: 'read' | 'readwrite';
+          }) => Promise<FileSystemDirectoryHandle>;
         }
       ).showDirectoryPicker;
       const handle = await picker({ mode: 'read' });
@@ -443,46 +383,43 @@ export default function App() {
     }
   };
 
-  // 8. Restore a Copy of a Historical Revision
-  const handleRestoreRevision = async (
-    revisionId: string,
-    customMemoryFolderName?: string
-  ) => {
+  // 7. Pick Destination Folder Helper for Recovery
+  const pickRecoveryDestinationFolder = async (): Promise<FileSystemDirectoryAdapter | null> => {
+    if (!supportsFileSystemAccessApi()) {
+      setStatusBanner({
+        type: 'error',
+        message: 'Directory picker is unavailable in this browser context.',
+      });
+      return null;
+    }
+    try {
+      const picker = (
+        window as unknown as {
+          showDirectoryPicker: (opts?: {
+            mode?: 'read' | 'readwrite';
+          }) => Promise<FileSystemDirectoryHandle>;
+        }
+      ).showDirectoryPicker;
+      const handle = await picker({ mode: 'readwrite' });
+      return new RealFileSystemAdapter(handle);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return null;
+      setStatusBanner({
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  };
+
+  // 8A. Restore Full Project Copy
+  const handleRestoreFullProject = async (revisionId: string) => {
     if (!vaultDir || !vaultState) return;
     setStatusBanner(null);
     setLastRestoreReport(null);
 
-    let destDir: FileSystemDirectoryAdapter;
-    if (vaultDir.kind === 'memory') {
-      if (!memoryRootRef.current) return;
-      const folderName =
-        customMemoryFolderName?.trim() || `Recovered_${Date.now().toString(36)}`;
-      destDir = await memoryRootRef.current.getDirectory([folderName], { create: true });
-    } else {
-      if (!supportsFileSystemAccessApi()) {
-        setStatusBanner({
-          type: 'error',
-          message: 'Directory picker is unavailable in this browser context.',
-        });
-        return;
-      }
-      try {
-        const picker = (
-          window as unknown as {
-            showDirectoryPicker: (opts?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
-          }
-        ).showDirectoryPicker;
-        const handle = await picker({ mode: 'readwrite' });
-        destDir = new RealFileSystemAdapter(handle);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setStatusBanner({
-          type: 'error',
-          message: err instanceof Error ? err.message : String(err),
-        });
-        return;
-      }
-    }
+    const destDir = await pickRecoveryDestinationFolder();
+    if (!destDir) return;
 
     const abort = new AbortController();
     abortControllerRef.current = abort;
@@ -498,19 +435,6 @@ export default function App() {
         onProgress: (p) => setProgress(p),
       });
 
-      let fixtureComparison: { matches: boolean; mismatches: string[] } | undefined;
-      if (
-        vaultDir.kind === 'memory' &&
-        result.displayNumber === 1 &&
-        expectedFixtureARef.current
-      ) {
-        fixtureComparison = await verifyDirectoryMatchesFixture(
-          destDir,
-          expectedFixtureARef.current
-        );
-      }
-
-      // Since restoreRevisionToFolder verified every vault object for this revision, mark it objects_verified
       setVaultState((prev) =>
         prev
           ? {
@@ -524,7 +448,52 @@ export default function App() {
           : prev
       );
 
-      setLastRestoreReport({ result, fixtureComparison });
+      setLastRestoreReport({ result });
+    } catch (err) {
+      setStatusBanner({
+        type: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsRestoring(false);
+      setProgress(null);
+      abortControllerRef.current = null;
+    }
+  };
+
+  // 8B. Restore Selected Files as a Copy
+  const handleRestoreSelectedFiles = async (revisionId: string, selectedPaths: string[]) => {
+    if (!vaultDir || !vaultState) return;
+    setStatusBanner(null);
+    setLastRestoreReport(null);
+
+    if (selectedPaths.length === 0) {
+      setStatusBanner({
+        type: 'error',
+        message: 'Select at least one file in the revision inventory before restoring selected files.',
+      });
+      return;
+    }
+
+    const destDir = await pickRecoveryDestinationFolder();
+    if (!destDir) return;
+
+    const abort = new AbortController();
+    abortControllerRef.current = abort;
+    setIsRestoring(true);
+
+    try {
+      const result = await restoreSelectedFilesToFolder({
+        vaultDir,
+        destinationDir: destDir,
+        workingDir,
+        revisionId,
+        selectedPaths,
+        signal: abort.signal,
+        onProgress: (p) => setProgress(p),
+      });
+
+      setLastRestoreReport({ result });
     } catch (err) {
       setStatusBanner({
         type: 'error',
@@ -591,63 +560,21 @@ export default function App() {
     }
   };
 
-  // 10. Wipe Browser Metadata & Reopen Vault Only (Proves Vault Metadata Independence)
+  // 10. Clear Browser Convenience Handles & Reload Vault Only
   const handleSimulateClearMetadataAndReopenVault = async () => {
     if (!vaultDir) return;
     await clearAllConvenienceMetadata();
     await refreshRememberedList();
 
-    // Detach working folder and reload vaultState purely from vaultDir
     setWorkingDir(null);
     setScanResult(null);
     const reopened = await openExistingVault(vaultDir);
     setVaultState(reopened);
     setStatusBanner({
       type: 'success',
-      message: `Cleared IndexedDB convenience metadata and reopened "${reopened.project.name}" (${reopened.revisions.length} revision(s)) purely from vault files. Working folder is detached until you click "Reattach Working Folder".`,
+      message: `Cleared remembered browser handles and reloaded "${reopened.project.name}" (${reopened.revisions.length} revision(s)) directly from vault files. Working folder is detached until you click "Reattach Working Folder".`,
     });
     setActiveTab('changes');
-  };
-
-  // Fixture Lab helper actions
-  const handleApplyFixtureBMutations = async () => {
-    if (!workingDir || workingDir.kind !== 'memory' || !vaultState) return;
-    await applyFixtureBMutations(workingDir);
-    await runScan(workingDir, vaultState, activeBranchId);
-    setStatusBanner({
-      type: 'info',
-      message:
-        'Applied Fixture B changes to working folder (+1 added part, ~2 modified parts including 1 same-size binary edit, -1 deleted zero-byte file, +1 empty directory) and rescanned.',
-    });
-  };
-
-  const handleToggleSimulatedUnreadableFile = async () => {
-    if (!memoryWorkingRef.current || !vaultState) return;
-    simulatedLockActiveRef.current = !simulatedLockActiveRef.current;
-    memoryWorkingRef.current.markFileUnreadable(
-      ['Parts', 'Housing_MainBody.SLDPRT'],
-      simulatedLockActiveRef.current
-        ? 'File exclusively locked by SolidWorks (simulated sharing violation)'
-        : ''
-    );
-    await runScan(memoryWorkingRef.current, vaultState, activeBranchId);
-    setStatusBanner({
-      type: simulatedLockActiveRef.current ? 'error' : 'info',
-      message: simulatedLockActiveRef.current
-        ? 'Simulated unreadable locked file on Parts/Housing_MainBody.SLDPRT. Notice capture is blocked rather than silently omitting the file.'
-        : 'Cleared simulated file lock on Parts/Housing_MainBody.SLDPRT and rescanned.',
-    });
-  };
-
-  const handleInjectIncompleteManifestFault = async () => {
-    if (!vaultDir || vaultDir.kind !== 'memory') return;
-    await vaultDir.writeFileText(
-      ['revisions', 'rev-interrupted-999.manifest.json'],
-      JSON.stringify({ note: 'Unpublished manifest without completion record' })
-    );
-    await vaultDir.writeFileText(['staging', 'session-aborted.tmp'], 'partial bytes');
-    const reloaded = await openExistingVault(vaultDir);
-    setVaultState(reloaded);
   };
 
   const handleCancelOperation = () => {
@@ -752,7 +679,6 @@ export default function App() {
               await clearAllConvenienceMetadata();
               await refreshRememberedList();
             }}
-            onLaunchFixtureSandbox={handleLaunchFixtureSandbox}
           />
         ) : activeTab === 'changes' ? (
           <ChangesCaptureView
@@ -760,7 +686,6 @@ export default function App() {
             activeBranchId={activeBranchId}
             workingFolderName={workingDir ? workingDir.name : null}
             vaultFolderName={vaultDir.name}
-            adapterMode={vaultDir.kind}
             scanResult={scanResult}
             isScanStale={isScanStale}
             isScanning={isScanning}
@@ -771,46 +696,35 @@ export default function App() {
             onCapture={handleCaptureRevision}
             onCancelOperation={handleCancelOperation}
             onReattachWorkingFolder={handleReattachWorkingFolder}
-            onApplyFixtureBMutations={
-              vaultDir.kind === 'memory' ? handleApplyFixtureBMutations : undefined
-            }
-            onSimulateUnreadableFile={
-              vaultDir.kind === 'memory' ? handleToggleSimulatedUnreadableFile : undefined
-            }
           />
         ) : activeTab === 'history' ? (
           <HistoryRecoveryView
             vaultState={vaultState}
             activeBranchId={activeBranchId}
-            adapterMode={vaultDir.kind}
             isRestoring={isRestoring}
             progress={progress}
             lastRestoreReport={lastRestoreReport}
             statusBanner={statusBanner}
-            onRestoreRevision={handleRestoreRevision}
+            onRestoreFullProject={handleRestoreFullProject}
+            onRestoreSelectedFiles={handleRestoreSelectedFiles}
             onVerifySingleRevisionObjects={handleVerifySingleRevisionObjects}
             onCancelOperation={handleCancelOperation}
           />
         ) : (
           <DiagnosticsView
             vaultState={vaultState}
-            adapterMode={vaultDir.kind}
             isVerifyingAll={isVerifyingAll}
             onVerifyAllObjects={handleVerifyAllObjects}
             onSimulateClearMetadataAndReopenVault={handleSimulateClearMetadataAndReopenVault}
-            onInjectIncompleteManifestFault={
-              vaultDir.kind === 'memory' ? handleInjectIncompleteManifestFault : undefined
-            }
           />
         )}
       </main>
 
       {/* Quiet Footer */}
       <footer className="border-t border-slate-200 bg-white px-6 py-4 text-xs text-slate-500 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <span>cAdtree MVP v0.2 · Milestone 1 (Main Snapshot, Integrity &amp; Recovery)</span>
+        <span>cAdtree · Local-First CAD Version Control</span>
         <span>
-          Zero outbound network telemetry · Local SHA-256 content addressing · SolidWorks CAD
-          validation pending Milestone 4
+          Your designs. Your versions. Your storage. · Local SHA-256 content addressing
         </span>
       </footer>
     </div>

@@ -3,7 +3,6 @@ import {
   FolderOpen,
   FolderPlus,
   HardDrive,
-  FlaskConical,
   AlertTriangle,
   ExternalLink,
   RefreshCw,
@@ -34,7 +33,6 @@ export interface ProjectConnectViewProps {
   onReconnectRemembered: (binding: RememberedProjectBinding) => Promise<void>;
   onRemoveRemembered: (projectId: string) => Promise<void>;
   onClearAllConvenienceMetadata: () => Promise<void>;
-  onLaunchFixtureSandbox: () => Promise<void>;
 }
 
 export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
@@ -44,9 +42,8 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
   onReconnectRemembered,
   onRemoveRemembered,
   onClearAllConvenienceMetadata,
-  onLaunchFixtureSandbox,
 }) => {
-  const [newProjectName, setNewProjectName] = useState('Actuator Housing Assembly');
+  const [newProjectName, setNewProjectName] = useState('');
   const [createWorkingDir, setCreateWorkingDir] = useState<RealFileSystemAdapter | null>(null);
   const [createVaultDir, setCreateVaultDir] = useState<RealFileSystemAdapter | null>(null);
 
@@ -66,14 +63,16 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
     setErrorMsg(null);
     if (!fsSupported) {
       setErrorMsg(
-        `Cannot pick ${purposeLabel}: This browser does not expose window.showDirectoryPicker(). Use Google Chrome or Microsoft Edge on Windows/Desktop.`
+        `Cannot select ${purposeLabel}: This browser does not support the File System Access API (window.showDirectoryPicker). Please use Google Chrome or Microsoft Edge on Windows or desktop.`
       );
       return null;
     }
     try {
       const picker = (
         window as unknown as {
-          showDirectoryPicker: (opts?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
+          showDirectoryPicker: (opts?: {
+            mode?: 'read' | 'readwrite';
+          }) => Promise<FileSystemDirectoryHandle>;
         }
       ).showDirectoryPicker;
       const handle = await picker({ mode });
@@ -84,7 +83,7 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
       }
       if (err instanceof DOMException && err.name === 'SecurityError') {
         setErrorMsg(
-          `Browser blocked directory picker (${purposeLabel}) due to cross-origin iframe restriction. Open cAdtree in a standalone top-level browser tab to grant local folder permissions.`
+          `Browser blocked directory selection (${purposeLabel}) because this page is running inside an embedded preview frame. Open cAdtree in a standalone top-level browser tab to select local folders.`
         );
         return null;
       }
@@ -137,32 +136,20 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
     }
   };
 
-  const handleStartFixtureLab = async () => {
-    setErrorMsg(null);
-    setBusyAction('fixture');
-    try {
-      await onLaunchFixtureSandbox();
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-10">
       {/* Hero / Tagline */}
       <section className="space-y-2 border-b border-slate-200 pb-6">
         <p className="text-xs font-medium text-slate-500">
-          Milestone 1 · Local-First CAD Snapshot &amp; Recovery Engine
+          Local-First CAD Version Control &amp; Verified Recovery
         </p>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 text-balance">
           Your designs. Your versions. Your storage.
         </h1>
         <p className="text-base text-slate-600 max-w-3xl leading-relaxed">
           Preserve saved native CAD project states into a separate local revision vault, record
-          engineering reasons, and recover verified byte-exact snapshots without modifying active
-          working folders.
+          file-specific and overall engineering reasons, and recover verified snapshots or selected
+          files into fresh folders without modifying active working files.
         </p>
       </section>
 
@@ -177,14 +164,14 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
               <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
               <span>
                 {embedded
-                  ? 'Embedded Preview Detected — Standalone Tab Required for Local Disk Pickers'
+                  ? 'Embedded Preview Detected — Open in Standalone Tab for Local Folder Access'
                   : 'File System Access API Unavailable in Current Browser'}
               </span>
             </div>
             <p className="text-xs text-amber-800 leading-relaxed max-w-3xl">
               {embedded
-                ? 'Chromium blocks window.showDirectoryPicker() inside cross-origin preview iframes for security. To connect real local Windows/CAD directories, open this URL in a standalone Chrome or Edge tab, or use the explicitly-labelled Fixture Lab below to verify engine behavior in-memory.'
-                : 'Real local folder access requires Google Chrome or Microsoft Edge over HTTPS or localhost. You can still run deterministic binary fixture verification in the Fixture Lab below.'}
+                ? 'Chromium restricts local folder pickers inside cross-origin preview frames. Open cAdtree in a standalone Chrome or Edge tab to connect your local CAD working folder and revision vault.'
+                : 'Local folder access requires Google Chrome or Microsoft Edge over HTTPS or localhost.'}
             </p>
           </div>
           <a
@@ -227,10 +214,10 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
                   <FolderPlus className="w-5 h-5 text-slate-700" />
                   <span>01. Create project</span>
                 </h2>
-                <span className="text-xs text-slate-500 font-mono">File System Access API</span>
+                <span className="text-xs text-slate-500 font-mono">New Revision Vault</span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Connect an existing CAD project working folder (read access) and initialize a
+                Select an existing CAD project working folder (read access) and initialize a
                 dedicated empty revision vault folder (read/write access).
               </p>
             </div>
@@ -259,16 +246,23 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
                     1. CAD Working Folder (Read Access)
                   </p>
                   <p className="text-xs text-slate-500 font-mono truncate">
-                    {createWorkingDir
-                      ? `Selected: ${createWorkingDir.name}`
-                      : 'Not selected · Save & close SolidWorks files before capture'}
+                    {createWorkingDir ? (
+                      `Selected: ${createWorkingDir.name}`
+                    ) : (
+                      'Not selected · Save & close CAD files before capture'
+                    )}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={async () => {
                     const dir = await pickDirectory('read', 'CAD Working Folder');
-                    if (dir) setCreateWorkingDir(dir);
+                    if (dir) {
+                      setCreateWorkingDir(dir);
+                      if (!newProjectName.trim()) {
+                        setNewProjectName(dir.name);
+                      }
+                    }
                   }}
                   className="px-3 py-1.5 text-xs font-medium text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap shrink-0"
                 >
@@ -322,7 +316,7 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
                   <FolderOpen className="w-5 h-5 text-slate-700" />
                   <span>02. Open existing vault</span>
                 </h2>
-                <span className="text-xs text-slate-500 font-mono">Vault Reconstruction</span>
+                <span className="text-xs text-slate-500 font-mono">Reopen Repository</span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
                 Reopen an existing cAdtree revision vault. Project identity, branches, revision
@@ -396,11 +390,11 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
           <div>
             <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <HardDrive className="w-4 h-4 text-slate-700" />
-              <span>Remembered Local Projects (IndexedDB Convenience Cache)</span>
+              <span>Remembered Local Projects</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Directory handles saved for quick reconnection. Permissions are rechecked on reuse.
-              Clearing this cache never deletes vault history.
+              Directory handles saved in browser storage for quick reconnection. Permissions are
+              rechecked on reuse. Clearing this list never deletes your vault history.
             </p>
           </div>
           {rememberedBindings.length > 0 && (
@@ -410,15 +404,15 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-md transition-colors whitespace-nowrap shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear IndexedDB Metadata</span>
+              <span>Clear Remembered Handles</span>
             </button>
           )}
         </div>
 
         {rememberedBindings.length === 0 ? (
           <p className="text-xs text-slate-500 py-2">
-            No remembered directory handles stored in IndexedDB. Create or open a vault above, or
-            use the Fixture Lab below.
+            No remembered projects stored in this browser yet. Create a new project or open an
+            existing vault above.
           </p>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -438,7 +432,14 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => onReconnectRemembered(item)}
+                    onClick={async () => {
+                      setErrorMsg(null);
+                      try {
+                        await onReconnectRemembered(item);
+                      } catch (err) {
+                        setErrorMsg(err instanceof Error ? err.message : String(err));
+                      }
+                    }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors whitespace-nowrap"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
@@ -457,38 +458,6 @@ export const ProjectConnectView: React.FC<ProjectConnectViewProps> = ({
             ))}
           </div>
         )}
-      </section>
-
-      {/* Explicitly-Labelled Fixture Lab for Milestone 1 Verification */}
-      <section className="bg-slate-900 text-slate-100 rounded-lg p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div className="space-y-2 max-w-3xl">
-          <div className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
-            <FlaskConical className="w-4 h-4 shrink-0" />
-            <span>LABELLED FIXTURE SANDBOX · IN-MEMORY ADAPTER · NON-DESTRUCTIVE</span>
-          </div>
-          <h2 className="text-lg font-semibold text-white">
-            Milestone 1 Binary Fixture Verification Lab
-          </h2>
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Runs the exact cAdtree storage, streaming SHA-256, object verification, manifest
-            publication, and recovery services against deterministic binary CAD fixtures
-            (<code className="font-mono text-slate-200">.SLDASM</code>,{' '}
-            <code className="font-mono text-slate-200">.SLDPRT</code>,{' '}
-            <code className="font-mono text-slate-200">.SLDDRW</code>, empty directories, Unicode
-            paths, and same-size binary mutations). Note: This tests binary preservation and vault
-            recovery; genuine SolidWorks validation occurs in Milestone 4.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleStartFixtureLab}
-          disabled={busyAction !== null}
-          className="px-5 py-3 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 rounded-md transition-colors whitespace-nowrap shrink-0"
-        >
-          {busyAction === 'fixture'
-            ? 'Provisioning Fixture A & Vault...'
-            : 'Launch Fixture Lab (In-Memory Engine)'}
-        </button>
       </section>
     </div>
   );

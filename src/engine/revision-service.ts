@@ -13,12 +13,23 @@ import {
   CompletionRecord,
   ReconstructedRevision,
   RevisionManifest,
+  ScanResult,
   VaultState,
 } from './types';
 import {
   computeManifestPayloadChecksum,
   openExistingVault,
+  sanitizeFileSpecificNotes,
 } from './vault-service';
+
+export class ReviewStaleError extends Error {
+  readonly freshScan: ScanResult;
+  constructor(message: string, freshScan: ScanResult) {
+    super(message);
+    this.name = 'ReviewStaleError';
+    this.freshScan = freshScan;
+  }
+}
 
 function createUniqueId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -72,15 +83,20 @@ export async function captureRevision(
       throw new Error(`Branch "${input.branchId}" does not exist in vault.`);
     }
 
+    if (vaultState.damagedBranchHeads[branch.branchId]) {
+      throw new Error(vaultState.damagedBranchHeads[branch.branchId]);
+    }
+
     if (vaultState.competingHeads[branch.branchId]?.length) {
       throw new Error(
-        `Branch "${branch.name}" has competing heads (${vaultState.competingHeads[branch.branchId].join(
-          ', '
-        )}). Resolve repository inconsistency before capturing new revisions.`
+        `Branch "${branch.name}" has competing heads (${vaultState.competingHeads[
+          branch.branchId
+        ].join(', ')}). Resolve repository inconsistency before capturing new revisions.`
       );
     }
 
-    const parentRevisionId = vaultState.branchHeads[branch.branchId] ?? branch.startingRevisionId ?? null;
+    const parentRevisionId =
+      vaultState.branchHeads[branch.branchId] ?? branch.startingRevisionId ?? null;
     let baselineManifest: RevisionManifest | null = null;
 
     if (parentRevisionId) {
@@ -104,7 +120,7 @@ export async function captureRevision(
     }
 
     const maxDisplayNumber = vaultState.revisions.reduce(
-      (max, r) => Math.max(max, r.manifest.displayNumber),
+      (max, r) => Math.max(max, r.manifest.displayNumber, r.completion.displayNumber),
       0
     );
     const nextDisplayNumber = maxDisplayNumber + 1;
@@ -155,11 +171,40 @@ export async function captureRevision(
       );
     }
 
+    const sanitizedFileNotes = sanitizeFileSpecificNotes(input.fileNotes);
+
+    // If the user reviewed a specific change list and files changed on disk before save,
+    // require review again before publishing file-associated notes.
+    if (
+      input.reviewedChangesSignature &&
+      freshScan.changesSignature !== input.reviewedChangesSignature
+    ) {
+      throw new ReviewStaleError(
+        'Working folder changes differ from the file list you reviewed. The change list has been refreshed — please review your file changes and note associations before saving.',
+        freshScan
+      );
+    }
+
     const allSnapshotFiles = [
       ...freshScan.added,
       ...freshScan.modified.map((m) => m.current),
       ...freshScan.unchanged,
     ].sort((a, b) => a.path.localeCompare(b.path));
+
+    if (sanitizedFileNotes && sanitizedFileNotes.length > 0) {
+      const validPaths = new Set<string>([
+        ...allSnapshotFiles.map((f) => f.path),
+        ...freshScan.deleted.map((f) => f.path),
+      ]);
+      for (const fn of sanitizedFileNotes) {
+        if (!validPaths.has(fn.path)) {
+          throw new ReviewStaleError(
+            `File-specific note refers to "${fn.path}", which is not in the current snapshot or deleted file set. Please review your file note associations.`,
+            freshScan
+          );
+        }
+      }
+    }
 
     // Step 3: Write new objects, close writes, reopen stored bytes, and verify size/hash.
     // Reused objects are also verified before the new revision relies on them.
@@ -195,7 +240,7 @@ export async function captureRevision(
       processedBytes += entry.size;
     }
 
-    // Step 4: Check source stability (re-enumerate working directory and compare inventory & hashes)
+    // Step 4: Check source stability (re-enumerate working directory and compare full directory and file sets)
     input.onProgress?.({
       phase: 'checking_stability',
       processedFiles: allSnapshotFiles.length,
@@ -221,10 +266,19 @@ export async function captureRevision(
       );
     }
 
+    // Compare complete normalized directory-path sets before and after capture, not just their lengths
     if (postCaptureInventory.directories.length !== freshScan.directories.length) {
       throw new Error(
-        'Source instability detected: directory structure changed during capture.'
+        `Source instability detected: directory count changed during capture (${freshScan.directories.length} -> ${postCaptureInventory.directories.length}).`
       );
+    }
+
+    for (let i = 0; i < freshScan.directories.length; i++) {
+      if (freshScan.directories[i] !== postCaptureInventory.directories[i]) {
+        throw new Error(
+          `Source instability detected: directory path set changed during capture ("${freshScan.directories[i]}" vs "${postCaptureInventory.directories[i]}").`
+        );
+      }
     }
 
     for (let i = 0; i < allSnapshotFiles.length; i++) {
@@ -267,6 +321,7 @@ export async function captureRevision(
         modification: input.notes.modification.trim(),
         observations: input.notes.observations.trim(),
       },
+      ...(sanitizedFileNotes ? { fileNotes: sanitizedFileNotes } : {}),
       directories: freshScan.directories,
       files: allSnapshotFiles,
     };
@@ -321,9 +376,7 @@ export async function captureRevision(
     await vaultDir.writeFileText(completionPath, completionJson);
     const readBackCompletionText = await vaultDir.readFileText(completionPath);
     if (hashString(readBackCompletionText) !== expectedCompletionSha256) {
-      throw new Error(
-        `Completion record verification failed for ${revisionId}.`
-      );
+      throw new Error(`Completion record verification failed for ${revisionId}.`);
     }
 
     // Clean up temporary staging folder for this session (best-effort)
@@ -336,7 +389,6 @@ export async function captureRevision(
     }
 
     // Step 7: Update optional caches and return success.
-    // A cache failure after publication must NOT fail the published revision or cause duplicate revisions on retry.
     let cacheWarning: string | undefined;
     try {
       const cachePayload = JSON.stringify(

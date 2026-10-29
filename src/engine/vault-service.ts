@@ -9,10 +9,14 @@ import {
   CADTREE_SCHEMA_VERSION,
   CompletionRecord,
   CorruptedVaultRecord,
+  FileEntry,
+  FileSpecificNote,
   IncompleteAttemptRecord,
   MAIN_BRANCH_ID,
+  ModifiedFileChange,
   ProjectIdentity,
   ReconstructedRevision,
+  RevisionDiffResult,
   RevisionManifest,
   VaultState,
 } from './types';
@@ -56,10 +60,19 @@ export function computeBranchRecordChecksum(
   return hashString(canonical);
 }
 
+/**
+ * Computes the canonical payload SHA-256 of a RevisionManifest.
+ * Backward-compatibility strategy:
+ * - Existing manifests (or manifests without fileNotes) have `fileNotes === undefined`
+ *   and serialize using the exact original field layout so existing vault checksums
+ *   remain 100% valid without rewriting history.
+ * - When `fileNotes` is present and non-empty, `fileNotes` is included in canonical order
+ *   so file-specific engineering notes are cryptographically integrity-protected.
+ */
 export function computeManifestPayloadChecksum(
   payload: Omit<RevisionManifest, 'manifestPayloadSha256'>
 ): string {
-  const canonical = JSON.stringify({
+  const baseObj: Record<string, unknown> = {
     schemaVersion: payload.schemaVersion,
     projectId: payload.projectId,
     revisionId: payload.revisionId,
@@ -74,15 +87,163 @@ export function computeManifestPayloadChecksum(
       modification: payload.notes.modification,
       observations: payload.notes.observations,
     },
-    directories: [...payload.directories],
-    files: payload.files.map((f) => ({
-      path: f.path,
-      size: f.size,
-      sha256: f.sha256,
-      lastModified: f.lastModified,
-    })),
-  });
-  return hashString(canonical);
+  };
+
+  if (Array.isArray(payload.fileNotes) && payload.fileNotes.length > 0) {
+    baseObj.fileNotes = [...payload.fileNotes]
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map((fn) => ({
+        path: fn.path,
+        problem: fn.problem,
+        modification: fn.modification,
+        observations: fn.observations,
+      }));
+  }
+
+  baseObj.directories = [...payload.directories];
+  baseObj.files = payload.files.map((f) => ({
+    path: f.path,
+    size: f.size,
+    sha256: f.sha256,
+    lastModified: f.lastModified,
+  }));
+
+  return hashString(JSON.stringify(baseObj));
+}
+
+/**
+ * Validates that a parsed JSON object has all required RevisionManifest structural fields
+ * before checksum calculation or property access.
+ */
+export function validateManifestStructure(raw: unknown): {
+  valid: boolean;
+  errors: string[];
+} {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { valid: false, errors: ['Manifest root must be a JSON object.'] };
+  }
+  const obj = raw as Record<string, unknown>;
+  const errors: string[] = [];
+
+  if (typeof obj.projectId !== 'string' || !obj.projectId) {
+    errors.push('Missing or invalid string field "projectId".');
+  }
+  if (typeof obj.revisionId !== 'string' || !obj.revisionId) {
+    errors.push('Missing or invalid string field "revisionId".');
+  }
+  if (typeof obj.branchId !== 'string' || !obj.branchId) {
+    errors.push('Missing or invalid string field "branchId".');
+  }
+  if (obj.parentRevisionId !== null && typeof obj.parentRevisionId !== 'string') {
+    errors.push('Field "parentRevisionId" must be a string or null.');
+  }
+  if (
+    typeof obj.displayNumber !== 'number' ||
+    !Number.isInteger(obj.displayNumber) ||
+    obj.displayNumber < 1
+  ) {
+    errors.push('Field "displayNumber" must be a positive integer.');
+  }
+  if (typeof obj.captureStartedAt !== 'string' || !obj.captureStartedAt) {
+    errors.push('Missing or invalid string field "captureStartedAt".');
+  }
+  if (typeof obj.captureCompletedAt !== 'string' || !obj.captureCompletedAt) {
+    errors.push('Missing or invalid string field "captureCompletedAt".');
+  }
+  if (typeof obj.summary !== 'string') {
+    errors.push('Missing or invalid string field "summary".');
+  }
+  if (typeof obj.manifestPayloadSha256 !== 'string' || !obj.manifestPayloadSha256) {
+    errors.push('Missing or invalid string field "manifestPayloadSha256".');
+  }
+
+  if (!obj.notes || typeof obj.notes !== 'object' || Array.isArray(obj.notes)) {
+    errors.push('Missing or invalid object field "notes".');
+  } else {
+    const notes = obj.notes as Record<string, unknown>;
+    if (
+      typeof notes.problem !== 'string' ||
+      typeof notes.modification !== 'string' ||
+      typeof notes.observations !== 'string'
+    ) {
+      errors.push('Manifest "notes" must contain string fields problem, modification, and observations.');
+    }
+  }
+
+  if (obj.fileNotes !== undefined) {
+    if (!Array.isArray(obj.fileNotes)) {
+      errors.push('Optional field "fileNotes" must be an array when present.');
+    } else {
+      for (let i = 0; i < obj.fileNotes.length; i++) {
+        const fn = obj.fileNotes[i] as Record<string, unknown> | null;
+        if (
+          !fn ||
+          typeof fn !== 'object' ||
+          typeof fn.path !== 'string' ||
+          !fn.path ||
+          typeof fn.problem !== 'string' ||
+          typeof fn.modification !== 'string' ||
+          typeof fn.observations !== 'string'
+        ) {
+          errors.push(`Invalid fileNotes entry at index ${i}.`);
+          break;
+        }
+      }
+    }
+  }
+
+  if (!Array.isArray(obj.directories)) {
+    errors.push('Missing or invalid array field "directories".');
+  } else if (!obj.directories.every((d) => typeof d === 'string' && d.length > 0)) {
+    errors.push('All entries in "directories" must be non-empty strings.');
+  }
+
+  if (!Array.isArray(obj.files)) {
+    errors.push('Missing or invalid array field "files".');
+  } else {
+    for (let i = 0; i < obj.files.length; i++) {
+      const f = obj.files[i] as Record<string, unknown> | null;
+      if (
+        !f ||
+        typeof f !== 'object' ||
+        typeof f.path !== 'string' ||
+        !f.path ||
+        typeof f.size !== 'number' ||
+        !Number.isInteger(f.size) ||
+        f.size < 0 ||
+        typeof f.sha256 !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(f.sha256) ||
+        typeof f.lastModified !== 'number'
+      ) {
+        errors.push(`Invalid file entry at index ${i} in manifest "files".`);
+        break;
+      }
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+function createDamagedPlaceholderManifest(
+  projectId: string,
+  completion: CompletionRecord,
+  summaryLabel: string
+): RevisionManifest {
+  return {
+    schemaVersion: CADTREE_SCHEMA_VERSION,
+    projectId,
+    revisionId: completion.revisionId,
+    branchId: completion.branchId,
+    parentRevisionId: null,
+    displayNumber: completion.displayNumber,
+    captureStartedAt: completion.completedAt,
+    captureCompletedAt: completion.completedAt,
+    summary: summaryLabel,
+    notes: { problem: '', modification: '', observations: '' },
+    directories: [],
+    files: [],
+    manifestPayloadSha256: '',
+  };
 }
 
 function generateId(prefix: string): string {
@@ -178,8 +339,9 @@ export async function initializeProjectVault(
 
 /**
  * Opens an existing vault and reconstructs project identity, branches, committed revisions,
- * branch heads, competing heads, and incomplete/corrupted records purely from vault files.
- * Does not require IndexedDB or browser metadata.
+ * branch heads, competing heads, damaged heads, and incomplete/corrupted records purely from vault files.
+ * Preserves damaged committed revisions explicitly using validated completion metadata so
+ * history is never silently omitted or overwritten.
  */
 export async function openExistingVault(
   vaultDir: FileSystemDirectoryAdapter
@@ -199,8 +361,21 @@ export async function openExistingVault(
     throw new Error('Corrupted project.json: file is not valid JSON.');
   }
 
+  if (!parsedProject || typeof parsedProject !== 'object') {
+    throw new Error('Corrupted project.json: root must be an object.');
+  }
+
   if (parsedProject.schemaVersion !== CADTREE_SCHEMA_VERSION) {
     throw new UnsupportedSchemaVersionError(parsedProject.schemaVersion);
+  }
+
+  if (
+    typeof parsedProject.projectId !== 'string' ||
+    !parsedProject.projectId ||
+    typeof parsedProject.name !== 'string' ||
+    typeof parsedProject.createdAt !== 'string'
+  ) {
+    throw new Error('Vault integrity failure: project.json is missing required identity fields.');
   }
 
   const expectedProjectHash = computeProjectIdentityChecksum(parsedProject);
@@ -222,11 +397,32 @@ export async function openExistingVault(
       try {
         const text = await branchDir.readFileText([entry.name]);
         const branch = JSON.parse(text) as BranchRecord;
+        if (!branch || typeof branch !== 'object') {
+          corruptedRecords.push({ recordPath, reason: 'Branch record is not a JSON object.' });
+          continue;
+        }
         if (branch.schemaVersion !== CADTREE_SCHEMA_VERSION) {
           throw new UnsupportedSchemaVersionError(branch.schemaVersion);
         }
+        if (
+          typeof branch.branchId !== 'string' ||
+          typeof branch.projectId !== 'string' ||
+          typeof branch.name !== 'string' ||
+          typeof branch.reason !== 'string' ||
+          typeof branch.createdAt !== 'string' ||
+          typeof branch.isMain !== 'boolean'
+        ) {
+          corruptedRecords.push({
+            recordPath,
+            reason: 'Branch record is missing required structural fields.',
+          });
+          continue;
+        }
         const expectedBranchHash = computeBranchRecordChecksum(branch);
-        if (branch.payloadSha256 !== expectedBranchHash || branch.projectId !== parsedProject.projectId) {
+        if (
+          branch.payloadSha256 !== expectedBranchHash ||
+          branch.projectId !== parsedProject.projectId
+        ) {
           corruptedRecords.push({
             recordPath,
             reason: 'Branch record checksum or projectId mismatch.',
@@ -248,7 +444,9 @@ export async function openExistingVault(
     throw new Error('Vault integrity failure: no valid branch records found in branches/.');
   }
 
-  branches.sort((a, b) => (a.isMain === b.isMain ? a.name.localeCompare(b.name) : a.isMain ? -1 : 1));
+  branches.sort((a, b) =>
+    a.isMain === b.isMain ? a.name.localeCompare(b.name) : a.isMain ? -1 : 1
+  );
 
   // 2. Load completion records
   const completionMap = new Map<string, { record: CompletionRecord; rawPath: string }>();
@@ -261,17 +459,28 @@ export async function openExistingVault(
       try {
         const text = await completedDir.readFileText([entry.name]);
         const done = JSON.parse(text) as CompletionRecord;
+        if (!done || typeof done !== 'object') {
+          corruptedRecords.push({ recordPath, reason: 'Completion record is not a JSON object.' });
+          continue;
+        }
         if (done.schemaVersion !== CADTREE_SCHEMA_VERSION) {
           throw new UnsupportedSchemaVersionError(done.schemaVersion);
         }
         if (
+          typeof done.revisionId !== 'string' ||
           !done.revisionId ||
+          typeof done.branchId !== 'string' ||
+          !done.branchId ||
+          typeof done.displayNumber !== 'number' ||
+          !Number.isInteger(done.displayNumber) ||
+          done.displayNumber < 1 ||
           done.projectId !== parsedProject.projectId ||
-          typeof done.manifestSha256 !== 'string'
+          typeof done.manifestSha256 !== 'string' ||
+          typeof done.completedAt !== 'string'
         ) {
           corruptedRecords.push({
             recordPath,
-            revisionId: done.revisionId,
+            revisionId: typeof done?.revisionId === 'string' ? done.revisionId : undefined,
             reason: 'Invalid completion record fields.',
           });
           continue;
@@ -321,11 +530,25 @@ export async function openExistingVault(
       try {
         rawManifestText = await revisionsDir.readFileText([entry.name]);
       } catch (err) {
+        const readErrMsg = `Unreadable committed manifest: ${
+          err instanceof Error ? err.message : String(err)
+        }`;
         if (completionEntry) {
           corruptedRecords.push({
             recordPath,
             revisionId: revIdFromFilename,
-            reason: `Unreadable committed manifest: ${err instanceof Error ? err.message : String(err)}`,
+            reason: readErrMsg,
+          });
+          // CRITICAL FIX: Preserve the damaged committed revision in history using validated completion metadata
+          revisions.push({
+            manifest: createDamagedPlaceholderManifest(
+              parsedProject.projectId,
+              completionEntry.record,
+              '[DAMAGED MANIFEST — UNREADABLE FILE]'
+            ),
+            completion: completionEntry.record,
+            integrityStatus: 'corrupted',
+            integrityErrors: [readErrMsg],
           });
         } else {
           incompleteAttempts.push({
@@ -351,51 +574,81 @@ export async function openExistingVault(
         continue;
       }
 
-      // It has a completion record! Validate manifest JSON and checksums
-      let manifest: RevisionManifest;
+      // It has a completion record! Parse JSON first
+      let parsedRaw: unknown;
       try {
-        manifest = JSON.parse(rawManifestText) as RevisionManifest;
+        parsedRaw = JSON.parse(rawManifestText);
       } catch {
+        const jsonErrMsg = 'Committed manifest file is not valid JSON.';
         corruptedRecords.push({
           recordPath,
           revisionId: revIdFromFilename,
-          reason: 'Committed manifest contains invalid JSON.',
+          reason: jsonErrMsg,
         });
-        // Surface a damaged revision placeholder so committed corruption is never hidden
         revisions.push({
-          manifest: {
-            schemaVersion: CADTREE_SCHEMA_VERSION,
-            projectId: parsedProject.projectId,
-            revisionId: revIdFromFilename,
-            branchId: completionEntry.record.branchId,
-            parentRevisionId: null,
-            displayNumber: completionEntry.record.displayNumber,
-            captureStartedAt: completionEntry.record.completedAt,
-            captureCompletedAt: completionEntry.record.completedAt,
-            summary: '[DAMAGED MANIFEST — INVALID JSON]',
-            notes: { problem: '', modification: '', observations: '' },
-            directories: [],
-            files: [],
-            manifestPayloadSha256: '',
-          },
+          manifest: createDamagedPlaceholderManifest(
+            parsedProject.projectId,
+            completionEntry.record,
+            '[DAMAGED MANIFEST — INVALID JSON]'
+          ),
           completion: completionEntry.record,
           integrityStatus: 'corrupted',
-          integrityErrors: ['Committed manifest file is not valid JSON.'],
+          integrityErrors: [jsonErrMsg],
         });
         continue;
       }
 
-      if (manifest.schemaVersion !== CADTREE_SCHEMA_VERSION) {
-        throw new UnsupportedSchemaVersionError(manifest.schemaVersion);
+      // Check schemaVersion before structural validation so genuinely unsupported newer schema versions throw UnsupportedSchemaVersionError
+      if (
+        parsedRaw &&
+        typeof parsedRaw === 'object' &&
+        !Array.isArray(parsedRaw) &&
+        'schemaVersion' in parsedRaw &&
+        (parsedRaw as { schemaVersion: unknown }).schemaVersion !== CADTREE_SCHEMA_VERSION
+      ) {
+        throw new UnsupportedSchemaVersionError(
+          (parsedRaw as { schemaVersion: unknown }).schemaVersion
+        );
       }
 
+      // Validate manifest structure before accessing fields or computing checksums
+      const structuralValidation = validateManifestStructure(parsedRaw);
+      if (!structuralValidation.valid) {
+        const structErrMsg = `Malformed manifest structure: ${structuralValidation.errors.join(' ')}`;
+        corruptedRecords.push({
+          recordPath,
+          revisionId: revIdFromFilename,
+          reason: structErrMsg,
+        });
+        revisions.push({
+          manifest: createDamagedPlaceholderManifest(
+            parsedProject.projectId,
+            completionEntry.record,
+            '[DAMAGED MANIFEST — MISSING REQUIRED FIELDS]'
+          ),
+          completion: completionEntry.record,
+          integrityStatus: 'corrupted',
+          integrityErrors: structuralValidation.errors,
+        });
+        continue;
+      }
+
+      const manifest = parsedRaw as RevisionManifest;
       const integrityErrors: string[] = [];
+
       if (manifest.projectId !== parsedProject.projectId) {
         integrityErrors.push('Manifest projectId does not match vault projectId.');
       }
       if (manifest.revisionId !== revIdFromFilename) {
         integrityErrors.push('Manifest revisionId does not match filename.');
       }
+      if (manifest.branchId !== completionEntry.record.branchId) {
+        integrityErrors.push('Manifest branchId does not match completion record branchId.');
+      }
+      if (manifest.displayNumber !== completionEntry.record.displayNumber) {
+        integrityErrors.push('Manifest displayNumber does not match completion record displayNumber.');
+      }
+
       const computedPayloadHash = computeManifestPayloadChecksum(manifest);
       if (manifest.manifestPayloadSha256 !== computedPayloadHash) {
         integrityErrors.push('Manifest internal payload SHA-256 checksum mismatch.');
@@ -431,21 +684,11 @@ export async function openExistingVault(
         reason: errReason,
       });
       revisions.push({
-        manifest: {
-          schemaVersion: CADTREE_SCHEMA_VERSION,
-          projectId: parsedProject.projectId,
-          revisionId: revId,
-          branchId: comp.record.branchId,
-          parentRevisionId: null,
-          displayNumber: comp.record.displayNumber,
-          captureStartedAt: comp.record.completedAt,
-          captureCompletedAt: comp.record.completedAt,
-          summary: '[MISSING MANIFEST FILE]',
-          notes: { problem: '', modification: '', observations: '' },
-          directories: [],
-          files: [],
-          manifestPayloadSha256: '',
-        },
+        manifest: createDamagedPlaceholderManifest(
+          parsedProject.projectId,
+          comp.record,
+          '[MISSING MANIFEST FILE]'
+        ),
         completion: comp.record,
         integrityStatus: 'corrupted',
         integrityErrors: [errReason],
@@ -456,14 +699,31 @@ export async function openExistingVault(
   // Sort revisions by displayNumber ascending
   revisions.sort((a, b) => a.manifest.displayNumber - b.manifest.displayNumber);
 
-  // 5. Reconstruct branch heads and detect competing heads from parentRevisionId lineage
+  // 5. Reconstruct branch heads, competing heads, and damaged branch heads
   const branchHeads: Record<string, string | null> = {};
   const competingHeads: Record<string, string[]> = {};
+  const damagedBranchHeads: Record<string, string> = {};
 
   for (const branch of branches) {
     const branchRevs = revisions.filter((r) => r.manifest.branchId === branch.branchId);
     if (branchRevs.length === 0) {
       branchHeads[branch.branchId] = branch.startingRevisionId;
+      continue;
+    }
+
+    // If any committed revision on this branch has a damaged manifest/completion record,
+    // its parent lineage or baseline state cannot be trusted for new captures.
+    const damagedRevsOnBranch = branchRevs.filter((r) => r.integrityStatus === 'corrupted');
+    if (damagedRevsOnBranch.length > 0) {
+      const damagedLabels = damagedRevsOnBranch
+        .map((r) => `${formatRevisionNumber(r.manifest.displayNumber)} (${r.manifest.revisionId})`)
+        .join(', ');
+      damagedBranchHeads[branch.branchId] =
+        `Branch "${branch.name}" contains damaged committed revision(s): ${damagedLabels}. ` +
+        `The intended branch head cannot be safely established; new captures are blocked to prevent history loss or duplicate numbering.`;
+      // Point branchHeads to the highest displayNumber revision on the branch so UI never silently falls back to an older head
+      branchHeads[branch.branchId] =
+        branchRevs[branchRevs.length - 1]?.manifest.revisionId ?? null;
       continue;
     }
 
@@ -480,21 +740,34 @@ export async function openExistingVault(
       }
     }
 
-    // Leaf revisions on this branch are those not referenced as parentRevisionId by another revision on this branch
+    // Verify every non-null parentRevisionId exists in the vault
+    const allVaultRevIds = new Set(revisions.map((r) => r.manifest.revisionId));
+    const missingParentRev = branchRevs.find(
+      (r) => r.manifest.parentRevisionId !== null && !allVaultRevIds.has(r.manifest.parentRevisionId)
+    );
+    if (missingParentRev) {
+      damagedBranchHeads[branch.branchId] =
+        `Revision ${formatRevisionNumber(missingParentRev.manifest.displayNumber)} references missing parent revision "${missingParentRev.manifest.parentRevisionId}".`;
+      branchHeads[branch.branchId] =
+        branchRevs[branchRevs.length - 1]?.manifest.revisionId ?? null;
+      continue;
+    }
+
     const leaves = branchRevs
       .map((r) => r.manifest.revisionId)
       .filter((id) => !parentIdsReferencedInBranch.has(id));
 
-    // Check if any parent has multiple children on the same branch or if there are multiple leaves
-    const hasForkOnSameBranch = Array.from(byParent.values()).some((children) => children.length > 1);
+    const hasForkOnSameBranch = Array.from(byParent.values()).some(
+      (children) => children.length > 1
+    );
 
     if (leaves.length > 1 || hasForkOnSameBranch) {
-      competingHeads[branch.branchId] = leaves.length > 0 ? leaves : branchRevs.map((r) => r.manifest.revisionId);
+      competingHeads[branch.branchId] =
+        leaves.length > 0 ? leaves : branchRevs.map((r) => r.manifest.revisionId);
       branchHeads[branch.branchId] = leaves[leaves.length - 1] ?? null;
     } else if (leaves.length === 1) {
       branchHeads[branch.branchId] = leaves[0];
     } else {
-      // Cycle or corrupted parent links
       competingHeads[branch.branchId] = branchRevs.map((r) => r.manifest.revisionId);
       branchHeads[branch.branchId] = null;
     }
@@ -506,8 +779,150 @@ export async function openExistingVault(
     revisions,
     branchHeads,
     competingHeads,
+    damagedBranchHeads,
     incompleteAttempts,
     corruptedRecords,
+  };
+}
+
+/**
+ * Computes the file and directory changes introduced in `revision` compared to its
+ * recorded `parentRevisionId` (never whichever revision happens to be newest).
+ * - If `revision` is the initial baseline (`parentRevisionId === null`), returns `status: 'baseline'`.
+ * - If `revision` is damaged or its recorded parent manifest is missing or damaged,
+ *   returns `status: 'unavailable'` with an explicit reason (never substituting zero changes).
+ */
+export function computeRevisionDiff(
+  revision: ReconstructedRevision,
+  vaultState: VaultState
+): RevisionDiffResult {
+  if (revision.integrityStatus === 'corrupted') {
+    return {
+      status: 'unavailable',
+      unavailableReason: `Comparison unavailable: ${formatRevisionNumber(
+        revision.manifest.displayNumber
+      )} manifest is damaged and cannot be validated.`,
+      parentRevisionId: revision.manifest.parentRevisionId,
+      parentDisplayNumber: null,
+      added: [],
+      modified: [],
+      deleted: [],
+      unchanged: [],
+      addedDirectories: [],
+      deletedDirectories: [],
+      unchangedDirectories: [],
+    };
+  }
+
+  const parentId = revision.manifest.parentRevisionId;
+  if (parentId === null) {
+    return {
+      status: 'baseline',
+      parentRevisionId: null,
+      parentDisplayNumber: null,
+      added: [...revision.manifest.files].sort((a, b) => a.path.localeCompare(b.path)),
+      modified: [],
+      deleted: [],
+      unchanged: [],
+      addedDirectories: [...revision.manifest.directories].sort((a, b) => a.localeCompare(b)),
+      deletedDirectories: [],
+      unchangedDirectories: [],
+    };
+  }
+
+  const parentRev = vaultState.revisions.find((r) => r.manifest.revisionId === parentId);
+  if (!parentRev) {
+    return {
+      status: 'unavailable',
+      unavailableReason: `Comparison unavailable: recorded parent revision (${parentId}) was not found in vault.`,
+      parentRevisionId: parentId,
+      parentDisplayNumber: null,
+      added: [],
+      modified: [],
+      deleted: [],
+      unchanged: [],
+      addedDirectories: [],
+      deletedDirectories: [],
+      unchangedDirectories: [],
+    };
+  }
+
+  if (parentRev.integrityStatus === 'corrupted') {
+    return {
+      status: 'unavailable',
+      unavailableReason: `Comparison unavailable: recorded parent ${formatRevisionNumber(
+        parentRev.manifest.displayNumber
+      )} (${parentId}) is damaged and its manifest cannot be validated.`,
+      parentRevisionId: parentId,
+      parentDisplayNumber: parentRev.manifest.displayNumber,
+      added: [],
+      modified: [],
+      deleted: [],
+      unchanged: [],
+      addedDirectories: [],
+      deletedDirectories: [],
+      unchangedDirectories: [],
+    };
+  }
+
+  const parentFilesMap = new Map<string, FileEntry>();
+  for (const pf of parentRev.manifest.files) {
+    parentFilesMap.set(pf.path, pf);
+  }
+
+  const added: FileEntry[] = [];
+  const modified: ModifiedFileChange[] = [];
+  const unchanged: FileEntry[] = [];
+  const seenCurrentPaths = new Set<string>();
+
+  for (const currFile of revision.manifest.files) {
+    seenCurrentPaths.add(currFile.path);
+    const prevFile = parentFilesMap.get(currFile.path);
+    if (!prevFile) {
+      added.push(currFile);
+    } else if (prevFile.sha256 !== currFile.sha256) {
+      modified.push({ current: currFile, previous: prevFile });
+    } else {
+      unchanged.push(currFile);
+    }
+  }
+
+  const deleted: FileEntry[] = [];
+  for (const [prevPath, prevFile] of parentFilesMap.entries()) {
+    if (!seenCurrentPaths.has(prevPath)) {
+      deleted.push(prevFile);
+    }
+  }
+
+  added.sort((a, b) => a.path.localeCompare(b.path));
+  modified.sort((a, b) => a.current.path.localeCompare(b.current.path));
+  deleted.sort((a, b) => a.path.localeCompare(b.path));
+  unchanged.sort((a, b) => a.path.localeCompare(b.path));
+
+  const parentDirsSet = new Set(parentRev.manifest.directories);
+  const currDirsSet = new Set(revision.manifest.directories);
+
+  const addedDirectories = revision.manifest.directories
+    .filter((d) => !parentDirsSet.has(d))
+    .sort((a, b) => a.localeCompare(b));
+  const deletedDirectories = parentRev.manifest.directories
+    .filter((d) => !currDirsSet.has(d))
+    .sort((a, b) => a.localeCompare(b));
+  const unchangedDirectories = revision.manifest.directories
+    .filter((d) => parentDirsSet.has(d))
+    .sort((a, b) => a.localeCompare(b));
+
+  return {
+    status: 'compared',
+    parentRevisionId: parentId,
+    parentDisplayNumber: parentRev.manifest.displayNumber,
+    added,
+    modified,
+    deleted,
+    unchanged,
+    addedDirectories,
+    deletedDirectories,
+    unchangedDirectories,
   };
 }
 
@@ -542,4 +957,22 @@ export async function verifyRevisionObjects(
 
 export function formatRevisionNumber(displayNumber: number): string {
   return `Rev ${String(displayNumber).padStart(3, '0')}`;
+}
+
+export function sanitizeFileSpecificNotes(
+  notes: FileSpecificNote[] | undefined
+): FileSpecificNote[] | undefined {
+  if (!notes || notes.length === 0) return undefined;
+  const byPath = new Map<string, FileSpecificNote>();
+  for (const n of notes) {
+    const path = n.path.trim();
+    const problem = n.problem.trim();
+    const modification = n.modification.trim();
+    const observations = n.observations.trim();
+    if (!path) continue;
+    if (!problem && !modification && !observations) continue;
+    byPath.set(path, { path, problem, modification, observations });
+  }
+  if (byPath.size === 0) return undefined;
+  return Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path));
 }
