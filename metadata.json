@@ -1,0 +1,6 @@
+{
+  "name": "cAdtree — Local-First CAD Version Control",
+  "description": "Free, local-first version control web application for individual CAD engineers. Preserve saved project states, record engineering reasons, and recover verified snapshots.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
