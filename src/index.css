@@ -289,6 +289,53 @@ h3 {
   color: var(--muted);
   margin-top: 3px;
 }
+.workspace-project {
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+.workspace-location {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.workspace-issues {
+  padding: 12px 22px;
+  border-top: 1px solid var(--border);
+  color: #945332;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.workspace-issues p + p {
+  margin-top: 5px;
+}
+.workspace-adopt {
+  margin-top: 24px;
+}
+.workspace-adopt p {
+  margin: 12px 0;
+}
+.workspace-reconnect {
+  margin-top: 18px;
+}
+.managed-destination {
+  margin: 15px 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.recovery-external-choice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 14px 0;
+  font-size: 12px;
+}
 .branch-origin {
   padding: 14px 18px;
   border: 1px solid var(--border);

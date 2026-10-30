@@ -12,6 +12,7 @@ export interface DiagnosticsViewProps {
   workingFolderName?: string | null;
   vaultFolderName?: string;
   onReattachWorkingFolder?: () => Promise<void>;
+  managed?: boolean;
 }
 export function DiagnosticsView({
   vaultState: state,
@@ -21,6 +22,7 @@ export function DiagnosticsView({
   workingFolderName,
   vaultFolderName,
   onReattachWorkingFolder,
+  managed,
 }: DiagnosticsViewProps) {
   const [error, setError] = useState("");
   const [clear, setClear] = useState(false);
@@ -62,7 +64,11 @@ export function DiagnosticsView({
             disabled={isVerifyingAll}
             onClick={onReattachWorkingFolder}
           >
-            {workingFolderName ? "Change folder" : "Connect folder"}
+            {managed
+              ? "Reconnect workspace"
+              : workingFolderName
+                ? "Change folder"
+                : "Connect folder"}
           </button>
         </div>
         <div className="settings-row">
@@ -199,11 +205,14 @@ export function DiagnosticsView({
               disabled={isVerifyingAll}
               onClick={() => setClear(true)}
             >
-              Clear remembered connections and reopen vault
+              {managed
+                ? "Clear remembered access and reread workspace"
+                : "Clear remembered connections and reopen vault"}
             </button>
             <p className="muted small">
-              This clears browser convenience data and detaches the working
-              folder. Your vault history stays in its folder.
+              {managed
+                ? "This clears browser convenience preferences. Project and branch locations remain in the workspace records."
+                : "This clears browser convenience data and detaches the working folder. Your vault history stays in its folder."}
             </p>
           </details>
         </div>
@@ -214,9 +223,9 @@ export function DiagnosticsView({
           onClose={() => setClear(false)}
         >
           <p>
-            This removes this browser’s saved project connections and reopens
-            the current vault from its files. Your working folder will need to
-            be connected again.
+            {managed
+              ? "This removes remembered browser access and rereads portable workspace records. The current authorized root can still resolve your branches during this session. After a browser restart, select the workspace once."
+              : "This removes this browser’s saved project connections and reopens the current vault from its files. Your working folder will need to be connected again."}
           </p>
           <div className="modal-actions">
             <button
