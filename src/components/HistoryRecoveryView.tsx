@@ -218,7 +218,7 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       (b) => b.branchId === rev.manifest.branchId,
                     )?.name ?? "Unknown branch"}
                   </span>
-                  <time>
+                  <time dateTime={rev.manifest.captureCompletedAt}>
                     {formatTimestamp(rev.manifest.captureCompletedAt)}
                   </time>
                 </div>
@@ -429,8 +429,8 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         "Manifest SHA-256": rev.manifest.manifestPayloadSha256,
                         "Completion SHA-256": rev.completion.manifestSha256,
                         "Record path": `revisions/${rev.manifest.revisionId}.manifest.json`,
-                        "Capture started": rev.manifest.captureStartedAt,
-                        "Capture completed": rev.manifest.captureCompletedAt,
+                        "Capture started (UTC)": rev.manifest.captureStartedAt,
+                        "Capture completed (UTC)": rev.manifest.captureCompletedAt,
                       }).map(([k, v]) => (
                         <div key={k}>
                           <dt>{k}</dt>

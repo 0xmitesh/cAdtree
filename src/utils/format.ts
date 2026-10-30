@@ -11,7 +11,13 @@ export function formatTimestamp(isoString: string): string {
   try {
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return isoString;
-    return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   } catch {
     return isoString;
   }
@@ -50,3 +56,4 @@ export function supportsFileSystemAccessApi(): boolean {
       'function'
   );
 }
+

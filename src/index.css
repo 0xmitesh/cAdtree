@@ -102,7 +102,7 @@ h3 {
   font-size: 12px;
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.5px;
   font-weight: 700;
   color: #637468;
@@ -145,7 +145,7 @@ h3 {
   color: #65c2b3;
 }
 .rail-caption {
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 1.25px;
   margin: 12px 7px 38px;
   color: #99ada8;
@@ -181,7 +181,7 @@ h3 {
 }
 .rail-section-label {
   color: #91a29f;
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1.2px;
   margin: 0 12px 8px;
 }
@@ -199,14 +199,14 @@ h3 {
   align-items: center;
   gap: 10px;
   color: #a3b9b2;
-  font-size: 11px;
+  font-size: 12px;
 }
 .rail-bottom strong {
   font-weight: 500;
   color: #c3d4ce;
 }
 .rail-bottom p {
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 2px;
   color: #91a8a1;
 }
@@ -260,7 +260,7 @@ h3 {
   gap: 7px;
   align-items: center;
   color: #637468;
-  font-size: 11px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 .local-indicator i {
@@ -279,7 +279,7 @@ h3 {
   justify-content: space-between;
   gap: 12px;
   color: #637468;
-  font-size: 10px;
+  font-size: 12px;
 }
 .page {
   padding: 30px 34px 12px;
@@ -459,7 +459,7 @@ progress {
   margin-bottom: 12px;
 }
 .section-heading .muted {
-  font-size: 11px;
+  font-size: 12px;
 }
 .empty-state {
   min-height: 300px;
@@ -525,18 +525,19 @@ progress {
   overflow: hidden;
 }
 .canvas-bar {
-  height: 49px;
+  min-height: 49px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 17px;
+  padding: 10px 17px;
   border-bottom: 1px solid #e3e9e2;
   background: #fff;
-  font-size: 11px;
+  font-size: 12px;
   gap: 10px;
 }
 .canvas-bar .muted {
-  font-size: 10px;
+  font-size: 12px;
 }
 .graph-viewport {
   height: calc(100vh - 365px);
@@ -597,6 +598,7 @@ progress {
   border-color: #d2e6d9;
 }
 .graph-dot {
+  font-size: 12px;
   position: absolute;
   display: grid;
   place-items: center;
@@ -650,7 +652,7 @@ progress {
 }
 .revision-eyebrow {
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.2px;
   color: #6a7d73;
   display: flex;
@@ -660,14 +662,14 @@ progress {
 }
 .graph-label time,
 .revision-list-row time {
-  font-size: 11px;
+  font-size: 12px;
   color: #637468;
 }
 .latest-label {
   color: #13725d;
   background: #dceee3;
   font-family: "Segoe UI", sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   border-radius: 3px;
   padding: 1px 5px;
@@ -675,7 +677,7 @@ progress {
 }
 .attention-label {
   color: #a04c2f;
-  font-size: 10px;
+  font-size: 12px;
 }
 .graph-branches {
   position: absolute;
@@ -692,13 +694,13 @@ progress {
   padding: 0 5px;
   background: #eff6ee;
   color: #547350;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .graph-branches .branch-chip {
   border-color: var(--branch-color);
   color: var(--branch-color);
-  font-size: 11px;
+  font-size: 12px;
   background: #fcfdfb;
   flex-shrink: 0;
   align-items: center;
@@ -718,17 +720,18 @@ progress {
   border-top: 1px solid #e3e9e2;
   background: #fff;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   padding: 7px 12px;
   gap: 10px;
-  font-size: 9px;
+  font-size: 12px;
 }
 .zoom-controls {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 12px;
   color: #6b8076;
 }
 .graph-toolbar {
@@ -758,7 +761,7 @@ progress {
   background: #fff;
   color: var(--branch-color);
   padding: 5px 10px;
-  font-size: 11px;
+  font-size: 12px;
   max-width: 200px;
 }
 .branch-filter > span:first-of-type {
@@ -782,7 +785,7 @@ progress {
 }
 .graph-direction {
   color: #637468;
-  font-size: 10px;
+  font-size: 12px;
 }
 .revision-list-row.dimmed {
   opacity: 0.4;
@@ -831,7 +834,7 @@ progress {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 15px;
-  font-size: 10px;
+  font-size: 12px;
   color: #637468;
   margin-top: 10px;
 }
@@ -845,7 +848,7 @@ progress {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 12px;
   color: #5f8170;
   margin-top: 12px;
 }
@@ -895,7 +898,7 @@ progress {
   margin: 12px 0 3px;
 }
 .file-selection-toolbar .text-button {
-  font-size: 10px;
+  font-size: 12px;
 }
 .detail-file {
   padding: 12px 0;
@@ -925,12 +928,12 @@ progress {
   align-items: center;
   gap: 8px;
   color: #637468;
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 5px;
 }
 .status-badge {
   display: inline-flex;
-  font-size: 9px;
+  font-size: 12px;
   padding: 1px 5px;
   border-radius: 3px;
   background: #eef2ed;
@@ -955,16 +958,16 @@ progress {
   color: #a65d48;
 }
 .deleted-help {
-  font-size: 10px;
+  font-size: 12px;
   margin: 8px 0 0 49px;
   color: #a26755;
 }
 .deleted-help .text-button {
-  font-size: 10px;
+  font-size: 12px;
 }
 .unchanged-toggle {
   margin: 14px 0 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 .disclosure {
   border-top: 1px solid #e4eae3;
@@ -992,17 +995,17 @@ summary {
 }
 .recovery-bar .button {
   padding: 9px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .recovery-bar p {
-  font-size: 10px;
+  font-size: 12px;
   text-align: center;
   color: #637468;
   margin-top: 2px;
 }
 .technical-data {
   margin: 12px 0 18px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .technical-data dt {
   color: #6d7f73;
@@ -1013,11 +1016,11 @@ summary {
   margin: 3px 0 0;
   overflow-wrap: anywhere;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
 .notes-text dt {
   color: #637468;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   margin-top: 12px;
 }
@@ -1049,7 +1052,7 @@ summary {
   justify-content: space-between;
   gap: 10px;
   color: #637468;
-  font-size: 11px;
+  font-size: 12px;
 }
 .scan-strip strong {
   color: #566b5e;
@@ -1087,12 +1090,12 @@ summary {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: #637468;
   margin-top: 6px;
 }
 .change-row .note-action {
-  font-size: 10px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 .changes-files > .disclosure {
@@ -1144,7 +1147,7 @@ input::placeholder {
   margin-top: 12px;
 }
 .notes-fields label > span {
-  font-size: 11px;
+  font-size: 12px;
   display: block;
   margin-bottom: 5px;
   color: #6d7d6e;
@@ -1156,7 +1159,7 @@ input::placeholder {
   border: 1px solid #e0e8de;
   padding: 7px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 12px;
   background: #fafcf8;
   width: 100%;
   margin-top: 6px;
@@ -1177,19 +1180,19 @@ input::placeholder {
   border-radius: 7px;
 }
 .file-note-editor > strong {
-  font-size: 11px;
+  font-size: 12px;
 }
 .file-note-editor .section-heading {
   margin-bottom: 5px;
 }
 .file-note-editor .text-button {
-  font-size: 10px;
+  font-size: 12px;
 }
 .file-note-editor .danger {
   margin-top: 10px;
 }
 .save-reminder {
-  font-size: 10px;
+  font-size: 12px;
   color: #637468;
   border-top: 1px solid #e5eadd;
   padding-top: 15px;
@@ -1267,14 +1270,14 @@ input::placeholder {
 }
 .project-copy p {
   color: #637468;
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 4px;
 }
 .project-copy .small {
-  font-size: 10px;
+  font-size: 12px;
 }
 .forget {
-  font-size: 10px;
+  font-size: 12px;
   color: #637468;
 }
 .projects-empty {
@@ -1379,7 +1382,7 @@ input::placeholder {
 }
 .project-entry-points small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #637468;
   margin-top: 5px;
 }
@@ -1389,7 +1392,7 @@ input::placeholder {
   justify-content: center;
   gap: 7px;
   color: #637468;
-  font-size: 10px;
+  font-size: 12px;
   margin: 24px 0 10px;
 }
 .settings-page {
@@ -1419,7 +1422,7 @@ input::placeholder {
 }
 .connection-dot {
   color: #658960;
-  font-size: 11px;
+  font-size: 12px;
 }
 .connection-dot:before {
   content: "●";
@@ -1491,14 +1494,14 @@ input::placeholder {
   font-size: 12px;
 }
 .folder-field p {
-  font-size: 11px;
+  font-size: 12px;
   color: #637468;
   margin: 5px 0 0;
   overflow-wrap: anywhere;
 }
 .folder-field .button {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 @media (min-width: 1400px) {
   .page {
@@ -1615,7 +1618,7 @@ input::placeholder {
   }
   .current-branch {
     padding-left: 9px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .page {
     padding: 22px 18px 10px;
@@ -1661,7 +1664,7 @@ input::placeholder {
   }
   .workspace-footer {
     padding: 18px;
-    font-size: 9px;
+    font-size: 12px;
   }
   .workspace-footer span:last-child {
     display: none;
@@ -1672,7 +1675,7 @@ input::placeholder {
     margin-right: 18px;
   }
   .canvas-footer {
-    font-size: 9px;
+    font-size: 12px;
   }
   .graph-label strong {
     font-size: 12px;
@@ -1714,10 +1717,10 @@ input::placeholder {
     padding: 0 12px;
   }
   .eyebrow {
-    font-size: 9px;
+    font-size: 12px;
   }
   .button {
-    font-size: 11px;
+    font-size: 12px;
     padding: 9px 12px;
   }
   .section-heading {

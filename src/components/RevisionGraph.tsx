@@ -294,15 +294,7 @@ export function RevisionGraph({
                         className={`graph-dot ${node.latest ? "latest" : ""} ${node.warnings.length ? "damaged" : ""}`}
                         style={{ left: position.x - NODE_RADIUS - 12 }}
                       >
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            fontSize:
-                              node.revision.manifest.displayNumber > 999
-                                ? 9
-                                : 11,
-                          }}
-                        >{`R${String(node.revision.manifest.displayNumber).padStart(3, "0")}`}</span>
+                        <span aria-hidden="true">{`R${String(node.revision.manifest.displayNumber).padStart(3, "0")}`}</span>
                       </span>
                       <span className="graph-label" style={{ left: labelX }}>
                         <span className="revision-eyebrow">
@@ -319,7 +311,7 @@ export function RevisionGraph({
                         <strong title={node.revision.manifest.summary}>
                           {node.revision.manifest.summary}
                         </strong>
-                        <time>
+                        <time dateTime={node.revision.manifest.captureCompletedAt}>
                           {formatTimestamp(
                             node.revision.manifest.captureCompletedAt,
                           )}
@@ -386,7 +378,7 @@ export function RevisionGraph({
                   ) : null}
                 </span>
                 <strong>{node.revision.manifest.summary}</strong>
-                <time>
+                <time dateTime={node.revision.manifest.captureCompletedAt}>
                   {formatTimestamp(node.revision.manifest.captureCompletedAt)}
                 </time>
                 {node.warnings.length ? (
