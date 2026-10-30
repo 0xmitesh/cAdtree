@@ -4,6 +4,7 @@ import {
 } from './fs-adapter';
 import { hashString } from './hash';
 import { verifyStoredObject } from './object-store';
+import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
   BranchRecord,
   CADTREE_SCHEMA_VERSION,
@@ -386,69 +387,7 @@ export async function openExistingVault(
   const corruptedRecords: CorruptedVaultRecord[] = [];
   const incompleteAttempts: IncompleteAttemptRecord[] = [];
 
-  // 1. Load branches
-  const branches: BranchRecord[] = [];
-  if (await vaultDir.hasDirectory(['branches'])) {
-    const branchDir = await vaultDir.getDirectory(['branches']);
-    const branchEntries = await branchDir.listEntries();
-    for (const entry of branchEntries) {
-      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
-      const recordPath = `branches/${entry.name}`;
-      try {
-        const text = await branchDir.readFileText([entry.name]);
-        const branch = JSON.parse(text) as BranchRecord;
-        if (!branch || typeof branch !== 'object') {
-          corruptedRecords.push({ recordPath, reason: 'Branch record is not a JSON object.' });
-          continue;
-        }
-        if (branch.schemaVersion !== CADTREE_SCHEMA_VERSION) {
-          throw new UnsupportedSchemaVersionError(branch.schemaVersion);
-        }
-        if (
-          typeof branch.branchId !== 'string' ||
-          typeof branch.projectId !== 'string' ||
-          typeof branch.name !== 'string' ||
-          typeof branch.reason !== 'string' ||
-          typeof branch.createdAt !== 'string' ||
-          typeof branch.isMain !== 'boolean'
-        ) {
-          corruptedRecords.push({
-            recordPath,
-            reason: 'Branch record is missing required structural fields.',
-          });
-          continue;
-        }
-        const expectedBranchHash = computeBranchRecordChecksum(branch);
-        if (
-          branch.payloadSha256 !== expectedBranchHash ||
-          branch.projectId !== parsedProject.projectId
-        ) {
-          corruptedRecords.push({
-            recordPath,
-            reason: 'Branch record checksum or projectId mismatch.',
-          });
-          continue;
-        }
-        branches.push(branch);
-      } catch (err) {
-        if (err instanceof UnsupportedSchemaVersionError) throw err;
-        corruptedRecords.push({
-          recordPath,
-          reason: `Malformed branch record: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      }
-    }
-  }
-
-  if (branches.length === 0) {
-    throw new Error('Vault integrity failure: no valid branch records found in branches/.');
-  }
-
-  branches.sort((a, b) =>
-    a.isMain === b.isMain ? a.name.localeCompare(b.name) : a.isMain ? -1 : 1
-  );
-
-  // 2. Load completion records
+  // 1. Load completion records: committed branch identities survive damaged ready markers
   const completionMap = new Map<string, { record: CompletionRecord; rawPath: string }>();
   if (await vaultDir.hasDirectory(['completed'])) {
     const completedDir = await vaultDir.getDirectory(['completed']);
@@ -493,6 +432,113 @@ export async function openExistingVault(
           reason: `Malformed completion record: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
+    }
+  }
+
+  // 2. Load branches after committed identities are known
+  const branches: BranchRecord[] = [];
+  const establishedBranchIds = new Set(Array.from(completionMap.values(), ({ record }) => record.branchId));
+  const damagedBranchPublications: Record<string, string> = {};
+  if (await vaultDir.hasDirectory(['branches'])) {
+    const branchDir = await vaultDir.getDirectory(['branches']);
+    const branchEntries = await branchDir.listEntries();
+    for (const entry of branchEntries) {
+      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+      if (entry.name.endsWith('.ready.json')) {
+        const branchId = entry.name.slice(0, -'.ready.json'.length);
+        if (!branchEntries.some((candidate) => candidate.kind === 'file' && candidate.name === `${branchId}.branch.json`)) {
+          corruptedRecords.push({ recordPath: `branches/${entry.name}`, reason: 'Branch ready marker has no matching branch record. Restore the missing branch record.' });
+        }
+        continue;
+      }
+      const recordPath = `branches/${entry.name}`;
+      try {
+        // New branch publications use a separate final marker. Legacy *.json records
+        // retain their original checksum and publication rules, including Main.
+        let expectedRecordHash: string | undefined;
+        let readyMarkerError: string | undefined;
+        if (entry.name.endsWith('.branch.json')) {
+          const branchId = entry.name.slice(0, -'.branch.json'.length);
+          try {
+            const marker = JSON.parse(await branchDir.readFileText([`${branchId}.ready.json`]));
+            if (marker.projectId !== parsedProject.projectId || marker.branchId !== branchId || !/^[a-f0-9]{64}$/.test(marker.recordSha256)) throw new Error('Invalid branch completion marker.');
+            expectedRecordHash = marker.recordSha256;
+          } catch (error) {
+            readyMarkerError = `Branch ready marker is missing, unreadable, or malformed: ${error instanceof Error ? error.message : String(error)}`;
+            if (!establishedBranchIds.has(branchId)) {
+              incompleteAttempts.push({ id: branchId, kind: 'uncompleted_branch', path: recordPath, detail: 'Branch publication has no valid ready marker and no committed revision. Its working copy may be incomplete; it is excluded from ready branches. Retry into a fresh folder.' });
+              continue;
+            }
+          }
+        }
+        const text = await branchDir.readFileText([entry.name]);
+        if (expectedRecordHash && hashString(text) !== expectedRecordHash) {
+          readyMarkerError = 'Branch ready marker checksum does not match the branch record.';
+          if (!establishedBranchIds.has(entry.name.slice(0, -'.branch.json'.length))) throw new Error(readyMarkerError);
+        }
+        const branch = JSON.parse(text) as BranchRecord;
+        if (!branch || typeof branch !== 'object') {
+          corruptedRecords.push({ recordPath, reason: 'Branch record is not a JSON object.' });
+          continue;
+        }
+        if (branch.schemaVersion !== CADTREE_SCHEMA_VERSION) {
+          throw new UnsupportedSchemaVersionError(branch.schemaVersion);
+        }
+        if (
+          typeof branch.branchId !== 'string' ||
+          typeof branch.projectId !== 'string' ||
+          typeof branch.name !== 'string' ||
+          typeof branch.reason !== 'string' ||
+          typeof branch.createdAt !== 'string' ||
+          typeof branch.isMain !== 'boolean' ||
+          !branch.branchId || !branch.name.trim() ||
+          (entry.name !== `${branch.branchId}.json` && entry.name !== `${branch.branchId}.branch.json`) ||
+          (branch.startingRevisionId !== null && typeof branch.startingRevisionId !== 'string')
+        ) {
+          corruptedRecords.push({
+            recordPath,
+            reason: 'Branch record is missing required structural fields.',
+          });
+          continue;
+        }
+        const expectedBranchHash = computeBranchRecordChecksum(branch);
+        if (
+          branch.payloadSha256 !== expectedBranchHash ||
+          branch.projectId !== parsedProject.projectId
+        ) {
+          corruptedRecords.push({
+            recordPath,
+            reason: 'Branch record checksum or projectId mismatch.',
+          });
+          continue;
+        }
+        branches.push(branch);
+        if (readyMarkerError) {
+          const reason = `Established branch "${branch.name}" has a damaged ready marker. ${readyMarkerError} Its identity and working-folder connection remain required; saving on this branch is blocked.`;
+          damagedBranchPublications[branch.branchId] = reason;
+          corruptedRecords.push({ recordPath: `branches/${branch.branchId}.ready.json`, reason });
+        }
+      } catch (err) {
+        if (err instanceof UnsupportedSchemaVersionError) throw err;
+        corruptedRecords.push({
+          recordPath,
+          reason: `Malformed branch record: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
+    }
+  }
+
+  if (branches.length === 0) {
+    throw new Error('Vault integrity failure: no valid branch records found in branches/.');
+  }
+
+  branches.sort((a, b) =>
+    a.isMain === b.isMain ? a.name.localeCompare(b.name) : a.isMain ? -1 : 1
+  );
+
+  for (const branchId of establishedBranchIds) {
+    if (!branches.some((branch) => branch.branchId === branchId)) {
+      corruptedRecords.push({ recordPath: `branches/${branchId}`, reason: `Committed branch identity "${branchId}" has no validated branch record. Folder isolation cannot be established; write operations are blocked until the record is restored.` });
     }
   }
 
@@ -773,7 +819,11 @@ export async function openExistingVault(
     }
   }
 
-  return {
+  for (const [branchId, reason] of Object.entries(damagedBranchPublications)) {
+    damagedBranchHeads[branchId] = [reason, damagedBranchHeads[branchId]].filter(Boolean).join(' ');
+  }
+
+  const state: VaultState = {
     project: parsedProject,
     branches,
     revisions,
@@ -783,6 +833,14 @@ export async function openExistingVault(
     incompleteAttempts,
     corruptedRecords,
   };
+  for (const branch of branches) {
+    if (branches.some((other) => other !== branch && (other.branchId === branch.branchId || branchNameKey(other.name) === branchNameKey(branch.name)))) {
+      damagedBranchHeads[branch.branchId] = `Branch "${branch.name}" has a duplicate identity or name. Operations are blocked.`;
+    }
+    try { getBranchBaseline(state, branch.branchId); }
+    catch (error) { damagedBranchHeads[branch.branchId] = error instanceof Error ? error.message : String(error); }
+  }
+  return state;
 }
 
 /**
@@ -976,3 +1034,4 @@ export function sanitizeFileSpecificNotes(
   if (byPath.size === 0) return undefined;
   return Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path));
 }
+

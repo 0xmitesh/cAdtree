@@ -21,6 +21,10 @@ import {
 import { formatBytes, formatTimestamp } from "../utils/format";
 import { layoutRevisions } from "../history/layout";
 import { RevisionGraph } from "./RevisionGraph";
+import {
+  CreateBranchDialog,
+  type CreateBranchParams,
+} from "./CreateBranchDialog";
 import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
 
 export interface HistoryRecoveryViewProps {
@@ -38,6 +42,8 @@ export interface HistoryRecoveryViewProps {
   onVerifySingleRevisionObjects: (revisionId: string) => Promise<void>;
   onCancelOperation: () => void;
   onGoToChanges?: () => void;
+  onCreateBranch?: (params: CreateBranchParams) => Promise<void>;
+  isCreatingBranch?: boolean;
 }
 export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const {
@@ -67,6 +73,16 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   );
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
+  const [branchSource, setBranchSource] = useState<string | null>(null);
+  const source = vaultState.revisions.find(
+    (r) => r.manifest.revisionId === branchSource,
+  );
+  const activeBranch = vaultState.branches.find(
+    (b) => b.branchId === activeBranchId,
+  );
+  const origin = vaultState.revisions.find(
+    (r) => r.manifest.revisionId === activeBranch?.startingRevisionId,
+  );
   const selected =
     graph.nodes.find((n) => n.id === selectedId) ??
     graph.nodes.find((n) => n.id === graph.latestId) ??
@@ -145,6 +161,26 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           </button>
         </div>
       </div>
+      {activeBranch && !activeBranch.isMain ? (
+        <section className="branch-origin">
+          <strong>{activeBranch.name}</strong>
+          {origin ? (
+            <button
+              className="text-button"
+              onClick={() => choose(origin.manifest.revisionId)}
+            >
+              Started from {formatRevisionNumber(origin.manifest.displayNumber)}{" "}
+              on{" "}
+              {vaultState.branches.find(
+                (b) => b.branchId === origin.manifest.branchId,
+              )?.name ?? "Unknown branch"}
+            </button>
+          ) : (
+            <span>Starting revision is unavailable. Saving is blocked.</span>
+          )}
+          <p>{activeBranch.reason}</p>
+        </section>
+      ) : null}
       {graph.warnings.map((w) => (
         <Notice key={w} type="error">
           {w}
@@ -430,7 +466,8 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         "Completion SHA-256": rev.completion.manifestSha256,
                         "Record path": `revisions/${rev.manifest.revisionId}.manifest.json`,
                         "Capture started (UTC)": rev.manifest.captureStartedAt,
-                        "Capture completed (UTC)": rev.manifest.captureCompletedAt,
+                        "Capture completed (UTC)":
+                          rev.manifest.captureCompletedAt,
                       }).map(([k, v]) => (
                         <div key={k}>
                           <dt>{k}</dt>
@@ -478,6 +515,27 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 )}
               </div>
               <div className="recovery-bar">
+                {props.onCreateBranch ? (
+                  <button
+                    className="button secondary"
+                    disabled={
+                      damaged ||
+                      isRestoring ||
+                      verifying ||
+                      props.isCreatingBranch ||
+                      Boolean(
+                        vaultState.damagedBranchHeads[rev.manifest.branchId],
+                      ) ||
+                      Boolean(
+                        vaultState.competingHeads[rev.manifest.branchId]
+                          ?.length,
+                      )
+                    }
+                    onClick={() => setBranchSource(rev.manifest.revisionId)}
+                  >
+                    <GitBranch size={16} /> Create branch from here
+                  </button>
+                ) : null}
                 <button
                   className="button primary"
                   disabled={damaged || isRestoring || verifying}
@@ -503,6 +561,22 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           ) : null}
         </div>
       )}
+      {source && props.onCreateBranch ? (
+        <CreateBranchDialog
+          source={source.manifest}
+          sourceBranchName={
+            vaultState.branches.find(
+              (b) => b.branchId === source.manifest.branchId,
+            )?.name ?? "Unknown branch"
+          }
+          branchNames={vaultState.branches.map((b) => b.name)}
+          busy={props.isCreatingBranch ?? false}
+          progress={progress}
+          onCreate={props.onCreateBranch}
+          onClose={() => setBranchSource(null)}
+          onCancel={onCancelOperation}
+        />
+      ) : null}
       {restoreKind && rev ? (
         <Modal
           title={

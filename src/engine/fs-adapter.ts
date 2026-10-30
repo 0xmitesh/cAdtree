@@ -23,7 +23,7 @@ export interface FileSystemDirectoryAdapter {
   listEntries(): Promise<DirectoryEntryInfo[]>;
   getDirectory(
     pathSegments: string[],
-    options?: { create?: boolean; exclusiveCheck?: boolean }
+    options?: { create?: boolean; exclusiveCheck?: boolean; exclusiveCreate?: boolean }
   ): Promise<FileSystemDirectoryAdapter>;
   hasDirectory(pathSegments: string[]): Promise<boolean>;
   hasFile(pathSegments: string[]): Promise<boolean>;
@@ -258,13 +258,16 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
 
   async getDirectory(
     pathSegments: string[],
-    options?: { create?: boolean; exclusiveCheck?: boolean }
+    options?: { create?: boolean; exclusiveCheck?: boolean; exclusiveCreate?: boolean }
   ): Promise<FileSystemDirectoryAdapter> {
     if (pathSegments.length === 0) return this;
     splitAndValidatePath(pathSegments.join('/'));
     let curr = this.handle;
     for (let i = 0; i < pathSegments.length; i++) {
       const seg = pathSegments[i];
+      if (options?.exclusiveCreate && options.create && i === pathSegments.length - 1) {
+        await this.assertNoExistingEntry(curr, seg, pathSegments.join('/'));
+      }
       if (options?.exclusiveCheck && options?.create) {
         // Ensure a file does not already occupy this path segment
         try {
@@ -626,7 +629,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
 
   async getDirectory(
     pathSegments: string[],
-    options?: { create?: boolean; exclusiveCheck?: boolean }
+    options?: { create?: boolean; exclusiveCheck?: boolean; exclusiveCreate?: boolean }
   ): Promise<FileSystemDirectoryAdapter> {
     this.assertReadPermission();
     if (options?.create) {
@@ -638,6 +641,13 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     for (let i = 0; i < pathSegments.length; i++) {
       const seg = pathSegments[i];
       let next = curr.children.get(seg);
+      if (options?.exclusiveCreate && options.create && i === pathSegments.length - 1) {
+        for (const existingName of curr.children.keys()) {
+          if (existingName.toLowerCase() === seg.toLowerCase()) {
+            throw new Error(`Destination conflict: "${existingName}" already exists.`);
+          }
+        }
+      }
       if (!next) {
         if (!options?.create) {
           throw new Error(`Directory "${seg}" not found.`);
@@ -876,3 +886,4 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     dir.children.delete(leafName);
   }
 }
+

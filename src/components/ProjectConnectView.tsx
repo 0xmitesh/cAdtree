@@ -297,11 +297,11 @@ export function ProjectConnectView({
                 <div className="folder-field">
                   <div>
                     <strong>
-                      Working folder <span className="muted">(optional)</span>
+                      Main working folder <span className="muted">(optional)</span>
                     </strong>
                     <p>
                       {working?.name ??
-                        "Connect later to scan and save changes."}
+                        "Connect Main here, or connect each branch later from the project header."}
                     </p>
                   </div>
                   <button

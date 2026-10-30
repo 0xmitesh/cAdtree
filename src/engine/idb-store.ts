@@ -12,6 +12,7 @@ export interface RememberedProjectBinding {
   vaultFolderName: string;
   workingFolderNames: Record<string, string>;
   lastOpenedAt: string;
+  activeBranchId?: string;
 }
 
 const DB_NAME = 'cadtree_convenience_v1';
@@ -61,6 +62,30 @@ export async function saveRememberedProjectBinding(
       db.close();
       reject(tx.error ?? new Error('Failed to save project binding in IndexedDB.'));
     };
+  });
+}
+
+/** Merge one branch binding in a single IDB transaction, retaining all other handles. */
+export async function rememberBranchConnection(
+  project: { projectId: string; projectName: string; vaultHandle: FileSystemDirectoryHandle; vaultFolderName: string },
+  branchId: string,
+  workingHandle?: FileSystemDirectoryHandle,
+): Promise<void> {
+  if (!isIndexedDbAvailable()) throw new Error('IndexedDB is unavailable; folder connections will last only for this session.');
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BINDINGS, 'readwrite');
+    const store = tx.objectStore(STORE_BINDINGS);
+    const request = store.get(project.projectId);
+    request.onsuccess = () => {
+      const previous = request.result as RememberedProjectBinding | undefined;
+      store.put({ ...previous, ...project, activeBranchId: branchId, lastOpenedAt: new Date().toISOString(),
+        branchWorkingHandles: { ...previous?.branchWorkingHandles, ...(workingHandle ? { [branchId]: workingHandle } : {}) },
+        workingFolderNames: { ...previous?.workingFolderNames, ...(workingHandle ? { [branchId]: workingHandle.name } : {}) },
+      } satisfies RememberedProjectBinding);
+    };
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember this branch connection.')); };
   });
 }
 
@@ -155,3 +180,4 @@ export async function clearAllConvenienceMetadata(): Promise<void> {
     // Ignore
   }
 }
+

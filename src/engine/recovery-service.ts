@@ -6,6 +6,7 @@ import {
 } from './fs-adapter';
 import { hashStream } from './hash';
 import { withProjectWriterLock } from './locks';
+import { validateOperationWorkingFolders, type WorkingFolderBindings } from './branch-state';
 import { getObjectPathSegments, verifyStoredObject } from './object-store';
 import { FileEntry, ProgressUpdate, RestoreResult } from './types';
 import { computeManifestPayloadChecksum, openExistingVault } from './vault-service';
@@ -14,6 +15,7 @@ export interface RestoreRevisionOptions {
   vaultDir: FileSystemDirectoryAdapter;
   destinationDir: FileSystemDirectoryAdapter;
   workingDir?: FileSystemDirectoryAdapter | null;
+  workingFolders?: WorkingFolderBindings;
   revisionId: string;
   onProgress?: (progress: ProgressUpdate) => void;
   signal?: AbortSignal;
@@ -45,6 +47,7 @@ async function executeVerifiedRecovery(params: {
   vaultDir: FileSystemDirectoryAdapter;
   destinationDir: FileSystemDirectoryAdapter;
   workingDir?: FileSystemDirectoryAdapter | null;
+  workingFolders?: WorkingFolderBindings;
   revisionId: string;
   selectedPaths?: string[];
   onProgress?: (progress: ProgressUpdate) => void;
@@ -55,6 +58,7 @@ async function executeVerifiedRecovery(params: {
     vaultDir,
     destinationDir,
     workingDir,
+    workingFolders,
     revisionId,
     selectedPaths,
     onProgress,
@@ -88,6 +92,12 @@ async function executeVerifiedRecovery(params: {
     }
 
     const vaultState = await openExistingVault(vaultDir);
+    await validateOperationWorkingFolders(vaultState, vaultDir, workingFolders);
+    if (workingFolders) {
+      for (const branch of vaultState.branches) {
+        await validateDirectoryIsolation(destinationDir, workingFolders[branch.branchId]!, 'Recovery destination', `"${branch.name}" working folder`);
+      }
+    }
     const targetRev = vaultState.revisions.find((r) => r.manifest.revisionId === revisionId);
     if (!targetRev) {
       throw new Error(`Revision "${revisionId}" does not exist in committed vault history.`);
@@ -410,3 +420,4 @@ export async function restoreSelectedFilesToFolder(
     kind: 'selected_files',
   });
 }
+

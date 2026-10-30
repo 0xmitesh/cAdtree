@@ -1,29 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  FileSystemDirectoryAdapter,
+  type FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
   validateDirectoryIsolation,
 } from "./engine/fs-adapter";
 import {
   clearAllConvenienceMetadata,
+  getRememberedProjectBinding,
   listRememberedProjectBindings,
-  RememberedProjectBinding,
+  type RememberedProjectBinding,
   removeRememberedProjectBinding,
-  saveRememberedProjectBinding,
+  rememberBranchConnection,
 } from "./engine/idb-store";
 import {
   restoreRevisionToFolder,
   restoreSelectedFilesToFolder,
 } from "./engine/recovery-service";
 import { captureRevision, ReviewStaleError } from "./engine/revision-service";
+import { createDesignBranch } from "./engine/branch-service";
+import {
+  getBranchBaseline,
+  validateWorkingFolderBindings,
+  type WorkingFolderBindings,
+} from "./engine/branch-state";
 import { scanBranchChanges } from "./engine/scanner";
 import {
-  FileSpecificNote,
+  type FileSpecificNote,
   MAIN_BRANCH_ID,
-  ProgressUpdate,
-  RestoreResult,
-  ScanResult,
-  VaultState,
+  type ProgressUpdate,
+  type RestoreResult,
+  type ScanResult,
+  type VaultState,
 } from "./engine/types";
 import {
   formatRevisionNumber,
@@ -35,6 +42,7 @@ import { ProjectConnectView } from "./components/ProjectConnectView";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { DiagnosticsView } from "./components/DiagnosticsView";
+import type { CreateBranchParams } from "./components/CreateBranchDialog";
 import {
   GitBranch,
   FolderOpen,
@@ -47,614 +55,705 @@ import { IntegrityNotice, Notice, OperationProgress } from "./components/ui";
 import { supportsFileSystemAccessApi } from "./utils/format";
 
 type ActiveTab = "connect" | "changes" | "history" | "diagnostics";
+type Operation =
+  | "scan"
+  | "capture"
+  | "restore"
+  | "verify"
+  | "branch"
+  | "connect";
+type Context = {
+  version: number;
+  signal: AbortSignal;
+  current: () => boolean;
+  progress: (p: ProgressUpdate) => void;
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("connect");
   const [rememberedBindings, setRememberedBindings] = useState<
     RememberedProjectBinding[]
   >([]);
-
-  // Active workspace adapters and state
   const [vaultDir, setVaultDir] = useState<FileSystemDirectoryAdapter | null>(
     null,
+  );
+  const [workingFolders, setWorkingFolders] = useState<WorkingFolderBindings>(
+    {},
   );
   const [workingDir, setWorkingDir] =
     useState<FileSystemDirectoryAdapter | null>(null);
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
-  const [activeBranchId, setActiveBranchId] = useState<string>(MAIN_BRANCH_ID);
-
-  // Scan & operation state
+  const [activeBranchId, setActiveBranchId] = useState(MAIN_BRANCH_ID);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [isScanStale, setIsScanStale] = useState<boolean>(false);
-  const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [isCapturing, setIsCapturing] = useState<boolean>(false);
-  const [isRestoring, setIsRestoring] = useState<boolean>(false);
-  const [isVerifyingAll, setIsVerifyingAll] = useState<boolean>(false);
+  const [isScanStale, setIsScanStale] = useState(false);
+  const [operation, setOperation] = useState<Operation | null>(null);
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
   const [statusBanner, setStatusBanner] = useState<{
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
-
   const [lastRestoreReport, setLastRestoreReport] = useState<{
     result: RestoreResult;
   } | null>(null);
-
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const refreshRememberedList = useCallback(async () => {
-    const list = await listRememberedProjectBindings();
-    setRememberedBindings(list);
-  }, []);
-
+  // Synchronous guards also cover rapid double clicks before React renders disabled controls.
+  const operationRef = useRef<AbortController | null>(null);
+  const contextVersion = useRef(0);
+  const refreshRememberedList = useCallback(
+    async () => setRememberedBindings(await listRememberedProjectBindings()),
+    [],
+  );
   useEffect(() => {
-    refreshRememberedList();
+    void refreshRememberedList();
   }, [refreshRememberedList]);
-
-  // Mark scan result as potentially stale a few seconds after completion
-  useEffect(() => {
-    if (!scanResult) return;
-    setIsScanStale(false);
-    const timer = setTimeout(() => {
-      setIsScanStale(true);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [scanResult]);
-
-  const runScan = useCallback(
-    async (
-      targetWorkingDir: FileSystemDirectoryAdapter,
-      currentVaultState: VaultState,
-      branchId: string,
-    ) => {
-      const abort = new AbortController();
-      abortControllerRef.current = abort;
-      setIsScanning(true);
-      setProgress({
-        phase: "scanning_source",
-        processedFiles: 0,
-        totalFiles: 0,
-        processedBytes: 0,
-        totalBytes: 0,
-        message: "Scanning working folder and computing SHA-256 digests...",
-      });
-
-      try {
-        const headRevId = currentVaultState.branchHeads[branchId] ?? null;
-        const headRev = headRevId
-          ? (currentVaultState.revisions.find(
-              (r) => r.manifest.revisionId === headRevId,
-            ) ?? null)
-          : null;
-
-        const res = await scanBranchChanges(
-          targetWorkingDir,
-          branchId,
-          headRev && headRev.integrityStatus !== "corrupted"
-            ? headRev.manifest
-            : null,
-          {
-            signal: abort.signal,
-            onProgress: (path, count, bytes) => {
-              setProgress({
-                phase: "scanning_source",
-                currentFile: path,
-                processedFiles: count,
-                totalFiles: count,
-                processedBytes: bytes,
-                totalBytes: bytes,
-                message: `Hashing ${path}...`,
-              });
-            },
-          },
-        );
-        setScanResult(res);
-        return res;
-      } finally {
-        setIsScanning(false);
-        setProgress(null);
-        abortControllerRef.current = null;
-      }
+  useEffect(
+    () => () => {
+      contextVersion.current++;
+      operationRef.current?.abort();
     },
     [],
   );
+  useEffect(() => {
+    setIsScanStale(false);
+    if (!scanResult) return;
+    const timer = setTimeout(() => setIsScanStale(true), 5000);
+    return () => clearTimeout(timer);
+  }, [scanResult]);
 
-  const persistRealBinding = async (
-    state: VaultState,
-    vDir: FileSystemDirectoryAdapter,
-    wDir: FileSystemDirectoryAdapter | null,
-  ) => {
-    if (vDir.kind !== "real") return;
-    const realV = vDir as RealFileSystemAdapter;
-    const realW =
-      wDir && wDir.kind === "real" ? (wDir as RealFileSystemAdapter) : null;
-
-    const binding: RememberedProjectBinding = {
-      projectId: state.project.projectId,
-      projectName: state.project.name,
-      vaultHandle: realV.handle,
-      branchWorkingHandles: realW ? { [MAIN_BRANCH_ID]: realW.handle } : {},
-      vaultFolderName: realV.name,
-      workingFolderNames: realW ? { [MAIN_BRANCH_ID]: realW.name } : {},
-      lastOpenedAt: new Date().toISOString(),
+  const perform = async <T,>(
+    kind: Operation,
+    action: (context: Context) => Promise<T>,
+    rethrow = false,
+  ): Promise<T | undefined> => {
+    if (operationRef.current) {
+      if (rethrow)
+        throw new Error("Finish or cancel the current operation first.");
+      return;
+    }
+    const abort = new AbortController();
+    const version = contextVersion.current;
+    operationRef.current = abort;
+    setOperation(kind);
+    setStatusBanner(null);
+    const current = () =>
+      contextVersion.current === version && operationRef.current === abort;
+    const context = {
+      version,
+      signal: abort.signal,
+      current,
+      progress: (p: ProgressUpdate) => {
+        if (current()) setProgress(p);
+      },
     };
-    await saveRememberedProjectBinding(binding);
-    await refreshRememberedList();
-  };
-
-  // 1. Create Real Project
-  const handleCreateRealProject = async (
-    projectName: string,
-    selectedWorkingDir: FileSystemDirectoryAdapter,
-    selectedVaultDir: FileSystemDirectoryAdapter,
-  ) => {
-    setStatusBanner(null);
-    const wPerm = await selectedWorkingDir.requestPermission("read");
-    if (wPerm !== "granted") {
-      throw new Error(
-        "Read permission was not granted for the CAD working folder.",
-      );
-    }
-    const vPerm = await selectedVaultDir.requestPermission("readwrite");
-    if (vPerm !== "granted") {
-      throw new Error(
-        "Read/write permission was not granted for the revision vault folder.",
-      );
-    }
-
-    const state = await initializeProjectVault(
-      selectedWorkingDir,
-      selectedVaultDir,
-      projectName,
-    );
-
-    setVaultDir(selectedVaultDir);
-    setWorkingDir(selectedWorkingDir);
-    setVaultState(state);
-    setActiveBranchId(MAIN_BRANCH_ID);
-    setLastRestoreReport(null);
-
-    await persistRealBinding(state, selectedVaultDir, selectedWorkingDir);
-    await runScan(selectedWorkingDir, state, MAIN_BRANCH_ID);
-    setStatusBanner({
-      type: "success",
-      message: `Initialized vault "${selectedVaultDir.name}" for project "${state.project.name}" and completed initial working folder scan.`,
-    });
-    setActiveTab("changes");
-  };
-
-  // 2. Open Existing Real Vault
-  const handleOpenRealVault = async (
-    selectedVaultDir: FileSystemDirectoryAdapter,
-    selectedWorkingDir: FileSystemDirectoryAdapter | null,
-  ) => {
-    setStatusBanner(null);
-    const vPerm = await selectedVaultDir.requestPermission("readwrite");
-    if (vPerm !== "granted") {
-      throw new Error(
-        "Read/write permission is required to open the revision vault.",
-      );
-    }
-
-    if (selectedWorkingDir) {
-      const wPerm = await selectedWorkingDir.requestPermission("read");
-      if (wPerm !== "granted") {
-        throw new Error(
-          "Read permission was not granted for the attached working folder.",
-        );
+    try {
+      return await action(context);
+    } catch (error) {
+      if (current())
+        setStatusBanner({
+          type:
+            error instanceof DOMException && error.name === "AbortError"
+              ? "info"
+              : "error",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      if (rethrow) throw error;
+    } finally {
+      if (operationRef.current === abort) {
+        operationRef.current = null;
+        setOperation(null);
+        setProgress(null);
       }
-      await validateDirectoryIsolation(
-        selectedWorkingDir,
-        selectedVaultDir,
-        "Working folder",
-        "Revision vault",
-      );
-    }
-
-    const state = await openExistingVault(selectedVaultDir);
-    setVaultDir(selectedVaultDir);
-    setWorkingDir(selectedWorkingDir);
-    setVaultState(state);
-    setActiveBranchId(MAIN_BRANCH_ID);
-    setLastRestoreReport(null);
-
-    await persistRealBinding(state, selectedVaultDir, selectedWorkingDir);
-
-    if (selectedWorkingDir) {
-      await runScan(selectedWorkingDir, state, MAIN_BRANCH_ID);
-      setStatusBanner({
-        type: "success",
-        message: `Reopened vault "${state.project.name}" (${state.revisions.length} committed revision(s)) and scanned attached working folder.`,
-      });
-      setActiveTab(state.revisions.length ? "history" : "changes");
-    } else {
-      setScanResult(null);
-      setStatusBanner({
-        type: "info",
-        message: `Reconstructed project "${state.project.name}" (${state.revisions.length} committed revision(s)) directly from vault files. Reattach a working folder explicitly to scan or save new changes.`,
-      });
-      setActiveTab(state.revisions.length > 0 ? "history" : "changes");
     }
   };
-
-  // 3. Reconnect Remembered Project from IndexedDB
+  const pickFolder = async (mode: "read" | "readwrite") => {
+    if (!supportsFileSystemAccessApi())
+      throw new Error(
+        "Folder selection is unavailable here. Open cAdtree in Edge or Chrome.",
+      );
+    const picker = (
+      window as unknown as {
+        showDirectoryPicker: (options: {
+          mode: string;
+        }) => Promise<FileSystemDirectoryHandle>;
+      }
+    ).showDirectoryPicker;
+    return new RealFileSystemAdapter(await picker({ mode }));
+  };
+  const applyVaultState = (next: VaultState) => {
+    setVaultState((previous) => {
+      if (previous?.project.projectId !== next.project.projectId) return next;
+      return {
+        ...next,
+        revisions: next.revisions.map((revision) => {
+          const checked = previous.revisions.find(
+            (old) => old.manifest.revisionId === revision.manifest.revisionId,
+          );
+          return revision.integrityStatus !== "corrupted" &&
+            checked &&
+            checked.integrityStatus !== "manifest_verified" &&
+            checked.manifest.manifestPayloadSha256 ===
+              revision.manifest.manifestPayloadSha256 &&
+            checked.completion.manifestSha256 ===
+              revision.completion.manifestSha256
+            ? checked
+            : revision;
+        }),
+      };
+    });
+  };
+  const persistBinding = async (
+    state: VaultState,
+    vault: FileSystemDirectoryAdapter,
+    branchId: string,
+    working?: FileSystemDirectoryAdapter | null,
+  ): Promise<string> => {
+    if (!(vault instanceof RealFileSystemAdapter)) return "";
+    try {
+      await rememberBranchConnection(
+        {
+          projectId: state.project.projectId,
+          projectName: state.project.name,
+          vaultHandle: vault.handle,
+          vaultFolderName: vault.name,
+        },
+        branchId,
+        working instanceof RealFileSystemAdapter ? working.handle : undefined,
+      );
+      await refreshRememberedList();
+      return "";
+    } catch (error) {
+      return `Browser convenience data could not be saved (${error instanceof Error ? error.message : String(error)}). Vault publication is independent; reconnect folders explicitly after reopening.`;
+    }
+  };
+  const scan = async (
+    vault: FileSystemDirectoryAdapter,
+    folders: WorkingFolderBindings,
+    branchId: string,
+    context: Context,
+  ) => {
+    const folder = folders[branchId];
+    if (!folder)
+      throw new Error(
+        "Connect the selected branch’s working folder before scanning.",
+      );
+    const state = await openExistingVault(vault);
+    if (!context.current()) return;
+    applyVaultState(state);
+    await validateWorkingFolderBindings(state, vault, folders, false);
+    if ((await folder.queryPermission("read")) !== "granted")
+      throw new Error(
+        "Reconnect the selected branch’s working folder to restore read permission.",
+      );
+    const baseline = getBranchBaseline(state, branchId);
+    const result = await scanBranchChanges(folder, branchId, baseline, {
+      signal: context.signal,
+      onProgress: (path, files, bytes) =>
+        context.progress({
+          phase: "scanning_source",
+          currentFile: path,
+          processedFiles: files,
+          totalFiles: files,
+          processedBytes: bytes,
+          totalBytes: bytes,
+          message: `Scanning ${path}…`,
+        }),
+    });
+    if (context.current()) setScanResult(result);
+    return result;
+  };
+  // Install a project only after all explicit connections have passed identity checks.
+  const installProject = async (
+    state: VaultState,
+    vault: FileSystemDirectoryAdapter,
+    folders: WorkingFolderBindings,
+    branchId: string,
+  ) => {
+    setVaultDir(vault);
+    setVaultState(state);
+    setWorkingFolders(folders);
+    setActiveBranchId(branchId);
+    setWorkingDir(folders[branchId] ?? null);
+    setScanResult(null);
+    setLastRestoreReport(null);
+    setActiveTab(state.revisions.length ? "history" : "changes");
+  };
+  const handleCreateRealProject = async (
+    name: string,
+    working: FileSystemDirectoryAdapter,
+    vault: FileSystemDirectoryAdapter,
+  ) => {
+    await perform(
+      "connect",
+      async (context) => {
+        if (
+          (await working.requestPermission("read")) !== "granted" ||
+          (await vault.requestPermission("readwrite")) !== "granted"
+        )
+          throw new Error("Folder permission was not granted.");
+        const state = await initializeProjectVault(working, vault, name);
+        if (!context.current()) return;
+        await installProject(
+          state,
+          vault,
+          { [MAIN_BRANCH_ID]: working },
+          MAIN_BRANCH_ID,
+        );
+        let warning = await persistBinding(
+          state,
+          vault,
+          MAIN_BRANCH_ID,
+          working,
+        );
+        try {
+          await scan(
+            vault,
+            { [MAIN_BRANCH_ID]: working },
+            MAIN_BRANCH_ID,
+            context,
+          );
+        } catch (error) {
+          warning += ` Scan needed: ${error instanceof Error ? error.message : String(error)}`;
+        }
+        if (!context.current()) return;
+        setStatusBanner({
+          type: warning ? "info" : "success",
+          message: `Created project "${name}". Save a revision to preserve the complete working project. ${warning}`,
+        });
+      },
+      true,
+    );
+  };
+  const openProject = async (
+    vault: FileSystemDirectoryAdapter,
+    selectedWorking: FileSystemDirectoryAdapter | null,
+    saved?: RememberedProjectBinding,
+  ) => {
+    await perform(
+      "connect",
+      async (context) => {
+        if ((await vault.requestPermission("readwrite")) !== "granted")
+          throw new Error(
+            "Read/write permission is required for the revision vault.",
+          );
+        const state = await openExistingVault(vault);
+        if (!context.current()) return;
+        if (saved && saved.projectId !== state.project.projectId)
+          throw new Error(
+            "The remembered vault now contains a different project. Reopen it manually before connecting working folders.",
+          );
+        const remembered =
+          saved ?? (await getRememberedProjectBinding(state.project.projectId));
+        const branchId =
+          saved &&
+          state.branches.some((b) => b.branchId === saved.activeBranchId)
+            ? saved.activeBranchId!
+            : MAIN_BRANCH_ID;
+        const folders: WorkingFolderBindings = {};
+        for (const branch of state.branches) {
+          const handle = remembered?.branchWorkingHandles[branch.branchId];
+          if (handle) {
+            const adapter = new RealFileSystemAdapter(handle);
+            try {
+              if ((await adapter.queryPermission("read")) === "granted")
+                folders[branch.branchId] = adapter;
+            } catch {
+              /* Invalid remembered handles are reconnected explicitly. */
+            }
+          }
+        }
+        if (selectedWorking) {
+          if ((await selectedWorking.requestPermission("read")) !== "granted")
+            throw new Error(
+              "Read permission was not granted for the selected working folder.",
+            );
+          folders[MAIN_BRANCH_ID] = selectedWorking;
+        }
+        await validateWorkingFolderBindings(state, vault, folders, false);
+        await installProject(state, vault, folders, branchId);
+        let warning = await persistBinding(
+          state,
+          vault,
+          branchId,
+          folders[branchId],
+        );
+        if (folders[branchId]) {
+          try {
+            await scan(vault, folders, branchId, context);
+          } catch (error) {
+            warning += ` Scan unavailable: ${error instanceof Error ? error.message : String(error)}`;
+          }
+        }
+        if (!context.current()) return;
+        setStatusBanner({
+          type: "info",
+          message: `Opened "${state.project.name}" from vault records with ${state.branches.length} branches and ${state.revisions.length} revisions. Select a branch to work on it; connect missing folders explicitly. ${warning}`,
+        });
+      },
+      true,
+    );
+  };
+  const handleOpenRealVault = (
+    vault: FileSystemDirectoryAdapter,
+    working: FileSystemDirectoryAdapter | null,
+  ) => openProject(vault, working);
   const handleReconnectRemembered = async (
     binding: RememberedProjectBinding,
   ) => {
-    setStatusBanner(null);
-    if (!binding.vaultHandle) {
+    if (!binding.vaultHandle)
       throw new Error(
-        "Saved binding does not have a directory handle. Please reopen the vault folder manually.",
+        "Reopen the vault folder manually to restore its connection.",
       );
-    }
-    const vAdapter = new RealFileSystemAdapter(binding.vaultHandle);
-    const wHandle = binding.branchWorkingHandles[MAIN_BRANCH_ID];
-    const wAdapter = wHandle ? new RealFileSystemAdapter(wHandle) : null;
-    await handleOpenRealVault(vAdapter, wAdapter);
+    return openProject(
+      new RealFileSystemAdapter(binding.vaultHandle),
+      null,
+      binding,
+    );
   };
-
-  // 4. Scan Working Folder
-  const handleScanCurrent = async () => {
-    if (!workingDir || !vaultState) return;
+  const handleSelectBranch = async (branchId: string) => {
+    if (
+      operationRef.current ||
+      !vaultState ||
+      !vaultDir ||
+      branchId === activeBranchId
+    )
+      return;
+    contextVersion.current++;
+    setActiveBranchId(branchId);
+    setScanResult(null);
+    setLastRestoreReport(null);
     setStatusBanner(null);
-    try {
-      const res = await runScan(workingDir, vaultState, activeBranchId);
-      setStatusBanner({
-        type: "info",
-        message: res.hasChanges
-          ? `Scan complete: +${res.added.length} added, ~${res.modified.length} modified, -${res.deleted.length} deleted, ${res.unchanged.length} unchanged.`
-          : "Scan complete: Working folder matches the latest saved revision (no changes).",
-      });
-    } catch (err) {
-      setStatusBanner({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-  };
-
-  // 5. Capture Revision
-  const handleCaptureRevision = async (params: {
-    summary: string;
-    notes: { problem: string; modification: string; observations: string };
-    fileNotes: FileSpecificNote[];
-    reviewedChangesSignature: string;
-  }) => {
-    if (!workingDir || !vaultDir || !vaultState) return;
-    setStatusBanner(null);
-    const abort = new AbortController();
-    abortControllerRef.current = abort;
-    setIsCapturing(true);
-
-    try {
-      const {
-        revision,
-        vaultState: updatedState,
-        cacheWarning,
-      } = await captureRevision(workingDir, vaultDir, {
-        branchId: activeBranchId,
-        summary: params.summary,
-        notes: params.notes,
-        fileNotes: params.fileNotes,
-        reviewedChangesSignature: params.reviewedChangesSignature,
-        signal: abort.signal,
-        onProgress: (p) => setProgress(p),
-      });
-
-      setVaultState(updatedState);
-      await runScan(workingDir, updatedState, activeBranchId);
-
-      setStatusBanner({
-        type: "success",
-        message: `Published and verified ${formatRevisionNumber(
-          revision.manifest.displayNumber,
-        )} ("${revision.manifest.summary}") with ${
-          revision.manifest.files.length
-        } files.${cacheWarning ? ` (${cacheWarning})` : ""}`,
-      });
-    } catch (err) {
-      if (err instanceof ReviewStaleError) {
-        setScanResult(err.freshScan);
+    setWorkingDir(null);
+    await perform("scan", async (context) => {
+      const state = await openExistingVault(vaultDir);
+      if (!context.current()) return;
+      applyVaultState(state);
+      if (!state.branches.some((b) => b.branchId === branchId))
+        throw new Error("Selected branch is missing. Reopen the vault.");
+      const folder = workingFolders[branchId];
+      let readable = false;
+      try {
+        readable = Boolean(
+          folder && (await folder.queryPermission("read")) === "granted",
+        );
+      } catch {
+        /* Reconnect a stale handle explicitly. */
       }
-      setStatusBanner({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
-    } finally {
-      setIsCapturing(false);
-      setProgress(null);
-      abortControllerRef.current = null;
-    }
+      if (folder && readable) {
+        if (!context.current()) return;
+        setWorkingDir(folder);
+        await scan(vaultDir, workingFolders, branchId, context);
+      } else {
+        setWorkingFolders((previous) => {
+          const updated = { ...previous };
+          delete updated[branchId];
+          return updated;
+        });
+      }
+      const warning = await persistBinding(state, vaultDir, branchId);
+      if (context.current())
+        setStatusBanner({
+          type: "info",
+          message: `${readable ? "Open this branch’s folder manually in SolidWorks." : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`,
+        });
+    });
   };
-
-  // 6. Reattach Working Folder explicitly
+  const handleScanCurrent = async () => {
+    if (!vaultDir) return;
+    await perform("scan", async (context) => {
+      setScanResult(null);
+      const result = await scan(
+        vaultDir,
+        workingFolders,
+        activeBranchId,
+        context,
+      );
+      if (result && context.current())
+        setStatusBanner({
+          type: "info",
+          message: result.hasChanges
+            ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
+            : "This working folder matches its branch’s saved revision.",
+        });
+    });
+  };
+  const handleCaptureRevision = async (
+    branchId: string,
+    params: {
+      summary: string;
+      notes: { problem: string; modification: string; observations: string };
+      fileNotes: FileSpecificNote[];
+      reviewedChangesSignature: string;
+    },
+  ) => {
+    if (!workingDir || !vaultDir || branchId !== activeBranchId)
+      throw new Error(
+        "The active branch connection changed. Scan again before saving.",
+      );
+    await perform(
+      "capture",
+      async (context) => {
+        try {
+          const result = await captureRevision(workingDir, vaultDir, {
+            ...params,
+            branchId,
+            workingFolders,
+            signal: context.signal,
+            onProgress: context.progress,
+          });
+          if (!context.current()) return;
+          setVaultState(result.vaultState);
+          setScanResult(null);
+          // Publication succeeded even if a subsequent scan loses folder access.
+          let scanWarning = "";
+          try {
+            await scan(vaultDir, workingFolders, branchId, context);
+          } catch (error) {
+            scanWarning = `Rescan needed: ${error instanceof Error ? error.message : String(error)}`;
+          }
+          if (context.current())
+            setStatusBanner({
+              type: "success",
+              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this branch. ${result.cacheWarning ?? ""} ${scanWarning}`,
+            });
+        } catch (error) {
+          if (error instanceof ReviewStaleError && context.current())
+            setScanResult(error.freshScan);
+          throw error;
+        }
+      },
+      true,
+    );
+  };
   const handleReattachWorkingFolder = async () => {
     if (!vaultDir || !vaultState) return;
-    setStatusBanner(null);
-
-    if (!supportsFileSystemAccessApi()) {
-      setStatusBanner({
-        type: "error",
-        message: "Directory picker is unavailable in this browser context.",
-      });
-      return;
-    }
-
-    try {
-      const picker = (
-        window as unknown as {
-          showDirectoryPicker: (opts?: {
-            mode?: "read" | "readwrite";
-          }) => Promise<FileSystemDirectoryHandle>;
+    await perform("connect", async (context) => {
+      const selected = await pickFolder("read");
+      const state = await openExistingVault(vaultDir);
+      const folders = { ...workingFolders, [activeBranchId]: selected };
+      await validateWorkingFolderBindings(state, vaultDir, folders, false);
+      if (!context.current()) return;
+      setWorkingFolders(folders);
+      setWorkingDir(selected);
+      setScanResult(null);
+      const warning = await persistBinding(
+        state,
+        vaultDir,
+        activeBranchId,
+        selected,
+      );
+      await scan(vaultDir, folders, activeBranchId, context);
+      if (context.current())
+        setStatusBanner({
+          type: "info",
+          message: `Connected "${selected.name}" to this branch. Open this folder manually in SolidWorks. ${warning}`,
+        });
+    });
+  };
+  const handleCreateBranch = async (params: CreateBranchParams) => {
+    if (!vaultDir || !vaultState)
+      throw new Error("Open a project vault first.");
+    await perform(
+      "branch",
+      async (context) => {
+        const result = await createDesignBranch({
+          ...params,
+          vaultDir,
+          workingFolders,
+          signal: context.signal,
+          onProgress: context.progress,
+        });
+        if (!context.current()) return;
+        const folders = {
+          ...workingFolders,
+          [result.branch.branchId]: result.workingDir,
+        };
+        setVaultState(result.vaultState);
+        setWorkingFolders(folders);
+        setWorkingDir(result.workingDir);
+        setActiveBranchId(result.branch.branchId);
+        setScanResult(null);
+        setLastRestoreReport(null);
+        const warning = await persistBinding(
+          result.vaultState,
+          vaultDir,
+          result.branch.branchId,
+          result.workingDir,
+        );
+        let scanWarning = "";
+        try {
+          await scan(vaultDir, folders, result.branch.branchId, context);
+        } catch (error) {
+          scanWarning = `Scan needed: ${error instanceof Error ? error.message : String(error)}`;
         }
-      ).showDirectoryPicker;
-      const handle = await picker({ mode: "read" });
-      const newWDir = new RealFileSystemAdapter(handle);
-      await validateDirectoryIsolation(
-        newWDir,
-        vaultDir,
-        "Working folder",
-        "Revision vault",
-      );
-
-      setWorkingDir(newWDir);
-      await persistRealBinding(vaultState, vaultDir, newWDir);
-      await runScan(newWDir, vaultState, activeBranchId);
-      setStatusBanner({
-        type: "success",
-        message: `Reattached working folder "${newWDir.name}" and completed a fresh SHA-256 scan.`,
-      });
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setStatusBanner({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
+        if (context.current())
+          setStatusBanner({
+            type: "success",
+            message: `Created and verified "${result.branch.name}". Open "${result.workingDir.name}" manually in SolidWorks. ${result.publicationWarning ?? ""} ${warning} ${scanWarning}`,
+          });
+      },
+      true,
+    );
   };
-
-  // 7. Pick Destination Folder Helper for Recovery
-  const pickRecoveryDestinationFolder =
-    async (): Promise<FileSystemDirectoryAdapter | null> => {
-      if (!supportsFileSystemAccessApi()) {
-        setStatusBanner({
-          type: "error",
-          message: "Directory picker is unavailable in this browser context.",
-        });
-        return null;
-      }
-      try {
-        const picker = (
-          window as unknown as {
-            showDirectoryPicker: (opts?: {
-              mode?: "read" | "readwrite";
-            }) => Promise<FileSystemDirectoryHandle>;
-          }
-        ).showDirectoryPicker;
-        const handle = await picker({ mode: "readwrite" });
-        return new RealFileSystemAdapter(handle);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError")
-          return null;
-        setStatusBanner({
-          type: "error",
-          message: err instanceof Error ? err.message : String(err),
-        });
-        return null;
-      }
-    };
-
-  // 8A. Restore Full Project Copy
-  const handleRestoreFullProject = async (revisionId: string) => {
+  const restore = async (revisionId: string, selectedPaths?: string[]) => {
     if (!vaultDir || !vaultState) return;
-    setStatusBanner(null);
-    setLastRestoreReport(null);
-
-    const destDir = await pickRecoveryDestinationFolder();
-    if (!destDir) return;
-
-    const abort = new AbortController();
-    abortControllerRef.current = abort;
-    setIsRestoring(true);
-
-    try {
-      const result = await restoreRevisionToFolder({
+    await perform("restore", async (context) => {
+      setLastRestoreReport(null);
+      const destinationDir = await pickFolder("readwrite");
+      const state = await openExistingVault(vaultDir);
+      await validateWorkingFolderBindings(state, vaultDir, workingFolders);
+      // Plain recovery must also remain isolated from every branch working folder.
+      for (const branch of state.branches)
+        await validateDirectoryIsolation(
+          destinationDir,
+          workingFolders[branch.branchId]!,
+          "Recovery destination",
+          `"${branch.name}" working folder`,
+        );
+      const options = {
         vaultDir,
-        destinationDir: destDir,
+        destinationDir,
         workingDir,
+        workingFolders,
         revisionId,
-        signal: abort.signal,
-        onProgress: (p) => setProgress(p),
-      });
-
-      setVaultState((prev) =>
-        prev
-          ? {
-              ...prev,
-              revisions: prev.revisions.map((r) =>
-                r.manifest.revisionId === revisionId
-                  ? { ...r, integrityStatus: "objects_verified" }
-                  : r,
-              ),
-            }
-          : prev,
-      );
-
-      setLastRestoreReport({ result });
-    } catch (err) {
-      setStatusBanner({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setIsRestoring(false);
-      setProgress(null);
-      abortControllerRef.current = null;
-    }
+        signal: context.signal,
+        onProgress: context.progress,
+      };
+      const result = selectedPaths
+        ? await restoreSelectedFilesToFolder({ ...options, selectedPaths })
+        : await restoreRevisionToFolder(options);
+      if (context.current()) {
+        setLastRestoreReport({ result });
+        if (!selectedPaths)
+          setVaultState((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  revisions: previous.revisions.map((revision) =>
+                    revision.manifest.revisionId === revisionId
+                      ? { ...revision, integrityStatus: "objects_verified" }
+                      : revision,
+                  ),
+                }
+              : previous,
+          );
+      }
+    });
   };
-
-  // 8B. Restore Selected Files as a Copy
-  const handleRestoreSelectedFiles = async (
+  const handleRestoreFullProject = (revisionId: string) => restore(revisionId);
+  const handleRestoreSelectedFiles = (
     revisionId: string,
     selectedPaths: string[],
-  ) => {
+  ) => restore(revisionId, selectedPaths);
+  const handleVerifyObjects = async (ids: string[]) => {
     if (!vaultDir || !vaultState) return;
-    setStatusBanner(null);
-    setLastRestoreReport(null);
-
-    if (selectedPaths.length === 0) {
-      setStatusBanner({
-        type: "error",
-        message:
-          "Select at least one file in the revision inventory before restoring selected files.",
-      });
-      return;
-    }
-
-    const destDir = await pickRecoveryDestinationFolder();
-    if (!destDir) return;
-
-    const abort = new AbortController();
-    abortControllerRef.current = abort;
-    setIsRestoring(true);
-
-    try {
-      const result = await restoreSelectedFilesToFolder({
-        vaultDir,
-        destinationDir: destDir,
-        workingDir,
-        revisionId,
-        selectedPaths,
-        signal: abort.signal,
-        onProgress: (p) => setProgress(p),
-      });
-
-      setLastRestoreReport({ result });
-    } catch (err) {
-      setStatusBanner({
-        type: "error",
-        message: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setIsRestoring(false);
-      setProgress(null);
-      abortControllerRef.current = null;
-    }
-  };
-
-  // 9. Verify single or all revision objects
-  const handleVerifySingleRevisionObjects = async (revisionId: string) => {
-    await handleVerifyObjects([revisionId]);
-  };
-
-  const handleVerifyObjects = async (revisionIds: string[]) => {
-    if (!vaultDir || !vaultState) return;
-    const abort = new AbortController();
-    abortControllerRef.current = abort;
-    setIsVerifyingAll(true);
-    setStatusBanner(null);
-    const targets = vaultState.revisions.filter((r) =>
-      revisionIds.includes(r.manifest.revisionId),
-    );
-    const totalFiles = targets.reduce((n, r) => n + r.manifest.files.length, 0);
-    const totalBytes = targets.reduce(
-      (n, r) => n + r.manifest.files.reduce((s, f) => s + f.size, 0),
-      0,
-    );
-    let processedFiles = 0;
-    let processedBytes = 0;
-    try {
-      const updated = [];
-      let anyCorrupt = false;
-      for (const rev of targets) {
-        if (abort.signal.aborted)
-          throw new DOMException("Verification cancelled.", "AbortError");
-        setProgress({
+    await perform("verify", async (context) => {
+      let processedFiles = 0,
+        processedBytes = 0,
+        corrupt = false;
+      const targets = vaultState.revisions.filter((r) =>
+        ids.includes(r.manifest.revisionId),
+      );
+      const totalFiles = targets.reduce(
+        (n, r) => n + r.manifest.files.length,
+        0,
+      );
+      const totalBytes = targets.reduce(
+        (n, r) => n + r.manifest.files.reduce((s, f) => s + f.size, 0),
+        0,
+      );
+      for (const revision of targets) {
+        if (context.signal.aborted)
+          throw new DOMException(
+            "Verification cancelled. Completed checks have been retained.",
+            "AbortError",
+          );
+        context.progress({
           phase: "verifying_objects",
-          message: `Checking file contents in ${formatRevisionNumber(rev.manifest.displayNumber)}…`,
           processedFiles,
           totalFiles,
           processedBytes,
           totalBytes,
+          message: `Verifying ${formatRevisionNumber(revision.manifest.displayNumber)}…`,
         });
-        const v = await verifyRevisionObjects(vaultDir, rev, abort.signal);
-        if (v.integrityStatus === "corrupted") anyCorrupt = true;
-        updated.push(v);
-        if (v.integrityStatus === "objects_verified") {
-          processedFiles += v.manifest.files.length;
-          processedBytes += v.manifest.files.reduce((n, f) => n + f.size, 0);
-        }
-        setVaultState((prev) =>
-          prev
-            ? {
-                ...prev,
-                revisions: prev.revisions.map((r) =>
-                  r.manifest.revisionId === v.manifest.revisionId ? v : r,
-                ),
-              }
-            : prev,
+        const verified = await verifyRevisionObjects(
+          vaultDir,
+          revision,
+          context.signal,
         );
+        corrupt ||= verified.integrityStatus === "corrupted";
+        if (context.current())
+          setVaultState((previous) =>
+            previous
+              ? {
+                  ...previous,
+                  revisions: previous.revisions.map((r) =>
+                    r.manifest.revisionId === verified.manifest.revisionId
+                      ? verified
+                      : r,
+                  ),
+                }
+              : previous,
+          );
+        if (verified.integrityStatus === "objects_verified") {
+          processedFiles += verified.manifest.files.length;
+          processedBytes += verified.manifest.files.reduce(
+            (n, f) => n + f.size,
+            0,
+          );
+        }
       }
-      setStatusBanner({
-        type: anyCorrupt ? "error" : "success",
-        message: anyCorrupt
-          ? "One or more revisions failed object integrity verification."
-          : `Verified all content objects across ${updated.length} committed revision(s).`,
-      });
-    } catch (err) {
-      setStatusBanner({
-        type:
-          err instanceof DOMException && err.name === "AbortError"
-            ? "info"
-            : "error",
-        message:
-          err instanceof DOMException && err.name === "AbortError"
-            ? "Verification cancelled. Completed checks have been retained."
-            : err instanceof Error
-              ? err.message
-              : String(err),
-      });
-    } finally {
-      setIsVerifyingAll(false);
-      setProgress(null);
-      abortControllerRef.current = null;
-    }
+      if (context.current())
+        setStatusBanner({
+          type: corrupt ? "error" : "success",
+          message: corrupt
+            ? "One or more revisions failed content verification."
+            : `Verified file contents across ${targets.length} revisions.`,
+        });
+    });
   };
-  const handleVerifyAllObjects = async () => {
-    await handleVerifyObjects(
+  const handleVerifySingleRevisionObjects = (id: string) =>
+    handleVerifyObjects([id]);
+  const handleVerifyAllObjects = () =>
+    handleVerifyObjects(
       vaultState?.revisions.map((r) => r.manifest.revisionId) ?? [],
     );
-  };
-
-  // 10. Clear Browser Convenience Handles & Reload Vault Only
-  const handleSimulateClearMetadataAndReopenVault = async () => {
-    if (!vaultDir) return;
+  const clearConnections = async () => {
     await clearAllConvenienceMetadata();
     await refreshRememberedList();
-
+    setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    const reopened = await openExistingVault(vaultDir);
-    setVaultState(reopened);
+    setLastRestoreReport(null);
+    if (vaultDir) {
+      setVaultState(await openExistingVault(vaultDir));
+      setActiveTab("history");
+    }
     setStatusBanner({
-      type: "success",
-      message: `Cleared remembered browser handles and reloaded "${reopened.project.name}" (${reopened.revisions.length} revision(s)) directly from vault files. Working folder is detached until you click "Reattach Working Folder".`,
+      type: "info",
+      message:
+        "Cleared browser convenience bindings. All branches and saved revisions were reconstructed from the vault. Reconnect each branch folder explicitly before saving or creating a branch.",
     });
-    setActiveTab("history");
   };
-
-  const handleCancelOperation = () => {
-    abortControllerRef.current?.abort();
+  const handleSimulateClearMetadataAndReopenVault = async () => {
+    await perform("connect", clearConnections);
   };
-
-  const busy = isScanning || isCapturing || isRestoring || isVerifyingAll;
+  const handleCancelOperation = () => operationRef.current?.abort();
+  const busy = operation !== null;
+  const isScanning = operation === "scan";
+  const isCapturing = operation === "capture";
+  const isRestoring = operation === "restore";
+  const isVerifyingAll = operation === "verify";
+  const isCreatingBranch = operation === "branch";
   const navigate = (tab: ActiveTab) => {
-    if (!busy) setActiveTab(tab);
+    if (!operationRef.current) setActiveTab(tab);
   };
   const activeBranch = vaultState?.branches.find(
     (b) => b.branchId === activeBranchId,
   );
+  const missingConnections =
+    vaultState?.branches
+      .filter((b) => !workingFolders[b.branchId])
+      .map((b) => b.name) ?? [];
+
   return (
     <div className="app-shell">
       <aside className="navigation-rail">
@@ -747,7 +846,23 @@ export default function App() {
             {vaultState ? (
               <span className="current-branch">
                 <GitBranch size={14} />
-                {activeBranch?.name ?? "Unknown branch"}
+                <label className="branch-picker">
+                  <span>Active branch</span>
+                  <select
+                    aria-label="Active branch"
+                    value={activeBranchId}
+                    disabled={busy}
+                    onChange={(e) => {
+                      void handleSelectBranch(e.target.value);
+                    }}
+                  >
+                    {vaultState.branches.map((branch) => (
+                      <option key={branch.branchId} value={branch.branchId}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </span>
             ) : null}
           </div>
@@ -756,8 +871,29 @@ export default function App() {
             Local workspace
           </span>
         </header>
+        {vaultState ? (
+          <div className="workspace-folder-bar">
+            <div>
+              <strong>
+                {activeBranch?.name ?? "Unknown branch"} · Working folder:{" "}
+                {workingDir?.name ?? "Not connected"}
+              </strong>
+              <p>
+                Open this branch’s folder manually in SolidWorks before editing
+                or saving CAD documents.
+              </p>
+            </div>
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={handleReattachWorkingFolder}
+            >
+              {workingDir ? "Change branch folder" : "Connect folder"}
+            </button>
+          </div>
+        ) : null}
         <main id="main-content">
-          {isVerifyingAll ? (
+          {isVerifyingAll || (isScanning && activeTab !== "changes") ? (
             <div className="global-feedback">
               <OperationProgress
                 progress={progress}
@@ -778,6 +914,13 @@ export default function App() {
           {vaultState ? (
             <div className="global-integrity">
               <IntegrityNotice state={vaultState} />
+              {missingConnections.length ? (
+                <Notice>
+                  Connect the working folders for{" "}
+                  {missingConnections.join(", ")} before saving or creating
+                  branches. Select each branch, then Connect folder.
+                </Notice>
+              ) : null}
             </div>
           ) : null}
           {activeTab === "connect" || !vaultState || !vaultDir ? (
@@ -791,31 +934,54 @@ export default function App() {
                 await refreshRememberedList();
               }}
               onClearAllConvenienceMetadata={async () => {
-                await clearAllConvenienceMetadata();
-                await refreshRememberedList();
+                await perform("connect", clearConnections);
               }}
             />
           ) : null}
           {vaultState && vaultDir ? (
             <div key={vaultState.project.projectId}>
-              <div hidden={activeTab !== "changes"}>
-                <ChangesCaptureView
-                  vaultState={vaultState}
-                  activeBranchId={activeBranchId}
-                  workingFolderName={workingDir?.name ?? null}
-                  vaultFolderName={vaultDir.name}
-                  scanResult={scanResult}
-                  isScanStale={isScanStale}
-                  isScanning={isScanning}
-                  isCapturing={isCapturing}
-                  progress={progress}
-                  statusBanner={null}
-                  onScan={handleScanCurrent}
-                  onCapture={handleCaptureRevision}
-                  onCancelOperation={handleCancelOperation}
-                  onReattachWorkingFolder={handleReattachWorkingFolder}
-                />
-              </div>
+              {vaultState.branches.map((branch) => (
+                <div
+                  key={branch.branchId}
+                  hidden={
+                    activeTab !== "changes" ||
+                    activeBranchId !== branch.branchId
+                  }
+                >
+                  <ChangesCaptureView
+                    vaultState={vaultState}
+                    activeBranchId={branch.branchId}
+                    workingFolderName={
+                      branch.branchId === activeBranchId
+                        ? (workingDir?.name ?? null)
+                        : null
+                    }
+                    vaultFolderName={vaultDir.name}
+                    scanResult={
+                      scanResult?.branchId === branch.branchId &&
+                      branch.branchId === activeBranchId
+                        ? scanResult
+                        : null
+                    }
+                    isScanStale={isScanStale}
+                    isScanning={isScanning}
+                    isCapturing={isCapturing}
+                    progress={progress}
+                    statusBanner={null}
+                    onScan={handleScanCurrent}
+                    onCapture={(params) =>
+                      handleCaptureRevision(branch.branchId, params)
+                    }
+                    onCancelOperation={handleCancelOperation}
+                    onReattachWorkingFolder={handleReattachWorkingFolder}
+                    operationBlockReason={
+                      missingConnections.length
+                        ? `Reconnect ${missingConnections.join(", ")} before saving, so folder isolation can be verified.`
+                        : undefined
+                    }
+                  />
+                </div>
+              ))}
               <div hidden={activeTab !== "history"}>
                 <HistoryRecoveryView
                   vaultState={vaultState}
@@ -831,6 +997,8 @@ export default function App() {
                   }
                   onCancelOperation={handleCancelOperation}
                   onGoToChanges={() => navigate("changes")}
+                  onCreateBranch={handleCreateBranch}
+                  isCreatingBranch={isCreatingBranch}
                 />
               </div>
               <div hidden={activeTab !== "diagnostics"}>
