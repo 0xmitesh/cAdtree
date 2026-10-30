@@ -11,19 +11,22 @@ The header selects the active working branch and identifies its folder. Graph la
 ## Persistence and safety
 
 - Existing schema-1 project, branch, and revision records retain their exact checksum rules and are never rewritten. Existing vaults continue to open.
-- New publications use `branches/<id>.branch.json` and a final `<id>.ready.json` marker containing project identity, branch identity, and the record’s SHA-256. The marker is published only after copy verification and record read-back. Missing/partial markers exclude unfinished branches; pending records and staging attempts remain visible in Settings. A completed marker is authoritative even if write acknowledgement, staging cleanup, or browser convenience storage later fails.
+- New publications use `branches/<id>.branch.json` and a final `<id>.ready.json` marker containing project identity, branch identity, and the record’s SHA-256. The marker is published only after copy verification and record read-back. A missing/partial marker with no committed revision remains an unfinished publication. Once committed revisions establish a branch, a missing, malformed, or mismatched marker instead retains its independently validated identity/name and folder-isolation obligations, visibly marks it damaged, and blocks new saves on that branch. Reopening never repairs or rewrites historical files. Pending records and staging attempts remain visible in Settings.
 - Branch creation and capture share the project writer lock. Both reload state under the lock. Verified recovery uses its existing, separate destination lock, so it does not reacquire the project lock.
 - Adapter identity and ancestry checks keep the vault and every branch working folder separate. Reconnect missing folders explicitly, one branch at a time. All branch connections are required for capture, tracked branch creation, and recovery destination checks; readonly inspection remains available.
 - Failed copies are retained and identified in the error. Retrying creates another fresh child folder. No user destination is automatically deleted or reused. File writes use independent streams and existing exclusive conflict checks. Browser filesystem APIs still cannot provide an OS-level atomic directory reservation against external programs.
 - IndexedDB stores only handles, folder labels, and the last active branch preference. Updating one binding retains other branches’ bindings. Clear/reopen reconstructs branch records and history from vault files; it does not infer missing folder connections.
+- Capture and both recovery operations reject damaged branch-publication states when folder bindings are unavailable. A committed branch whose identity record cannot be validated blocks writes even if the caller omits its binding. Read-only history and diagnostics remain available.
 
 ## Validation
 
-`npm test`: **45 passed**, including all original engine tests. `npm run lint` and `npm run build`: passed.
+`npm test`: **54 passed**, including all original engine tests. `npm run lint` and `npm run build`: passed.
 
 The acceptance test creates Main 001 → 002 → 003, then Cases A/B/C from 001, checks exact binary inventories and empty directories, rejects unchanged captures, and saves/continues all four histories with unique global numbers and branch-specific parents. It also creates an alternative from another alternative and confirms plain recovery creates no branch.
 
 Additional tests cover name races, overlapping identities, missing permissions, cancelled/queued operations, corrupt source objects, partial record/ready writes, retry folders, ambiguous heads, damaged/missing origins, concurrent creation/capture, and unchanged historical checksums. Application tests run the real services through a test-only native-handle facade: separate drafts/file notes, graph highlighting, Graph/List inspection, unavailable handles, asynchronous switching guards, visible cancellation, browser-cache failure after successful publication, session integrity indicators, and reconnection after clearing convenience data. IndexedDB tests exercise transactional binding updates.
+
+Ready-marker regressions create a branch with its own committed revision, remove or corrupt its marker, and reopen. They verify retained identity, case-insensitive name reservation, visible damage, inspectable graph/history, blocked nested destinations, capture/full/selected-recovery checks with missing bindings, and byte-identical historical records after rejected writes. Invalid marker fields/checksums and unvalidated branch records are covered separately. Existing interrupted/unpublished retry tests remain passing.
 
 Browser visual/native-picker inspection remains blocked by the previously reported browser permission. DOM integration tests are not a replacement for native browser layout, permission, or SolidWorks testing. No screenshots or real CAD validation are claimed.
 

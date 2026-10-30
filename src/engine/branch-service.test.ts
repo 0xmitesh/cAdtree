@@ -18,7 +18,10 @@ import {
 } from "./vault-service";
 import { captureRevision } from "./revision-service";
 import { enumerateWorkingFolder, scanBranchChanges } from "./scanner";
-import { restoreRevisionToFolder } from "./recovery-service";
+import {
+  restoreRevisionToFolder,
+  restoreSelectedFilesToFolder,
+} from "./recovery-service";
 import { getObjectPathSegments } from "./object-store";
 import { hashString } from "./hash";
 import { layoutRevisions } from "../history/layout";
@@ -71,6 +74,247 @@ async function inventory(dir: FileSystemDirectoryAdapter) {
     directories: result.directories,
   };
 }
+
+async function establishedBranchWithDamagedMarker(
+  mode: "missing" | "malformed",
+) {
+  const context = await setup();
+  const created = await context.create();
+  context.workingFolders[created.branch.branchId] = created.workingDir;
+  await created.workingDir.writeFileBytes(
+    ["Parts", "Housing.SLDPRT"],
+    new Uint8Array([17, 0, 255]),
+  );
+  const saved = await captureRevision(created.workingDir, context.vault, {
+    branchId: created.branch.branchId,
+    summary: "Established alternative",
+    notes,
+    workingFolders: context.workingFolders,
+  });
+  const marker = ["branches", `${created.branch.branchId}.ready.json`];
+  if (mode === "missing") await context.vault.removeEntry(marker);
+  else await context.vault.writeFileText(marker, "{");
+  return { ...context, created, saved, marker };
+}
+
+for (const mode of ["missing", "malformed"] as const) {
+  test(`established branch with ${mode} ready marker remains a damaged identity with inspectable history`, async () => {
+    const { vault, created, saved } =
+      await establishedBranchWithDamagedMarker(mode);
+    const before = await inventory(vault);
+    const reopened = await openExistingVault(vault);
+    assert.equal(
+      reopened.branches.find(
+        (branch) => branch.branchId === created.branch.branchId,
+      )?.name,
+      "Case A",
+    );
+    assert.match(
+      reopened.damagedBranchHeads[created.branch.branchId],
+      /ready marker/i,
+    );
+    assert.ok(
+      reopened.corruptedRecords.some(
+        (record) =>
+          record.recordPath ===
+          `branches/${created.branch.branchId}.ready.json`,
+      ),
+    );
+    assert.ok(
+      !reopened.incompleteAttempts.some(
+        (attempt) =>
+          attempt.kind === "uncompleted_branch" &&
+          attempt.id === created.branch.branchId,
+      ),
+    );
+    assert.equal(
+      reopened.branchHeads[created.branch.branchId],
+      saved.revision.manifest.revisionId,
+    );
+    const graph = layoutRevisions(reopened, created.branch.branchId);
+    assert.equal(
+      graph.nodes.find((node) => node.id === saved.revision.manifest.revisionId)
+        ?.branchName,
+      "Case A",
+    );
+    assert.equal(graph.latestId, null);
+    assert.throws(
+      () => getBranchBaseline(reopened, created.branch.branchId),
+      /ready marker/i,
+    );
+    assert.deepEqual(
+      await inventory(vault),
+      before,
+      "Reopening and inspection must never repair or rewrite records",
+    );
+  });
+
+  test(`${mode} marker does not free an established branch name for reuse`, async () => {
+    const { vault, create } = await establishedBranchWithDamagedMarker(mode);
+    const before = await inventory(vault);
+    await assert.rejects(create(" case a "), /already exists/);
+    assert.deepEqual(await inventory(vault), before);
+  });
+
+  test(`${mode} marker cannot hide an established working folder from destination isolation checks`, async () => {
+    const { main, vault, create, created, first, workingFolders } =
+      await establishedBranchWithDamagedMarker(mode);
+    const before = await inventory(created.workingDir);
+    const vaultBefore = await inventory(vault);
+    const reopened = await openExistingVault(vault);
+    const mainOnly = { [MAIN_BRANCH_ID]: main };
+    await assert.rejects(
+      validateWorkingFolderBindings(reopened, vault, mainOnly),
+      /Reconnect.*Case A/,
+    );
+    await assert.rejects(
+      create("Nested unsafe alternative", first.manifest.revisionId, {
+        destinationParent: created.workingDir,
+        workingFolders: mainOnly,
+      }),
+    );
+    await assert.rejects(
+      captureRevision(main, vault, {
+        branchId: MAIN_BRANCH_ID,
+        summary: "Unverified isolation",
+        notes,
+      }),
+      /Folder isolation cannot be established/,
+    );
+    await assert.rejects(
+      captureRevision(main, vault, {
+        branchId: MAIN_BRANCH_ID,
+        summary: "Missing folder",
+        notes,
+        workingFolders: mainOnly,
+      }),
+      /Reconnect.*Case A/,
+    );
+    assert.deepEqual(await inventory(created.workingDir), before);
+    const nested = await created.workingDir.getDirectory(
+      ["Fresh nested destination"],
+      { create: true },
+    );
+    for (const bindings of [undefined, mainOnly, workingFolders]) {
+      await assert.rejects(
+        restoreRevisionToFolder({
+          vaultDir: vault,
+          workingDir: main,
+          workingFolders: bindings,
+          revisionId: first.manifest.revisionId,
+          destinationDir: nested,
+        }),
+        /Folder isolation|Reconnect.*Case A|nested inside/,
+      );
+      await assert.rejects(
+        restoreSelectedFilesToFolder({
+          vaultDir: vault,
+          workingDir: main,
+          workingFolders: bindings,
+          revisionId: first.manifest.revisionId,
+          destinationDir: nested,
+          selectedPaths: [first.manifest.files[0].path],
+        }),
+        /Folder isolation|Reconnect.*Case A|nested inside/,
+      );
+      assert.deepEqual(await nested.listEntries(), []);
+    }
+    await assert.rejects(
+      validateWorkingFolderBindings(reopened, vault, {
+        ...workingFolders,
+        [MAIN_BRANCH_ID]: nested,
+      }),
+      /nested inside/,
+    );
+    assert.deepEqual(
+      await inventory(vault),
+      vaultBefore,
+      "Rejected writes must not repair history or publish new data",
+    );
+  });
+}
+
+test("ready marker field/checksum damage preserves an established identity independently of marker contents", async () => {
+  for (const markerValue of [
+    null,
+    {},
+    { projectId: "wrong", branchId: "wrong", recordSha256: "0".repeat(64) },
+    "checksum-mismatch",
+  ]) {
+    const { vault, created, marker } =
+      await establishedBranchWithDamagedMarker("malformed");
+    await vault.writeFileText(
+      marker,
+      JSON.stringify(
+        markerValue === "checksum-mismatch"
+          ? {
+              projectId: created.branch.projectId,
+              branchId: created.branch.branchId,
+              recordSha256: "0".repeat(64),
+            }
+          : markerValue,
+      ),
+    );
+    const state = await openExistingVault(vault);
+    assert.ok(
+      state.branches.some(
+        (branch) =>
+          branch.branchId === created.branch.branchId &&
+          branch.name === "Case A",
+      ),
+    );
+    assert.match(
+      state.damagedBranchHeads[created.branch.branchId],
+      /ready marker/i,
+    );
+  }
+});
+
+test("committed branch identity with an unvalidated record blocks writes even if folder bindings omit it", async () => {
+  for (const mode of ["missing", "malformed"] as const) {
+    const { main, vault, created, first, create } =
+      await establishedBranchWithDamagedMarker(mode);
+    await vault.writeFileText(
+      ["branches", `${created.branch.branchId}.branch.json`],
+      "{",
+    );
+    const before = await inventory(vault);
+    const reopened = await openExistingVault(vault);
+    assert.ok(
+      reopened.revisions.some(
+        (revision) => revision.manifest.branchId === created.branch.branchId,
+      ),
+    );
+    assert.ok(
+      reopened.corruptedRecords.some((record) =>
+        record.reason.includes("no validated branch record"),
+      ),
+    );
+    assert.ok(layoutRevisions(reopened, MAIN_BRANCH_ID).nodes.length >= 2);
+    await assert.rejects(create("Case A"));
+    for (const bindings of [undefined, { [MAIN_BRANCH_ID]: main }]) {
+      await assert.rejects(
+        captureRevision(main, vault, {
+          branchId: MAIN_BRANCH_ID,
+          summary: "Unsafe",
+          notes,
+          workingFolders: bindings,
+        }),
+        /committed branch identities without valid records/,
+      );
+      await assert.rejects(
+        restoreRevisionToFolder({
+          vaultDir: vault,
+          destinationDir: new InMemoryFileSystemAdapter("Unknown isolation"),
+          revisionId: first.manifest.revisionId,
+          workingFolders: bindings,
+        }),
+        /committed branch identities without valid records/,
+      );
+    }
+    assert.deepEqual(await inventory(vault), before);
+  }
+});
 
 test("Milestone 2: three complete independent cases share Rev 001, diverge, and continue with global numbering", async () => {
   const { main, vault, first, workingFolders, create } = await setup();

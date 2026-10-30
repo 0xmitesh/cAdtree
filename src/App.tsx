@@ -612,6 +612,7 @@ export default function App() {
         vaultDir,
         destinationDir,
         workingDir,
+        workingFolders,
         revisionId,
         signal: context.signal,
         onProgress: context.progress,

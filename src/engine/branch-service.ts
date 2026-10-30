@@ -177,6 +177,7 @@ export async function createDesignBranch(
       // Holding the project lock throughout restore serializes creation with all captures.
       await restoreRevisionToFolder({
         vaultDir,
+        workingFolders,
         destinationDir: workingDir,
         revisionId: sourceRevisionId,
         signal,

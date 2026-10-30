@@ -5,7 +5,7 @@ import {
 } from './fs-adapter';
 import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
-import { getBranchBaseline, validateWorkingFolderBindings } from './branch-state';
+import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
 import {
@@ -81,8 +81,8 @@ export async function captureRevision(
     const vaultState = await openExistingVault(vaultDir);
     if (vaultState.project.projectId !== projectId) throw new Error('Vault identity changed while waiting for the writer lock.');
     getBranchBaseline(vaultState, input.branchId);
+    await validateOperationWorkingFolders(vaultState, vaultDir, input.workingFolders);
     if (input.workingFolders) {
-      await validateWorkingFolderBindings(vaultState, vaultDir, input.workingFolders);
       const connected = input.workingFolders[input.branchId];
       if (!connected || !await connected.isSameEntry(workingDir)) throw new Error('The capture folder does not match the selected branch connection.');
     }

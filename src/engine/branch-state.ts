@@ -88,6 +88,42 @@ export function assertRevisionAncestry(
   return result!;
 }
 
+/** Committed revision ownership must be accounted for before any write operation. */
+function assertKnownCommittedBranchIdentities(state: VaultState): void {
+  const known = new Set(state.branches.map((branch) => branch.branchId));
+  const unaccounted = [
+    ...new Set(
+      state.revisions.flatMap((revision) => [
+        revision.manifest.branchId,
+        revision.completion.branchId,
+      ]),
+    ),
+  ].filter((branchId) => !known.has(branchId));
+  if (unaccounted.length)
+    throw new Error(
+      `Folder isolation cannot be established for committed branch identities without valid records: ${unaccounted.join(", ")}. Restore their branch records before writing; history remains available for read-only inspection.`,
+    );
+}
+
+/** Existing callers may omit bindings only when branch identity/publication is healthy. */
+export async function validateOperationWorkingFolders(
+  state: VaultState,
+  vault: FileSystemDirectoryAdapter,
+  bindings?: WorkingFolderBindings,
+): Promise<void> {
+  assertKnownCommittedBranchIdentities(state);
+  if (bindings) await validateWorkingFolderBindings(state, vault, bindings);
+  else if (
+    state.corruptedRecords.some((record) =>
+      record.recordPath.startsWith("branches/"),
+    )
+  ) {
+    throw new Error(
+      "Folder isolation cannot be established while branch publication records are damaged. Reconnect all branch working folders before writing; read-only inspection remains available.",
+    );
+  }
+}
+
 /** Partial reconnection is allowed, but operations require every branch connection. */
 export async function validateWorkingFolderBindings(
   state: VaultState,
@@ -95,6 +131,7 @@ export async function validateWorkingFolderBindings(
   bindings: WorkingFolderBindings,
   requireAll = true,
 ): Promise<void> {
+  if (requireAll) assertKnownCommittedBranchIdentities(state);
   const connected: { name: string; dir: FileSystemDirectoryAdapter }[] = [];
   for (const branch of state.branches) {
     const dir = bindings[branch.branchId];

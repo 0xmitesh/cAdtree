@@ -103,6 +103,79 @@ async function createFromUI(
   return branch;
 }
 
+test("reopening an established branch with a damaged marker keeps its selector, graph, history, and diagnostics inspectable", async () => {
+  for (const mode of ["missing", "malformed"]) {
+    const ctx = await setup();
+    const branch = await createFromUI(ctx, "Case A");
+    const folder = await ctx.parent.getDirectory([
+      (await ctx.parent.listEntries())[0].name,
+    ]);
+    await folder.writeFileBytes(["Part.SLDPRT"], new Uint8Array([4, 0, 255]));
+    await captureRevision(folder, ctx.vault, {
+      branchId: branch.branchId,
+      summary: "Established damaged case",
+      notes,
+      workingFolders: { "branch-main": ctx.main, [branch.branchId]: folder },
+    });
+    const marker = ["branches", `${branch.branchId}.ready.json`];
+    if (mode === "missing") await ctx.vault.removeEntry(marker);
+    else await ctx.vault.writeFileText(marker, "{");
+    cleanup();
+    const ui = render(<App />);
+    ctx.queue.push(nativeDirectory(ctx.vault));
+    fireEvent.click(ui.getByRole("button", { name: /Open existing vault/ }));
+    const dialog = within(ui.getByRole("dialog"));
+    fireEvent.click(dialog.getByRole("button", { name: "Choose vault" }));
+    await waitFor(() => assert.ok(dialog.getByText("Vault", { exact: true })));
+    fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
+    await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+    assert.ok(ui.getByRole("option", { name: "Case A" }));
+    assert.ok(ui.getByText("History needs attention."));
+    fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
+      target: { value: branch.branchId },
+    });
+    await waitFor(() =>
+      assert.equal(
+        (
+          ui.getByRole("combobox", {
+            name: "Active branch",
+          }) as HTMLSelectElement
+        ).disabled,
+        false,
+      ),
+    );
+    fireEvent.click(
+      ui.getByRole("button", { name: /Rev 002: Established damaged case/ }),
+    );
+    assert.ok(ui.getByRole("heading", { name: "Established damaged case" }));
+    assert.equal(
+      (
+        ui.getByRole("button", {
+          name: "Create branch from here",
+        }) as HTMLButtonElement
+      ).disabled,
+      true,
+    );
+    fireEvent.click(ui.getByRole("button", { name: "List" }));
+    assert.ok(ui.getByRole("heading", { name: "Established damaged case" }));
+    fireEvent.click(ui.getByRole("button", { name: "Settings" }));
+    assert.match(
+      ui.container.querySelector(".settings-page")!.textContent!,
+      /Established branch "Case A" has a damaged ready marker/,
+    );
+    assert.equal(
+      (await openExistingVault(ctx.vault)).branches.find(
+        (candidate) => candidate.branchId === branch.branchId,
+      )?.name,
+      "Case A",
+    );
+    if (mode === "missing")
+      assert.equal(await ctx.vault.hasFile(marker), false);
+    else assert.equal(await ctx.vault.readFileText(marker), "{");
+    cleanup();
+  }
+});
+
 test("App creates branches, preserves Main and branch notes, and keeps graph highlighting separate from working context", async () => {
   const ctx = await setup();
   await ctx.main.writeFileBytes(["Part.SLDPRT"], new Uint8Array([3, 2]));
