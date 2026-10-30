@@ -255,6 +255,56 @@ h3 {
   font-size: 12px;
   flex-shrink: 0;
 }
+.branch-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.branch-picker select {
+  font: inherit;
+  color: #253338;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 5px;
+  padding: 7px 9px;
+  max-width: 210px;
+}
+.workspace-folder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 34px;
+  border-bottom: 1px solid var(--border);
+  background: #fafbf9;
+  font-size: 12px;
+}
+.workspace-folder-bar > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace-folder-bar p {
+  color: var(--muted);
+  margin-top: 3px;
+}
+.branch-origin {
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  margin-bottom: 20px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.branch-origin > button {
+  margin-left: 12px;
+}
+.branch-origin p {
+  margin-top: 6px;
+  color: var(--muted);
+}
 .local-indicator {
   display: flex;
   gap: 7px;
@@ -1601,6 +1651,25 @@ input::placeholder {
   }
 }
 @media (max-width: 760px) {
+  .workspace-header:has(.branch-picker) {
+    min-height: 60px;
+    height: auto;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .current-branch:has(.branch-picker) {
+    flex-shrink: 1;
+    max-width: 100%;
+  }
+  .branch-picker {
+    flex-wrap: wrap;
+  }
+  .branch-picker select {
+    max-width: 170px;
+  }
+  .workspace-folder-bar {
+    padding: 12px 18px;
+  }
   .workspace-header {
     height: 60px;
     padding: 0 18px;

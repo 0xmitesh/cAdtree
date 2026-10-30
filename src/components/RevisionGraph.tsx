@@ -311,7 +311,9 @@ export function RevisionGraph({
                         <strong title={node.revision.manifest.summary}>
                           {node.revision.manifest.summary}
                         </strong>
-                        <time dateTime={node.revision.manifest.captureCompletedAt}>
+                        <time
+                          dateTime={node.revision.manifest.captureCompletedAt}
+                        >
                           {formatTimestamp(
                             node.revision.manifest.captureCompletedAt,
                           )}
@@ -330,7 +332,7 @@ export function RevisionGraph({
                         {heads.map((branch) => (
                           <button
                             key={branch.id}
-                            className="branch-chip"
+                            className={`branch-chip ${branch.current ? "current-head" : ""}`}
                             style={
                               {
                                 "--branch-color": branch.color,
@@ -339,10 +341,18 @@ export function RevisionGraph({
                             aria-label={`${branch.name} head at ${formatRevisionNumber(node.revision.manifest.displayNumber)}`}
                             aria-pressed={highlightBranchId === branch.id}
                             onClick={() => toggleBranch(branch.id)}
-                            title={`Highlight ${branch.name} ancestry`}
+                            title={`Highlight ${branch.name} ancestry${branch.current ? " · active working branch" : ""}`}
                           >
                             <GitBranch size={11} />
                             {branch.name}
+                            {branch.current ? (
+                              <span
+                                className="current-branch-marker"
+                                aria-hidden="true"
+                              >
+                                ●
+                              </span>
+                            ) : null}
                           </button>
                         ))}
                       </div>

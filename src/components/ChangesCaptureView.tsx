@@ -31,6 +31,7 @@ export interface ChangesCaptureViewProps {
   }) => Promise<void>;
   onCancelOperation: () => void;
   onReattachWorkingFolder: () => Promise<void>;
+  operationBlockReason?: string;
 }
 const emptyNotes: RevisionNotes = {
   problem: "",
@@ -50,6 +51,7 @@ export function ChangesCaptureView({
   onCapture,
   onCancelOperation,
   onReattachWorkingFolder,
+  operationBlockReason,
 }: ChangesCaptureViewProps) {
   const [summary, setSummary] = useState("");
   const [notes, setNotes] = useState<RevisionNotes>(emptyNotes);
@@ -106,6 +108,10 @@ export function ChangesCaptureView({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (operationBlockReason) {
+      setError(operationBlockReason);
+      return;
+    }
     if (!scan || !summary.trim()) {
       setError("Add a short revision summary.");
       return;
@@ -176,6 +182,7 @@ export function ChangesCaptureView({
             : "Scan needed"}
         </span>
       </div>
+      {operationBlockReason ? <Notice>{operationBlockReason}</Notice> : null}
       {!workingFolderName ? (
         <Notice>
           Connect a working folder to scan and save revisions.{" "}
@@ -454,6 +461,7 @@ export function ChangesCaptureView({
                   !scan?.canCapture ||
                   !scan?.hasChanges ||
                   Boolean(damaged) ||
+                  Boolean(operationBlockReason) ||
                   needsReview ||
                   Boolean(staleNotes.length)
                 }

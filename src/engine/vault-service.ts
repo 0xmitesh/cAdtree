@@ -4,6 +4,7 @@ import {
 } from './fs-adapter';
 import { hashString } from './hash';
 import { verifyStoredObject } from './object-store';
+import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
   BranchRecord,
   CADTREE_SCHEMA_VERSION,
@@ -393,9 +394,31 @@ export async function openExistingVault(
     const branchEntries = await branchDir.listEntries();
     for (const entry of branchEntries) {
       if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+      if (entry.name.endsWith('.ready.json')) {
+        const branchId = entry.name.slice(0, -'.ready.json'.length);
+        if (!branchEntries.some((candidate) => candidate.kind === 'file' && candidate.name === `${branchId}.branch.json`)) {
+          corruptedRecords.push({ recordPath: `branches/${entry.name}`, reason: 'Branch ready marker has no matching branch record. Restore the missing branch record.' });
+        }
+        continue;
+      }
       const recordPath = `branches/${entry.name}`;
       try {
+        // New branch publications use a separate final marker. Legacy *.json records
+        // retain their original checksum and publication rules, including Main.
+        let expectedRecordHash: string | undefined;
+        if (entry.name.endsWith('.branch.json')) {
+          const branchId = entry.name.slice(0, -'.branch.json'.length);
+          try {
+            const marker = JSON.parse(await branchDir.readFileText([`${branchId}.ready.json`]));
+            if (marker.projectId !== parsedProject.projectId || marker.branchId !== branchId || !/^[a-f0-9]{64}$/.test(marker.recordSha256)) throw new Error('Invalid branch completion marker.');
+            expectedRecordHash = marker.recordSha256;
+          } catch {
+            incompleteAttempts.push({ id: branchId, kind: 'uncompleted_branch', path: recordPath, detail: 'Branch publication has no valid ready marker. Its working copy may be incomplete; it is excluded from ready branches. Retry into a fresh folder.' });
+            continue;
+          }
+        }
         const text = await branchDir.readFileText([entry.name]);
+        if (expectedRecordHash && hashString(text) !== expectedRecordHash) throw new Error('Published branch record does not match its ready marker checksum.');
         const branch = JSON.parse(text) as BranchRecord;
         if (!branch || typeof branch !== 'object') {
           corruptedRecords.push({ recordPath, reason: 'Branch record is not a JSON object.' });
@@ -410,7 +433,10 @@ export async function openExistingVault(
           typeof branch.name !== 'string' ||
           typeof branch.reason !== 'string' ||
           typeof branch.createdAt !== 'string' ||
-          typeof branch.isMain !== 'boolean'
+          typeof branch.isMain !== 'boolean' ||
+          !branch.branchId || !branch.name.trim() ||
+          (entry.name !== `${branch.branchId}.json` && entry.name !== `${branch.branchId}.branch.json`) ||
+          (branch.startingRevisionId !== null && typeof branch.startingRevisionId !== 'string')
         ) {
           corruptedRecords.push({
             recordPath,
@@ -773,7 +799,7 @@ export async function openExistingVault(
     }
   }
 
-  return {
+  const state: VaultState = {
     project: parsedProject,
     branches,
     revisions,
@@ -783,6 +809,14 @@ export async function openExistingVault(
     incompleteAttempts,
     corruptedRecords,
   };
+  for (const branch of branches) {
+    if (branches.some((other) => other !== branch && (other.branchId === branch.branchId || branchNameKey(other.name) === branchNameKey(branch.name)))) {
+      damagedBranchHeads[branch.branchId] = `Branch "${branch.name}" has a duplicate identity or name. Operations are blocked.`;
+    }
+    try { getBranchBaseline(state, branch.branchId); }
+    catch (error) { damagedBranchHeads[branch.branchId] = error instanceof Error ? error.message : String(error); }
+  }
+  return state;
 }
 
 /**
@@ -976,3 +1010,4 @@ export function sanitizeFileSpecificNotes(
   if (byPath.size === 0) return undefined;
   return Array.from(byPath.values()).sort((a, b) => a.path.localeCompare(b.path));
 }
+

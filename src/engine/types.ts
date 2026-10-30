@@ -1,3 +1,5 @@
+import type { FileSystemDirectoryAdapter } from './fs-adapter';
+
 export const CADTREE_SCHEMA_VERSION = 1;
 export const MAIN_BRANCH_ID = 'branch-main';
 
@@ -131,7 +133,7 @@ export interface CorruptedVaultRecord {
 
 export interface IncompleteAttemptRecord {
   id: string;
-  kind: 'uncompleted_manifest' | 'staging_artifact';
+  kind: 'uncompleted_manifest' | 'staging_artifact' | 'uncompleted_branch';
   path: string;
   detail: string;
 }
@@ -156,6 +158,7 @@ export interface ProgressUpdate {
     | 'checking_stability'
     | 'writing_manifest'
     | 'publishing_completion'
+    | 'publishing_branch'
     | 'restoring_directories'
     | 'restoring_files'
     | 'verifying_restored_files';
@@ -168,6 +171,7 @@ export interface ProgressUpdate {
 }
 
 export interface CaptureRevisionInput {
+  workingFolders?: Record<string, FileSystemDirectoryAdapter | undefined>;
   branchId: string;
   summary: string;
   notes: RevisionNotes;
@@ -188,3 +192,4 @@ export interface RestoreResult {
   destinationName: string;
   completedAt: string;
 }
+
