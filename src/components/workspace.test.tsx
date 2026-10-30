@@ -21,6 +21,7 @@ import {
   openExistingVault,
 } from "../engine/vault-service";
 import { scanBranchChanges } from "../engine/scanner";
+import { formatTimestamp } from "../utils/format";
 import { captureRevision, ReviewStaleError } from "../engine/revision-service";
 import {
   restoreRevisionToFolder,
@@ -28,6 +29,44 @@ import {
 } from "../engine/recovery-service";
 
 afterEach(cleanup);
+test("normal dates follow local day boundaries while Technical details preserve exact UTC", () => {
+  const previousTimezone = process.env.TZ;
+  const state = historyState(1);
+  const iso = "2026-10-29T20:15:37.123Z";
+  state.revisions[0].manifest.captureCompletedAt = iso;
+  try {
+    // This UTC instant is the following day in India and still the previous day in New York.
+    for (const timezone of ["Asia/Kolkata", "America/New_York"]) {
+      process.env.TZ = timezone;
+      const expected = new Intl.DateTimeFormat(undefined, {
+        timeZone: timezone,
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(iso));
+      assert.equal(formatTimestamp(iso), expected);
+      const ui = render(
+        <HistoryRecoveryView {...historyProps({ vaultState: state })} />,
+      );
+      const times = [...ui.container.querySelectorAll("time")];
+      assert.equal(times.length, 2);
+      assert.ok(
+        times.every((time) => time.textContent === expected && time.dateTime === iso),
+      );
+      fireEvent.click(ui.getByRole("button", { name: "Technical details" }));
+      assert.ok(ui.getByText("Capture completed (UTC)"));
+      assert.ok(ui.getByText(iso));
+      cleanup();
+    }
+    assert.equal(formatTimestamp("invalid date"), "invalid date");
+    assert.equal(state.revisions[0].manifest.captureCompletedAt, iso);
+  } finally {
+    if (previousTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTimezone;
+  }
+});
 test("diagram labels and arrowheads follow parent identity, with ancestors above children", () => {
   const state = scenarioState("branches");
   const ui = render(
