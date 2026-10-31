@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { File, RefreshCw, Save, StickyNote } from "lucide-react";
 import type {
   FileSpecificNote,
@@ -14,6 +14,8 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
 
 export interface ChangesCaptureViewProps {
+  draftCache?: Map<string, CaptureDraft>;
+  draftKey?: string;
   vaultState: VaultState;
   activeBranchId: string;
   workingFolderName: string | null;
@@ -36,6 +38,13 @@ export interface ChangesCaptureViewProps {
   operationBlockReason?: string;
   resolveFilePath?: (path: string) => Promise<FilePathLocation>;
 }
+export interface CaptureDraft {
+  summary: string;
+  notes: RevisionNotes;
+  fileNotes: Record<string, FileSpecificNote>;
+  notePath: string | null;
+  showOverall: boolean;
+}
 const emptyNotes: RevisionNotes = {
   problem: "",
   modification: "",
@@ -56,14 +65,33 @@ export function ChangesCaptureView({
   onReattachWorkingFolder,
   operationBlockReason,
   resolveFilePath,
+  draftCache,
+  draftKey,
 }: ChangesCaptureViewProps) {
-  const [summary, setSummary] = useState("");
-  const [notes, setNotes] = useState<RevisionNotes>(emptyNotes);
-  const [fileNotes, setFileNotes] = useState<Record<string, FileSpecificNote>>(
-    {},
+  const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
+  const [summary, setSummary] = useState(savedDraft?.summary ?? "");
+  const [notes, setNotes] = useState<RevisionNotes>(
+    savedDraft?.notes ?? emptyNotes,
   );
-  const [notePath, setNotePath] = useState<string | null>(null);
-  const [showOverall, setShowOverall] = useState(false);
+  const [fileNotes, setFileNotes] = useState<Record<string, FileSpecificNote>>(
+    savedDraft?.fileNotes ?? {},
+  );
+  const [notePath, setNotePath] = useState<string | null>(
+    savedDraft?.notePath ?? null,
+  );
+  const [showOverall, setShowOverall] = useState(
+    savedDraft?.showOverall ?? false,
+  );
+  useEffect(() => {
+    if (draftKey)
+      draftCache?.set(draftKey, {
+        summary,
+        notes,
+        fileNotes,
+        notePath,
+        showOverall,
+      });
+  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState("");
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(

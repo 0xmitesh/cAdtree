@@ -2042,3 +2042,90 @@ input::placeholder {
     scroll-behavior: auto !important;
   }
 }
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.home-workspaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.home-workspaces .workspace-project {
+  min-width: 0;
+  margin: 0;
+}
+.home-workspaces .project-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  border-bottom: 0;
+}
+.home-workspaces .disclosure {
+  margin-top: 0;
+  padding: 14px 22px;
+}
+.home-workspaces h3,
+.home-workspaces .file-path {
+  overflow-wrap: anywhere;
+}
+.workspace-switcher {
+  min-width: 0;
+  max-width: 220px;
+}
+.workspace-switcher select {
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  border-radius: 6px;
+}
+.workspace-context {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.workspace-header {
+  min-height: 78px;
+  height: auto;
+  gap: 12px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+@media (max-width: 700px) {
+  .workspace-header {
+    align-items: flex-start;
+  }
+  .workspace-header .local-indicator,
+  .workspace-header .workspace-symbol {
+    display: none;
+  }
+  .workspace-context {
+    gap: 8px;
+  }
+  .workspace-context .workspace-breadcrumb {
+    display: none;
+  }
+  .workspace-switcher {
+    max-width: 165px;
+  }
+  .home-actions .button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}

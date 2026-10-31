@@ -383,6 +383,10 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
   }) as typeof globalThis.structuredClone;
   try {
     let ui = render(<App />);
+    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(
+      ui.getByRole("button", { name: "Inspect external workspaces" }),
+    );
     fireEvent.click(ui.getByRole("button", { name: /Create workspace/ }));
     let dialog = within(ui.getByRole("dialog"));
     assert.ok(
@@ -403,6 +407,10 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
     await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
     cleanup();
     ui = render(<App />);
+    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(
+      ui.getByRole("button", { name: "Inspect external workspaces" }),
+    );
     await waitFor(() =>
       assert.ok(ui.getByRole("button", { name: "Reconnect Picker workspace" })),
     );
@@ -458,6 +466,10 @@ test("canceling unconfigured folder copying leaves the workspace usable with no 
     copied.push(value);
   });
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(
+    ui.getByRole("button", { name: "Inspect external workspaces" }),
+  );
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.equal(
@@ -528,6 +540,10 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     copied.push(value);
   });
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(
+    ui.getByRole("button", { name: "Inspect external workspaces" }),
+  );
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("heading", { name: "Engineering workspace." })),
@@ -578,14 +594,18 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   fireEvent.click(
     settings.getByRole("button", { name: "Configure path shortcuts" }),
   );
-  assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" }));
-  assert.equal(
-    (
-      ui.getByRole("textbox", {
-        name: "Workspace folder path",
-      }) as HTMLInputElement
-    ).value,
-    "D:\\工程 Workspace",
+  await waitFor(() =>
+    assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" })),
+  );
+  await waitFor(() =>
+    assert.equal(
+      (
+        ui.getByRole("textbox", {
+          name: "Workspace folder path",
+        }) as HTMLInputElement
+      ).value,
+      "D:\\工程 Workspace",
+    ),
   );
   fireEvent.click(
     within(ui.getByRole("dialog")).getByRole("button", { name: "Cancel" }),

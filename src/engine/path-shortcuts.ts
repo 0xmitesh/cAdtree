@@ -4,9 +4,42 @@ import {
 } from "./fs-adapter";
 import { managedPath, resolveManagedProject } from "./workspace-service";
 import {
+  openHome,
+  type HomeState,
+  type HomeWorkspaceEntry,
+} from "./home-service";
+import {
   validateWindowsSegments,
   type FilePathLocation,
 } from "../utils/windows-path";
+
+/** Prefix only a freshly validated managed descendant; external paths keep their own settings. */
+export async function resolveHomeFilePath(
+  home: HomeState,
+  entry: HomeWorkspaceEntry,
+  location: FilePathLocation,
+): Promise<FilePathLocation> {
+  const current = await openHome(home.root);
+  if (current.identity.homeId !== home.identity.homeId)
+    throw new Error("Cadtree home identity changed.");
+  const registered = current.workspaces.find((e) => e.key === entry.key);
+  if (
+    !registered?.workspace ||
+    registered.workspaceId !== location.workspaceId ||
+    !registered.directory
+  )
+    throw new Error("Workspace home mapping is unavailable.");
+  if (
+    entry.workspace &&
+    !(await entry.workspace.root.isSameEntry(registered.workspace.root))
+  )
+    throw new Error("Workspace location changed. Reconnect it.");
+  return {
+    ...location,
+    workspaceId: home.identity.homeId,
+    relativeDirectory: `${registered.directory}/${location.relativeDirectory}`,
+  };
+}
 
 async function existingFile(
   root: FileSystemDirectoryAdapter,

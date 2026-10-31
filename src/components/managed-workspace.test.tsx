@@ -75,6 +75,8 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   let ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
   fireEvent.click(ui.getByRole("button", { name: /Create workspace/ }));
   let dialog = within(ui.getByRole("dialog"));
   fireEvent.change(dialog.getByRole("textbox", { name: "Workspace name" }), {
@@ -169,6 +171,8 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   picker.queue.push(nativeDirectory(root));
   const reopenCount = picker.calls();
   ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Open project" })),
@@ -215,6 +219,8 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Inspect project" })),
@@ -259,6 +265,8 @@ test("managed action preflight notices a folder lost after opening, before it di
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Open project" })),
@@ -308,6 +316,8 @@ test("legacy adoption is guided through the workspace UI and preserves unsaved w
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Add project" })),

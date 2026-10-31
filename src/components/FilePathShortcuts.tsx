@@ -18,30 +18,37 @@ import {
   saveWorkspaceWindowsPath,
 } from "../engine/idb-store";
 import type { WorkspaceState } from "../engine/workspace-service";
+import type { HomeState } from "../engine/home-service";
+import { RealFileSystemAdapter } from "../engine/fs-adapter";
 import { Modal, Notice } from "./ui";
 
 export function WindowsWorkspacePathField({
   value,
   onChange,
+  home = false,
 }: {
   value: string;
   onChange: (value: string) => void;
+  home?: boolean;
 }) {
   const id = useId();
   return (
     <label className="field windows-path-field">
-      <span id={`${id}-label`}>Workspace folder path</span>
+      <span id={`${id}-label`}>
+        {home ? "Cadtree home folder path" : "Workspace folder path"}
+      </span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={"D:\\CAD Workspace"}
+        placeholder={home ? "D:\\Cadtree" : "D:\\CAD Workspace"}
         aria-labelledby={`${id}-label`}
         aria-describedby={id}
         autoComplete="off"
         spellCheck={false}
       />
       <span className="field-help" id={id}>
-        Copy this workspace folder’s full location from Explorer’s address bar.
+        Copy this {home ? "Cadtree home" : "workspace"} folder’s full location
+        from Explorer’s address bar.
       </span>
     </label>
   );
@@ -57,14 +64,21 @@ const Shortcuts = createContext<ShortcutContext | null>(null);
 
 export function FilePathShortcutsProvider({
   workspace,
+  home,
+  contextKey,
   convenienceEpoch,
   children,
 }: {
   workspace: WorkspaceState | null;
+  home?: HomeState | null;
+  contextKey?: string;
   convenienceEpoch: number;
   children: ReactNode;
 }) {
-  const workspaceId = workspace?.identity.workspaceId;
+  const workspaceId = home?.identity.homeId ?? workspace?.identity.workspaceId;
+  const accessRoot = home?.root ?? workspace?.root;
+  const accessHandle =
+    accessRoot instanceof RealFileSystemAdapter ? accessRoot.handle : undefined;
   const [setting, setSetting] = useState({ workspaceId: "", path: "" });
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState("");
@@ -90,7 +104,7 @@ export function FilePathShortcutsProvider({
     setSetting({ workspaceId: workspaceId ?? "", path: "" });
     if (!workspaceId) return;
     let cancelled = false;
-    void getWorkspaceWindowsPath(workspaceId)
+    void getWorkspaceWindowsPath(workspaceId, accessHandle)
       .then((path) => {
         if (cancelled || version.current !== currentVersion) return;
         setSetting({ workspaceId, path });
@@ -101,7 +115,7 @@ export function FilePathShortcutsProvider({
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, convenienceEpoch]);
+  }, [workspaceId, accessRoot, convenienceEpoch, contextKey]);
   useEffect(() => {
     if (!feedback) return;
     const timer = setTimeout(() => setFeedback(""), 3000);
@@ -119,7 +133,7 @@ export function FilePathShortcutsProvider({
     // A click can arrive before the initial preference read finishes.
     if (!root) {
       try {
-        root = await getWorkspaceWindowsPath(workspaceId);
+        root = await getWorkspaceWindowsPath(workspaceId, accessHandle);
       } catch {
         /* Setup also works with session-only preferences. */
       }
@@ -147,6 +161,7 @@ export function FilePathShortcutsProvider({
   };
   const copy = async (request: CopyRequest) => {
     if (copying.current) return;
+    const currentVersion = version.current;
     copying.current = true;
     setBusy(true);
     setError("");
@@ -154,15 +169,28 @@ export function FilePathShortcutsProvider({
     try {
       await execute(request, windowsPath);
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      if (currentVersion === version.current)
+        setError(error instanceof Error ? error.message : String(error));
     } finally {
-      copying.current = false;
-      setBusy(false);
+      if (currentVersion === version.current) {
+        copying.current = false;
+        setBusy(false);
+      }
     }
   };
-  const configure = () => {
+  const configure = async () => {
+    const currentVersion = version.current;
+    let path = windowsPath;
+    if (!path && workspaceId) {
+      try {
+        path = await getWorkspaceWindowsPath(workspaceId, accessHandle);
+      } catch {
+        /* Session-only setup remains available. */
+      }
+    }
+    if (currentVersion !== version.current) return;
     setPending(null);
-    setInput(windowsPath);
+    setInput(path);
     setError("");
     setEditing(true);
   };
@@ -190,7 +218,7 @@ export function FilePathShortcutsProvider({
           </button>
         </Modal>
       ) : null}
-      {editing && workspace ? (
+      {editing && (workspace || home) ? (
         <Modal
           title="Set up folder-path copying"
           busy={busy}
@@ -201,13 +229,15 @@ export function FilePathShortcutsProvider({
           }}
         >
           <p>
-            Paste this workspace folder’s full Windows path once so cAdtree can
-            copy locations you can paste into File Explorer.
+            Paste this {home ? "Cadtree home" : "workspace"} folder’s full
+            Windows path once so cAdtree can copy locations you can paste into
+            File Explorer.
           </p>
           <form
             onSubmit={async (event) => {
               event.preventDefault();
               if (copying.current) return;
+              const currentVersion = version.current;
               copying.current = true;
               setBusy(true);
               setError("");
@@ -220,15 +250,17 @@ export function FilePathShortcutsProvider({
                 let cacheWarning = "";
                 try {
                   await saveWorkspaceWindowsPath(
-                    workspace.identity.workspaceId,
+                    workspaceId!,
                     path,
+                    accessHandle,
                   );
                 } catch {
                   cacheWarning =
                     "Your path could not be remembered. It is available for this session only; set it again next time.";
                 }
+                if (currentVersion !== version.current) return;
                 setSetting({
-                  workspaceId: workspace.identity.workspaceId,
+                  workspaceId: workspaceId!,
                   path,
                 });
                 setWarning(cacheWarning);
@@ -237,17 +269,24 @@ export function FilePathShortcutsProvider({
                 setEditing(false);
                 if (request) await execute(request, path);
               } catch (error) {
-                setError(
-                  error instanceof Error ? error.message : String(error),
-                );
+                if (currentVersion === version.current)
+                  setError(
+                    error instanceof Error ? error.message : String(error),
+                  );
               } finally {
-                copying.current = false;
-                setBusy(false);
+                if (currentVersion === version.current) {
+                  copying.current = false;
+                  setBusy(false);
+                }
               }
             }}
           >
             <fieldset disabled={busy}>
-              <WindowsWorkspacePathField value={input} onChange={setInput} />
+              <WindowsWorkspacePathField
+                home={Boolean(home)}
+                value={input}
+                onChange={setInput}
+              />
               {error ? <Notice type="error">{error}</Notice> : null}
               <div className="modal-actions">
                 <button
