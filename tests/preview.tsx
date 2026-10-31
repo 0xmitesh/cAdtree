@@ -52,7 +52,14 @@ function Preview() {
   const [message, setMessage] = useState("");
   const noop = async () => {};
   return (
-    <div className="app-shell">
+    <div className="app-shell component-fixture-preview">
+      <div className="component-fixture-label" role="note">
+        SYNTHETIC COMPONENT HARNESS · isolated view tests, not the current
+        application shell.{" "}
+        <a href="/tests/synthetic.html">
+          Open the current multi-workspace preview
+        </a>
+      </div>
       <aside className="navigation-rail">
         <a className="wordmark" href="/" aria-label="cAdtree projects">
           <GitBranch size={29} />

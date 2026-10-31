@@ -3,7 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>cAdtree · development preview</title>
+    <title>cAdtree · isolated component fixture harness</title>
+    <style>
+      .component-fixture-label {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 50;
+        padding: 5px 14px;
+        background: #fff4ce;
+        color: #614900;
+        font: 11px system-ui;
+      }
+      .component-fixture-preview {
+        padding-top: 28px;
+      }
+      .component-fixture-preview .navigation-rail {
+        top: 28px;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

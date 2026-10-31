@@ -2331,3 +2331,88 @@ input::placeholder {
     border-top: 1px solid #38474a;
   }
 }
+
+/* Compact project context and a bounded, locally remembered Explorer width. */
+.workspace-shell {
+  position: relative;
+}
+.compact-local-indicator {
+  position: absolute;
+  top: 10px;
+  right: 34px;
+  font-size: 11px;
+  pointer-events: none;
+  display: flex;
+}
+.project-heading-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+.page-heading {
+  flex-wrap: wrap;
+}
+.page-heading > div:first-child {
+  min-width: 0;
+}
+.page-heading .eyebrow {
+  overflow-wrap: anywhere;
+}
+.project-branch-picker {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.project-branch-picker select {
+  width: 210px;
+  max-width: 100%;
+  font-size: 13px;
+}
+.workspace-tree {
+  font-size: 13px;
+}
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible {
+  background: #65c2b3;
+  outline: 0;
+}
+@media (min-width: 961px) {
+  .navigation-rail {
+    width: var(--sidebar-width, 260px);
+  }
+  .workspace-shell {
+    margin-left: var(--sidebar-width, 260px);
+  }
+}
+@media (max-width: 960px) {
+  .sidebar-resizer {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .project-heading-controls {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .project-branch-picker {
+    flex: 1 1 150px;
+  }
+  .compact-local-indicator {
+    right: 18px;
+    font-size: 10px;
+  }
+}

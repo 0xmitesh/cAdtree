@@ -1,4 +1,5 @@
 import {
+  useId,
   useEffect,
   useRef,
   useState,
@@ -61,6 +62,7 @@ interface VisibleNode extends TreeNode {
 
 /** Product navigation only: storage internals never become editable explorer targets. */
 export function WorkspaceTree(props: WorkspaceTreeProps) {
+  const descriptionId = useId();
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(["home"]),
   );
@@ -239,7 +241,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         aria-busy={props.busy}
         className="tree-items"
       >
-        {visible.map((node) => {
+        {visible.map((node, index) => {
           const isExpanded = expanded.has(node.key);
           const Icon =
             node.kind === "home"
@@ -258,6 +260,11 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
               }}
               role="treeitem"
               aria-label={node.accessibleLabel ?? node.label}
+              aria-describedby={
+                !node.unavailable && node.count !== undefined
+                  ? `${descriptionId}-${index}`
+                  : undefined
+              }
               aria-level={node.depth + 1}
               aria-posinset={node.position}
               aria-setsize={node.siblings}
@@ -300,8 +307,15 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                   !
                 </span>
               ) : node.count !== undefined ? (
-                <span className="tree-count" aria-hidden="true">
-                  {node.count}
+                <span
+                  className="tree-count"
+                  title={`${node.count} ${node.kind === "workspace" ? "projects" : "branches"}`}
+                >
+                  <span aria-hidden="true">{node.count}</span>
+                  <span className="sr-only" id={`${descriptionId}-${index}`}>
+                    {node.count}{" "}
+                    {node.kind === "workspace" ? "projects" : "branches"}
+                  </span>
                 </span>
               ) : null}
             </div>

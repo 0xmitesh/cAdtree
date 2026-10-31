@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
@@ -30,6 +31,7 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
 
 export interface HistoryRecoveryViewProps {
+  branchControl?: ReactNode;
   vaultState: VaultState;
   activeBranchId: string;
   isRestoring: boolean;
@@ -172,29 +174,32 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
     <div className="page history-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">PROJECT WORKSPACE</p>
+          <p className="eyebrow">{vaultState.project.name}</p>
           <h1>
             History<span className="heading-dot">.</span>
           </h1>
           <p>A clear view of how your design evolved.</p>
         </div>
-        <div className="segmented" aria-label="History display">
-          <button
-            className={mode === "graph" ? "active" : ""}
-            aria-pressed={mode === "graph"}
-            onClick={() => setMode("graph")}
-          >
-            <Network size={15} />
-            Graph
-          </button>
-          <button
-            className={mode === "list" ? "active" : ""}
-            aria-pressed={mode === "list"}
-            onClick={() => setMode("list")}
-          >
-            <List size={15} />
-            List
-          </button>
+        <div className="project-heading-controls">
+          {props.branchControl}
+          <div className="segmented" aria-label="History display">
+            <button
+              className={mode === "graph" ? "active" : ""}
+              aria-pressed={mode === "graph"}
+              onClick={() => setMode("graph")}
+            >
+              <Network size={15} />
+              Graph
+            </button>
+            <button
+              className={mode === "list" ? "active" : ""}
+              aria-pressed={mode === "list"}
+              onClick={() => setMode("list")}
+            >
+              <List size={15} />
+              List
+            </button>
+          </div>
         </div>
       </div>
       {activeBranch && !activeBranch.isMain ? (

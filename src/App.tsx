@@ -53,10 +53,14 @@ import {
 import { ProjectConnectView } from "./components/ProjectConnectView";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
+import { ActiveBranchPicker } from "./components/ActiveBranchPicker";
+import {
+  SidebarResizeHandle,
+  useSidebarWidth,
+} from "./components/SidebarResize";
 import { DiagnosticsView } from "./components/DiagnosticsView";
 import type { CreateBranchParams } from "./components/CreateBranchDialog";
 import {
-  GitBranch,
   FolderOpen,
   History,
   Settings,
@@ -111,6 +115,7 @@ type Context = {
 };
 
 export default function App() {
+  const sidebar = useSidebarWidth();
   const [home, setHome] = useState<HomeState | null>(null);
   const [rememberedHome, setRememberedHome] = useState<RememberedHome | null>(
     null,
@@ -684,10 +689,14 @@ export default function App() {
       }
     }
     if (context.current())
-      setStatusBanner({
-        type: "info",
-        message: `${message || `Opened managed location ${project.record.containerPath}.`} ${warning}`,
-      });
+      setStatusBanner(
+        message.trim() || warning.trim()
+          ? {
+              type: "info",
+              message: `${message} ${warning}`.trim(),
+            }
+          : null,
+      );
   };
   const openManaged = async (entry: WorkspaceProjectEntry) => {
     if (!workspace) return;
@@ -1124,10 +1133,15 @@ export default function App() {
       }
       const warning = await persistBinding(state, vaultDir, branchId);
       if (context.current())
-        setStatusBanner({
-          type: "info",
-          message: `${readable ? "Open this branch’s folder manually in SolidWorks." : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`,
-        });
+        setStatusBanner(
+          !readable || warning
+            ? {
+                type: "info",
+                message:
+                  `${readable ? "" : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`.trim(),
+              }
+            : null,
+        );
     });
   };
   const handleScanCurrent = async () => {
@@ -1610,7 +1624,7 @@ export default function App() {
       contextKey={`${homeView}:${workspace?.identity.workspaceId}:${managedWorkspaceKey}:${managedProject?.record.projectId}:${activeBranchId}`}
       convenienceEpoch={convenienceEpoch}
     >
-      <div className="app-shell">
+      <div className="app-shell" style={sidebar.style}>
         <aside className="navigation-rail">
           <a
             className="wordmark"
@@ -1723,129 +1737,20 @@ export default function App() {
               <p>Your files. Your storage.</p>
             </div>
           </div>
+          <SidebarResizeHandle
+            width={sidebar.width}
+            max={sidebar.max}
+            onChange={sidebar.change}
+          />
         </aside>
         <div className="workspace-shell">
-          <header className="workspace-header">
-            <div className="workspace-context">
-              <button
-                className="text-button"
-                disabled={busy}
-                onClick={allWorkspaces}
-              >
-                Cadtree home
-              </button>
-              {home && !homeView ? (
-                <label className="workspace-switcher">
-                  <span className="sr-only">Workspace</span>
-                  <select
-                    aria-label="Switch workspace"
-                    value={homeEntry?.key ?? ""}
-                    disabled={busy}
-                    onChange={(event) => {
-                      const entry = home.workspaces.find(
-                        (e) => e.key === event.target.value,
-                      );
-                      if (entry) void openHomeEntry(entry).catch(() => {});
-                    }}
-                  >
-                    <option value="" disabled>
-                      External workspace
-                    </option>
-                    {homeWorkspaceGroups(home.workspaces)
-                      .map(
-                        (entries) =>
-                          entries.find((e) => e.workspace) ?? entries[0],
-                      )
-                      .map((e) => (
-                        <option
-                          key={e.key}
-                          value={e.key}
-                          disabled={!e.workspace}
-                        >
-                          {e.name}
-                          {e.workspace ? "" : " · Unavailable"}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              ) : null}
-              <span className="workspace-symbol">
-                <FolderOpen size={17} />
-              </span>
-              <span
-                className="workspace-breadcrumb"
-                hidden={Boolean(homeEntry)}
-              >
-                {projectView && !managedProject
-                  ? "External project"
-                  : (workspace?.identity.name ?? "All workspaces")}
-              </span>
-              <strong>
-                {projectView
-                  ? vaultState?.project.name
-                  : legacyMode
-                    ? "External projects"
-                    : homeView
-                      ? ""
-                      : (workspace?.identity.name ?? "Workspace")}
-              </strong>
-              {projectView && vaultState ? (
-                <span className="current-branch">
-                  <GitBranch size={14} />
-                  <label className="branch-picker">
-                    <span>Active branch</span>
-                    <select
-                      aria-label="Active branch"
-                      value={activeBranchId}
-                      disabled={busy}
-                      onChange={(e) => {
-                        void handleSelectBranch(e.target.value);
-                      }}
-                    >
-                      {vaultState.branches.map((branch) => (
-                        <option key={branch.branchId} value={branch.branchId}>
-                          {branch.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </span>
-              ) : null}
-            </div>
-            <span className="local-indicator">
-              <i />
-              Local workspace
-            </span>
-          </header>
-          {projectView && vaultState ? (
-            <div className="workspace-folder-bar">
-              <div>
-                <strong>
-                  {activeBranch?.name ?? "Unknown branch"} · Working folder:{" "}
-                  {managedProject
-                    ? `${workingDir ? "" : "Not connected · "}${managedProject.workingPaths[activeBranchId] ?? "Unknown location"}`
-                    : (workingDir?.name ?? "Not connected")}
-                </strong>
-                <p>
-                  Open this branch’s folder manually in SolidWorks before
-                  editing or saving CAD documents.
-                </p>
-              </div>
-              <button
-                className="button secondary"
-                disabled={busy}
-                onClick={handleReattachWorkingFolder}
-              >
-                {managedProject
-                  ? "Reconnect workspace"
-                  : workingDir
-                    ? "Change branch folder"
-                    : "Connect folder"}
-              </button>
-            </div>
-          ) : null}
+          <span className="local-indicator compact-local-indicator">
+            <i />
+            Local workspace
+          </span>
           <main id="main-content">
-            {isVerifyingAll || (isScanning && activeTab !== "changes") ? (
+            {progress &&
+            (isVerifyingAll || (isScanning && activeTab !== "changes")) ? (
               <div className="global-feedback">
                 <OperationProgress
                   progress={progress}
@@ -1860,12 +1765,41 @@ export default function App() {
                   onDismiss={() => setStatusBanner(null)}
                 >
                   {statusBanner.message}
+                  {statusBanner.type === "error" &&
+                  /permission|reconnect|access|notallowed/i.test(
+                    statusBanner.message,
+                  ) &&
+                  projectView ? (
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={handleReattachWorkingFolder}
+                    >
+                      {managedProject
+                        ? "Reconnect workspace"
+                        : "Connect folder"}
+                    </button>
+                  ) : null}
                 </Notice>
               </div>
             ) : null}
             {projectView && vaultState ? (
               <div className="global-integrity">
                 <IntegrityNotice state={vaultState} />
+                {vaultState.incompleteAttempts.length ? (
+                  <Notice>
+                    {vaultState.incompleteAttempts.length} incomplete or
+                    interrupted operation(s) retained. These are not committed
+                    revisions.
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => navigate("diagnostics")}
+                    >
+                      Review in Settings
+                    </button>
+                  </Notice>
+                ) : null}
                 {managedBlockReason ? (
                   <Notice type="error">{managedBlockReason}</Notice>
                 ) : null}
@@ -1879,6 +1813,15 @@ export default function App() {
                     {managedProject
                       ? "Missing or moved folders will stay disconnected until their recorded location is restored."
                       : "Select each branch, then Connect folder."}
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={handleReattachWorkingFolder}
+                    >
+                      {managedProject
+                        ? "Reconnect workspace"
+                        : "Connect folder"}
+                    </button>
                   </Notice>
                 ) : null}
               </div>
@@ -1980,6 +1923,14 @@ export default function App() {
                     }
                   >
                     <ChangesCaptureView
+                      branchControl={
+                        <ActiveBranchPicker
+                          state={vaultState}
+                          activeBranchId={activeBranchId}
+                          busy={busy}
+                          onSelect={handleSelectBranch}
+                        />
+                      }
                       vaultState={vaultState}
                       draftCache={draftCache.current}
                       draftKey={`${managedWorkspaceKey ?? workspace?.root.name ?? "external"}:${workspace?.identity.workspaceId ?? "external"}:${managedProject?.record.containerPath ?? vaultDir.name}:${vaultState.project.projectId}:${branch.branchId}`}
@@ -2021,6 +1972,14 @@ export default function App() {
                 ))}
                 <div hidden={activeTab !== "history"}>
                   <HistoryRecoveryView
+                    branchControl={
+                      <ActiveBranchPicker
+                        state={vaultState}
+                        activeBranchId={activeBranchId}
+                        busy={busy}
+                        onSelect={handleSelectBranch}
+                      />
+                    }
                     vaultState={vaultState}
                     activeBranchId={activeBranchId}
                     isRestoring={isRestoring}
@@ -2101,6 +2060,14 @@ export default function App() {
                 </div>
                 <div hidden={activeTab !== "diagnostics"}>
                   <DiagnosticsView
+                    branchControl={
+                      <ActiveBranchPicker
+                        state={vaultState}
+                        activeBranchId={activeBranchId}
+                        busy={busy}
+                        onSelect={handleSelectBranch}
+                      />
+                    }
                     managed={Boolean(managedProject)}
                     vaultState={vaultState}
                     isVerifyingAll={isVerifyingAll}

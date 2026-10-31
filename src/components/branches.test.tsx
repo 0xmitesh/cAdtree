@@ -45,7 +45,9 @@ async function setup() {
   });
   const ui = render(<App />);
   fireEvent.click(ui.getByText("Other locations"));
-  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
+  fireEvent.click(
+    ui.getByRole("button", { name: "Inspect external workspaces" }),
+  );
   fireEvent.click(ui.getByText("Advanced: external projects"));
   fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
   fireEvent.click(ui.getByRole("button", { name: /Open existing vault/ }));
@@ -126,8 +128,10 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     else await ctx.vault.writeFileText(marker, "{");
     cleanup();
     const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
-  fireEvent.click(ui.getByRole("button", { name: "Inspect external workspaces" }));
+    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(
+      ui.getByRole("button", { name: "Inspect external workspaces" }),
+    );
     fireEvent.click(ui.getByText("Advanced: external projects"));
     fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
     ctx.queue.push(nativeDirectory(ctx.vault));
@@ -440,7 +444,8 @@ test("App clears stale scan context for unavailable handles and rejects switchin
     assert.ok(ctx.ui.getByRole("button", { name: "Connect folder" })),
   );
   assert.match(
-    ctx.ui.container.querySelector(".workspace-folder-bar")!.textContent!,
+    ctx.ui.container.querySelector(".settings-page .settings-row")!
+      .textContent!,
     /Not connected/,
   );
   fireEvent.click(
@@ -526,7 +531,8 @@ test("clearing browser bindings reconstructs all branches and requires explicit 
   );
   assert.equal(ctx.ui.getAllByRole("option").length, 2);
   assert.match(
-    ctx.ui.container.querySelector(".workspace-folder-bar")!.textContent!,
+    ctx.ui.container.querySelector(".settings-page .settings-row")!
+      .textContent!,
     /Not connected/,
   );
   fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
@@ -555,7 +561,8 @@ test("clearing browser bindings reconstructs all branches and requires explicit 
     ),
   );
   assert.match(
-    ctx.ui.container.querySelector(".workspace-folder-bar")!.textContent!,
+    ctx.ui.container.querySelector(".settings-page .settings-row")!
+      .textContent!,
     /Main CAD/,
   );
   assert.match(

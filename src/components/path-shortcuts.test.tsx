@@ -572,15 +572,10 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   assert.ok(ui.getByRole("button", { name: "Add project" }));
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
-  assert.ok(
-    ui.container
-      .querySelector(".workspace-header")!
-      .textContent!.includes("Engineering workspace"),
-  );
-  assert.ok(
-    ui.container
-      .querySelector(".workspace-header")!
-      .textContent!.includes("Cam assembly"),
+  assert.equal(ui.container.querySelector(".workspace-header"), null);
+  assert.match(
+    ui.container.querySelector(".history-page .eyebrow")!.textContent!,
+    /Cam assembly/,
   );
   nav(ui, "Settings");
   const settings = within(

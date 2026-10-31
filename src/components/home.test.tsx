@@ -194,11 +194,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
     changes(ui).getByRole("textbox", { name: "Case-only.bin: problem" }),
     { target: { value: "Case A engineering note" } },
   );
-  const switcher = ui.getByRole("combobox", { name: "Switch workspace" });
-  const options = (await openHome(root)).workspaces;
-  fireEvent.change(switcher, {
-    target: { value: options.find((e) => e.name === "autocad")!.key },
-  });
+  fireEvent.click(ui.getByRole("treeitem", { name: "autocad" }));
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "autocad." })));
   await ready(ui, "Open project");
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
@@ -216,9 +212,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
     changes(ui).getByRole("textbox", { name: /Revision summary/ }),
     { target: { value: "AutoCAD draft" } },
   );
-  fireEvent.change(ui.getByRole("combobox", { name: "Switch workspace" }), {
-    target: { value: options.find((e) => e.name === "cam 2")!.key },
-  });
+  fireEvent.click(ui.getByRole("treeitem", { name: "cam 2" }));
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "cam 2." })));
   await ready(ui, "Open project");
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
@@ -266,16 +260,10 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   );
   await waitFor(() => assert.equal(entered, true));
   assert.equal(
-    (
-      ui.getByRole("combobox", {
-        name: "Switch workspace",
-      }) as HTMLSelectElement
-    ).disabled,
-    true,
+    ui.getByRole("treeitem", { name: "autocad" }).getAttribute("aria-disabled"),
+    "true",
   );
-  fireEvent.change(ui.getByRole("combobox", { name: "Switch workspace" }), {
-    target: { value: options.find((e) => e.name === "autocad")!.key },
-  });
+  fireEvent.click(ui.getByRole("treeitem", { name: "autocad" }));
   nav(ui, "All workspaces");
   release();
   await idle(ui);

@@ -195,7 +195,7 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   assert.equal(picker.calls(), reopenCount + 1);
   assert.ok(
     !ui.container
-      .querySelector(".workspace-folder-bar")!
+      .querySelector(".settings-page .settings-row")!
       .textContent!.includes("Not connected"),
   );
   assert.equal(await snap(source), before);

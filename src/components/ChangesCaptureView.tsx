@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { File, RefreshCw, Save, StickyNote } from "lucide-react";
 import type {
@@ -14,6 +15,7 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
 
 export interface ChangesCaptureViewProps {
+  branchControl?: ReactNode;
   draftCache?: Map<string, CaptureDraft>;
   draftKey?: string;
   vaultState: VaultState;
@@ -67,6 +69,7 @@ export function ChangesCaptureView({
   resolveFilePath,
   draftCache,
   draftKey,
+  branchControl,
 }: ChangesCaptureViewProps) {
   const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
   const [summary, setSummary] = useState(savedDraft?.summary ?? "");
@@ -182,20 +185,23 @@ export function ChangesCaptureView({
     <div className="page changes-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">WORKING FOLDER</p>
+          <p className="eyebrow">{vaultState.project.name}</p>
           <h1>
             Changes<span className="heading-dot">.</span>
           </h1>
           <p>What changed, and why it matters.</p>
         </div>
-        <button
-          className="button secondary"
-          disabled={busy || !workingFolderName}
-          onClick={onScan}
-        >
-          <RefreshCw size={16} />
-          {isScanning ? "Scanning…" : "Scan for changes"}
-        </button>
+        <div className="project-heading-controls">
+          {branchControl}
+          <button
+            className="button secondary"
+            disabled={busy || !workingFolderName}
+            onClick={onScan}
+          >
+            <RefreshCw size={16} />
+            {isScanning ? "Scanning…" : "Scan for changes"}
+          </button>
+        </div>
       </div>
       <div className="scan-strip">
         <span>
