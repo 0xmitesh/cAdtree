@@ -155,7 +155,8 @@ h3 {
   flex-direction: column;
   gap: 5px;
 }
-.navigation-rail nav button {
+.navigation-rail nav > button,
+.navigation-rail .project-navigation > button {
   display: flex;
   align-items: center;
   gap: 13px;
@@ -167,10 +168,12 @@ h3 {
   padding: 12px;
   font-size: 13px;
 }
-.navigation-rail nav button:hover:not(:disabled) {
+.navigation-rail nav > button:hover:not(:disabled),
+.navigation-rail .project-navigation > button:hover:not(:disabled) {
   background: #2e4043;
 }
-.navigation-rail nav button[aria-current] {
+.navigation-rail nav > button[aria-current],
+.navigation-rail .project-navigation > button[aria-current] {
   color: #a3e4d5;
   background: #304b4c;
   box-shadow: inset 2px 0 #6ac6b6;
@@ -1818,7 +1821,8 @@ input::placeholder {
   }
   .wordmark span,
   .rail-caption,
-  .navigation-rail nav button span,
+  .navigation-rail nav > button span,
+  .navigation-rail .project-navigation > button span,
   .rail-section-label,
   .rail-bottom div,
   .nav-change-dot {
@@ -1827,7 +1831,8 @@ input::placeholder {
   .navigation-rail nav {
     margin-top: 35px;
   }
-  .navigation-rail nav button {
+  .navigation-rail nav > button,
+  .navigation-rail .project-navigation > button {
     justify-content: center;
     padding: 14px;
   }
@@ -1972,7 +1977,8 @@ input::placeholder {
   .wordmark svg {
     width: 25px;
   }
-  .navigation-rail nav button {
+  .navigation-rail nav > button,
+  .navigation-rail .project-navigation > button {
     padding: 12px;
   }
   .workspace-shell {
@@ -2284,5 +2290,44 @@ input::placeholder {
   }
   .navigation-rail nav .mobile-tree-toggle {
     display: flex;
+  }
+}
+
+/* Keep the Explorer pane in place while the project controls appear below it. */
+.navigation-rail > .rail-navigation {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+.rail-navigation > button {
+  flex-shrink: 0;
+}
+.project-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 0 0 204px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid transparent;
+}
+.project-navigation.has-project {
+  border-top-color: #38474a;
+}
+@media (max-width: 960px) {
+  .navigation-rail > .rail-navigation {
+    flex: 0 0 auto;
+    gap: 5px;
+  }
+  .project-navigation {
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .project-navigation.has-project {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #38474a;
   }
 }

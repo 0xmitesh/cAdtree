@@ -1642,7 +1642,7 @@ export default function App() {
             </span>
           </a>
           <p className="rail-caption">DESIGN. RECORD. EVOLVE.</p>
-          <nav aria-label="Primary navigation">
+          <nav aria-label="Primary navigation" className="rail-navigation">
             <button
               aria-label="All workspaces"
               disabled={busy}
@@ -1652,52 +1652,6 @@ export default function App() {
               <FolderOpen size={18} />
               <span>All workspaces</span>
             </button>
-            {!homeView ? (
-              <>
-                {vaultState ? (
-                  <>
-                    <div className="rail-divider" />
-                    <p className="rail-section-label">PROJECT</p>
-                    <button
-                      aria-label="History"
-                      disabled={!vaultState || busy}
-                      aria-current={
-                        activeTab === "history" ? "page" : undefined
-                      }
-                      onClick={() => navigate("history")}
-                    >
-                      <History size={18} />
-                      <span>History</span>
-                    </button>
-                    <button
-                      aria-label="Changes"
-                      disabled={!vaultState || busy}
-                      aria-current={
-                        activeTab === "changes" ? "page" : undefined
-                      }
-                      onClick={() => navigate("changes")}
-                    >
-                      <ScanLine size={18} />
-                      <span>Changes</span>
-                      {scanResult?.hasChanges ? (
-                        <i className="nav-change-dot" />
-                      ) : null}
-                    </button>
-                    <button
-                      aria-label="Settings"
-                      disabled={!vaultState || busy}
-                      aria-current={
-                        activeTab === "diagnostics" ? "page" : undefined
-                      }
-                      onClick={() => navigate("diagnostics")}
-                    >
-                      <Settings size={18} />
-                      <span>Settings</span>
-                    </button>
-                  </>
-                ) : null}
-              </>
-            ) : null}
             {home || workspace ? (
               <button
                 className="mobile-tree-toggle"
@@ -1709,10 +1663,59 @@ export default function App() {
                 <span>Browse folders</span>
               </button>
             ) : null}
+            <div className="desktop-workspace-tree">
+              <WorkspaceTree {...treeProps} />
+            </div>
+            <div
+              className={`project-navigation${!homeView && vaultState ? " has-project" : ""}`}
+            >
+              {!homeView ? (
+                <>
+                  {vaultState ? (
+                    <>
+                      <p className="rail-section-label">PROJECT</p>
+                      <button
+                        aria-label="History"
+                        disabled={!vaultState || busy}
+                        aria-current={
+                          activeTab === "history" ? "page" : undefined
+                        }
+                        onClick={() => navigate("history")}
+                      >
+                        <History size={18} />
+                        <span>History</span>
+                      </button>
+                      <button
+                        aria-label="Changes"
+                        disabled={!vaultState || busy}
+                        aria-current={
+                          activeTab === "changes" ? "page" : undefined
+                        }
+                        onClick={() => navigate("changes")}
+                      >
+                        <ScanLine size={18} />
+                        <span>Changes</span>
+                        {scanResult?.hasChanges ? (
+                          <i className="nav-change-dot" />
+                        ) : null}
+                      </button>
+                      <button
+                        aria-label="Settings"
+                        disabled={!vaultState || busy}
+                        aria-current={
+                          activeTab === "diagnostics" ? "page" : undefined
+                        }
+                        onClick={() => navigate("diagnostics")}
+                      >
+                        <Settings size={18} />
+                        <span>Settings</span>
+                      </button>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           </nav>
-          <div className="desktop-workspace-tree">
-            <WorkspaceTree {...treeProps} />
-          </div>
           <div className="rail-bottom">
             <HardDrive size={17} />
             <div>

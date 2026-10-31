@@ -59,6 +59,10 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       .click();
     await expect(page.getByRole("heading", { name: name + "." })).toBeVisible();
     if (index < 2) {
+      const explorerBefore = await page
+        .locator(".desktop-workspace-tree")
+        .boundingBox();
+      expect(explorerBefore).not.toBeNull();
       await page.evaluate(() =>
         Object.assign(window, {
           showDirectoryPicker: async () =>
@@ -86,6 +90,20 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       await expect(
         page.getByRole("combobox", { name: "Active branch" }),
       ).toBeEnabled();
+      const explorerAfter = await page
+        .locator(".desktop-workspace-tree")
+        .boundingBox();
+      const historyButton = await page
+        .getByRole("navigation")
+        .getByRole("button", { name: "History" })
+        .boundingBox();
+      expect(Math.abs(explorerAfter!.y - explorerBefore!.y)).toBeLessThan(1);
+      expect(
+        Math.abs(explorerAfter!.height - explorerBefore!.height),
+      ).toBeLessThan(1);
+      expect(historyButton!.y).toBeGreaterThan(
+        explorerAfter!.y + explorerAfter!.height,
+      );
       await page
         .getByRole("navigation")
         .getByRole("button", { name: "History" })
