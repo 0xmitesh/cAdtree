@@ -2143,12 +2143,6 @@ input::placeholder {
 .navigation-rail > .rail-caption {
   margin-bottom: 24px;
 }
-.navigation-rail .active-workspace-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .desktop-workspace-tree {
   min-height: 0;
   overflow-y: auto;

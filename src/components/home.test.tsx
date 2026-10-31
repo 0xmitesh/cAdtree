@@ -445,12 +445,25 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   fireEvent.click(tree.getByRole("treeitem", { name: "Actuator, cam 2" }));
   await idle(ui);
   assert.ok(
-    within(ui.getByRole("navigation")).getByRole("button", { name: "cam 2" }),
+    !within(ui.getByRole("navigation")).queryByRole("button", {
+      name: "cam 2",
+    }),
   );
   nav(ui, "Changes");
   fireEvent.change(
     changes(ui).getByRole("textbox", { name: /Revision summary/ }),
     { target: { value: "Main draft" } },
+  );
+  fireEvent.click(tree.getByRole("treeitem", { name: "cam 2" }));
+  assert.ok(ui.getByRole("heading", { name: "cam 2." }));
+  nav(ui, "Changes");
+  assert.equal(
+    (
+      changes(ui).getByRole("textbox", {
+        name: /Revision summary/,
+      }) as HTMLInputElement
+    ).value,
+    "Main draft",
   );
   const main = tree.getByRole("treeitem", { name: "Main, Actuator, cam 2" });
   act(() => main.focus());
@@ -488,7 +501,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   );
   await idle(ui);
   assert.ok(
-    within(ui.getByRole("navigation")).getByRole("button", {
+    !within(ui.getByRole("navigation")).queryByRole("button", {
       name: "Concept Lab",
     }),
   );
@@ -539,7 +552,7 @@ test("folder browser opens in a dialog, supports keyboard traversal, and closes 
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   assert.ok(ui.getByRole("heading", { name: "Client ABC." }));
   assert.ok(
-    within(ui.getByRole("navigation")).getByRole("button", {
+    !within(ui.getByRole("navigation")).queryByRole("button", {
       name: "Client ABC",
     }),
   );

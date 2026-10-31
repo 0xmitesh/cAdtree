@@ -492,7 +492,7 @@ test("canceling unconfigured folder copying leaves the workspace usable with no 
   assert.ok(!ui.queryByRole("dialog"));
   assert.ok(!ui.queryByText(/Folder path copied|File path copied/));
   assert.equal(copied.length, 0);
-  nav(ui, "Workspace");
+  fireEvent.click(ui.getByRole("treeitem", { name: "Workspace · External" }));
   fireEvent.click(ui.getByRole("button", { name: "Add project" }));
   assert.ok(ui.getByRole("dialog", { name: "Import existing CAD project" }));
   assert.equal(
@@ -687,7 +687,9 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
       .length,
     1,
   );
-  nav(ui, "Engineering workspace");
+  fireEvent.click(
+    ui.getByRole("treeitem", { name: "Engineering workspace · External" }),
+  );
   assert.ok(ui.queryByRole("combobox", { name: "Active branch" }) === null);
   assert.ok(ui.container.querySelector(".workspace-folder-bar") === null);
   assert.ok(ui.queryByText(/Opened managed location/) === null);

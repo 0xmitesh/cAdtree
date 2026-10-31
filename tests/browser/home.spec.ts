@@ -143,7 +143,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     page
       .getByRole("navigation")
       .getByRole("button", { name: "AutoCAD", exact: true }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "All workspaces" })

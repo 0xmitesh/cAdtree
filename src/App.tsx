@@ -1592,7 +1592,8 @@ export default function App() {
       setExplorerOpen(false);
     },
     onWorkspace: async (entry) => {
-      if (entry) await openHomeEntry(entry);
+      if (entry && entry.key !== managedWorkspaceKey)
+        await openHomeEntry(entry);
       else navigate("connect");
       setExplorerOpen(false);
     },
@@ -1653,21 +1654,6 @@ export default function App() {
             </button>
             {!homeView ? (
               <>
-                <button
-                  aria-label={workspace?.identity.name ?? "Workspace"}
-                  data-workspace-navigation
-                  disabled={busy}
-                  aria-current={activeTab === "connect" ? "page" : undefined}
-                  onClick={() => navigate("connect")}
-                >
-                  <FolderOpen size={18} />
-                  <span
-                    className="active-workspace-name"
-                    title={workspace?.identity.name}
-                  >
-                    {workspace?.identity.name ?? "Workspace"}
-                  </span>
-                </button>
                 {vaultState ? (
                   <>
                     <div className="rail-divider" />
