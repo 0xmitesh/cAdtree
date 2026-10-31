@@ -30,7 +30,7 @@ export function WindowsWorkspacePathField({
   const id = useId();
   return (
     <label className="field windows-path-field">
-      <span id={`${id}-label`}>Windows workspace-root path (optional)</span>
+      <span id={`${id}-label`}>Workspace folder path</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -42,10 +42,6 @@ export function WindowsWorkspacePathField({
       />
       <span className="field-help" id={id}>
         Copy this workspace folder’s full location from Explorer’s address bar.
-        Used only for path shortcuts; it cannot be checked against the chosen
-        folder. Folder access and file operations still use your authorized
-        browser handle. Stored only in this browser, separately for each
-        workspace.
       </span>
     </label>
   );
@@ -62,12 +58,10 @@ const Shortcuts = createContext<ShortcutContext | null>(null);
 export function FilePathShortcutsProvider({
   workspace,
   convenienceEpoch,
-  setupVersion,
   children,
 }: {
   workspace: WorkspaceState | null;
   convenienceEpoch: number;
-  setupVersion: number;
   children: ReactNode;
 }) {
   const workspaceId = workspace?.identity.workspaceId;
@@ -82,7 +76,6 @@ export function FilePathShortcutsProvider({
   const [busy, setBusy] = useState(false);
   const copying = useRef(false);
   const version = useRef(0);
-  const seenSetup = useRef(0);
   const windowsPath = setting.workspaceId === workspaceId ? setting.path : "";
   useEffect(() => {
     const currentVersion = ++version.current;
@@ -97,31 +90,18 @@ export function FilePathShortcutsProvider({
     setSetting({ workspaceId: workspaceId ?? "", path: "" });
     if (!workspaceId) return;
     let cancelled = false;
-    const shouldPrompt = setupVersion > seenSetup.current;
-    seenSetup.current = setupVersion;
     void getWorkspaceWindowsPath(workspaceId)
       .then((path) => {
         if (cancelled || version.current !== currentVersion) return;
         setSetting({ workspaceId, path });
-        if (shouldPrompt) {
-          setInput(path);
-          setEditing(true);
-        }
       })
       .catch(() => {
-        if (cancelled || version.current !== currentVersion) return;
-        setWarning(
-          "Browser location preferences could not be read. You can enter a location for this session.",
-        );
-        if (shouldPrompt) {
-          setInput("");
-          setEditing(true);
-        }
+        /* Path setup is offered only on request. */
       });
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, convenienceEpoch, setupVersion]);
+  }, [workspaceId, convenienceEpoch]);
   useEffect(() => {
     if (!feedback) return;
     const timer = setTimeout(() => setFeedback(""), 3000);
@@ -159,9 +139,7 @@ export function FilePathShortcutsProvider({
       await navigator.clipboard.writeText(path);
       if (currentVersion === version.current)
         setFeedback(
-          request.containingFolder
-            ? "Containing folder path copied"
-            : "File path copied",
+          request.containingFolder ? "Folder path copied" : "File path copied",
         );
     } catch {
       if (currentVersion === version.current) setManualPath(path);
@@ -214,7 +192,7 @@ export function FilePathShortcutsProvider({
       ) : null}
       {editing && workspace ? (
         <Modal
-          title="Windows workspace location"
+          title="Set up folder-path copying"
           busy={busy}
           onClose={() => {
             setEditing(false);
@@ -223,11 +201,8 @@ export function FilePathShortcutsProvider({
           }}
         >
           <p>
-            <strong>{workspace.identity.name}</strong> · This optional setting
-            enables complete file paths. Leaving it blank does not block
-            importing, capturing, branching, or recovery. It does not open
-            Explorer or SolidWorks. UNC syntax is accepted for copying;
-            network-share behavior is not qualified.
+            Paste this workspace folder’s full Windows path once so cAdtree can
+            copy locations you can paste into File Explorer.
           </p>
           <form
             onSubmit={async (event) => {
@@ -240,7 +215,7 @@ export function FilePathShortcutsProvider({
                 const path = normalizeWindowsWorkspacePath(input);
                 if (pending && !path)
                   throw new Error(
-                    "Enter the Windows workspace-root path to complete this copy, or cancel.",
+                    "Enter the workspace folder path to complete this copy, or cancel.",
                   );
                 let cacheWarning = "";
                 try {
@@ -250,7 +225,7 @@ export function FilePathShortcutsProvider({
                   );
                 } catch {
                   cacheWarning =
-                    "The Windows location is available for this session only. Browser convenience storage could not save it; enter it again after reopening.";
+                    "Your path could not be remembered. It is available for this session only; set it again next time.";
                 }
                 setSetting({
                   workspaceId: workspace.identity.workspaceId,
@@ -284,10 +259,10 @@ export function FilePathShortcutsProvider({
                     setError("");
                   }}
                 >
-                  {pending ? "Cancel" : "Not now"}
+                  Cancel
                 </button>
                 <button className="button primary">
-                  {pending ? "Save and copy path" : "Save location"}
+                  {pending ? "Save and copy" : "Save"}
                 </button>
               </div>
             </fieldset>
@@ -361,7 +336,7 @@ export function WorkspaceLocationSetting({
         className={compact ? "text-button" : "button secondary"}
         onClick={context.configure}
       >
-        {compact ? "Windows workspace location" : "Edit Windows location"}
+        Configure path shortcuts
       </button>
     </div>
   );
@@ -380,10 +355,8 @@ export function FilePathActions({
 }) {
   const context = useContext(Shortcuts);
   if (!context) return null;
-  const label = historicalBranch
-    ? "Copy current working file path"
-    : "Copy file path";
-  const description = `${historicalBranch ? historicalBranch + " · " : restored ? "Restored copy · " : ""}${filePath}`;
+  const label = "Copy folder path";
+  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : restored ? "Restored copy · " : ""}${filePath}`;
   return (
     <div
       className={`file-path-actions${historicalBranch ? " historical" : ""}`}
@@ -393,12 +366,12 @@ export function FilePathActions({
         className={historicalBranch ? "text-button" : "icon-button"}
         aria-label={`${label} — ${description}`}
         title={`${label} — ${description}`}
-        onClick={() => context.copy({ resolve, containingFolder: false })}
+        onClick={() => context.copy({ resolve, containingFolder: true })}
       >
         <Copy size={15} aria-hidden="true" />
         {historicalBranch ? (
           <span>
-            {label} · {historicalBranch}
+            {label} · Current file on {historicalBranch}
           </span>
         ) : null}
       </button>
@@ -412,14 +385,15 @@ export function FilePathActions({
         <button
           type="button"
           className="text-button"
+          aria-label={`Copy full file path — ${description}`}
           onClick={(event) => {
             const disclosure = event.currentTarget.closest("details");
             disclosure?.removeAttribute("open");
             disclosure?.querySelector<HTMLElement>("summary")?.focus();
-            context.copy({ resolve, containingFolder: true });
+            context.copy({ resolve, containingFolder: false });
           }}
         >
-          Copy containing folder path
+          Copy full file path
           {historicalBranch ? ` · Current file on ${historicalBranch}` : ""}
         </button>
       </details>

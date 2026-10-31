@@ -24,7 +24,7 @@ Open `http://127.0.0.1:2501/`. The separate static-build ZIP contains `index.htm
 
 ## Start a workspace and import a project
 
-The top-level **Workspace** page shows the workspace name and its projects. **Add project** is the primary action. Once connected, **Workspace options** contains Create/Open/Switch workspace and the Windows location setting. Project cards keep their internal identity and relative storage path under **Location details**. History, Changes, Settings, the branch selector, and the working-folder banner belong to the opened project.
+The top-level **Workspace** page shows the workspace name and its projects. **Add project** is the primary action. Once connected, **Workspace options** contains Create/Open/Switch workspace and **Configure path shortcuts**. Project cards keep their internal identity and relative storage path under **Location details**. History, Changes, Settings, the branch selector, and the working-folder banner belong to the opened project.
 
 1. Choose **Create workspace**, enter a name, and select an empty directory. Use **Open workspace** for a previously created workspace. A populated unrelated directory is never adopted automatically.
 2. Choose **Add project**. Enter the project name and choose the original CAD source folder. Save and close its CAD documents first. Click **Import project** explicitly.
@@ -81,15 +81,17 @@ Cancellation, read failures, unstable source files, and failed writes leave iden
 
 An established branch with a broken publication marker remains visible as damaged, keeps its identity/name reserved, and remains part of folder-isolation checks. Its historical records are not repaired or rewritten automatically. Settings explains integrity failures and interrupted attempts.
 
-## Copy complete Windows file paths
+## Copy folder and file paths
 
-During workspace creation or reconnection, you can enter the **Windows workspace-root path**. In Explorer, open that workspace folder and copy its full location from the address bar, for example `D:\CAD Workspace`. Quoted paths, drive roots, spaces, Unicode, and UNC syntax are accepted; network-share operation is not qualified. You can edit or clear it later through **Workspace options → Windows workspace location** or project **Settings → Edit Windows location**.
+Workspace creation, opening, and reconnection use folder pickers/permissions and never ask for a Windows path. Path setup appears only when you first copy a location without a saved root, or when you choose **Configure path shortcuts** in Workspace options or project Settings. In Explorer, open that workspace folder and copy its full location from the address bar, for example `D:\CAD Workspace`, into **Workspace folder path**. Quoted paths, drive roots, spaces, Unicode, and UNC syntax are accepted; network-share operation is not qualified. Saved values are retained and can be edited or cleared explicitly.
 
 The field is optional and never controls file access. The browser cannot verify this typed location against its authorized folder handle. Check that it describes the same workspace. It is remembered only in this browser, separately per workspace identity; it is absent from portable records. Clearing browser convenience data also clears these paths.
 
-Beside a file in Changes, choose the copy icon (**Copy file path**) to copy its full path including the filename. The **More path actions** menu offers **Copy containing folder path**. If no Windows location is configured, enter it in the offered dialog and choose **Save and copy path** to finish the original request. A confirmation appears only after the clipboard accepts the path. If access is denied/unavailable, a selectable plain-path field lets you copy manually with Ctrl+C.
+Beside a file in Changes, the copy icon (**Copy folder path**) copies the full absolute path of its immediate containing folder, without the filename. For `Parts\Bracket.SLDPRT`, it copies the `Parts` folder; for a file directly in the branch working folder, it copies that working folder. Paste this into Explorer’s address bar and manually open the file. **More path actions → Copy full file path** includes the filename instead.
 
-Revision details use **Copy current working file path · [branch]**. This refers to the revision's recorded branch, even if another branch is active. It points to that branch's current file, which may differ from the saved historical bytes. Missing/inaccessible files or folders produce an unavailable message; cAdtree does not guess another branch or recreate missing folders.
+Without a saved root, the **Set up folder-path copying** dialog offers **Cancel** or **Save and copy**. Saving completes the original request. Canceling leaves your workspace usable and copies nothing. **Folder path copied** appears only after clipboard success; denied/unavailable access offers a selectable plain path for manual copying with Ctrl+C.
+
+Revision details identify **Current file on [branch]** beside the folder-copy action. This refers to the revision's recorded branch, even if another branch is active, and locates its current working copy rather than historical bytes. The secondary full-file action uses that same branch. Missing/inaccessible files or folders produce an unavailable message; cAdtree does not guess another branch or recreate missing folders.
 
 For exact historical bytes, restore a full or selected-file copy. After a managed recovery succeeds, expand **Restored files — copy paths** for shortcuts to those restored files. External recovery folders have no known full Windows location, so cAdtree explains that limit instead of inventing a path. Vault objects are never presented as editable CAD-file locations.
 

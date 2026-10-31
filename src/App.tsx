@@ -14,13 +14,11 @@ import {
   rememberWorkspace,
   getRememberedWorkspace,
   type RememberedWorkspace,
-  saveWorkspaceWindowsPath,
 } from "./engine/idb-store";
 import {
   resolveWorkingFilePath,
   resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
-import { normalizeWindowsWorkspacePath } from "./utils/windows-path";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import {
   restoreRevisionToFolder,
@@ -110,7 +108,6 @@ export default function App() {
     useState<RememberedWorkspace | null>(null);
   const [legacyMode, setLegacyMode] = useState(false);
   const [convenienceEpoch, setConvenienceEpoch] = useState(0);
-  const [locationSetupVersion, setLocationSetupVersion] = useState(0);
   const [bannerScope, setBannerScope] = useState<"workspace" | "project">(
     "workspace",
   );
@@ -306,15 +303,10 @@ export default function App() {
     root: FileSystemDirectoryAdapter,
     name?: string,
     expectedId?: string,
-    windowsPathInput?: string,
   ) => {
     await perform(
       "connect",
       async (context) => {
-        const windowsPath =
-          windowsPathInput === undefined
-            ? undefined
-            : normalizeWindowsWorkspacePath(windowsPathInput);
         if ((await root.requestPermission("readwrite")) !== "granted")
           throw new Error(
             "Workspace permission was not granted. Reconnect it to renew access.",
@@ -328,20 +320,7 @@ export default function App() {
             "The remembered root contains a different workspace identity. Open it explicitly to choose its projects.",
           );
         if (!context.current()) return;
-        let pathWarning = "";
-        if (windowsPath !== undefined) {
-          try {
-            await saveWorkspaceWindowsPath(
-              current.identity.workspaceId,
-              windowsPath,
-            );
-          } catch {
-            pathWarning =
-              "Windows path shortcuts were not remembered. Set the Windows workspace location in the workspace menu when needed.";
-          }
-        }
         setWorkspace(current);
-        if (name === undefined) setLocationSetupVersion((value) => value + 1);
         if (!vaultState || managedProject) {
           setManagedProject(null);
           setVaultState(null);
@@ -359,7 +338,7 @@ export default function App() {
         if (context.current())
           setStatusBanner({
             type: "info",
-            message: `Opened workspace "${current.identity.name}". Projects and branch locations were read from its records. ${warning} ${pathWarning}`,
+            message: `Opened workspace "${current.identity.name}". Projects and branch locations were read from its records. ${warning}`,
           });
       },
       true,
@@ -1246,7 +1225,6 @@ export default function App() {
     <FilePathShortcutsProvider
       workspace={workspace}
       convenienceEpoch={convenienceEpoch}
-      setupVersion={locationSetupVersion}
     >
       <div className="app-shell">
         <aside className="navigation-rail">
@@ -1484,9 +1462,7 @@ export default function App() {
                         ? "The external history needs attention before it can be adopted."
                         : undefined
                   }
-                  onCreate={(root, name, windowsPath) =>
-                    chooseWorkspace(root, name, undefined, windowsPath)
-                  }
+                  onCreate={(root, name) => chooseWorkspace(root, name)}
                   onOpen={(root) => chooseWorkspace(root)}
                   onReconnect={async () => {
                     if (!rememberedWorkspace) return;

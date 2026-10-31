@@ -78,18 +78,14 @@ function harness(
   epoch = 0,
 ) {
   return (
-    <FilePathShortcutsProvider
-      workspace={ws}
-      convenienceEpoch={epoch}
-      setupVersion={0}
-    >
+    <FilePathShortcutsProvider workspace={ws} convenienceEpoch={epoch}>
       <WorkspaceLocationSetting />
       <FilePathActions filePath={filePath} resolve={resolve} />
     </FilePathShortcutsProvider>
   );
 }
 const copyButton = (ui: ReturnType<typeof render>) =>
-  ui.getByRole("button", { name: `Copy file path — ${filePath}` });
+  ui.getByRole("button", { name: `Copy folder path — ${filePath}` });
 
 test("a first path click offers setup, saves locally, rechecks the file, then completes that exact copy", async () => {
   await clearAllConvenienceMetadata();
@@ -106,36 +102,68 @@ test("a first path click offers setup, saves locally, rechecks the file, then co
   );
   fireEvent.click(copyButton(ui));
   await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Windows workspace location" })),
+    assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" })),
   );
   assert.equal(copied.length, 0);
   assert.ok(ui.getByText(/Explorer’s address bar/));
-  fireEvent.change(
-    ui.getByRole("textbox", { name: "Windows workspace-root path (optional)" }),
-    { target: { value: '"D:\\CAD Workspace\\"' } },
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Save and copy path" }));
+  fireEvent.change(ui.getByRole("textbox", { name: "Workspace folder path" }), {
+    target: { value: '"D:\\CAD Workspace\\"' },
+  });
+  fireEvent.click(ui.getByRole("button", { name: "Save and copy" }));
   await waitFor(() => assert.equal(copied.length, 1));
   assert.equal(
     copied[0],
-    composeWindowsFilePaths("D:\\CAD Workspace", location).file,
+    composeWindowsFilePaths("D:\\CAD Workspace", location).folder,
   );
   assert.equal(checks, 2);
   assert.equal(await getWorkspaceWindowsPath("ws-one"), "D:\\CAD Workspace");
-  assert.ok(ui.getByText("File path copied"));
+  assert.ok(ui.getByText("Folder path copied"));
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(copied.length, 2));
   assert.ok(ui.queryByRole("dialog") === null);
   fireEvent.click(ui.getByLabelText(`More path actions — ${filePath}`));
   fireEvent.click(
-    ui.getByRole("button", { name: "Copy containing folder path" }),
+    ui.getByRole("button", { name: `Copy full file path — ${filePath}` }),
   );
   await waitFor(() => assert.equal(copied.length, 3));
   assert.equal(
     copied[2],
-    composeWindowsFilePaths("D:\\CAD Workspace", location).folder,
+    composeWindowsFilePaths("D:\\CAD Workspace", location).file,
   );
-  assert.ok(ui.getByText("Containing folder path copied"));
+  assert.ok(ui.getByText("File path copied"));
+});
+
+test("a branch-root file copies its working folder; the secondary action includes its filename", async () => {
+  await saveWorkspaceWindowsPath("ws-one", "D:\\CAD Workspace");
+  const copied: string[] = [];
+  clipboard(async (value) => {
+    copied.push(value);
+  });
+  const rootFile = "Assembly.SLDASM";
+  const ui = render(
+    <FilePathShortcutsProvider workspace={workspace()} convenienceEpoch={0}>
+      <FilePathActions
+        filePath={rootFile}
+        resolve={async () => ({ ...location, filePath: rootFile })}
+      />
+    </FilePathShortcutsProvider>,
+  );
+  fireEvent.click(
+    ui.getByRole("button", { name: `Copy folder path — ${rootFile}` }),
+  );
+  await waitFor(() => assert.equal(copied.length, 1));
+  assert.equal(
+    copied[0],
+    "D:\\CAD Workspace\\projects\\p\\working\\actual-leaf",
+  );
+  assert.ok(ui.getByText("Folder path copied"));
+  fireEvent.click(ui.getByLabelText(`More path actions — ${rootFile}`));
+  fireEvent.click(
+    ui.getByRole("button", { name: `Copy full file path — ${rootFile}` }),
+  );
+  await waitFor(() => assert.equal(copied.length, 2));
+  assert.equal(copied[1], copied[0] + "\\Assembly.SLDASM");
+  assert.ok(ui.getByText("File path copied"));
 });
 
 test("clipboard feedback waits for success; denied or unavailable access offers a selectable plain-path fallback", async () => {
@@ -151,9 +179,9 @@ test("clipboard feedback waits for success; denied or unavailable access offers 
   // A configured workspace must work even before the mount-time preference read finishes.
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(typeof finish, "function"));
-  assert.ok(ui.queryByText("File path copied") === null);
+  assert.ok(ui.queryByText("Folder path copied") === null);
   await act(async () => finish());
-  assert.ok(ui.getByText("File path copied"));
+  assert.ok(ui.getByText("Folder path copied"));
   cleanup();
   for (const write of [
     undefined,
@@ -171,9 +199,9 @@ test("clipboard feedback waits for success; denied or unavailable access offers 
     assert.equal(
       (ui.getByRole("textbox", { name: "Path to copy" }) as HTMLTextAreaElement)
         .value,
-      composeWindowsFilePaths("D:\\Workspace", location).file,
+      composeWindowsFilePaths("D:\\Workspace", location).folder,
     );
-    assert.ok(ui.queryByText("File path copied") === null);
+    assert.ok(ui.queryByText("Folder path copied") === null);
     const field = ui.getByRole("textbox", {
       name: "Path to copy",
     }) as HTMLTextAreaElement;
@@ -213,7 +241,7 @@ test("workspace switching and clearing convenience data never reuse another work
   await waitFor(() => assert.ok(ui.getByText(/Not set/)));
   fireEvent.click(copyButton(ui));
   await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Save and copy path" })),
+    assert.ok(ui.getByRole("button", { name: "Save and copy" })),
   );
   assert.equal(copied.length, 1);
 });
@@ -235,14 +263,13 @@ test("missing files never reach clipboard success or fabricate a fallback; files
   );
   fireEvent.click(copyButton(ui));
   await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Save and copy path" })),
+    assert.ok(ui.getByRole("button", { name: "Save and copy" })),
   );
   exists = false;
-  fireEvent.change(
-    ui.getByRole("textbox", { name: "Windows workspace-root path (optional)" }),
-    { target: { value: "D:\\Workspace" } },
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Save and copy path" }));
+  fireEvent.change(ui.getByRole("textbox", { name: "Workspace folder path" }), {
+    target: { value: "D:\\Workspace" },
+  });
+  fireEvent.click(ui.getByRole("button", { name: "Save and copy" }));
   await waitFor(() =>
     assert.ok(ui.getByRole("dialog", { name: "File path unavailable" })),
   );
@@ -258,18 +285,17 @@ test("unconfigured shortcuts can be cancelled or invalid input corrected without
   const ui = render(harness(workspace()));
   fireEvent.click(copyButton(ui));
   await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Save and copy path" })),
+    assert.ok(ui.getByRole("button", { name: "Save and copy" })),
   );
-  fireEvent.change(
-    ui.getByRole("textbox", { name: "Windows workspace-root path (optional)" }),
-    { target: { value: "D:\\CAD\\..\\Elsewhere" } },
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Save and copy path" }));
+  fireEvent.change(ui.getByRole("textbox", { name: "Workspace folder path" }), {
+    target: { value: "D:\\CAD\\..\\Elsewhere" },
+  });
+  fireEvent.click(ui.getByRole("button", { name: "Save and copy" }));
   await waitFor(() => assert.ok(ui.getByRole("alert")));
   assert.equal(await getWorkspaceWindowsPath("ws-one"), "");
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   assert.ok(ui.queryByRole("dialog") === null);
-  assert.ok(ui.queryByText("File path copied") === null);
+  assert.ok(ui.queryByText("Folder path copied") === null);
 });
 
 test("unavailable convenience storage keeps an entered location usable for this session and reports the limit", async () => {
@@ -283,20 +309,20 @@ test("unavailable convenience storage keeps an entered location usable for this 
     const ui = render(harness(workspace()));
     fireEvent.click(copyButton(ui));
     await waitFor(() =>
-      assert.ok(ui.getByRole("button", { name: "Save and copy path" })),
+      assert.ok(ui.getByRole("button", { name: "Save and copy" })),
     );
     fireEvent.change(
       ui.getByRole("textbox", {
-        name: "Windows workspace-root path (optional)",
+        name: "Workspace folder path",
       }),
       { target: { value: "D:\\Session" } },
     );
-    fireEvent.click(ui.getByRole("button", { name: "Save and copy path" }));
+    fireEvent.click(ui.getByRole("button", { name: "Save and copy" }));
     await waitFor(() => assert.equal(copied.length, 1));
     assert.ok(ui.getByText(/available for this session only/));
     assert.equal(
       copied[0],
-      composeWindowsFilePaths("D:\\Session", location).file,
+      composeWindowsFilePaths("D:\\Session", location).folder,
     );
     fireEvent.click(copyButton(ui));
     await waitFor(() => assert.equal(copied.length, 2));
@@ -317,6 +343,157 @@ const idle = (ui: ReturnType<typeof render>) =>
       false,
     ),
   );
+
+test("workspace create, open, and remembered reconnect use pickers/permissions without path setup", async () => {
+  const root = new InMemoryFileSystemAdapter("Picker workspace");
+  const handle = nativeDirectory(root);
+  let pickerCalls = 0,
+    permissionCalls = 0;
+  Object.assign(handle, {
+    requestPermission: async ({ mode }: { mode: "read" | "readwrite" }) => {
+      permissionCalls++;
+      return root.requestPermission(mode);
+    },
+  });
+  Object.assign(window, {
+    showDirectoryPicker: async () => {
+      pickerCalls++;
+      return handle;
+    },
+  });
+  // Native directory handles are structured-cloneable in the target browser.
+  // Preserve this test-only facade when fake IndexedDB clones the remembered root.
+  const clone = globalThis.structuredClone;
+  globalThis.structuredClone = ((
+    value: unknown,
+    options?: StructuredSerializeOptions,
+  ) => {
+    if (
+      value &&
+      typeof value === "object" &&
+      "rootHandle" in value &&
+      value.rootHandle === handle
+    ) {
+      return {
+        ...clone({ ...value, rootHandle: undefined }, options),
+        rootHandle: handle,
+      };
+    }
+    return clone(value, options);
+  }) as typeof globalThis.structuredClone;
+  try {
+    let ui = render(<App />);
+    fireEvent.click(ui.getByRole("button", { name: /Create workspace/ }));
+    let dialog = within(ui.getByRole("dialog"));
+    assert.ok(
+      !dialog.queryByRole("textbox", { name: /Workspace folder path|Windows/ }),
+    );
+    assert.equal(dialog.getAllByRole("textbox").length, 1);
+    fireEvent.change(dialog.getByRole("textbox", { name: "Workspace name" }), {
+      target: { value: "Picker workspace" },
+    });
+    fireEvent.click(dialog.getByRole("button", { name: "Choose folder" }));
+    await waitFor(() =>
+      assert.ok(dialog.getByText("Picker workspace", { exact: true })),
+    );
+    fireEvent.click(dialog.getByRole("button", { name: "Create workspace" }));
+    await waitFor(() =>
+      assert.ok(ui.getByRole("heading", { name: "Picker workspace." })),
+    );
+    await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+    cleanup();
+    ui = render(<App />);
+    await waitFor(() =>
+      assert.ok(ui.getByRole("button", { name: "Reconnect Picker workspace" })),
+    );
+    fireEvent.click(
+      ui.getByRole("button", { name: "Reconnect Picker workspace" }),
+    );
+    await waitFor(() =>
+      assert.ok(ui.getByRole("heading", { name: "Picker workspace." })),
+    );
+    await waitFor(() =>
+      assert.equal(
+        (ui.getByRole("button", { name: "Add project" }) as HTMLButtonElement)
+          .disabled,
+        false,
+      ),
+    );
+    assert.ok(!ui.queryByRole("dialog"));
+    assert.equal(pickerCalls, 1);
+    assert.ok(permissionCalls >= 2);
+    fireEvent.click(ui.getByText("Workspace options"));
+    fireEvent.click(
+      ui.getByRole("button", { name: "Open / switch workspace" }),
+    );
+    await waitFor(() => assert.ok(permissionCalls >= 3));
+    await waitFor(() =>
+      assert.equal(
+        (ui.getByRole("button", { name: "Add project" }) as HTMLButtonElement)
+          .disabled,
+        false,
+      ),
+    );
+    assert.equal(pickerCalls, 2);
+    assert.ok(!ui.queryByRole("dialog"));
+    const ws = await openWorkspace(root);
+    assert.equal(await getWorkspaceWindowsPath(ws.identity.workspaceId), "");
+  } finally {
+    cleanup();
+    globalThis.structuredClone = clone;
+  }
+});
+
+test("canceling unconfigured folder copying leaves the workspace usable with no success or CAD changes", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root, "Workspace");
+  const source = new InMemoryFileSystemAdapter("Source");
+  await source.writeFileText(filePath.split("/"), "unchanged CAD bytes");
+  const project = await importProject(root, source, "Project");
+  Object.assign(window, {
+    showDirectoryPicker: async () => nativeDirectory(root),
+  });
+  const copied: string[] = [];
+  clipboard(async (value) => {
+    copied.push(value);
+  });
+  const ui = render(<App />);
+  fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await waitFor(() =>
+    assert.equal(
+      (ui.getByRole("button", { name: "Open project" }) as HTMLButtonElement)
+        .disabled,
+      false,
+    ),
+  );
+  assert.ok(!ui.queryByRole("dialog"));
+  fireEvent.click(ui.getByRole("button", { name: "Open project" }));
+  await idle(ui);
+  nav(ui, "Changes");
+  fireEvent.click(copyButton(ui));
+  await waitFor(() =>
+    assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" })),
+  );
+  fireEvent.click(
+    within(ui.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+  );
+  assert.ok(!ui.queryByRole("dialog"));
+  assert.ok(!ui.queryByText(/Folder path copied|File path copied/));
+  assert.equal(copied.length, 0);
+  nav(ui, "Workspace");
+  fireEvent.click(ui.getByRole("button", { name: "Add project" }));
+  assert.ok(ui.getByRole("dialog", { name: "Import existing CAD project" }));
+  assert.equal(
+    await project.workingFolders[MAIN_BRANCH_ID]!.readFileText(
+      filePath.split("/"),
+    ),
+    "unchanged CAD bytes",
+  );
+  const reopened = (await openWorkspace(root)).projects[0].project!;
+  assert.equal(reopened.vaultState.revisions.length, 0);
+  assert.equal(reopened.vaultState.branches.length, 1);
+});
+
 test("App keeps the workspace overview separate, copies explicit history-branch/current-file paths and restored-copy paths", async () => {
   const root = new InMemoryFileSystemAdapter("Root");
   const ws = await createWorkspace(root, "Engineering workspace");
@@ -353,18 +530,15 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Windows workspace location" })),
+    assert.ok(ui.getByRole("heading", { name: "Engineering workspace." })),
   );
-  assert.equal(
-    (
-      ui.getByRole("textbox", {
-        name: "Windows workspace-root path (optional)",
-      }) as HTMLInputElement
-    ).value,
-    "D:\\工程 Workspace",
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Save location" }));
-  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.ok(!ui.queryByRole("dialog"));
+  await act(async () => {
+    assert.equal(
+      await getWorkspaceWindowsPath(ws.identity.workspaceId),
+      "D:\\工程 Workspace",
+    );
+  });
   assert.ok(ui.getByRole("heading", { name: "Engineering workspace." }));
   assert.ok(ui.getByRole("heading", { name: "Cam assembly" }));
   assert.ok(ui.queryByRole("combobox", { name: "Active branch" }) === null);
@@ -392,7 +566,33 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
       .querySelector(".workspace-header")!
       .textContent!.includes("Cam assembly"),
   );
+  nav(ui, "Settings");
+  const settings = within(
+    ui.container.querySelector<HTMLElement>(".settings-page")!,
+  );
+  fireEvent.click(
+    settings.getByRole("button", { name: "Reconnect workspace" }),
+  );
+  await idle(ui);
+  assert.ok(!ui.queryByRole("dialog"));
+  fireEvent.click(
+    settings.getByRole("button", { name: "Configure path shortcuts" }),
+  );
+  assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" }));
+  assert.equal(
+    (
+      ui.getByRole("textbox", {
+        name: "Workspace folder path",
+      }) as HTMLInputElement
+    ).value,
+    "D:\\工程 Workspace",
+  );
+  fireEvent.click(
+    within(ui.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
+  );
   nav(ui, "Changes");
+  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await idle(ui);
   fireEvent.click(ui.getByRole("button", { name: /Show 1 unchanged files/ }));
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(copied.length, 1));
@@ -402,7 +602,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
       workspaceId: ws.identity.workspaceId,
       relativeDirectory: project.workingPaths[MAIN_BRANCH_ID],
       filePath,
-    }).file,
+    }).folder,
   );
   nav(ui, "History");
   fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
@@ -411,7 +611,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   await idle(ui);
   fireEvent.click(
     ui.getByRole("button", {
-      name: `Copy current working file path — Main · ${filePath}`,
+      name: `Copy folder path — Current file on Main · ${filePath}`,
     }),
   );
   await waitFor(() => assert.equal(copied.length, 2));
@@ -433,14 +633,11 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   fireEvent.click(ui.getByText(/Restored files — copy paths/));
   fireEvent.click(
     ui.getByRole("button", {
-      name: `Copy file path — Restored copy · ${filePath}`,
+      name: `Copy folder path — Restored copy · ${filePath}`,
     }),
   );
   await waitFor(() => assert.equal(copied.length, 3));
-  assert.match(
-    copied[2],
-    /\\recoveries\\copy-[^\\]+\\Parts\\内側\\Bracket.SLDPRT$/,
-  );
+  assert.match(copied[2], /\\recoveries\\copy-[^\\]+\\Parts\\内側$/);
   picks.push(
     nativeDirectory(new InMemoryFileSystemAdapter("External recovery")),
   );
@@ -462,7 +659,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     ),
   );
   assert.ok(
-    !ui.queryByRole("button", { name: /^Copy file path — Restored copy/ }),
+    !ui.queryByRole("button", { name: /^Copy folder path — Restored copy/ }),
   );
   assert.equal(copied.length, 3);
   assert.equal(
