@@ -8,6 +8,7 @@ import {
   fireEvent,
   waitFor,
   within,
+  act,
 } from "@testing-library/react";
 import App from "../App";
 import { nativeDirectory } from "../../tests/native-fs";
@@ -394,4 +395,152 @@ test("home groups retained migration attempts, shows missing workspaces, and res
   nav(ui, "All workspaces");
   assert.equal(ui.getAllByRole("article").length, 2);
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 1);
+});
+
+test("sidebar explorer expands independently, navigates projects and branches across workspaces, and retains scoped drafts", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const cam = await createHomeWorkspace(home, "cam 2");
+  const client = await createHomeWorkspace(home, "Concept Lab");
+  let p = await importProject(cam.workspace.root, await source(), "Actuator");
+  const baseline = await captureRevision(
+    p.workingFolders["branch-main"]!,
+    p.vaultDir,
+    {
+      branchId: "branch-main",
+      summary: "Baseline",
+      notes,
+      workingFolders: p.workingFolders,
+    },
+  );
+  const branched = await createManagedBranch(
+    cam.workspace.root,
+    p.record.containerPath,
+    {
+      sourceRevisionId: baseline.revision.manifest.revisionId,
+      name: "Case A",
+      reason: "Compare",
+    },
+  );
+  p = branched;
+  await p.workingFolders[branched.createdBranchId]!.writeFileText(
+    ["Case-only.bin"],
+    "case change",
+  );
+  await p.workingFolders["branch-main"]!.writeFileText(
+    ["Pending.bin"],
+    "main change",
+  );
+  await importProject(client.workspace.root, await source(), "Cable Guide");
+  const picker = pickerQueue();
+  picker.queue.push(nativeDirectory(home));
+  const ui = render(<App />);
+  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await ready(ui, "Open workspace");
+  const tree = within(ui.getByRole("tree", { name: "Workspace explorer" }));
+  const camFolder = tree.getByRole("treeitem", { name: "cam 2" });
+  fireEvent.click(tree.getByRole("button", { name: "Expand cam 2" }));
+  assert.equal(camFolder.getAttribute("aria-expanded"), "true");
+  assert.equal(ui.queryByRole("combobox", { name: "Active branch" }), null);
+  fireEvent.click(tree.getByRole("treeitem", { name: "Actuator, cam 2" }));
+  await idle(ui);
+  assert.ok(
+    within(ui.getByRole("navigation")).getByRole("button", { name: "cam 2" }),
+  );
+  nav(ui, "Changes");
+  fireEvent.change(
+    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    { target: { value: "Main draft" } },
+  );
+  const main = tree.getByRole("treeitem", { name: "Main, Actuator, cam 2" });
+  act(() => main.focus());
+  fireEvent.keyDown(main, { key: "ArrowDown" });
+  assert.ok(
+    document.activeElement ===
+      tree.getByRole("treeitem", { name: "Case A, Actuator, cam 2" }),
+  );
+  assert.equal(
+    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
+      .value,
+    "branch-main",
+  );
+  fireEvent.keyDown(
+    tree.getByRole("treeitem", { name: "Case A, Actuator, cam 2" }),
+    { key: "Enter" },
+  );
+  await idle(ui);
+  assert.equal(
+    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
+      .value,
+    branched.createdBranchId,
+  );
+  assert.equal(
+    tree
+      .getByRole("treeitem", { name: "Case A, Actuator, cam 2" })
+      .getAttribute("aria-selected"),
+    "true",
+  );
+  nav(ui, "Changes");
+  assert.ok(changes(ui).getByText("Case-only.bin"));
+  fireEvent.click(tree.getByRole("button", { name: "Expand Concept Lab" }));
+  fireEvent.click(
+    tree.getByRole("treeitem", { name: "Cable Guide, Concept Lab" }),
+  );
+  await idle(ui);
+  assert.ok(
+    within(ui.getByRole("navigation")).getByRole("button", {
+      name: "Concept Lab",
+    }),
+  );
+  assert.equal(changes(ui).queryByText("Case-only.bin"), null);
+  fireEvent.click(tree.getByRole("treeitem", { name: "Actuator, cam 2" }));
+  await idle(ui);
+  fireEvent.click(
+    tree.getByRole("treeitem", { name: "Main, Actuator, cam 2" }),
+  );
+  await idle(ui);
+  nav(ui, "Changes");
+  assert.equal(
+    (
+      changes(ui).getByRole("textbox", {
+        name: /Revision summary/,
+      }) as HTMLInputElement
+    ).value,
+    "Main draft",
+  );
+  fireEvent.click(tree.getByRole("button", { name: "Collapse cam 2" }));
+  assert.equal(tree.queryByRole("treeitem", { name: "Actuator, cam 2" }), null);
+  assert.equal(
+    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
+      .value,
+    "branch-main",
+  );
+  assert.equal(picker.calls(), 1);
+});
+
+test("folder browser opens in a dialog, supports keyboard traversal, and closes after navigation", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  await createHomeWorkspace(home, "Client ABC");
+  const picker = pickerQueue();
+  picker.queue.push(nativeDirectory(home));
+  const ui = render(<App />);
+  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await ready(ui, "Open workspace");
+  fireEvent.click(ui.getByRole("button", { name: "Browse folders" }));
+  const dialog = within(ui.getByRole("dialog", { name: "Browse folders" }));
+  const tree = within(dialog.getByRole("tree"));
+  const root = tree.getByRole("treeitem", { name: "Cadtree home" });
+  act(() => root.focus());
+  fireEvent.keyDown(root, { key: "ArrowDown" });
+  const client = tree.getByRole("treeitem", { name: "Client ABC" });
+  assert.ok(document.activeElement === client);
+  fireEvent.keyDown(client, { key: "Enter" });
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.ok(ui.getByRole("heading", { name: "Client ABC." }));
+  assert.ok(
+    within(ui.getByRole("navigation")).getByRole("button", {
+      name: "Client ABC",
+    }),
+  );
 });

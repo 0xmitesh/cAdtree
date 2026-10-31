@@ -122,6 +122,32 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     path: "artifacts/screenshots/home-mobile.png",
     fullPage: true,
   });
+  await page.getByRole("button", { name: "Browse folders" }).click();
+  const folderDialog = page.getByRole("dialog", { name: "Browse folders" });
+  const explorer = folderDialog.getByRole("tree", {
+    name: "Workspace explorer",
+  });
+  await expect(explorer).toBeVisible();
+  await explorer.getByRole("treeitem", { name: "Cadtree home" }).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(
+    explorer.getByRole("treeitem", { name: "AutoCAD", exact: true }),
+  ).toBeFocused();
+  await page.screenshot({
+    path: "artifacts/screenshots/folder-browser-mobile.png",
+    fullPage: true,
+  });
+  await page.keyboard.press("Enter");
+  await expect(folderDialog).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("navigation")
+      .getByRole("button", { name: "AutoCAD", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "All workspaces" })
+    .click();
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.reload();
   await page.getByRole("button", { name: "Reconnect Cadtree" }).click();

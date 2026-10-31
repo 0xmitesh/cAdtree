@@ -341,7 +341,7 @@ test("legacy adoption is guided through the workspace UI and preserves unsaved w
   picker.queue.push(nativeDirectory(branch.workingDir));
   fireEvent.click(ui.getByRole("button", { name: "Connect folder" }));
   await idle(ui);
-  nav(ui, "Workspace");
+  nav(ui, "Workbench");
   fireEvent.click(ui.getByRole("button", { name: "Bring into workspace" }));
   dialog = within(ui.getByRole("dialog"));
   fireEvent.click(

@@ -687,7 +687,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
       .length,
     1,
   );
-  nav(ui, "Workspace");
+  nav(ui, "Engineering workspace");
   assert.ok(ui.queryByRole("combobox", { name: "Active branch" }) === null);
   assert.ok(ui.container.querySelector(".workspace-folder-bar") === null);
   assert.ok(ui.queryByText(/Opened managed location/) === null);

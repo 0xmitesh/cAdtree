@@ -2129,3 +2129,166 @@ input::placeholder {
     white-space: normal;
   }
 }
+
+/* Folder explorer follows the same dark rail and mint selection as primary navigation. */
+.navigation-rail {
+  overflow: hidden;
+}
+.navigation-rail > nav,
+.navigation-rail > .wordmark,
+.navigation-rail > .rail-caption,
+.rail-bottom {
+  flex-shrink: 0;
+}
+.navigation-rail > .rail-caption {
+  margin-bottom: 24px;
+}
+.navigation-rail .active-workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.desktop-workspace-tree {
+  min-height: 0;
+  overflow-y: auto;
+  flex: 1;
+  margin-top: 22px;
+  scrollbar-width: thin;
+  scrollbar-color: #526465 transparent;
+}
+.workspace-tree {
+  color: #c4cfcd;
+  font-size: 12px;
+}
+.tree-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 9px;
+  color: #91a29f;
+  letter-spacing: 1.2px;
+  font-size: 10px;
+}
+.tree-collapse,
+.tree-expander {
+  border: 0;
+  background: transparent;
+  color: #8ca6a1;
+  padding: 0;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+}
+.tree-collapse {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+}
+.tree-collapse:hover,
+.tree-expander:hover {
+  color: #b9eee0;
+  background: #3a5052;
+}
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 9px 6px calc(3px + var(--tree-depth) * 15px);
+  position: relative;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+.tree-row:not(.home)::before {
+  content: "";
+  position: absolute;
+  height: 100%;
+  top: 0;
+  left: calc(10px + (var(--tree-depth) - 1) * 15px);
+  border-left: 1px solid #3b4e4f;
+  pointer-events: none;
+}
+.tree-row:hover {
+  background: #2e4043;
+}
+.tree-row[aria-selected="true"] {
+  color: #b6eddf;
+  background: #304b4c;
+  box-shadow: inset 2px 0 #6ac6b6;
+}
+.tree-row:focus-visible {
+  outline: 2px solid #6ac6b6;
+  outline-offset: -2px;
+}
+.tree-row.unavailable {
+  color: #8f9c9b;
+  cursor: default;
+}
+.tree-expander {
+  width: 16px;
+  height: 20px;
+  border-radius: 3px;
+}
+.tree-expander svg {
+  transition: transform 0.15s;
+}
+.tree-expander svg.expanded {
+  transform: rotate(90deg);
+}
+.tree-folder-icon {
+  flex-shrink: 0;
+  color: #89b7ad;
+}
+.tree-row.branch .tree-folder-icon {
+  color: #8eaaa7;
+}
+.tree-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+.tree-count {
+  color: #91a5a0;
+  font-size: 10px;
+  margin-left: 2px;
+}
+.tree-warning {
+  color: #e4bd79;
+  font-size: 11px;
+}
+.navigation-rail nav .mobile-tree-toggle {
+  display: none;
+}
+.rail-bottom {
+  padding-top: 18px;
+}
+.mobile-workspace-tree {
+  background: #202d31;
+  padding: 15px 10px;
+  border-radius: 7px;
+  max-height: 62vh;
+  overflow-y: auto;
+}
+@media (min-width: 961px) {
+  .navigation-rail {
+    width: 260px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .workspace-shell {
+    margin-left: 260px;
+  }
+}
+@media (max-width: 960px) {
+  .desktop-workspace-tree {
+    display: none;
+  }
+  .navigation-rail nav .mobile-tree-toggle {
+    display: flex;
+  }
+}

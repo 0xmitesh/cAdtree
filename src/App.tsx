@@ -73,6 +73,10 @@ import { supportsFileSystemAccessApi } from "./utils/format";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
 import {
+  WorkspaceTree,
+  type WorkspaceTreeProps,
+} from "./components/WorkspaceTree";
+import {
   createHome,
   openHome,
   createHomeWorkspace,
@@ -112,6 +116,7 @@ export default function App() {
     null,
   );
   const [homeView, setHomeView] = useState(true);
+  const [explorerOpen, setExplorerOpen] = useState(false);
   const [managedWorkspaceKey, setManagedWorkspaceKey] = useState<string | null>(
     null,
   );
@@ -622,9 +627,20 @@ export default function App() {
     project: ManagedProject,
     context: Context,
     message = "",
+    requestedBranchId?: string,
   ) => {
     if (!context.current()) return;
+    if (
+      requestedBranchId &&
+      !project.vaultState.branches.some(
+        (branch) => branch.branchId === requestedBranchId,
+      )
+    )
+      throw new Error(
+        "This branch is no longer available. Refresh the workspace.",
+      );
     const preferred =
+      requestedBranchId ??
       branchContexts.current.get(
         `${current.identity.workspaceId}:${project.record.containerPath}`,
       ) ??
@@ -685,6 +701,80 @@ export default function App() {
           await resolveManagedProject(workspace.root, entry.containerPath),
           context,
         );
+      },
+      true,
+    );
+  };
+  const openTreeProject: WorkspaceTreeProps["onProject"] = async (
+    homeWorkspace,
+    entry,
+    branchId,
+  ) => {
+    await perform(
+      "connect",
+      async (context) => {
+        let current: WorkspaceState;
+        if (homeWorkspace && home) {
+          if ((await home.root.requestPermission("readwrite")) !== "granted")
+            throw new Error("Reconnect the Cadtree home to renew access.");
+          const discovered = await openHome(home.root);
+          if (discovered.identity.homeId !== home.identity.homeId)
+            throw new Error(
+              "Cadtree home identity changed. Reopen it explicitly.",
+            );
+          const chosen = discovered.workspaces.find(
+            (item) => item.key === homeWorkspace.key,
+          );
+          if (
+            !chosen?.workspace ||
+            chosen.workspaceId !== homeWorkspace.workspaceId
+          )
+            throw new Error(
+              "This workspace is unavailable. Refresh home to inspect its connections.",
+            );
+          current = chosen.workspace;
+          if (context.current()) setHome(discovered);
+        } else {
+          if (!workspace) throw new Error("Choose a workspace first.");
+          if (
+            (await workspace.root.requestPermission("readwrite")) !== "granted"
+          )
+            throw new Error("Reconnect the workspace to renew access.");
+          current = await openWorkspace(workspace.root);
+          if (current.identity.workspaceId !== workspace.identity.workspaceId)
+            throw new Error(
+              "Workspace identity changed. Open the intended workspace explicitly.",
+            );
+        }
+        const fresh = current.projects.find(
+          (project) => project.containerPath === entry.containerPath,
+        );
+        if (
+          !fresh?.project ||
+          fresh.status === "duplicate" ||
+          fresh.projectId !== entry.projectId
+        )
+          throw new Error(
+            "This project location needs attention. Open the workspace to inspect it.",
+          );
+        const project = await resolveManagedProject(
+          current.root,
+          fresh.containerPath,
+        );
+        if (
+          branchId &&
+          !project.vaultState.branches.some(
+            (branch) => branch.branchId === branchId,
+          )
+        )
+          throw new Error(
+            "This branch is no longer available. Refresh the workspace.",
+          );
+        if (!context.current()) return;
+        setWorkspace(current);
+        setManagedWorkspaceKey(homeWorkspace?.key ?? null);
+        setHomeView(false);
+        await activateManaged(current, project, context, "", branchId);
       },
       true,
     );
@@ -1488,6 +1578,29 @@ export default function App() {
       ? resolveHomeFilePath(shortcutHome, homeEntry, location)
       : location;
   };
+  const treeProps: WorkspaceTreeProps = {
+    home,
+    workspace,
+    managedWorkspaceKey,
+    projectPath: managedProject?.record.containerPath,
+    activeVault: vaultState,
+    activeBranchId,
+    projectView,
+    busy,
+    onHome: () => {
+      allWorkspaces();
+      setExplorerOpen(false);
+    },
+    onWorkspace: async (entry) => {
+      if (entry) await openHomeEntry(entry);
+      else navigate("connect");
+      setExplorerOpen(false);
+    },
+    onProject: async (entry, project, branch) => {
+      await openTreeProject(entry, project, branch);
+      setExplorerOpen(false);
+    },
+  };
 
   return (
     <FilePathShortcutsProvider
@@ -1541,13 +1654,19 @@ export default function App() {
             {!homeView ? (
               <>
                 <button
-                  aria-label="Workspace"
+                  aria-label={workspace?.identity.name ?? "Workspace"}
+                  data-workspace-navigation
                   disabled={busy}
                   aria-current={activeTab === "connect" ? "page" : undefined}
                   onClick={() => navigate("connect")}
                 >
                   <FolderOpen size={18} />
-                  <span>Workspace</span>
+                  <span
+                    className="active-workspace-name"
+                    title={workspace?.identity.name}
+                  >
+                    {workspace?.identity.name ?? "Workspace"}
+                  </span>
                 </button>
                 {vaultState ? (
                   <>
@@ -1593,7 +1712,21 @@ export default function App() {
                 ) : null}
               </>
             ) : null}
+            {home || workspace ? (
+              <button
+                className="mobile-tree-toggle"
+                aria-label="Browse folders"
+                disabled={busy}
+                onClick={() => setExplorerOpen(true)}
+              >
+                <FolderOpen size={18} />
+                <span>Browse folders</span>
+              </button>
+            ) : null}
           </nav>
+          <div className="desktop-workspace-tree">
+            <WorkspaceTree {...treeProps} />
+          </div>
           <div className="rail-bottom">
             <HardDrive size={17} />
             <div>
@@ -1665,7 +1798,7 @@ export default function App() {
                     ? "External projects"
                     : homeView
                       ? ""
-                      : "Workspace"}
+                      : (workspace?.identity.name ?? "Workspace")}
               </strong>
               {projectView && vaultState ? (
                 <span className="current-branch">
@@ -2002,6 +2135,17 @@ export default function App() {
             <span>cAdtree · CAD project history</span>
             <span>Complete revisions. Separate recovery copies.</span>
           </footer>
+          {explorerOpen ? (
+            <Modal
+              title="Browse folders"
+              busy={busy}
+              onClose={() => setExplorerOpen(false)}
+            >
+              <div className="mobile-workspace-tree">
+                <WorkspaceTree {...treeProps} />
+              </div>
+            </Modal>
+          ) : null}
           {workspaceLocationConflict ? (
             <Modal
               title="Choose workspace location"
