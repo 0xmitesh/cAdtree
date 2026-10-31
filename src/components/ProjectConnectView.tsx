@@ -89,9 +89,9 @@ export function ProjectConnectView({
     <div className="page projects-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">YOUR LOCAL WORKSPACE</p>
+          <p className="eyebrow">ADVANCED · EXTERNAL STORAGE</p>
           <h1>
-            Projects<span className="heading-dot">.</span>
+            External projects<span className="heading-dot">.</span>
           </h1>
           <p>Good engineering deserves a clear history.</p>
         </div>
@@ -297,7 +297,8 @@ export function ProjectConnectView({
                 <div className="folder-field">
                   <div>
                     <strong>
-                      Main working folder <span className="muted">(optional)</span>
+                      Main working folder{" "}
+                      <span className="muted">(optional)</span>
                     </strong>
                     <p>
                       {working?.name ??

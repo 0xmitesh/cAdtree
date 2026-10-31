@@ -29,6 +29,28 @@ import {
 } from "../engine/recovery-service";
 
 afterEach(cleanup);
+test("the inspected revision stays readable outside highlighted ancestry in both graph and list", () => {
+  const ui = render(
+    <HistoryRecoveryView
+      {...historyProps({ vaultState: scenarioState("branches") })}
+    />,
+  );
+  fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
+  fireEvent.click(ui.getByRole("button", { name: "Main" }));
+  assert.equal(
+    ui.container
+      .querySelector(".graph-row.selected")!
+      .classList.contains("dimmed"),
+    false,
+  );
+  fireEvent.click(ui.getByRole("button", { name: "List" }));
+  assert.equal(
+    ui.container
+      .querySelector(".revision-list-row.selected")!
+      .classList.contains("dimmed"),
+    false,
+  );
+});
 test("normal dates follow local day boundaries while Technical details preserve exact UTC", () => {
   const previousTimezone = process.env.TZ;
   const state = historyState(1);
@@ -53,7 +75,9 @@ test("normal dates follow local day boundaries while Technical details preserve 
       const times = [...ui.container.querySelectorAll("time")];
       assert.equal(times.length, 2);
       assert.ok(
-        times.every((time) => time.textContent === expected && time.dateTime === iso),
+        times.every(
+          (time) => time.textContent === expected && time.dateTime === iso,
+        ),
       );
       fireEvent.click(ui.getByRole("button", { name: "Technical details" }));
       assert.ok(ui.getByText("Capture completed (UTC)"));

@@ -81,9 +81,10 @@ export async function captureRevision(
     const vaultState = await openExistingVault(vaultDir);
     if (vaultState.project.projectId !== projectId) throw new Error('Vault identity changed while waiting for the writer lock.');
     getBranchBaseline(vaultState, input.branchId);
-    await validateOperationWorkingFolders(vaultState, vaultDir, input.workingFolders);
-    if (input.workingFolders) {
-      const connected = input.workingFolders[input.branchId];
+    const workingFolders = input.resolveWorkingFolders ? await input.resolveWorkingFolders(vaultState) : input.workingFolders;
+    await validateOperationWorkingFolders(vaultState, vaultDir, workingFolders);
+    if (workingFolders) {
+      const connected = workingFolders[input.branchId];
       if (!connected || !await connected.isSameEntry(workingDir)) throw new Error('The capture folder does not match the selected branch connection.');
     }
     const branch = vaultState.branches.find((b) => b.branchId === input.branchId);

@@ -270,7 +270,7 @@ export function RevisionGraph({
                 return (
                   <div
                     key={node.id}
-                    className={`graph-row ${selected ? "selected" : ""} ${ancestry && !ancestry.has(node.id) ? "dimmed" : ""}`}
+                    className={`graph-row ${selected ? "selected" : ""} ${ancestry && !ancestry.has(node.id) && !selected ? "dimmed" : ""}`}
                     style={
                       {
                         top: position.y - 42,
@@ -368,7 +368,7 @@ export function RevisionGraph({
               <button
                 key={node.id}
                 ref={(element) => register(node.id, element)}
-                className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry && !ancestry.has(node.id) ? "dimmed" : ""}`}
+                className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry && !ancestry.has(node.id) && selectedId !== node.id ? "dimmed" : ""}`}
                 aria-pressed={selectedId === node.id}
                 onClick={() => onSelect(node.id)}
                 onKeyDown={(event) => keyboard(event, index)}

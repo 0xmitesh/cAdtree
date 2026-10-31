@@ -15,10 +15,69 @@ export interface RememberedProjectBinding {
   activeBranchId?: string;
 }
 
+import { normalizeWindowsWorkspacePath } from '../utils/windows-path';
+
 const DB_NAME = 'cadtree_convenience_v1';
 const DB_VERSION = 1;
 const STORE_BINDINGS = 'project_bindings';
 const STORE_PREFS = 'ui_preferences';
+
+/** Per workspace, machine-local convenience text; not a portable filesystem binding. */
+export async function saveWorkspaceWindowsPath(workspaceId: string, input: string): Promise<void> {
+  const path = normalizeWindowsWorkspacePath(input);
+  if (!isIndexedDbAvailable()) throw new Error('Browser convenience storage is unavailable. This location can only be used for this session.');
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, 'readwrite');
+    tx.objectStore(STORE_PREFS).put(path, `windows-root:${workspaceId}`);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the Windows workspace location.')); };
+  });
+}
+export async function getWorkspaceWindowsPath(workspaceId: string): Promise<string> {
+  if (!isIndexedDbAvailable()) return '';
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, 'readonly');
+    const request = tx.objectStore(STORE_PREFS).get(`windows-root:${workspaceId}`);
+    request.onsuccess = () => {
+      db.close();
+      try { resolve(typeof request.result === 'string' ? normalizeWindowsWorkspacePath(request.result) : ''); }
+      catch { resolve(''); }
+    };
+    request.onerror = () => { db.close(); reject(request.error); };
+  });
+}
+
+export interface RememberedWorkspace {
+  workspaceId: string;
+  name: string;
+  rootHandle: FileSystemDirectoryHandle;
+  projectPath?: string;
+  activeBranchId?: string;
+}
+export async function rememberWorkspace(binding: RememberedWorkspace): Promise<void> {
+  if (!isIndexedDbAvailable()) throw new Error('Browser convenience storage is unavailable. Reconnect the workspace root after reopening.');
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, 'readwrite');
+    tx.objectStore(STORE_PREFS).put(binding, 'workspace');
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember workspace access.')); };
+  });
+}
+export async function getRememberedWorkspace(): Promise<RememberedWorkspace | null> {
+  if (!isIndexedDbAvailable()) return null;
+  try {
+    const db = await openDatabase();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_PREFS, 'readonly');
+      const request = tx.objectStore(STORE_PREFS).get('workspace');
+      request.onsuccess = () => { db.close(); resolve(request.result ?? null); };
+      request.onerror = () => { db.close(); reject(request.error); };
+    });
+  } catch { return null; }
+}
 
 function isIndexedDbAvailable(): boolean {
   return typeof indexedDB !== 'undefined' && indexedDB !== null;

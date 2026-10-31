@@ -13,7 +13,7 @@ export interface CreateBranchParams {
   sourceRevisionId: string;
   name: string;
   reason: string;
-  destinationParent: FileSystemDirectoryAdapter;
+  destinationParent?: FileSystemDirectoryAdapter;
 }
 export function CreateBranchDialog({
   source,
@@ -24,6 +24,7 @@ export function CreateBranchDialog({
   onCreate,
   onClose,
   onCancel,
+  managedDestination,
 }: {
   source: RevisionManifest;
   sourceBranchName: string;
@@ -33,6 +34,7 @@ export function CreateBranchDialog({
   onCreate: (params: CreateBranchParams) => Promise<void>;
   onClose: () => void;
   onCancel: () => void;
+  managedDestination?: string;
 }) {
   const [name, setName] = useState("");
   const [reason, setReason] = useState("");
@@ -72,7 +74,7 @@ export function CreateBranchDialog({
             setError("Add a short engineering reason.");
             return;
           }
-          if (!parent) {
+          if (!parent && !managedDestination) {
             setError("Choose a destination parent folder.");
             return;
           }
@@ -81,7 +83,7 @@ export function CreateBranchDialog({
               sourceRevisionId: source.revisionId,
               name,
               reason,
-              destinationParent: parent,
+              destinationParent: parent ?? undefined,
             });
             onClose();
           } catch (error) {
@@ -109,52 +111,60 @@ export function CreateBranchDialog({
               placeholder="What design question will this case explore?"
             />
           </label>
-          <div className="folder-field">
-            <div>
-              <strong>Destination parent folder</strong>
-              <p>
-                {parent?.name ??
-                  "A fresh, uniquely named subfolder will be created here."}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="button secondary"
-              onClick={async () => {
-                setError("");
-                try {
-                  if (!supportsFileSystemAccessApi())
-                    throw new Error(
-                      "Folder selection is unavailable here. Open cAdtree in Edge or Chrome.",
+          {managedDestination ? (
+            <p className="managed-destination">
+              Destination: {managedDestination}/&lt;new case&gt;
+              <br />A fresh working folder is created and verified
+              automatically.
+            </p>
+          ) : (
+            <div className="folder-field">
+              <div>
+                <strong>Destination parent folder</strong>
+                <p>
+                  {parent?.name ??
+                    "A fresh, uniquely named subfolder will be created here."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={async () => {
+                  setError("");
+                  try {
+                    if (!supportsFileSystemAccessApi())
+                      throw new Error(
+                        "Folder selection is unavailable here. Open cAdtree in Edge or Chrome.",
+                      );
+                    const picker = (
+                      window as unknown as {
+                        showDirectoryPicker: (options: {
+                          mode: string;
+                        }) => Promise<FileSystemDirectoryHandle>;
+                      }
+                    ).showDirectoryPicker;
+                    setParent(
+                      new RealFileSystemAdapter(
+                        await picker({ mode: "readwrite" }),
+                      ),
                     );
-                  const picker = (
-                    window as unknown as {
-                      showDirectoryPicker: (options: {
-                        mode: string;
-                      }) => Promise<FileSystemDirectoryHandle>;
-                    }
-                  ).showDirectoryPicker;
-                  setParent(
-                    new RealFileSystemAdapter(
-                      await picker({ mode: "readwrite" }),
-                    ),
-                  );
-                } catch (error) {
-                  if (
-                    !(
-                      error instanceof DOMException &&
-                      error.name === "AbortError"
+                  } catch (error) {
+                    if (
+                      !(
+                        error instanceof DOMException &&
+                        error.name === "AbortError"
+                      )
                     )
-                  )
-                    setError(
-                      error instanceof Error ? error.message : String(error),
-                    );
-                }
-              }}
-            >
-              {parent ? "Change parent folder" : "Choose parent folder"}
-            </button>
-          </div>
+                      setError(
+                        error instanceof Error ? error.message : String(error),
+                      );
+                  }
+                }}
+              >
+                {parent ? "Change parent folder" : "Choose parent folder"}
+              </button>
+            </div>
+          )}
           <p className="muted small">
             After creation, open the new branch folder manually in SolidWorks.
             cAdtree does not change which CAD documents are open.

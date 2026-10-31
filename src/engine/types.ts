@@ -172,6 +172,7 @@ export interface ProgressUpdate {
 
 export interface CaptureRevisionInput {
   workingFolders?: Record<string, FileSystemDirectoryAdapter | undefined>;
+  resolveWorkingFolders?: (state: VaultState) => Promise<Record<string, FileSystemDirectoryAdapter | undefined>>;
   branchId: string;
   summary: string;
   notes: RevisionNotes;

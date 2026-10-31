@@ -26,24 +26,42 @@ import {
   type CreateBranchParams,
 } from "./CreateBranchDialog";
 import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
+import { FilePathActions } from "./FilePathShortcuts";
+import type { FilePathLocation } from "../utils/windows-path";
 
 export interface HistoryRecoveryViewProps {
   vaultState: VaultState;
   activeBranchId: string;
   isRestoring: boolean;
   progress: ProgressUpdate | null;
-  lastRestoreReport: { result: RestoreResult } | null;
+  lastRestoreReport: {
+    result: RestoreResult;
+    destinationPath?: string;
+    recoveredFiles?: { relativeDirectory: string; paths: string[] };
+  } | null;
   statusBanner: { type: "success" | "error" | "info"; message: string } | null;
-  onRestoreFullProject: (revisionId: string) => Promise<void>;
+  onRestoreFullProject: (
+    revisionId: string,
+    external?: boolean,
+  ) => Promise<void>;
   onRestoreSelectedFiles: (
     revisionId: string,
     paths: string[],
+    external?: boolean,
   ) => Promise<void>;
   onVerifySingleRevisionObjects: (revisionId: string) => Promise<void>;
   onCancelOperation: () => void;
   onGoToChanges?: () => void;
   onCreateBranch?: (params: CreateBranchParams) => Promise<void>;
   isCreatingBranch?: boolean;
+  managedDestination?: string;
+  operationsBlockedReason?: string;
+  onPrepareWrite?: () => Promise<void>;
+  resolveWorkingFilePath?: (
+    branchId: string,
+    path: string,
+  ) => Promise<FilePathLocation>;
+  resolveRecoveredFilePath?: (path: string) => Promise<FilePathLocation>;
 }
 export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const {
@@ -74,6 +92,24 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [branchSource, setBranchSource] = useState<string | null>(null);
+  const [externalRecovery, setExternalRecovery] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const prepareWrite = async (action: () => void) => {
+    if (!props.onPrepareWrite) {
+      action();
+      return;
+    }
+    setPreparing(true);
+    setError("");
+    try {
+      await props.onPrepareWrite();
+      action();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPreparing(false);
+    }
+  };
   const source = vaultState.revisions.find(
     (r) => r.manifest.revisionId === branchSource,
   );
@@ -181,6 +217,9 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           <p>{activeBranch.reason}</p>
         </section>
       ) : null}
+      {props.operationsBlockedReason ? (
+        <Notice type="error">{props.operationsBlockedReason}</Notice>
+      ) : null}
       {graph.warnings.map((w) => (
         <Notice key={w} type="error">
           {w}
@@ -210,12 +249,42 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
               {lastRestoreReport.result.restoredDirectoriesCount} directories ·{" "}
               {formatTimestamp(lastRestoreReport.result.completedAt)}
             </p>
+            {lastRestoreReport.destinationPath ? (
+              <p className="file-path">
+                Location: {lastRestoreReport.destinationPath}
+              </p>
+            ) : null}
             {lastRestoreReport.result.selectedPaths?.map((p) => (
               <p key={p} className="file-path">
                 {p}
               </p>
             ))}
           </details>
+          {lastRestoreReport.recoveredFiles &&
+          props.resolveRecoveredFilePath ? (
+            <details className="restored-paths">
+              <summary>
+                Restored files — copy paths (
+                {lastRestoreReport.recoveredFiles.paths.length})
+              </summary>
+              {lastRestoreReport.recoveredFiles.paths.map((path) => (
+                <div className="restored-file" key={path}>
+                  <span className="file-path">{path}</span>
+                  <FilePathActions
+                    filePath={path}
+                    restored
+                    resolve={() => props.resolveRecoveredFilePath!(path)}
+                  />
+                </div>
+              ))}
+            </details>
+          ) : (
+            <p className="small">
+              A full Windows path is not known for this external destination.
+              Find the chosen folder in Explorer; cAdtree cannot fabricate its
+              absolute location.
+            </p>
+          )}
         </Notice>
       ) : null}
       {!graph.nodes.length ? (
@@ -301,6 +370,16 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         {rev.manifest.files.length} in snapshot
                       </span>
                     </div>
+                    {props.resolveWorkingFilePath ? (
+                      <p className="muted small">
+                        Current working file shortcuts refer to{" "}
+                        {vaultState.branches.find(
+                          (branch) => branch.branchId === rev.manifest.branchId,
+                        )?.name ?? "the recorded branch"}
+                        , which may differ from this saved revision. Restore a
+                        copy for the exact historical bytes.
+                      </p>
+                    ) : null}
                     {diff.status === "baseline" ? (
                       <p className="muted small">
                         The first complete project state; no earlier revision to
@@ -373,6 +452,23 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                               </button>
                             ) : null}
                           </div>
+                          {props.resolveWorkingFilePath ? (
+                            <FilePathActions
+                              filePath={file.path}
+                              historicalBranch={
+                                vaultState.branches.find(
+                                  (branch) =>
+                                    branch.branchId === rev.manifest.branchId,
+                                )?.name ?? "Unknown branch"
+                              }
+                              resolve={() =>
+                                props.resolveWorkingFilePath!(
+                                  rev.manifest.branchId,
+                                  file.path,
+                                )
+                              }
+                            />
+                          ) : null}
                           {status === "Deleted" ? (
                             <div className="deleted-help">
                               Absent from this revision.{" "}
@@ -520,6 +616,8 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     className="button secondary"
                     disabled={
                       damaged ||
+                      preparing ||
+                      Boolean(props.operationsBlockedReason) ||
                       isRestoring ||
                       verifying ||
                       props.isCreatingBranch ||
@@ -531,15 +629,30 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                           ?.length,
                       )
                     }
-                    onClick={() => setBranchSource(rev.manifest.revisionId)}
+                    onClick={() =>
+                      void prepareWrite(() =>
+                        setBranchSource(rev.manifest.revisionId),
+                      )
+                    }
                   >
                     <GitBranch size={16} /> Create branch from here
                   </button>
                 ) : null}
                 <button
                   className="button primary"
-                  disabled={damaged || isRestoring || verifying}
-                  onClick={() => setRestoreKind("full")}
+                  disabled={
+                    damaged ||
+                    isRestoring ||
+                    verifying ||
+                    preparing ||
+                    Boolean(props.operationsBlockedReason)
+                  }
+                  onClick={() =>
+                    void prepareWrite(() => {
+                      setExternalRecovery(false);
+                      setRestoreKind("full");
+                    })
+                  }
                 >
                   <ArrowDownToLine size={16} />
                   Restore project copy
@@ -547,9 +660,19 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 <button
                   className="button secondary"
                   disabled={
-                    damaged || isRestoring || verifying || !selectedPaths.size
+                    damaged ||
+                    isRestoring ||
+                    verifying ||
+                    !selectedPaths.size ||
+                    preparing ||
+                    Boolean(props.operationsBlockedReason)
                   }
-                  onClick={() => setRestoreKind("selected")}
+                  onClick={() =>
+                    void prepareWrite(() => {
+                      setExternalRecovery(false);
+                      setRestoreKind("selected");
+                    })
+                  }
                 >
                   Copy selected files ({selectedPaths.size})
                 </button>
@@ -575,6 +698,11 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           onCreate={props.onCreateBranch}
           onClose={() => setBranchSource(null)}
           onCancel={onCancelOperation}
+          managedDestination={
+            props.managedDestination
+              ? `${props.managedDestination}/working`
+              : undefined
+          }
         />
       ) : null}
       {restoreKind && rev ? (
@@ -599,10 +727,26 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
               ? "Complete project snapshot"
               : "Selected-file copy"}
           </p>
+          {props.managedDestination ? (
+            <label className="recovery-external-choice">
+              <input
+                type="checkbox"
+                checked={externalRecovery}
+                onChange={(event) => setExternalRecovery(event.target.checked)}
+              />{" "}
+              Choose an external destination instead
+            </label>
+          ) : null}
           <p className="muted">
-            Choose a fresh, empty folder outside your working folder and vault.
-            The destination is verified and existing files are never
-            overwritten.
+            {props.managedDestination && !externalRecovery ? (
+              `A fresh copy is created automatically under ${props.managedDestination}/recoveries/.`
+            ) : (
+              <>
+                Choose a fresh, empty folder outside your working folder and
+                vault. The destination is verified and existing files are never
+                overwritten.
+              </>
+            )}
           </p>
           {restoreKind === "selected" ? (
             <>
@@ -633,14 +777,21 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 const kind = restoreKind;
                 setRestoreKind(null);
                 if (kind === "full")
-                  await onRestoreFullProject(rev.manifest.revisionId);
+                  await onRestoreFullProject(
+                    rev.manifest.revisionId,
+                    externalRecovery,
+                  );
                 else
-                  await onRestoreSelectedFiles(rev.manifest.revisionId, [
-                    ...selectedPaths,
-                  ]);
+                  await onRestoreSelectedFiles(
+                    rev.manifest.revisionId,
+                    [...selectedPaths],
+                    externalRecovery,
+                  );
               }}
             >
-              Choose destination
+              {props.managedDestination && !externalRecovery
+                ? "Restore copy"
+                : "Choose destination"}
             </button>
           </div>
         </Modal>

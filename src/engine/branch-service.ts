@@ -30,6 +30,8 @@ export interface CreateDesignBranchOptions {
   reason: string;
   signal?: AbortSignal;
   onProgress?: (progress: ProgressUpdate) => void;
+  resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
+  beforePublish?: (branch: BranchRecord, workingDir: FileSystemDirectoryAdapter) => Promise<void>;
 }
 export class BranchCreationError extends Error {
   constructor(
@@ -74,7 +76,7 @@ export async function createDesignBranch(
   const {
     vaultDir,
     destinationParent,
-    workingFolders,
+    workingFolders: initialWorkingFolders,
     sourceRevisionId,
     signal,
     onProgress,
@@ -101,6 +103,7 @@ export async function createDesignBranch(
         "Vault identity changed while waiting for the writer lock.",
       );
     validateName(state, name); // Concurrent creation must recheck under the capture lock.
+    const workingFolders = options.resolveWorkingFolders ? await options.resolveWorkingFolders(state) : initialWorkingFolders;
     const source = assertRevisionAncestry(state, sourceRevisionId);
     await validateWorkingFolderBindings(state, vaultDir, workingFolders);
     if ((await vaultDir.queryPermission("readwrite")) !== "granted")
@@ -236,6 +239,8 @@ export async function createDesignBranch(
         ...draft,
         payloadSha256: computeBranchRecordChecksum(draft),
       };
+      await options.beforePublish?.(branch, workingDir);
+      checkCancelled(signal);
       const recordPath = ["branches", `${branchId}.branch.json`];
       const text = JSON.stringify(branch, null, 2);
       // The large record is staged and read back before a small ready marker commits it.
