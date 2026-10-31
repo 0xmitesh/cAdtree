@@ -1,4 +1,9 @@
 import "../../tests/dom";
+import {
+  appBusy,
+  currentBranchId,
+  selectBranch,
+} from "../../tests/app-controls";
 import { indexedDB as testIndexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -338,9 +343,8 @@ const nav = (ui: ReturnType<typeof render>, name: string) =>
 const idle = (ui: ReturnType<typeof render>) =>
   waitFor(() =>
     assert.equal(
-      (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-        .disabled,
-      false,
+      ui.container.querySelector("main")?.getAttribute("aria-busy"),
+      "false",
     ),
   );
 
@@ -620,9 +624,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     }).folder,
   );
   nav(ui, "History");
-  fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: branch.createdBranchId },
-  });
+  await selectBranch(ui, branch.createdBranchId);
   await idle(ui);
   fireEvent.click(
     ui.getByRole("button", {
@@ -631,11 +633,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   );
   await waitFor(() => assert.equal(copied.length, 2));
   assert.equal(copied[1], copied[0]); // inspecting Main while Case A is active
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    branch.createdBranchId,
-  );
+  assert.equal(currentBranchId(ui), branch.createdBranchId);
   assert.ok(ui.getByText(/Restore a copy for the exact historical bytes/));
   fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
   await waitFor(() => assert.ok(ui.getByRole("dialog")));

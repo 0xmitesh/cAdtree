@@ -1,4 +1,9 @@
 import "../../tests/dom";
+import {
+  appBusy,
+  currentBranchId,
+  selectBranch,
+} from "../../tests/app-controls";
 import { indexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -53,9 +58,8 @@ const nav = (ui: ReturnType<typeof render>, name: string) =>
 const idle = (ui: ReturnType<typeof render>) =>
   waitFor(() =>
     assert.equal(
-      (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-        .disabled,
-      false,
+      ui.container.querySelector("main")?.getAttribute("aria-busy"),
+      "false",
     ),
   );
 const ready = (ui: ReturnType<typeof render>, name: string) =>
@@ -178,9 +182,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   await ready(ui, "Open project");
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
-  fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: caseId },
-  });
+  await selectBranch(ui, caseId);
   await idle(ui);
   nav(ui, "Changes");
   fireEvent.change(
@@ -218,11 +220,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
   nav(ui, "Changes");
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    caseId,
-  );
+  assert.equal(currentBranchId(ui), caseId);
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
@@ -276,11 +274,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
     ).value,
     "Case A draft",
   );
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    caseId,
-  );
+  assert.equal(currentBranchId(ui), caseId);
   nav(ui, "All workspaces");
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 3);
 });
@@ -460,21 +454,13 @@ test("sidebar explorer expands independently, navigates projects and branches ac
     document.activeElement ===
       tree.getByRole("treeitem", { name: "Case A, Actuator, cam 2" }),
   );
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    "branch-main",
-  );
+  assert.equal(currentBranchId(ui), "branch-main");
   fireEvent.keyDown(
     tree.getByRole("treeitem", { name: "Case A, Actuator, cam 2" }),
     { key: "Enter" },
   );
   await idle(ui);
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    branched.createdBranchId,
-  );
+  assert.equal(currentBranchId(ui), branched.createdBranchId);
   assert.equal(
     tree
       .getByRole("treeitem", { name: "Case A, Actuator, cam 2" })
@@ -511,11 +497,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   );
   fireEvent.click(tree.getByRole("button", { name: "Collapse cam 2" }));
   assert.equal(tree.queryByRole("treeitem", { name: "Actuator, cam 2" }), null);
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    "branch-main",
-  );
+  assert.equal(currentBranchId(ui), "branch-main");
   assert.equal(picker.calls(), 1);
 });
 

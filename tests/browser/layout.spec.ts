@@ -30,7 +30,10 @@ test("current App: compact headings, branch context, bounded resizing and mobile
     })
     .click();
   const active = page.getByRole("combobox", { name: "Active branch" });
-  await expect(active).toBeEnabled();
+  const current = page.getByRole("status", { name: "Current branch" });
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+  await expect(active).toHaveCount(0);
+  await expect(current).toHaveText(/Current branchMain/);
   await expect(page.locator(".history-page .eyebrow")).toHaveText(
     "Camera Mount",
   );
@@ -94,15 +97,20 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     }),
   ).toHaveAttribute("aria-pressed", "true");
-  await expect(active).toHaveValue("branch-main");
+  await expect(current).toHaveAttribute("data-branch-id", "branch-main");
   await expect(
     tree.getByRole("treeitem", {
       name: "Main, Camera Mount, Personal SolidWorks",
       exact: true,
     }),
   ).toHaveAttribute("aria-selected", "true");
-  await active.selectOption({ label: "Lightweight concept" });
-  await expect(active).toBeEnabled();
+  await tree
+    .getByRole("treeitem", {
+      name: "Lightweight concept, Camera Mount, Personal SolidWorks",
+      exact: true,
+    })
+    .click();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(
     tree.getByRole("treeitem", {
       name: "Lightweight concept, Camera Mount, Personal SolidWorks",
@@ -115,19 +123,19 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     })
     .click();
-  await expect(active).toHaveValue("branch-main");
-  await expect(active).toBeEnabled();
+  await expect(current).toHaveAttribute("data-branch-id", "branch-main");
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
 
   const nav = page.getByRole("navigation");
   await nav.getByRole("button", { name: "Changes", exact: true }).click();
   const summary = page.getByRole("textbox", { name: /Revision summary/ });
   await summary.fill("Main scoped layout review");
   await active.selectOption({ label: "Lightweight concept" });
-  await expect(active).toBeEnabled();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(summary).toHaveValue("");
   await summary.fill("Lightweight scoped layout review");
   await active.selectOption({ label: "Main" });
-  await expect(active).toBeEnabled();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(summary).toHaveValue("Main scoped layout review");
   await nav.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(active).toHaveValue("branch-main");
@@ -144,7 +152,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await page.keyboard.press("End");
   await expect(resize).toHaveAttribute("aria-valuenow", "400");
   const controls = page.locator(".history-page .project-heading-controls");
-  const pickerBox = await active.boundingBox();
+  const pickerBox = await current.boundingBox();
   const modesBox = await controls.locator(".segmented").boundingBox();
   expect(
     pickerBox!.x + pickerBox!.width <= modesBox!.x ||
@@ -172,7 +180,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     })
     .click();
-  await expect(active).toBeEnabled();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page.screenshot({
     path: "artifacts/screenshots/compact-laptop.png",
     fullPage: false,
@@ -185,7 +193,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
         .locator("body")
         .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
     ).toBe(true);
-    await expect(active).toBeVisible();
+    await expect(current).toBeVisible();
     if (width === 1024) {
       await resize.press("End");
       await expect(resize).toHaveAttribute("aria-valuenow", "304");

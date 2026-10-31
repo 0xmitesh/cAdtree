@@ -1,4 +1,9 @@
 import "../../tests/dom";
+import {
+  appBusy,
+  currentBranchId,
+  selectBranch,
+} from "../../tests/app-controls";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -58,9 +63,8 @@ const nav = (ui: ReturnType<typeof render>, name: string) =>
 const idle = (ui: ReturnType<typeof render>) =>
   waitFor(() =>
     assert.equal(
-      (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-        .disabled,
-      false,
+      ui.container.querySelector("main")?.getAttribute("aria-busy"),
+      "false",
     ),
   );
 test("UI imports into a workspace, creates cases without parent pickers, recovers copies, and reconnects all cases with one root", async () => {
@@ -183,14 +187,15 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   );
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
-  assert.equal(ui.getAllByRole("option").length, 4);
+  assert.equal(
+    ui.container.querySelectorAll(".settings-page option").length,
+    4,
+  );
   assert.equal(picker.calls(), reopenCount + 1);
   const caseA = project.vaultState.branches.find(
     (branch) => branch.name === "Case A",
   )!;
-  fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: caseA.branchId },
-  });
+  await selectBranch(ui, caseA.branchId);
   await idle(ui);
   assert.equal(picker.calls(), reopenCount + 1);
   assert.ok(
@@ -344,9 +349,7 @@ test("legacy adoption is guided through the workspace UI and preserves unsaved w
   fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   await idle(ui);
-  fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: branch.branch.branchId },
-  });
+  await selectBranch(ui, branch.branch.branchId);
   await idle(ui);
   picker.queue.push(nativeDirectory(branch.workingDir));
   fireEvent.click(ui.getByRole("button", { name: "Connect folder" }));

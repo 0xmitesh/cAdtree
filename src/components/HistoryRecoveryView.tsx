@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
@@ -31,7 +30,6 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
 
 export interface HistoryRecoveryViewProps {
-  branchControl?: ReactNode;
   vaultState: VaultState;
   activeBranchId: string;
   isRestoring: boolean;
@@ -178,10 +176,22 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           <h1>
             History<span className="heading-dot">.</span>
           </h1>
-          <p>A clear view of how your design evolved.</p>
+          <p className="history-description">
+            <span>A clear view of how your design evolved.</span>
+            <span
+              className="current-branch-indicator"
+              role="status"
+              aria-label="Current branch"
+              data-branch-id={activeBranchId}
+              title={activeBranch?.name}
+            >
+              <GitBranch size={13} aria-hidden="true" />
+              <span>Current branch</span>
+              <strong>{activeBranch?.name ?? "Unavailable"}</strong>
+            </span>
+          </p>
         </div>
         <div className="project-heading-controls">
-          {props.branchControl}
           <div className="segmented" aria-label="History display">
             <button
               className={mode === "graph" ? "active" : ""}

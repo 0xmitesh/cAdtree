@@ -140,7 +140,7 @@ Byte-perfect storage and recovery do not prove SolidWorks reference correctness.
 
 ### Compact project navigation
 
-The project name appears above History, Changes, and Settings. **Active branch** in each page heading selects the working branch and stays synchronized with Explorer. Selecting a saved revision or highlighting graph ancestry only changes the history inspection; it does not switch working folders.
+The project name appears above History, Changes, and Settings. History shows a small **Current branch** confirmation beside its description; choose a branch in Explorer to switch working folders. **Active branch** remains available in Changes and Settings. Selecting a saved revision or highlighting graph ancestry only changes the history inspection; it does not switch working folders.
 
 Drag the desktop sidebar’s right edge to resize it. You can also focus **Resize sidebar** with Tab and use Left/Right arrows, Home (minimum), or End (maximum). Width is remembered locally and bounded to leave room for the main content. The tree keeps its position and scrolls independently above the project navigation. Narrow screens retain **Browse folders**.
 

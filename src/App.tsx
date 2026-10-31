@@ -1744,7 +1744,7 @@ export default function App() {
             <i />
             Local workspace
           </span>
-          <main id="main-content">
+          <main id="main-content" aria-busy={busy}>
             {progress &&
             (isVerifyingAll || (isScanning && activeTab !== "changes")) ? (
               <div className="global-feedback">
@@ -1968,14 +1968,6 @@ export default function App() {
                 ))}
                 <div hidden={activeTab !== "history"}>
                   <HistoryRecoveryView
-                    branchControl={
-                      <ActiveBranchPicker
-                        state={vaultState}
-                        activeBranchId={activeBranchId}
-                        busy={busy}
-                        onSelect={handleSelectBranch}
-                      />
-                    }
                     vaultState={vaultState}
                     activeBranchId={activeBranchId}
                     isRestoring={isRestoring}

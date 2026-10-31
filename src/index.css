@@ -2416,3 +2416,32 @@ input::placeholder {
     font-size: 10px;
   }
 }
+
+.history-description {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.current-branch-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid #d5e5df;
+  border-radius: 5px;
+  background: #eef5f1;
+  color: #54736c;
+  font-size: 12px;
+}
+.current-branch-indicator > svg,
+.current-branch-indicator > span {
+  flex-shrink: 0;
+}
+.current-branch-indicator strong {
+  color: #226a64;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

@@ -1,4 +1,9 @@
 import "../../tests/dom";
+import {
+  appBusy,
+  currentBranchId,
+  selectBranch,
+} from "../../tests/app-controls";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -58,7 +63,7 @@ async function setup() {
   await waitFor(() => assert.ok(dialog.getByText("Main CAD", { exact: true })));
   fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
   await waitFor(() =>
-    assert.ok(ui.getByRole("combobox", { name: "Active branch" })),
+    assert.ok(ui.getByRole("status", { name: "Current branch" })),
   );
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   return { main, vault, parent, first, queue, ui };
@@ -98,14 +103,7 @@ async function createFromUI(
   const state = await openExistingVault(ctx.vault);
   const branch = state.branches.find((b) => b.name === name)!;
   assert.ok(branch);
-  assert.equal(
-    (
-      ctx.ui.getByRole("combobox", {
-        name: "Active branch",
-      }) as HTMLSelectElement
-    ).value,
-    branch.branchId,
-  );
+  assert.equal(currentBranchId(ctx.ui), branch.branchId);
   return branch;
 }
 
@@ -141,21 +139,14 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     await waitFor(() => assert.ok(dialog.getByText("Vault", { exact: true })));
     fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
     await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-    assert.ok(ui.getByRole("option", { name: "Case A" }));
-    assert.ok(ui.getByText("History needs attention."));
-    fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
-      target: { value: branch.branchId },
-    });
-    await waitFor(() =>
-      assert.equal(
-        (
-          ui.getByRole("combobox", {
-            name: "Active branch",
-          }) as HTMLSelectElement
-        ).disabled,
-        false,
-      ),
+    assert.ok(
+      within(
+        ui.container.querySelector<HTMLElement>(".settings-page")!,
+      ).getByRole("option", { name: "Case A", hidden: true }),
     );
+    assert.ok(ui.getByText("History needs attention."));
+    await selectBranch(ui, branch.branchId);
+    await waitFor(() => assert.equal(appBusy(ui), false));
     fireEvent.click(
       ui.getByRole("button", { name: /Rev 002: Established damaged case/ }),
     );
@@ -257,19 +248,8 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   fireEvent.change(changes.getByRole("textbox", { name: "Overall: problem" }), {
     target: { value: "Alternative intent" },
   });
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: "branch-main" },
-  });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await selectBranch(ctx.ui, "branch-main");
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   changes = visibleChanges(ctx.ui.container);
   assert.equal(
     (
@@ -295,19 +275,8 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
     ).value,
     "Main file note",
   );
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: branch.branchId },
-  });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await selectBranch(ctx.ui, branch.branchId);
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   changes = visibleChanges(ctx.ui.container);
   assert.equal(
     (
@@ -321,16 +290,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   await waitFor(async () =>
     assert.equal((await openExistingVault(ctx.vault)).revisions.length, 2),
   );
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   const saved = (await openExistingVault(ctx.vault)).revisions[1].manifest;
   assert.equal(saved.branchId, branch.branchId);
   assert.equal(saved.parentRevisionId, ctx.first.manifest.revisionId);
@@ -338,14 +298,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.equal(saved.fileNotes, undefined);
   fireEvent.click(ctx.ui.getByRole("button", { name: "History" }));
   fireEvent.click(ctx.ui.getByRole("button", { name: "Main" }));
-  assert.equal(
-    (
-      ctx.ui.getByRole("combobox", {
-        name: "Active branch",
-      }) as HTMLSelectElement
-    ).value,
-    branch.branchId,
-  );
+  assert.equal(currentBranchId(ctx.ui), branch.branchId);
   fireEvent.click(
     ctx.ui.getByRole("button", { name: "Started from Rev 001 on Main" }),
   );
@@ -356,19 +309,8 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   await waitFor(() =>
     assert.ok(ctx.ui.getByText("Metadata and file contents verified")),
   );
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: "branch-main" },
-  });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await selectBranch(ctx.ui, "branch-main");
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   assert.ok(ctx.ui.getByText("Metadata and file contents verified"));
 });
 
@@ -380,6 +322,7 @@ test("App clears stale scan context for unavailable handles and rejects switchin
     release = resolve;
   });
   let scanning = false;
+  fireEvent.click(ctx.ui.getByRole("button", { name: "Settings" }));
   ctx.main.setHooks({
     onBeforeRead: async () => {
       scanning = true;
@@ -519,47 +462,21 @@ test("clearing browser bindings reconstructs all branches and requires explicit 
     dialog.getByRole("button", { name: "Clear connections and reopen" }),
   );
   await waitFor(() => assert.ok(!ctx.ui.queryByRole("dialog")));
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
+  assert.equal(
+    ctx.ui.container.querySelectorAll(".settings-page option").length,
+    2,
   );
-  assert.equal(ctx.ui.getAllByRole("option").length, 2);
   assert.match(
     ctx.ui.container.querySelector(".settings-page .settings-row")!
       .textContent!,
     /Not connected/,
   );
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: "branch-main" },
-  });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await selectBranch(ctx.ui, "branch-main");
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   ctx.queue.push(nativeDirectory(ctx.main));
   fireEvent.click(ctx.ui.getByRole("button", { name: "Connect folder" }));
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   assert.match(
     ctx.ui.container.querySelector(".settings-page .settings-row")!
       .textContent!,
@@ -569,31 +486,11 @@ test("clearing browser bindings reconstructs all branches and requires explicit 
     ctx.ui.container.querySelector(".global-integrity")!.textContent!,
     /Case A/,
   );
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: branch.branchId },
-  });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await selectBranch(ctx.ui, branch.branchId);
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   ctx.queue.push(nativeDirectory(caseDir));
   fireEvent.click(ctx.ui.getByRole("button", { name: "Connect folder" }));
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   assert.ok(
     !ctx.ui.container
       .querySelector(".global-integrity")!
@@ -632,14 +529,7 @@ test("branch creation shows cancellable progress and reports the incomplete fold
   fireEvent.click(dialog.getByRole("button", { name: "Create branch" }));
   try {
     await waitFor(() => assert.equal(paused, true));
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      true,
-    );
+    assert.equal(appBusy(ctx.ui), true);
     fireEvent.click(dialog.getByRole("button", { name: "Cancel operation" }));
   } finally {
     await act(async () => {

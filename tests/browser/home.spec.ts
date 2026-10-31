@@ -87,9 +87,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       await page
         .getByRole("button", { name: "Save revision", exact: true })
         .click();
-      await expect(
-        page.getByRole("combobox", { name: "Active branch" }),
-      ).toBeEnabled();
+      await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       const explorerAfter = await page
         .locator(".desktop-workspace-tree")
         .boundingBox();
@@ -218,9 +216,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
   await expect(
     page.getByRole("heading", { name: "Baseline Personal SolidWorks" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("combobox", { name: "Active branch" }),
-  ).toBeEnabled();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page.screenshot({
     path: "artifacts/screenshots/home-project.png",
     fullPage: true,
@@ -272,18 +268,14 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
   await page
     .getByRole("button", { name: "Scan for changes", exact: true })
     .click();
-  await expect(
-    page.getByRole("combobox", { name: "Active branch" }),
-  ).toBeEnabled();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page
     .getByRole("textbox", { name: /Revision summary/ })
     .fill("Offline revision");
   await page
     .getByRole("button", { name: "Save revision", exact: true })
     .click();
-  await expect(
-    page.getByRole("combobox", { name: "Active branch" }),
-  ).toBeEnabled();
+  await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "History" })
