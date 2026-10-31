@@ -172,29 +172,44 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
     <div className="page history-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">PROJECT WORKSPACE</p>
+          <p className="eyebrow">{vaultState.project.name}</p>
           <h1>
             History<span className="heading-dot">.</span>
           </h1>
-          <p>A clear view of how your design evolved.</p>
+          <p className="history-description">
+            <span>A clear view of how your design evolved.</span>
+            <span
+              className="current-branch-indicator"
+              role="status"
+              aria-label="Current branch"
+              data-branch-id={activeBranchId}
+              title={activeBranch?.name}
+            >
+              <GitBranch size={13} aria-hidden="true" />
+              <span>Current branch</span>
+              <strong>{activeBranch?.name ?? "Unavailable"}</strong>
+            </span>
+          </p>
         </div>
-        <div className="segmented" aria-label="History display">
-          <button
-            className={mode === "graph" ? "active" : ""}
-            aria-pressed={mode === "graph"}
-            onClick={() => setMode("graph")}
-          >
-            <Network size={15} />
-            Graph
-          </button>
-          <button
-            className={mode === "list" ? "active" : ""}
-            aria-pressed={mode === "list"}
-            onClick={() => setMode("list")}
-          >
-            <List size={15} />
-            List
-          </button>
+        <div className="project-heading-controls">
+          <div className="segmented" aria-label="History display">
+            <button
+              className={mode === "graph" ? "active" : ""}
+              aria-pressed={mode === "graph"}
+              onClick={() => setMode("graph")}
+            >
+              <Network size={15} />
+              Graph
+            </button>
+            <button
+              className={mode === "list" ? "active" : ""}
+              aria-pressed={mode === "list"}
+              onClick={() => setMode("list")}
+            >
+              <List size={15} />
+              List
+            </button>
+          </div>
         </div>
       </div>
       {activeBranch && !activeBranch.isMain ? (

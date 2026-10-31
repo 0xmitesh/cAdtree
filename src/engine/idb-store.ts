@@ -23,30 +23,43 @@ const STORE_BINDINGS = 'project_bindings';
 const STORE_PREFS = 'ui_preferences';
 
 /** Per workspace, machine-local convenience text; not a portable filesystem binding. */
-export async function saveWorkspaceWindowsPath(workspaceId: string, input: string): Promise<void> {
+export async function saveWorkspaceWindowsPath(workspaceId: string, input: string, rootHandle?: FileSystemDirectoryHandle): Promise<void> {
   const path = normalizeWindowsWorkspacePath(input);
   if (!isIndexedDbAvailable()) throw new Error('Browser convenience storage is unavailable. This location can only be used for this session.');
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PREFS, 'readwrite');
     tx.objectStore(STORE_PREFS).put(path, `windows-root:${workspaceId}`);
+    if (rootHandle) tx.objectStore(STORE_PREFS).put(rootHandle, `windows-handle:${workspaceId}`);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the Windows workspace location.')); };
   });
 }
-export async function getWorkspaceWindowsPath(workspaceId: string): Promise<string> {
-  if (!isIndexedDbAvailable()) return '';
+/** Associates a retained pre-home path setting with its actual original location. */
+export async function bindWorkspaceWindowsPathToRoot(workspaceId: string, rootHandle: FileSystemDirectoryHandle): Promise<void> {
+  if (!isIndexedDbAvailable()) return;
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, 'readwrite');
+    tx.objectStore(STORE_PREFS).put(rootHandle, `windows-handle:${workspaceId}`);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the original path location.')); };
+  });
+}
+export async function getWorkspaceWindowsPath(workspaceId: string, rootHandle?: FileSystemDirectoryHandle): Promise<string> {
+  if (!isIndexedDbAvailable()) return '';
+  const db = await openDatabase();
+  const saved = await new Promise<{ path: unknown; handle?: FileSystemDirectoryHandle }>((resolve, reject) => {
     const tx = db.transaction(STORE_PREFS, 'readonly');
     const request = tx.objectStore(STORE_PREFS).get(`windows-root:${workspaceId}`);
-    request.onsuccess = () => {
-      db.close();
-      try { resolve(typeof request.result === 'string' ? normalizeWindowsWorkspacePath(request.result) : ''); }
-      catch { resolve(''); }
-    };
-    request.onerror = () => { db.close(); reject(request.error); };
+    const handle = tx.objectStore(STORE_PREFS).get(`windows-handle:${workspaceId}`);
+    tx.oncomplete = () => { db.close(); resolve({ path: request.result, handle: handle.result }); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error); };
   });
+  if (rootHandle && saved.handle) {
+    try { if (!(await rootHandle.isSameEntry(saved.handle))) return ''; } catch { return ''; }
+  }
+  try { return typeof saved.path === 'string' ? normalizeWindowsWorkspacePath(saved.path) : ''; } catch { return ''; }
 }
 
 export interface RememberedWorkspace {
@@ -62,8 +75,52 @@ export async function rememberWorkspace(binding: RememberedWorkspace): Promise<v
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PREFS, 'readwrite');
     tx.objectStore(STORE_PREFS).put(binding, 'workspace');
+    tx.objectStore(STORE_PREFS).put(binding, `workspace:${binding.workspaceId}`);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember workspace access.')); };
+  });
+}
+export interface RememberedHome {
+  homeId: string;
+  name: string;
+  rootHandle: FileSystemDirectoryHandle;
+  workspaceId?: string;
+  projectPath?: string;
+  activeBranchId?: string;
+}
+export async function rememberHome(binding: RememberedHome): Promise<void> {
+  if (!isIndexedDbAvailable())
+    throw new Error(
+      "Browser convenience storage is unavailable. Select the Cadtree home again after reopening.",
+    );
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, "readwrite");
+    tx.objectStore(STORE_PREFS).put(binding, "home");
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onabort = tx.onerror = () => {
+      db.close();
+      reject(tx.error ?? new Error("Could not remember home access."));
+    };
+  });
+}
+export async function getRememberedHome(): Promise<RememberedHome | null> {
+  if (!isIndexedDbAvailable()) return null;
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, "readonly");
+    const request = tx.objectStore(STORE_PREFS).get("home");
+    request.onsuccess = () => {
+      db.close();
+      resolve(request.result ?? null);
+    };
+    request.onerror = () => {
+      db.close();
+      reject(request.error);
+    };
   });
 }
 export async function getRememberedWorkspace(): Promise<RememberedWorkspace | null> {

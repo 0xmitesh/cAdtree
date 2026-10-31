@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cAdtree — populated synthetic preview</title>
+    <style>
+      body {
+        padding-top: 32px;
+      }
+      .demo-bar {
+        position: fixed;
+        z-index: 50;
+        top: 0;
+        left: 0;
+        right: 0;
+        min-height: 32px;
+        padding: 7px 16px;
+        background: #fff4ce;
+        color: #614900;
+        font:
+          12px system-ui,
+          sans-serif;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+      .demo-bar a {
+        color: inherit;
+        text-decoration: underline;
+      }
+      .navigation-rail {
+        top: 32px;
+        height: calc(100vh - 32px);
+      }
+      #loading {
+        padding: 72px 32px;
+        font-family: system-ui, sans-serif;
+      }
+      #loading p {
+        margin: 14px 0;
+        color: #54645d;
+      }
+      @media (max-width: 700px) {
+        body {
+          padding-top: 48px;
+        }
+        .demo-bar {
+          font-size: 10px;
+          height: 48px;
+        }
+        .navigation-rail {
+          top: 48px;
+          height: calc(100vh - 48px);
+        }
+        .demo-bar #demo-counts {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-bar">
+      <span
+        ><strong>SYNTHETIC PREVIEW</strong> · sample files in browser
+        storage</span
+      ><span id="demo-counts">Preparing samples…</span
+      ><a href="/index.html">Open unseeded app</a>
+    </div>
+    <div id="loading">
+      <h1>Preparing your populated preview</h1>
+      <p id="preparing">Creating temporary sample workspaces…</p>
+      <p>
+        These samples are for exploring the interface. No real CAD folders are
+        accessed.
+      </p>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/tests/synthetic.tsx"></script>
+  </body>
+</html>

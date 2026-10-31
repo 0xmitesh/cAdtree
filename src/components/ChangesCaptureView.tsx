@@ -1,4 +1,5 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { File, RefreshCw, Save, StickyNote } from "lucide-react";
 import type {
   FileSpecificNote,
@@ -14,6 +15,9 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
 
 export interface ChangesCaptureViewProps {
+  branchControl?: ReactNode;
+  draftCache?: Map<string, CaptureDraft>;
+  draftKey?: string;
   vaultState: VaultState;
   activeBranchId: string;
   workingFolderName: string | null;
@@ -36,6 +40,13 @@ export interface ChangesCaptureViewProps {
   operationBlockReason?: string;
   resolveFilePath?: (path: string) => Promise<FilePathLocation>;
 }
+export interface CaptureDraft {
+  summary: string;
+  notes: RevisionNotes;
+  fileNotes: Record<string, FileSpecificNote>;
+  notePath: string | null;
+  showOverall: boolean;
+}
 const emptyNotes: RevisionNotes = {
   problem: "",
   modification: "",
@@ -56,14 +67,34 @@ export function ChangesCaptureView({
   onReattachWorkingFolder,
   operationBlockReason,
   resolveFilePath,
+  draftCache,
+  draftKey,
+  branchControl,
 }: ChangesCaptureViewProps) {
-  const [summary, setSummary] = useState("");
-  const [notes, setNotes] = useState<RevisionNotes>(emptyNotes);
-  const [fileNotes, setFileNotes] = useState<Record<string, FileSpecificNote>>(
-    {},
+  const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
+  const [summary, setSummary] = useState(savedDraft?.summary ?? "");
+  const [notes, setNotes] = useState<RevisionNotes>(
+    savedDraft?.notes ?? emptyNotes,
   );
-  const [notePath, setNotePath] = useState<string | null>(null);
-  const [showOverall, setShowOverall] = useState(false);
+  const [fileNotes, setFileNotes] = useState<Record<string, FileSpecificNote>>(
+    savedDraft?.fileNotes ?? {},
+  );
+  const [notePath, setNotePath] = useState<string | null>(
+    savedDraft?.notePath ?? null,
+  );
+  const [showOverall, setShowOverall] = useState(
+    savedDraft?.showOverall ?? false,
+  );
+  useEffect(() => {
+    if (draftKey)
+      draftCache?.set(draftKey, {
+        summary,
+        notes,
+        fileNotes,
+        notePath,
+        showOverall,
+      });
+  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState("");
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
@@ -154,20 +185,23 @@ export function ChangesCaptureView({
     <div className="page changes-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">WORKING FOLDER</p>
+          <p className="eyebrow">{vaultState.project.name}</p>
           <h1>
             Changes<span className="heading-dot">.</span>
           </h1>
           <p>What changed, and why it matters.</p>
         </div>
-        <button
-          className="button secondary"
-          disabled={busy || !workingFolderName}
-          onClick={onScan}
-        >
-          <RefreshCw size={16} />
-          {isScanning ? "Scanning…" : "Scan for changes"}
-        </button>
+        <div className="project-heading-controls">
+          {branchControl}
+          <button
+            className="button secondary"
+            disabled={busy || !workingFolderName}
+            onClick={onScan}
+          >
+            <RefreshCw size={16} />
+            {isScanning ? "Scanning…" : "Scan for changes"}
+          </button>
+        </div>
       </div>
       <div className="scan-strip">
         <span>

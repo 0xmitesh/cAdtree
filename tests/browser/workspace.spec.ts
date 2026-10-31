@@ -40,7 +40,10 @@ for (const viewport of [
       .locator("body")
       .evaluate((el) => ({ scroll: el.scrollWidth, client: el.clientWidth }));
     expect(mainWidth.scroll).toBeLessThanOrEqual(mainWidth.client + 1);
-    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Changes", exact: true })
+      .click();
     await page
       .getByRole("textbox", { name: /Revision summary/ })
       .fill("Refine housing clearance");
@@ -55,7 +58,10 @@ for (const viewport of [
       fullPage: true,
     });
     await page.getByRole("button", { name: "History", exact: true }).click();
-    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: "Changes", exact: true })
+      .click();
     await expect(
       page.getByRole("textbox", { name: "Parts/Housing.SLDPRT: problem" }),
     ).toHaveValue("Shaft binds at operating temperature.");
@@ -104,7 +110,9 @@ for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {
       await expect(latest).toHaveAttribute("aria-pressed", "true");
     }
     if (scenario === "damaged")
-      await expect(page.getByText("History needs attention.")).toBeVisible();
+      await expect(
+        page.getByText("History needs attention.", { exact: true }),
+      ).toBeVisible();
     await page.screenshot({
       path: path.join(screenshotDir, `scenario-${scenario}.png`),
       fullPage: true,

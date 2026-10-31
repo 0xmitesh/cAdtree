@@ -1,4 +1,9 @@
 import "../../tests/dom";
+import {
+  appBusy,
+  currentBranchId,
+  selectBranch,
+} from "../../tests/app-controls";
 import { indexedDB as testIndexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -338,9 +343,8 @@ const nav = (ui: ReturnType<typeof render>, name: string) =>
 const idle = (ui: ReturnType<typeof render>) =>
   waitFor(() =>
     assert.equal(
-      (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-        .disabled,
-      false,
+      ui.container.querySelector("main")?.getAttribute("aria-busy"),
+      "false",
     ),
   );
 
@@ -383,6 +387,10 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
   }) as typeof globalThis.structuredClone;
   try {
     let ui = render(<App />);
+    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(
+      ui.getByRole("button", { name: "Inspect external workspaces" }),
+    );
     fireEvent.click(ui.getByRole("button", { name: /Create workspace/ }));
     let dialog = within(ui.getByRole("dialog"));
     assert.ok(
@@ -403,6 +411,10 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
     await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
     cleanup();
     ui = render(<App />);
+    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(
+      ui.getByRole("button", { name: "Inspect external workspaces" }),
+    );
     await waitFor(() =>
       assert.ok(ui.getByRole("button", { name: "Reconnect Picker workspace" })),
     );
@@ -458,6 +470,10 @@ test("canceling unconfigured folder copying leaves the workspace usable with no 
     copied.push(value);
   });
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(
+    ui.getByRole("button", { name: "Inspect external workspaces" }),
+  );
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.equal(
@@ -480,7 +496,7 @@ test("canceling unconfigured folder copying leaves the workspace usable with no 
   assert.ok(!ui.queryByRole("dialog"));
   assert.ok(!ui.queryByText(/Folder path copied|File path copied/));
   assert.equal(copied.length, 0);
-  nav(ui, "Workspace");
+  fireEvent.click(ui.getByRole("treeitem", { name: "Workspace · External" }));
   fireEvent.click(ui.getByRole("button", { name: "Add project" }));
   assert.ok(ui.getByRole("dialog", { name: "Import existing CAD project" }));
   assert.equal(
@@ -528,6 +544,10 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     copied.push(value);
   });
   const ui = render(<App />);
+  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(
+    ui.getByRole("button", { name: "Inspect external workspaces" }),
+  );
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("heading", { name: "Engineering workspace." })),
@@ -556,15 +576,10 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   assert.ok(ui.getByRole("button", { name: "Add project" }));
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
-  assert.ok(
-    ui.container
-      .querySelector(".workspace-header")!
-      .textContent!.includes("Engineering workspace"),
-  );
-  assert.ok(
-    ui.container
-      .querySelector(".workspace-header")!
-      .textContent!.includes("Cam assembly"),
+  assert.equal(ui.container.querySelector(".workspace-header"), null);
+  assert.match(
+    ui.container.querySelector(".history-page .eyebrow")!.textContent!,
+    /Cam assembly/,
   );
   nav(ui, "Settings");
   const settings = within(
@@ -578,14 +593,18 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   fireEvent.click(
     settings.getByRole("button", { name: "Configure path shortcuts" }),
   );
-  assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" }));
-  assert.equal(
-    (
-      ui.getByRole("textbox", {
-        name: "Workspace folder path",
-      }) as HTMLInputElement
-    ).value,
-    "D:\\工程 Workspace",
+  await waitFor(() =>
+    assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" })),
+  );
+  await waitFor(() =>
+    assert.equal(
+      (
+        ui.getByRole("textbox", {
+          name: "Workspace folder path",
+        }) as HTMLInputElement
+      ).value,
+      "D:\\工程 Workspace",
+    ),
   );
   fireEvent.click(
     within(ui.getByRole("dialog")).getByRole("button", { name: "Cancel" }),
@@ -605,9 +624,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     }).folder,
   );
   nav(ui, "History");
-  fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: branch.createdBranchId },
-  });
+  await selectBranch(ui, branch.createdBranchId);
   await idle(ui);
   fireEvent.click(
     ui.getByRole("button", {
@@ -616,11 +633,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   );
   await waitFor(() => assert.equal(copied.length, 2));
   assert.equal(copied[1], copied[0]); // inspecting Main while Case A is active
-  assert.equal(
-    (ui.getByRole("combobox", { name: "Active branch" }) as HTMLSelectElement)
-      .value,
-    branch.createdBranchId,
-  );
+  assert.equal(currentBranchId(ui), branch.createdBranchId);
   assert.ok(ui.getByText(/Restore a copy for the exact historical bytes/));
   fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
   await waitFor(() => assert.ok(ui.getByRole("dialog")));
@@ -667,7 +680,9 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
       .length,
     1,
   );
-  nav(ui, "Workspace");
+  fireEvent.click(
+    ui.getByRole("treeitem", { name: "Engineering workspace · External" }),
+  );
   assert.ok(ui.queryByRole("combobox", { name: "Active branch" }) === null);
   assert.ok(ui.container.querySelector(".workspace-folder-bar") === null);
   assert.ok(ui.queryByText(/Opened managed location/) === null);

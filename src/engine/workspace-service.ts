@@ -187,6 +187,7 @@ async function workspaceIdentity(
 export async function createWorkspace(
   root: FileSystemDirectoryAdapter,
   name = root.name,
+  workspaceId = `workspace-${crypto.randomUUID()}`,
 ): Promise<WorkspaceState> {
   return withProjectWriterLock("workspace-initialization", async () => {
     if (!name.trim()) throw new Error("Workspace name is required.");
@@ -198,7 +199,7 @@ export async function createWorkspace(
       );
     const identity = seal({
       schemaVersion: VERSION,
-      workspaceId: `workspace-${crypto.randomUUID()}`,
+      workspaceId: idSegment(workspaceId),
       name: name.trim(),
       createdAt: new Date().toISOString(),
     });

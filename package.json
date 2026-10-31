@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port=2500 --strictPort --host=127.0.0.1",
     "build": "vite build",
+    "dev:synthetic": "vite --mode synthetic --port=2517 --strictPort --host=127.0.0.1",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",

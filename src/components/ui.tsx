@@ -19,11 +19,15 @@ export function Modal({
   busy?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const opener = useRef(document.activeElement as HTMLElement | null);
   const id = useId();
   useEffect(() => {
     const dialog = ref.current!;
     dialog.showModal();
-    return () => dialog.close();
+    return () => {
+      dialog.close();
+      if (opener.current?.isConnected) opener.current.focus();
+    };
   }, []);
   return (
     <dialog

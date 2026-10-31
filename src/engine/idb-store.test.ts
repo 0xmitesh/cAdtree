@@ -9,6 +9,9 @@ import {
   getRememberedWorkspace,
   getWorkspaceWindowsPath,
   saveWorkspaceWindowsPath,
+  rememberHome,
+  getRememberedHome,
+  bindWorkspaceWindowsPathToRoot,
 } from "./idb-store";
 
 test("remembering and selecting a branch retains every other binding; clearing IDB removes convenience data only", async () => {
@@ -45,6 +48,74 @@ test("remembering and selecting a branch retains every other binding; clearing I
   );
   await clearAllConvenienceMetadata();
   assert.equal(await getRememberedProjectBinding("project"), null);
+});
+
+test("retained workspace path preferences follow their original handle and cannot be reused by relocated copies", async () => {
+  await clearAllConvenienceMetadata();
+  const original = {
+    kind: "directory",
+    name: "Original workspace",
+  } as FileSystemDirectoryHandle;
+  const match = (name: string) =>
+    ({
+      isSameEntry: async (handle: FileSystemDirectoryHandle) =>
+        handle.name === name,
+    }) as FileSystemDirectoryHandle;
+  await saveWorkspaceWindowsPath("workspace-copied", "D:\\Original workspace");
+  await bindWorkspaceWindowsPathToRoot("workspace-copied", original);
+  assert.equal(
+    await getWorkspaceWindowsPath(
+      "workspace-copied",
+      match("Original workspace"),
+    ),
+    "D:\\Original workspace",
+  );
+  assert.equal(
+    await getWorkspaceWindowsPath("workspace-copied", match("Managed copy")),
+    "",
+  );
+  await saveWorkspaceWindowsPath("workspace-copied", "E:\\Managed copy", {
+    kind: "directory",
+    name: "Managed copy",
+  } as FileSystemDirectoryHandle);
+  assert.equal(
+    await getWorkspaceWindowsPath("workspace-copied", match("Managed copy")),
+    "E:\\Managed copy",
+  );
+  assert.equal(
+    await getWorkspaceWindowsPath(
+      "workspace-copied",
+      match("Original workspace"),
+    ),
+    "",
+  );
+});
+
+test("home access and last context are convenience data; home Windows roots stay separate from retained workspace roots", async () => {
+  await clearAllConvenienceMetadata();
+  const rootHandle = {
+    name: "Cadtree",
+    kind: "directory",
+  } as FileSystemDirectoryHandle;
+  await rememberHome({
+    homeId: "home-one",
+    name: "Cadtree",
+    rootHandle,
+    workspaceId: "workspace-one",
+    projectPath: "projects/one",
+    activeBranchId: "case-a",
+  });
+  await saveWorkspaceWindowsPath("home-one", "D:\\Cadtree");
+  await saveWorkspaceWindowsPath("workspace-one", "E:\\Original workspace");
+  assert.equal((await getRememberedHome())!.activeBranchId, "case-a");
+  assert.equal(await getWorkspaceWindowsPath("home-one"), "D:\\Cadtree");
+  assert.equal(
+    await getWorkspaceWindowsPath("workspace-one"),
+    "E:\\Original workspace",
+  );
+  await clearAllConvenienceMetadata();
+  assert.equal(await getRememberedHome(), null);
+  assert.equal(await getWorkspaceWindowsPath("home-one"), "");
 });
 
 test("Windows location preferences are separate per workspace identity and disappear when convenience data is cleared", async () => {
