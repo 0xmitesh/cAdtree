@@ -3,6 +3,7 @@ import { HardDrive, ShieldCheck } from "lucide-react";
 import type { VaultState } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { Modal, Notice } from "./ui";
+import { WorkspaceLocationSetting } from "./FilePathShortcuts";
 
 export interface DiagnosticsViewProps {
   vaultState: VaultState;
@@ -78,6 +79,7 @@ export function DiagnosticsView({
           </div>
           <span className="connection-dot">Connected</span>
         </div>
+        {managed ? <WorkspaceLocationSetting /> : null}
       </section>
       <section className="panel">
         <div className="panel-heading">

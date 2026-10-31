@@ -26,13 +26,19 @@ import {
   type CreateBranchParams,
 } from "./CreateBranchDialog";
 import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
+import { FilePathActions } from "./FilePathShortcuts";
+import type { FilePathLocation } from "../utils/windows-path";
 
 export interface HistoryRecoveryViewProps {
   vaultState: VaultState;
   activeBranchId: string;
   isRestoring: boolean;
   progress: ProgressUpdate | null;
-  lastRestoreReport: { result: RestoreResult; destinationPath?: string } | null;
+  lastRestoreReport: {
+    result: RestoreResult;
+    destinationPath?: string;
+    recoveredFiles?: { relativeDirectory: string; paths: string[] };
+  } | null;
   statusBanner: { type: "success" | "error" | "info"; message: string } | null;
   onRestoreFullProject: (
     revisionId: string,
@@ -51,6 +57,11 @@ export interface HistoryRecoveryViewProps {
   managedDestination?: string;
   operationsBlockedReason?: string;
   onPrepareWrite?: () => Promise<void>;
+  resolveWorkingFilePath?: (
+    branchId: string,
+    path: string,
+  ) => Promise<FilePathLocation>;
+  resolveRecoveredFilePath?: (path: string) => Promise<FilePathLocation>;
 }
 export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const {
@@ -249,6 +260,31 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
               </p>
             ))}
           </details>
+          {lastRestoreReport.recoveredFiles &&
+          props.resolveRecoveredFilePath ? (
+            <details className="restored-paths">
+              <summary>
+                Restored files — copy paths (
+                {lastRestoreReport.recoveredFiles.paths.length})
+              </summary>
+              {lastRestoreReport.recoveredFiles.paths.map((path) => (
+                <div className="restored-file" key={path}>
+                  <span className="file-path">{path}</span>
+                  <FilePathActions
+                    filePath={path}
+                    restored
+                    resolve={() => props.resolveRecoveredFilePath!(path)}
+                  />
+                </div>
+              ))}
+            </details>
+          ) : (
+            <p className="small">
+              A full Windows path is not known for this external destination.
+              Find the chosen folder in Explorer; cAdtree cannot fabricate its
+              absolute location.
+            </p>
+          )}
         </Notice>
       ) : null}
       {!graph.nodes.length ? (
@@ -334,6 +370,16 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         {rev.manifest.files.length} in snapshot
                       </span>
                     </div>
+                    {props.resolveWorkingFilePath ? (
+                      <p className="muted small">
+                        Current working file shortcuts refer to{" "}
+                        {vaultState.branches.find(
+                          (branch) => branch.branchId === rev.manifest.branchId,
+                        )?.name ?? "the recorded branch"}
+                        , which may differ from this saved revision. Restore a
+                        copy for the exact historical bytes.
+                      </p>
+                    ) : null}
                     {diff.status === "baseline" ? (
                       <p className="muted small">
                         The first complete project state; no earlier revision to
@@ -406,6 +452,23 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                               </button>
                             ) : null}
                           </div>
+                          {props.resolveWorkingFilePath ? (
+                            <FilePathActions
+                              filePath={file.path}
+                              historicalBranch={
+                                vaultState.branches.find(
+                                  (branch) =>
+                                    branch.branchId === rev.manifest.branchId,
+                                )?.name ?? "Unknown branch"
+                              }
+                              resolve={() =>
+                                props.resolveWorkingFilePath!(
+                                  rev.manifest.branchId,
+                                  file.path,
+                                )
+                              }
+                            />
+                          ) : null}
                           {status === "Deleted" ? (
                             <div className="deleted-help">
                               Absent from this revision.{" "}

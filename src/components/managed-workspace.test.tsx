@@ -63,6 +63,16 @@ const idle = (ui: ReturnType<typeof render>) =>
       false,
     ),
   );
+const skipPathSetup = async (ui: ReturnType<typeof render>) => {
+  await waitFor(() =>
+    assert.ok(ui.queryByRole("dialog", { name: "Windows workspace location" })),
+  );
+  fireEvent.click(
+    within(
+      ui.getByRole("dialog", { name: "Windows workspace location" }),
+    ).getByRole("button", { name: "Not now" }),
+  );
+};
 
 test("UI imports into a workspace, creates cases without parent pickers, recovers copies, and reconnects all cases with one root", async () => {
   const root = new InMemoryFileSystemAdapter("Workbench");
@@ -171,6 +181,7 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   const reopenCount = picker.calls();
   ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await skipPathSetup(ui);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Open project" })),
   );
@@ -217,6 +228,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await skipPathSetup(ui);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Inspect project" })),
   );
@@ -261,6 +273,7 @@ test("managed action preflight notices a folder lost after opening, before it di
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await skipPathSetup(ui);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Open project" })),
   );
@@ -310,6 +323,7 @@ test("legacy adoption is guided through the workspace UI and preserves unsaved w
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await skipPathSetup(ui);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Add project" })),
   );
@@ -332,7 +346,7 @@ test("legacy adoption is guided through the workspace UI and preserves unsaved w
   picker.queue.push(nativeDirectory(branch.workingDir));
   fireEvent.click(ui.getByRole("button", { name: "Connect folder" }));
   await idle(ui);
-  nav(ui, "Projects");
+  nav(ui, "Workspace");
   fireEvent.click(ui.getByRole("button", { name: "Bring into workspace" }));
   dialog = within(ui.getByRole("dialog"));
   fireEvent.click(

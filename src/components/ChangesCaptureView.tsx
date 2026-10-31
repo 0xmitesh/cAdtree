@@ -10,6 +10,8 @@ import type {
 import { formatRevisionNumber } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
 import { NotesFields, Notice, OperationProgress, StatusBadge } from "./ui";
+import { FilePathActions } from "./FilePathShortcuts";
+import type { FilePathLocation } from "../utils/windows-path";
 
 export interface ChangesCaptureViewProps {
   vaultState: VaultState;
@@ -32,6 +34,7 @@ export interface ChangesCaptureViewProps {
   onCancelOperation: () => void;
   onReattachWorkingFolder: () => Promise<void>;
   operationBlockReason?: string;
+  resolveFilePath?: (path: string) => Promise<FilePathLocation>;
 }
 const emptyNotes: RevisionNotes = {
   problem: "",
@@ -52,6 +55,7 @@ export function ChangesCaptureView({
   onCancelOperation,
   onReattachWorkingFolder,
   operationBlockReason,
+  resolveFilePath,
 }: ChangesCaptureViewProps) {
   const [summary, setSummary] = useState("");
   const [notes, setNotes] = useState<RevisionNotes>(emptyNotes);
@@ -283,32 +287,40 @@ export function ChangesCaptureView({
                         <StatusBadge status={status} /> {formatBytes(file.size)}
                       </span>
                     </div>
-                    {status !== "Unchanged" ? (
-                      <button
-                        className="text-button note-action"
-                        aria-label={`Add note for ${file.path}`}
-                        onClick={() => {
-                          setNotePath(file.path);
-                          setFileNotes((prev) => ({
-                            ...prev,
-                            [file.path]: prev[file.path] ?? {
-                              ...emptyNotes,
-                              path: file.path,
-                            },
-                          }));
-                        }}
-                      >
-                        <StickyNote size={15} />
-                        {fileNotes[file.path] &&
-                        [
-                          fileNotes[file.path].problem,
-                          fileNotes[file.path].modification,
-                          fileNotes[file.path].observations,
-                        ].some((v) => v.trim())
-                          ? "Edit note"
-                          : "Add note"}
-                      </button>
-                    ) : null}
+                    <div className="change-file-actions">
+                      {resolveFilePath ? (
+                        <FilePathActions
+                          filePath={file.path}
+                          resolve={() => resolveFilePath(file.path)}
+                        />
+                      ) : null}
+                      {status !== "Unchanged" ? (
+                        <button
+                          className="text-button note-action"
+                          aria-label={`Add note for ${file.path}`}
+                          onClick={() => {
+                            setNotePath(file.path);
+                            setFileNotes((prev) => ({
+                              ...prev,
+                              [file.path]: prev[file.path] ?? {
+                                ...emptyNotes,
+                                path: file.path,
+                              },
+                            }));
+                          }}
+                        >
+                          <StickyNote size={15} />
+                          {fileNotes[file.path] &&
+                          [
+                            fileNotes[file.path].problem,
+                            fileNotes[file.path].modification,
+                            fileNotes[file.path].observations,
+                          ].some((v) => v.trim())
+                            ? "Edit note"
+                            : "Add note"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

@@ -15,10 +15,39 @@ export interface RememberedProjectBinding {
   activeBranchId?: string;
 }
 
+import { normalizeWindowsWorkspacePath } from '../utils/windows-path';
+
 const DB_NAME = 'cadtree_convenience_v1';
 const DB_VERSION = 1;
 const STORE_BINDINGS = 'project_bindings';
 const STORE_PREFS = 'ui_preferences';
+
+/** Per workspace, machine-local convenience text; not a portable filesystem binding. */
+export async function saveWorkspaceWindowsPath(workspaceId: string, input: string): Promise<void> {
+  const path = normalizeWindowsWorkspacePath(input);
+  if (!isIndexedDbAvailable()) throw new Error('Browser convenience storage is unavailable. This location can only be used for this session.');
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, 'readwrite');
+    tx.objectStore(STORE_PREFS).put(path, `windows-root:${workspaceId}`);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the Windows workspace location.')); };
+  });
+}
+export async function getWorkspaceWindowsPath(workspaceId: string): Promise<string> {
+  if (!isIndexedDbAvailable()) return '';
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PREFS, 'readonly');
+    const request = tx.objectStore(STORE_PREFS).get(`windows-root:${workspaceId}`);
+    request.onsuccess = () => {
+      db.close();
+      try { resolve(typeof request.result === 'string' ? normalizeWindowsWorkspacePath(request.result) : ''); }
+      catch { resolve(''); }
+    };
+    request.onerror = () => { db.close(); reject(request.error); };
+  });
+}
 
 export interface RememberedWorkspace {
   workspaceId: string;

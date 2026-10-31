@@ -11,6 +11,10 @@ import type {
 import type { RememberedWorkspace } from "../engine/idb-store";
 import { Modal, Notice, OperationProgress } from "./ui";
 import type { ProgressUpdate } from "../engine/types";
+import {
+  WindowsWorkspacePathField,
+  WorkspaceLocationSetting,
+} from "./FilePathShortcuts";
 
 export interface WorkspaceProjectsViewProps {
   workspace: WorkspaceState | null;
@@ -19,7 +23,11 @@ export interface WorkspaceProjectsViewProps {
   progress: ProgressUpdate | null;
   externalProjectName?: string;
   adoptionBlockedReason?: string;
-  onCreate: (root: FileSystemDirectoryAdapter, name: string) => Promise<void>;
+  onCreate: (
+    root: FileSystemDirectoryAdapter,
+    name: string,
+    windowsPath?: string,
+  ) => Promise<void>;
   onOpen: (root: FileSystemDirectoryAdapter) => Promise<void>;
   onReconnect: () => Promise<void>;
   onRefresh: () => Promise<void>;
@@ -33,6 +41,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
   const [flow, setFlow] = useState<"create" | "import" | "adopt" | null>(null);
   const [folder, setFolder] = useState<FileSystemDirectoryAdapter | null>(null);
   const [name, setName] = useState("");
+  const [windowsPath, setWindowsPath] = useState("");
   const [error, setError] = useState("");
   const [choosingLocation, setChoosingLocation] = useState<string | null>(null);
   const run = async (action: () => Promise<void>) => {
@@ -59,6 +68,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
     setFlow(kind);
     setFolder(null);
     setName("");
+    setWindowsPath("");
     setError("");
   };
   const groups = new Map<string, WorkspaceProjectEntry[]>();
@@ -72,49 +82,90 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
         <div>
           <p className="eyebrow">YOUR LOCAL WORKSPACE</p>
           <h1>
-            Projects<span className="heading-dot">.</span>
+            {props.workspace?.identity.name ?? "Workspace"}
+            <span className="heading-dot">.</span>
           </h1>
           <p>
             {props.workspace
-              ? props.workspace.identity.name
+              ? "Your projects, together in one workspace."
               : "Your designs. Your versions. Your storage."}
           </p>
         </div>
         {props.workspace ? (
-          <button
-            className="button primary"
-            disabled={props.busy}
-            onClick={() => start("import")}
-          >
-            <Plus size={16} /> Add project
-          </button>
+          <div className="workspace-heading-actions">
+            <button
+              className="button primary"
+              disabled={props.busy}
+              onClick={() => start("import")}
+            >
+              <Plus size={16} /> Add project
+            </button>
+            <details className="workspace-menu">
+              <summary>Workspace options</summary>
+              <div className="workspace-menu-content">
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={props.busy}
+                  onClick={(event) => {
+                    const disclosure = event.currentTarget.closest("details");
+                    disclosure?.removeAttribute("open");
+                    disclosure?.querySelector<HTMLElement>("summary")?.focus();
+                    start("create");
+                  }}
+                >
+                  Create workspace
+                </button>
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={props.busy}
+                  onClick={(event) => {
+                    const disclosure = event.currentTarget.closest("details");
+                    disclosure?.removeAttribute("open");
+                    disclosure?.querySelector<HTMLElement>("summary")?.focus();
+                    void run(async () => props.onOpen(await pick("readwrite")));
+                  }}
+                >
+                  Open / switch workspace
+                </button>
+                <WorkspaceLocationSetting compact />
+              </div>
+            </details>
+          </div>
         ) : null}
       </div>
       {error ? <Notice type="error">{error}</Notice> : null}
-      <div className="project-entry-points">
-        <button
-          className="panel"
-          disabled={props.busy}
-          onClick={() => start("create")}
-        >
-          <FolderPlus size={21} />
-          <span>
-            <strong>Create workspace</strong>
-            <small>Choose an empty folder for your managed projects.</small>
-          </span>
-        </button>
-        <button
-          className="panel"
-          disabled={props.busy}
-          onClick={() => run(async () => props.onOpen(await pick("readwrite")))}
-        >
-          <FolderOpen size={21} />
-          <span>
-            <strong>Open workspace</strong>
-            <small>One folder reconnects its projects and intact cases.</small>
-          </span>
-        </button>
-      </div>
+      {!props.workspace ? (
+        <div className="project-entry-points">
+          <button
+            className="panel"
+            disabled={props.busy}
+            onClick={() => start("create")}
+          >
+            <FolderPlus size={21} />
+            <span>
+              <strong>Create workspace</strong>
+              <small>Choose an empty folder for your managed projects.</small>
+            </span>
+          </button>
+          <button
+            className="panel"
+            disabled={props.busy}
+            onClick={() =>
+              run(async () => props.onOpen(await pick("readwrite")))
+            }
+          >
+            <FolderOpen size={21} />
+            <span>
+              <strong>Open workspace</strong>
+              <small>
+                One folder reconnects its projects and intact cases.
+              </small>
+            </span>
+          </button>
+        </div>
+      ) : null}
       {props.remembered && !props.workspace ? (
         <button
           className="button secondary workspace-reconnect"
@@ -153,7 +204,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                     <p>
                       {locations.length > 1
                         ? `${locations.length} locations for the same project identity`
-                        : locations[0].containerPath}
+                        : "Managed project"}
                     </p>
                     <p className="small">
                       {locations.length > 1
@@ -188,6 +239,19 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                     </button>
                   ) : null}
                 </div>
+                <details className="disclosure project-location-details">
+                  <summary>Location details</summary>
+                  {locations[0].projectId ? (
+                    <p className="file-path">
+                      Project identity: {locations[0].projectId}
+                    </p>
+                  ) : null}
+                  {locations.map((entry) => (
+                    <p className="file-path" key={entry.containerPath}>
+                      Workspace-relative location: {entry.containerPath}
+                    </p>
+                  ))}
+                </details>
                 {locations.length > 1 && choosingLocation === id
                   ? locations.map((entry) => (
                       <div
@@ -282,7 +346,8 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                 else {
                   if (!folder || !name.trim())
                     throw new Error("Choose a folder and enter a name.");
-                  if (flow === "create") await props.onCreate(folder, name);
+                  if (flow === "create")
+                    await props.onCreate(folder, name, windowsPath);
                   else await props.onImport(folder, name);
                 }
                 setFlow(null);
@@ -333,6 +398,12 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                       Choose folder
                     </button>
                   </div>
+                  {flow === "create" ? (
+                    <WindowsWorkspacePathField
+                      value={windowsPath}
+                      onChange={setWindowsPath}
+                    />
+                  ) : null}
                 </>
               ) : (
                 <p>
