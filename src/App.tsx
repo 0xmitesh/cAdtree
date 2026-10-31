@@ -85,7 +85,6 @@ import {
   openHome,
   createHomeWorkspace,
   bringWorkspaceIntoHome,
-  homeWorkspaceGroups,
   type HomeState,
   type HomeWorkspaceEntry,
 } from "./engine/home-service";
@@ -1556,9 +1555,6 @@ export default function App() {
       if (tab === "connect") setLegacyMode(false);
     }
   };
-  const activeBranch = vaultState?.branches.find(
-    (b) => b.branchId === activeBranchId,
-  );
   const missingConnections =
     vaultState?.branches
       .filter((b) => !workingFolders[b.branchId])

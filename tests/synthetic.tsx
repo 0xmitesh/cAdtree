@@ -135,7 +135,6 @@ async function seed() {
         });
         let project = await importProject(workspace.root, source, name);
         const saved: string[] = [];
-        let counter = 0;
         async function capture(
           branchId: string,
           summary: string,
@@ -177,7 +176,6 @@ async function seed() {
               },
             ],
           });
-          counter++;
           saved.push(result.revision.manifest.revisionId);
           project = await resolveManagedProject(
             workspace.root,
