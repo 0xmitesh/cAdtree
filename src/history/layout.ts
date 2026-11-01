@@ -27,6 +27,7 @@ export interface RevisionGraph {
     color: string;
     headIds: string[];
     current: boolean;
+    available?: boolean;
   }[];
   edges: { child: string; parent: string; color: string }[];
   warnings: string[];

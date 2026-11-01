@@ -19,6 +19,7 @@ import {
   formatRevisionNumber,
 } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
+import { fileHistory, historicalFilePaths } from "../history/file-history";
 import { layoutRevisions } from "../history/layout";
 import { RevisionGraph } from "./RevisionGraph";
 import {
@@ -64,6 +65,14 @@ export interface HistoryRecoveryViewProps {
   resolveRecoveredFilePath?: (path: string) => Promise<FilePathLocation>;
 }
 export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
+  return (
+    <ProjectHistoryRecoveryView
+      key={props.vaultState.project.projectId}
+      {...props}
+    />
+  );
+}
+function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const {
     vaultState,
     activeBranchId,
@@ -75,10 +84,30 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
     onVerifySingleRevisionObjects,
     onCancelOperation,
   } = props;
-  const graph = useMemo(
+  const fullGraph = useMemo(
     () => layoutRevisions(vaultState, activeBranchId),
     [vaultState, activeBranchId],
   );
+  const [filePath, setFilePath] = useState("");
+  const [highlightBranchId, setHighlightBranchId] = useState<string | null>(
+    null,
+  );
+  const [contextId, setContextId] = useState<string | null>(null);
+  const paths = useMemo(() => historicalFilePaths(vaultState), [vaultState]);
+  const projection = useMemo(
+    () =>
+      filePath
+        ? fileHistory(
+            vaultState,
+            fullGraph,
+            filePath,
+            highlightBranchId,
+            contextId,
+          )
+        : null,
+    [vaultState, fullGraph, filePath, highlightBranchId, contextId],
+  );
+  const graph = projection?.graph ?? fullGraph;
   const [selectedId, setSelectedId] = useState<string | null>(
     () => graph.latestId ?? graph.nodes[0]?.id ?? null,
   );
@@ -124,12 +153,35 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
     graph.nodes.find((n) => n.id === graph.latestId) ??
     graph.nodes[0];
   const rev = selected?.revision;
+  const fileRecord = selected && projection?.records.get(selected.id);
+  const fileNotes =
+    rev?.manifest.fileNotes?.filter(
+      (note) => !filePath || note.path === filePath,
+    ) ?? [];
+  const changeFile = (path: string) => {
+    setFilePath(path);
+    setSelectedId(null);
+    setContextId(null);
+    setSelectedPaths(new Set());
+    setRestoreKind(null);
+    setShowAll(false);
+  };
+  const changeHighlight = (id: string | null) => {
+    setHighlightBranchId(id);
+    if (filePath) {
+      setSelectedId(null);
+      setContextId(null);
+      setSelectedPaths(new Set());
+      setRestoreKind(null);
+    }
+  };
   const diff = useMemo(
     () => (rev ? computeRevisionDiff(rev, vaultState) : null),
     [rev, vaultState],
   );
   const choose = (id: string, preselect?: string) => {
     setSelectedId(id);
+    if (filePath && !graph.nodes.some((n) => n.id === id)) setContextId(id);
     setSelectedPaths(new Set(preselect ? [preselect] : []));
     setShowAll(Boolean(preselect));
     setRestoreKind(null);
@@ -140,7 +192,7 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
       next.has(path) ? next.delete(path) : next.add(path);
       return next;
     });
-  const rows: { file: FileEntry; status: string }[] =
+  const projectRows: { file: FileEntry; status: string }[] =
     diff?.status === "unavailable"
       ? (rev?.manifest.files ?? []).map((file) => ({
           file,
@@ -161,6 +213,21 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
             status: "Unchanged",
           })),
         ];
+  const rows = filePath
+    ? fileRecord?.file
+      ? [
+          {
+            file: fileRecord.file,
+            status:
+              fileRecord.kind === "unavailable"
+                ? "Snapshot"
+                : fileRecord.status === "Inherited state"
+                  ? "Unchanged"
+                  : fileRecord.status,
+          },
+        ]
+      : []
+    : projectRows;
   const fileCount =
     restoreKind === "full"
       ? (rev?.manifest.files.length ?? 0)
@@ -176,7 +243,7 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           <h1>
             History<span className="heading-dot">.</span>
           </h1>
-          <p className="history-description">
+          <div className="history-description">
             <span>A clear view of how your design evolved.</span>
             <span
               className="current-branch-indicator"
@@ -189,7 +256,23 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
               <span>Current branch</span>
               <strong>{activeBranch?.name ?? "Unavailable"}</strong>
             </span>
-          </p>
+            <label className="history-file-picker">
+              <span>File history</span>
+              <select
+                aria-label="File history"
+                value={filePath}
+                title={filePath || "All files"}
+                onChange={(event) => changeFile(event.target.value)}
+              >
+                <option value="">All files</option>
+                {paths.map((path) => (
+                  <option key={path} value={path}>
+                    {path}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
         <div className="project-heading-controls">
           <div className="segmented" aria-label="History display">
@@ -302,7 +385,7 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
           )}
         </Notice>
       ) : null}
-      {!graph.nodes.length ? (
+      {!fullGraph.nodes.length ? (
         <div className="empty-state">
           <History size={32} />
           <h2>Your design history starts here</h2>
@@ -318,6 +401,9 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
             selectedId={selected?.id ?? null}
             onSelect={(id) => choose(id)}
             mode={mode}
+            highlightBranchId={highlightBranchId}
+            onHighlightBranch={changeHighlight}
+            fileRecords={projection?.records}
           />
           {rev && diff ? (
             <aside className="revision-detail" aria-label="Revision details">
@@ -326,11 +412,52 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   {formatRevisionNumber(rev.manifest.displayNumber)}{" "}
                   {selected.latest ? (
                     <span className="latest-label">
-                      Latest on current branch
+                      {filePath
+                        ? "Current branch file state"
+                        : "Latest on current branch"}
                     </span>
                   ) : null}
                 </div>
                 <h2>{rev.manifest.summary}</h2>
+                {filePath && fileRecord ? (
+                  <section
+                    className="selected-file-context"
+                    aria-label="Selected file history"
+                  >
+                    <strong className="file-path" title={filePath}>
+                      {filePath}
+                    </strong>
+                    <p>
+                      <StatusBadge status={fileRecord.status} />
+                      {fileRecord.origins.length
+                        ? ` · Origin of ${fileRecord.origins.join(", ")}`
+                        : ""}
+                    </p>
+                    {fileRecord.kind === "context" ? (
+                      <p className="muted small">
+                        Context only; this revision did not change the file.{" "}
+                        {fileRecord.file
+                          ? "The case inherits this saved file state."
+                          : "The file is absent at this origin."}
+                      </p>
+                    ) : null}
+                    {fileRecord.kind === "unavailable" ? (
+                      <Notice type="error">
+                        The revision or its parent evidence is missing, damaged,
+                        or ambiguous. A file change cannot be established.
+                      </Notice>
+                    ) : null}
+                    {fileNotes.length ? (
+                      fileNotes.map((note) => (
+                        <NotesText key={note.path} notes={note} />
+                      ))
+                    ) : (
+                      <p className="muted small">
+                        No per-file notes recorded in this revision.
+                      </p>
+                    )}
+                  </section>
+                ) : null}
                 <div className="detail-meta">
                   <span>
                     <GitBranch size={14} />
@@ -375,11 +502,13 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   <>
                     <div className="section-heading">
                       <h3>
-                        {diff.status === "baseline"
-                          ? "Initial baseline"
-                          : diff.status === "unavailable"
-                            ? "Snapshot files"
-                            : "Changed files"}
+                        {filePath
+                          ? "Selected file"
+                          : diff.status === "baseline"
+                            ? "Initial baseline"
+                            : diff.status === "unavailable"
+                              ? "Snapshot files"
+                              : "Changed files"}
                       </h3>
                       <span className="muted">
                         {rev.manifest.files.length} in snapshot
@@ -395,7 +524,17 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         copy for the exact historical bytes.
                       </p>
                     ) : null}
-                    {diff.status === "baseline" ? (
+                    {filePath ? (
+                      fileRecord?.kind !== "unavailable" ? (
+                        <p className="muted small">
+                          {rev.manifest.parentRevisionId
+                            ? `Compared with the recorded parent · ${fileRecord?.status}`
+                            : "Initial recorded file addition."}{" "}
+                          Byte changes do not necessarily indicate geometry
+                          changes.
+                        </p>
+                      ) : null
+                    ) : diff.status === "baseline" ? (
                       <p className="muted small">
                         The first complete project state; no earlier revision to
                         compare.
@@ -420,15 +559,32 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     <div className="file-selection-toolbar">
                       <button
                         className="text-button"
-                        disabled={damaged}
+                        disabled={
+                          damaged ||
+                          Boolean(
+                            filePath &&
+                            !rev.manifest.files.some(
+                              (f) => f.path === filePath,
+                            ),
+                          )
+                        }
                         onClick={() => {
                           setSelectedPaths(
-                            new Set(rev.manifest.files.map((f) => f.path)),
+                            new Set(
+                              (filePath
+                                ? rev.manifest.files.filter(
+                                    (f) => f.path === filePath,
+                                  )
+                                : rev.manifest.files
+                              ).map((f) => f.path),
+                            ),
                           );
                           setShowAll(true);
                         }}
                       >
-                        Select all snapshot files
+                        {filePath
+                          ? "Select file for recovery"
+                          : "Select all snapshot files"}
                       </button>
                       <button
                         className="text-button"
@@ -509,7 +665,7 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         </div>
                       ))}
                     </div>
-                    {diff.unchanged.length > 0 ? (
+                    {!filePath && diff.unchanged.length > 0 ? (
                       <button
                         className="text-button unchanged-toggle"
                         aria-expanded={showAll}
@@ -519,9 +675,10 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         unchanged files
                       </button>
                     ) : null}
-                    {diff.addedDirectories.length +
+                    {!filePath &&
+                    diff.addedDirectories.length +
                       diff.deletedDirectories.length >
-                    0 ? (
+                      0 ? (
                       <details className="disclosure">
                         <summary>
                           Directory changes (
@@ -547,8 +704,8 @@ export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       <p className="muted">No overall notes recorded.</p>
                     )}
                     <h3 className="section-spaced">File-specific notes</h3>
-                    {rev.manifest.fileNotes?.length ? (
-                      rev.manifest.fileNotes.map((note) => (
+                    {fileNotes.length ? (
+                      fileNotes.map((note) => (
                         <section className="file-note-read" key={note.path}>
                           <strong className="file-path">{note.path}</strong>
                           <NotesText notes={note} />
