@@ -320,6 +320,40 @@ export function CompareRevisionsDialog({
                     : "No file or directory differences between these saved snapshots."}
               </Notice>
             ) : null}
+            <section aria-label="Overall engineering notes">
+              <details className="disclosure comparison-overall-notes" open>
+                <summary>Overall engineering notes</summary>
+                <p className="muted small">
+                  These notes describe the complete project revision, including
+                  when comparing a single file.
+                </p>
+                <div className="comparison-file-endpoints">
+                  {[
+                    { side: "From", revision: result.from },
+                    { side: "To", revision: result.to },
+                  ].map(({ side, revision }) => (
+                    <section
+                      key={side}
+                      aria-label={`${side} overall notes at ${formatRevisionNumber(revision.manifest.displayNumber)}`}
+                    >
+                      <h4>
+                        {side} ·{" "}
+                        {formatRevisionNumber(revision.manifest.displayNumber)}
+                      </h4>
+                      {Object.values(revision.manifest.notes).some((value) =>
+                        value.trim(),
+                      ) ? (
+                        <NotesText notes={revision.manifest.notes} />
+                      ) : (
+                        <p className="muted small">
+                          No overall engineering notes at this endpoint.
+                        </p>
+                      )}
+                    </section>
+                  ))}
+                </div>
+              </details>
+            </section>
             <section aria-label="Changed files comparison">
               {changed.map(rowView)}
             </section>

@@ -273,3 +273,75 @@ test("comparison distinguishes metadata-only from previously verified contents a
     null,
   );
 });
+test("comparison includes overall and individual notes in file scope, labels endpoints, swaps them, and explains missing overall notes", () => {
+  const state = historyState(2);
+  state.revisions[0].manifest.notes = {
+    problem: "Overall baseline intent",
+    modification: "Baseline project change",
+    observations: "Baseline project observation",
+  };
+  state.revisions[1].manifest.notes = {
+    problem: "Overall target intent",
+    modification: "Target project change",
+    observations: "Target project observation",
+  };
+  state.revisions[0].manifest.fileNotes = [
+    {
+      path,
+      problem: "Baseline part note",
+      modification: "Part before",
+      observations: "Part baseline",
+    },
+  ];
+  state.revisions[1].manifest.fileNotes = [
+    {
+      path,
+      problem: "Target part note",
+      modification: "Part after",
+      observations: "Part target",
+    },
+  ];
+  const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
+  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
+    target: { value: path },
+  });
+  fireEvent.click(ui.getByRole("button", { name: "Compare" }));
+  const dialog = within(
+    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+  );
+  const before = dialog.getByRole("region", {
+    name: "From overall notes at Rev 001",
+  });
+  const after = dialog.getByRole("region", {
+    name: "To overall notes at Rev 002",
+  });
+  assert.ok(before.textContent?.includes("Overall baseline intent"));
+  assert.ok(before.textContent?.includes("Baseline project change"));
+  assert.ok(before.textContent?.includes("Baseline project observation"));
+  assert.ok(after.textContent?.includes("Overall target intent"));
+  assert.ok(dialog.getByText("Baseline part note"));
+  assert.ok(dialog.getByText("Target part note"));
+  fireEvent.click(dialog.getByRole("button", { name: "Swap" }));
+  assert.ok(
+    dialog
+      .getByRole("region", { name: "From overall notes at Rev 002" })
+      .textContent?.includes("Overall target intent"),
+  );
+  assert.ok(
+    dialog
+      .getByRole("region", { name: "To overall notes at Rev 001" })
+      .textContent?.includes("Overall baseline intent"),
+  );
+  const blank = structuredClone(state);
+  blank.revisions[0].manifest.notes = {
+    problem: " ",
+    modification: "",
+    observations: "",
+  };
+  ui.rerender(<HistoryRecoveryView {...props({ vaultState: blank })} />);
+  assert.ok(
+    dialog
+      .getByRole("region", { name: "To overall notes at Rev 001" })
+      .textContent?.includes("No overall engineering notes at this endpoint."),
+  );
+});

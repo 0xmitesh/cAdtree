@@ -74,6 +74,12 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     /Rev 004 · Main · Main release with 20 files/,
   );
   await expectCounts(17, 2, 1, 2);
+  await expect(
+    dialog.getByRole("region", { name: "From overall notes at Rev 003" }),
+  ).toContainText("Old case with 5 files");
+  await expect(
+    dialog.getByRole("region", { name: "To overall notes at Rev 004" }),
+  ).toContainText("Main release with 20 files");
   await expect(dialog.getByText(/5 files · Metadata verified/)).toBeVisible();
   await expect(dialog.getByText(/20 files · Metadata verified/)).toBeVisible();
   await page.screenshot({
@@ -95,6 +101,12 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     .allTextContents();
   await dialog.getByRole("button", { name: "Swap", exact: true }).click();
   await expectCounts(2, 17, 1, 2);
+  await expect(
+    dialog.getByRole("region", { name: "From overall notes at Rev 004" }),
+  ).toContainText("Main release with 20 files");
+  await expect(
+    dialog.getByRole("region", { name: "To overall notes at Rev 003" }),
+  ).toContainText("Old case with 5 files");
   await expect(
     pin.locator(".comparison-file-endpoints section > p"),
   ).toHaveText([...beforeSizes].reverse());
@@ -201,6 +213,12 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
   await from.selectOption(fixture.ids[2]);
   await to.selectOption(fixture.ids[3]);
   await expectCounts(0, 0, 1, 0);
+  await expect(
+    dialog.getByRole("region", { name: "From overall notes at Rev 003" }),
+  ).toContainText("Old case with 5 files");
+  await expect(
+    dialog.getByRole("region", { name: "To overall notes at Rev 004" }),
+  ).toContainText("Main release with 20 files");
   expect(
     await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
   ).toBe(true);
