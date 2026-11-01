@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
+  ArrowLeftRight,
   File,
   GitBranch,
   History,
@@ -21,6 +22,7 @@ import {
 import { formatBytes, formatTimestamp } from "../utils/format";
 import { fileHistory, historicalFilePaths } from "../history/file-history";
 import { layoutRevisions } from "../history/layout";
+import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
 import {
   CreateBranchDialog,
@@ -118,6 +120,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const [restoreKind, setRestoreKind] = useState<"full" | "selected" | null>(
     null,
   );
+  const [comparison, setComparison] = useState<{
+    inspectedId: string;
+    initialPath: string;
+  } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [branchSource, setBranchSource] = useState<string | null>(null);
@@ -408,15 +414,28 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           {rev && diff ? (
             <aside className="revision-detail" aria-label="Revision details">
               <div className="detail-header">
-                <div className="revision-eyebrow">
-                  {formatRevisionNumber(rev.manifest.displayNumber)}{" "}
-                  {selected.latest ? (
-                    <span className="latest-label">
-                      {filePath
-                        ? "Current branch file state"
-                        : "Latest on current branch"}
-                    </span>
-                  ) : null}
+                <div className="detail-revision-row">
+                  <div className="revision-eyebrow">
+                    {formatRevisionNumber(rev.manifest.displayNumber)}{" "}
+                    {selected.latest ? (
+                      <span className="latest-label">
+                        {filePath
+                          ? "Current branch file state"
+                          : "Latest on current branch"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <button
+                    className="button secondary revision-compare-action"
+                    onClick={() =>
+                      setComparison({
+                        inspectedId: rev.manifest.revisionId,
+                        initialPath: filePath,
+                      })
+                    }
+                  >
+                    <ArrowLeftRight size={14} /> Compare
+                  </button>
                 </div>
                 <h2>{rev.manifest.summary}</h2>
                 {filePath && fileRecord ? (
@@ -856,6 +875,13 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           ) : null}
         </div>
       )}
+      {comparison ? (
+        <CompareRevisionsDialog
+          state={vaultState}
+          {...comparison}
+          onClose={() => setComparison(null)}
+        />
+      ) : null}
       {source && props.onCreateBranch ? (
         <CreateBranchDialog
           source={source.manifest}

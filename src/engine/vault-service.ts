@@ -3,6 +3,7 @@ import {
   validateDirectoryIsolation,
 } from './fs-adapter';
 import { hashString } from './hash';
+import { compareSnapshotContents } from './snapshot-comparison';
 import { verifyStoredObject } from './object-store';
 import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
@@ -14,7 +15,6 @@ import {
   FileSpecificNote,
   IncompleteAttemptRecord,
   MAIN_BRANCH_ID,
-  ModifiedFileChange,
   ProjectIdentity,
   ReconstructedRevision,
   RevisionDiffResult,
@@ -878,13 +878,7 @@ export function computeRevisionDiff(
       status: 'baseline',
       parentRevisionId: null,
       parentDisplayNumber: null,
-      added: [...revision.manifest.files].sort((a, b) => a.path.localeCompare(b.path)),
-      modified: [],
-      deleted: [],
-      unchanged: [],
-      addedDirectories: [...revision.manifest.directories].sort((a, b) => a.localeCompare(b)),
-      deletedDirectories: [],
-      unchangedDirectories: [],
+      ...compareSnapshotContents({ files: [], directories: [] }, revision.manifest),
     };
   }
 
@@ -923,64 +917,11 @@ export function computeRevisionDiff(
     };
   }
 
-  const parentFilesMap = new Map<string, FileEntry>();
-  for (const pf of parentRev.manifest.files) {
-    parentFilesMap.set(pf.path, pf);
-  }
-
-  const added: FileEntry[] = [];
-  const modified: ModifiedFileChange[] = [];
-  const unchanged: FileEntry[] = [];
-  const seenCurrentPaths = new Set<string>();
-
-  for (const currFile of revision.manifest.files) {
-    seenCurrentPaths.add(currFile.path);
-    const prevFile = parentFilesMap.get(currFile.path);
-    if (!prevFile) {
-      added.push(currFile);
-    } else if (prevFile.sha256 !== currFile.sha256) {
-      modified.push({ current: currFile, previous: prevFile });
-    } else {
-      unchanged.push(currFile);
-    }
-  }
-
-  const deleted: FileEntry[] = [];
-  for (const [prevPath, prevFile] of parentFilesMap.entries()) {
-    if (!seenCurrentPaths.has(prevPath)) {
-      deleted.push(prevFile);
-    }
-  }
-
-  added.sort((a, b) => a.path.localeCompare(b.path));
-  modified.sort((a, b) => a.current.path.localeCompare(b.current.path));
-  deleted.sort((a, b) => a.path.localeCompare(b.path));
-  unchanged.sort((a, b) => a.path.localeCompare(b.path));
-
-  const parentDirsSet = new Set(parentRev.manifest.directories);
-  const currDirsSet = new Set(revision.manifest.directories);
-
-  const addedDirectories = revision.manifest.directories
-    .filter((d) => !parentDirsSet.has(d))
-    .sort((a, b) => a.localeCompare(b));
-  const deletedDirectories = parentRev.manifest.directories
-    .filter((d) => !currDirsSet.has(d))
-    .sort((a, b) => a.localeCompare(b));
-  const unchangedDirectories = revision.manifest.directories
-    .filter((d) => parentDirsSet.has(d))
-    .sort((a, b) => a.localeCompare(b));
-
   return {
     status: 'compared',
     parentRevisionId: parentId,
     parentDisplayNumber: parentRev.manifest.displayNumber,
-    added,
-    modified,
-    deleted,
-    unchanged,
-    addedDirectories,
-    deletedDirectories,
-    unchangedDirectories,
+    ...compareSnapshotContents(parentRev.manifest, revision.manifest),
   };
 }
 
