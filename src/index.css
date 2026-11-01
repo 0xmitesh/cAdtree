@@ -2459,6 +2459,7 @@ input::placeholder {
 .graph-dot.context-dot {
   border-style: dashed;
   background: #f2f6f3;
+  color: #226a64;
 }
 .selected-file-context {
   margin: 14px 0 10px;
