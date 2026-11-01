@@ -2417,6 +2417,15 @@ input::placeholder {
   }
 }
 
+.history-page > .page-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.history-page .project-heading-controls {
+  align-self: start;
+  margin-top: 28px;
+}
 .history-description {
   display: flex;
   flex-wrap: wrap;
@@ -2435,10 +2444,21 @@ input::placeholder {
   white-space: nowrap;
 }
 .history-file-picker select {
-  width: 240px;
+  width: 180px;
   max-width: 100%;
   min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid #b7cfc8;
+  border-radius: 5px;
+  background-color: #fff;
+  color: #23443f;
+  cursor: pointer;
   font-size: 12px;
+}
+.history-file-picker select:focus-visible {
+  outline: 2px solid #087f80;
+  outline-offset: 2px;
 }
 .history-description > span:first-child {
   flex-basis: 100%;
@@ -2494,11 +2514,26 @@ input::placeholder {
 .current-branch-indicator > span {
   flex-shrink: 0;
 }
+.history-page .current-branch-indicator {
+  max-width: min(260px, 100%);
+  min-height: 32px;
+}
 .current-branch-indicator strong {
   color: #226a64;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   min-width: 0;
+}
+@media (max-width: 700px) {
+  .history-page > .page-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .history-page .project-heading-controls {
+    margin-top: 0;
+  }
 }
 
 .home-heading-actions {

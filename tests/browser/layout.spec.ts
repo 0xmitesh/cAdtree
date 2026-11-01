@@ -40,6 +40,15 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(active).toHaveCount(0);
   await expect(current).toHaveText(/Current branchMain/);
+  const historyModes = page.locator(".history-page .project-heading-controls");
+  const modesBeforeBranchSwitch = (await historyModes.boundingBox())!;
+  const filePicker = page.getByRole("combobox", {
+    name: "File history",
+    exact: true,
+  });
+  expect((await filePicker.boundingBox())!.width).toBeLessThanOrEqual(180);
+  await expect(filePicker).toHaveCSS("border-top-style", "solid");
+  await expect(filePicker).toHaveCSS("border-top-width", "1px");
   await expect(page.locator(".history-page .eyebrow")).toHaveText(
     "Camera Mount",
   );
@@ -123,6 +132,10 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     }),
   ).toHaveAttribute("aria-selected", "true");
+  const modesAfterBranchSwitch = (await historyModes.boundingBox())!;
+  expect(modesAfterBranchSwitch.y).toBe(modesBeforeBranchSwitch.y);
+  expect(modesAfterBranchSwitch.x).toBe(modesBeforeBranchSwitch.x);
+  await expect(current).toHaveAttribute("title", "Lightweight concept");
   await tree
     .getByRole("treeitem", {
       name: "Main, Camera Mount, Personal SolidWorks",
