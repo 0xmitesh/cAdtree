@@ -39,6 +39,12 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     });
   });
   await page.getByRole("button", { name: "Create Cadtree home" }).click();
+  await page
+    .getByRole("textbox", { name: "Cadtree home folder address" })
+    .fill("D:\\Cadtree");
+  await page
+    .getByRole("button", { name: "Complete setup", exact: true })
+    .click();
   await expect(
     page.getByRole("button", { name: "Create workspace" }),
   ).toBeEnabled();
@@ -195,10 +201,8 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     home,
   );
   // Returning home with no remembered binding must discover using one explicit selection.
-  await page.getByText("Other locations", { exact: true }).click();
-  await page
-    .getByRole("button", { name: "Choose another Cadtree home" })
-    .click();
+  await page.getByText("Home options", { exact: true }).click();
+  await page.getByRole("button", { name: "Switch Cadtree home" }).click();
   await expect(
     page.getByRole("button", { name: "Open workspace", exact: true }),
   ).toHaveCount(3);

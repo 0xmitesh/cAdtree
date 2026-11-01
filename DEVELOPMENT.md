@@ -4,7 +4,7 @@ Run `npm install` once, then `npm run dev` for the normal unseeded application (
 
 ## Current multi-workspace UI
 
-Run `npm run dev:synthetic`, then open http://127.0.0.1:2517/. Alternatively, open `/tests/synthetic.html` on any normal development server. Use Chrome or Edge with origin-private filesystem support. Click **Reconnect cAdtree Synthetic Preview v2** after setup, then navigate using Explorer.
+Run `npm run dev:synthetic`, then open http://127.0.0.1:2517/. Alternatively, open `/tests/synthetic.html` on any normal development server. Use Chrome or Edge with origin-private filesystem support. Click **Reconnect cAdtree Synthetic Preview v2** after sample generation, then complete the required address step (for these browser-only samples, use a fictional development address such as `D:\Synthetic Cadtree`; no physical Windows folder is implied). Navigate using Explorer.
 
 `tests/synthetic.tsx` mounts the current real `src/App.tsx` and creates 4 workspaces, 9 projects, 28 branches, 60 verified revision records, and pending working edits through the real engine. The data consists of synthetic text files, not valid CAD documents. Everything stays in this origin’s browser storage; it never selects or reads real CAD directories. The development banner stays visible. Seeds use fixed dates and a versioned browser-storage directory; IDs are generated normally. A manufacturing-drawing revision changes an actual drawing path, including for the SolidWorks samples.
 

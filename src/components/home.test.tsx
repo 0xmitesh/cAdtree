@@ -3,6 +3,7 @@ import {
   appBusy,
   currentBranchId,
   selectBranch,
+  completeHomeAddress,
 } from "../../tests/app-controls";
 import { indexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
@@ -89,6 +90,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   assert.equal(ui.queryByRole("button", { name: "History" }), null);
   assert.equal(ui.queryByRole("combobox", { name: "Active branch" }), null);
   fireEvent.click(ui.getByRole("button", { name: "Create Cadtree home" }));
+  await completeHomeAddress(ui);
   await ready(ui, "Create workspace");
   assert.equal(ui.queryByRole("dialog"), null);
   for (const name of ["Personal SolidWorks", "Client ABC", "AutoCAD"]) {
@@ -120,6 +122,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   picker.queue.push(nativeDirectory(root));
   ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await completeHomeAddress(ui);
   await waitFor(() =>
     assert.equal(
       ui.getAllByRole("button", { name: "Open workspace" }).length,
@@ -170,6 +173,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await completeHomeAddress(ui);
   await waitFor(() =>
     assert.equal(
       ui.getAllByRole("button", { name: "Open workspace" }).length,
@@ -297,19 +301,12 @@ test("guided whole-workspace migration identifies managed location and never reu
   picker.queue.push(nativeDirectory(home), nativeDirectory(original));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
-  await waitFor(() =>
-    assert.equal(
-      (
-        ui.getByRole("button", {
-          name: "Bring existing workspace into Cadtree",
-        }) as HTMLButtonElement
-      ).disabled,
-      false,
-    ),
-  );
+  await completeHomeAddress(ui);
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
-    ui.getByRole("button", { name: "Bring existing workspace into Cadtree" }),
+    ui.getByRole("button", { name: "Import existing workspace" }),
   );
+  fireEvent.click(ui.getByRole("button", { name: "Choose workspace folder" }));
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "cam 2." })));
   await ready(ui, "Open project");
   assert.match(
@@ -318,23 +315,24 @@ test("guided whole-workspace migration identifies managed location and never reu
   );
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
+  const copied: string[] = [];
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async (value: string) => {
+        copied.push(value);
+      },
+    },
+  });
   fireEvent.click(
     changes(ui).getByRole("button", {
       name: /Copy folder path.*Uncaptured.bin/,
     }),
   );
-  await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" })),
-  );
-  assert.match(ui.getByRole("dialog").textContent!, /Cadtree home/);
-  assert.equal(
-    (
-      ui.getByRole("textbox", {
-        name: "Cadtree home folder path",
-      }) as HTMLInputElement
-    ).value,
-    "",
-  );
+  await waitFor(() => assert.equal(copied.length, 1));
+  assert.ok(copied[0].startsWith("D:\\Cadtree\\"));
+  assert.ok(!copied[0].includes("Old external location"));
+  assert.equal(ui.queryByRole("dialog"), null);
   assert.equal(picker.calls(), 2);
 });
 
@@ -359,11 +357,12 @@ test("home groups retained migration attempts, shows missing workspaces, and res
   picker.queue.push(nativeDirectory(home), nativeDirectory(original));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   assert.equal(ui.getAllByRole("article").length, 2);
   assert.ok(ui.getByText("Location details · 2 retained locations"));
   assert.ok(ui.getByText("Unavailable · Needs attention"));
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -418,6 +417,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   picker.queue.push(nativeDirectory(home));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   const tree = within(ui.getByRole("tree", { name: "Workspace explorer" }));
   const camFolder = tree.getByRole("treeitem", { name: "cam 2" });
@@ -509,6 +509,7 @@ test("folder browser opens in a dialog, supports keyboard traversal, and closes 
   picker.queue.push(nativeDirectory(home));
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   fireEvent.click(ui.getByRole("button", { name: "Browse folders" }));
   const dialog = within(ui.getByRole("dialog", { name: "Browse folders" }));

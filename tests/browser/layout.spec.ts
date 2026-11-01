@@ -16,6 +16,12 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await page
     .getByRole("button", { name: /Reconnect cAdtree Synthetic Preview v2/ })
     .click();
+  await page
+    .getByRole("textbox", { name: "Cadtree home folder address" })
+    .fill("D:\\Cadtree");
+  await page
+    .getByRole("button", { name: "Complete setup", exact: true })
+    .click();
   const tree = page.getByRole("tree", { name: "Workspace explorer" });
   await tree
     .getByRole("treeitem", { name: "Personal SolidWorks", exact: true })

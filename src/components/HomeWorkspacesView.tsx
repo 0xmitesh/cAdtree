@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FolderOpen, Plus, RefreshCw } from "lucide-react";
 import {
   homeWorkspaceGroups,
@@ -8,7 +8,7 @@ import {
 import type { RememberedHome } from "../engine/idb-store";
 import type { ProgressUpdate } from "../engine/types";
 import { Modal, Notice, OperationProgress } from "./ui";
-import { WorkspaceLocationSetting } from "./FilePathShortcuts";
+import { HomeFolderAddressSetting } from "./FilePathShortcuts";
 
 export function HomeWorkspacesView(props: {
   home: HomeState | null;
@@ -24,6 +24,8 @@ export function HomeWorkspacesView(props: {
   onExternal: () => void;
   onCancel: () => void;
 }) {
+  const options = useRef<HTMLDetailsElement>(null);
+  const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -49,20 +51,76 @@ export function HomeWorkspacesView(props: {
               : "Your designs. Your versions. Your storage."}
           </p>
         </div>
-        {props.home ? (
-          <button
-            className="button primary"
-            disabled={props.busy}
-            onClick={() => {
-              setName("");
-              setError("");
-              setCreating(true);
-            }}
-          >
-            <Plus size={16} />
-            Create workspace
-          </button>
-        ) : null}
+        <div className="home-heading-actions">
+          {props.home ? (
+            <button
+              className="button primary"
+              disabled={props.busy}
+              onClick={() => {
+                setName("");
+                setError("");
+                setCreating(true);
+              }}
+            >
+              <Plus size={16} />
+              Create workspace
+            </button>
+          ) : null}
+          <details className="workspace-menu home-options" ref={options}>
+            <summary
+              onClick={(event) => {
+                if (props.busy) event.preventDefault();
+              }}
+              aria-disabled={props.busy || undefined}
+            >
+              Home options
+            </summary>
+            <div
+              className="workspace-menu-content"
+              onClick={(event) => {
+                if ((event.target as HTMLElement).closest("button")) {
+                  options.current?.removeAttribute("open");
+                  options.current
+                    ?.querySelector<HTMLElement>("summary")
+                    ?.focus();
+                }
+              }}
+            >
+              {props.home ? (
+                <>
+                  <HomeFolderAddressSetting />
+                  <button
+                    className="text-button"
+                    disabled={props.busy}
+                    onClick={() => {
+                      setError("");
+                      setImporting(true);
+                    }}
+                  >
+                    Import existing workspace
+                  </button>
+                </>
+              ) : null}
+              <button
+                className="text-button"
+                disabled={props.busy}
+                onClick={() => void run(() => props.onConnect(false))}
+              >
+                Switch Cadtree home
+              </button>
+              <div className="home-options-advanced">
+                <span>Advanced</span>
+                <button
+                  className="text-button"
+                  disabled={props.busy}
+                  onClick={props.onExternal}
+                >
+                  Inspect external workspaces
+                </button>
+              </div>
+            </div>
+          </details>
+        </div>
       </div>
       {error ? <Notice type="error">{error}</Notice> : null}
       {!props.home ? (
@@ -181,43 +239,48 @@ export function HomeWorkspacesView(props: {
               })}
             </div>
           )}
-          <div className="home-actions">
+        </>
+      )}
+      <OperationProgress progress={props.progress} onCancel={props.onCancel} />
+      {importing ? (
+        <Modal
+          title="Import existing workspace"
+          busy={props.busy}
+          onClose={() => setImporting(false)}
+        >
+          <p>
+            Create a verified managed copy inside {props.home?.root.name},
+            including working edits not yet captured in history. The original
+            workspace and its files remain untouched.
+          </p>
+          <p>
+            Choose the existing workspace folder using the native folder picker.
+            Workspace groups do not grant collaboration permissions.
+          </p>
+          {error ? <Notice type="error">{error}</Notice> : null}
+          <div className="modal-actions">
             <button
               className="button secondary"
               disabled={props.busy}
-              onClick={() => void run(props.onBring)}
+              onClick={() => setImporting(false)}
             >
-              Bring existing workspace into Cadtree
+              Cancel
             </button>
-            <WorkspaceLocationSetting compact />
+            <button
+              className="button primary"
+              disabled={props.busy}
+              onClick={() =>
+                void run(async () => {
+                  await props.onBring();
+                  setImporting(false);
+                })
+              }
+            >
+              Choose workspace folder
+            </button>
           </div>
-          <p className="muted small">
-            Bringing a workspace creates a verified managed copy, including
-            unsaved-to-history working edits. Originals stay untouched.
-            Workspace groups do not grant collaboration permissions.
-          </p>
-        </>
-      )}
-      <details className="disclosure">
-        <summary>Other locations</summary>
-        <div className="home-actions">
-          <button
-            className="button secondary"
-            disabled={props.busy}
-            onClick={props.onExternal}
-          >
-            Inspect external workspaces
-          </button>
-          <button
-            className="text-button"
-            disabled={props.busy}
-            onClick={() => void run(() => props.onConnect(false))}
-          >
-            Choose another Cadtree home
-          </button>
-        </div>
-      </details>
-      <OperationProgress progress={props.progress} onCancel={props.onCancel} />
+        </Modal>
+      ) : null}
       {creating ? (
         <Modal
           title="Create workspace"

@@ -27,9 +27,10 @@ Open `http://127.0.0.1:2501/`. The separate static-build ZIP contains `index.htm
 The hierarchy is **Cadtree home → Workspaces → Projects → Design branches and revisions**. Workspaces can represent clients, CAD tools, organisations, or other groups. They are organisational folders; no accounts, collaboration roles, or access controls are added.
 
 1. Choose **Create Cadtree home**. In the native folder picker, create/select a dedicated empty folder, suggested name **Cadtree**. Unrelated populated storage is rejected. **Open Cadtree home** opens an existing recognized home.
-2. On **All workspaces**, choose **Create workspace** and enter a readable name. cAdtree allocates a unique child folder automatically. No second parent picker is needed. Repeated display names receive independent identities and folders.
-3. **Open workspace** opens its projects. Use **Switch workspace** in the header to move between connected workspaces, or **All workspaces** to return home. Switching never removes another workspace's registration.
-4. The home shows actual discovered project counts and connection state. Missing, damaged, duplicate, and incomplete locations remain visible; no identity is guessed from a folder name.
+2. In **Complete home setup**, enter the selected folder’s full **Cadtree home folder address**, for example `D:\Cadtree`, copied from File Explorer’s address bar. This is required before the home is connected. Cancel or Back leaves the selected folder untouched; Back starts a new native folder selection and clears the address. The browser grants folder access but does not share its full Windows address, so cAdtree cannot compare your entry with the selected folder.
+3. On **All workspaces**, choose **Create workspace** and enter a readable name. cAdtree allocates a unique child folder automatically. No second parent picker is needed. Repeated display names receive independent identities and folders.
+4. **Open workspace** opens its projects. Use **Explorer** to move between connected workspaces, or **All workspaces** to return home. Switching never removes another workspace's registration.
+5. The home shows actual discovered project counts and connection state. Missing, damaged, duplicate, and incomplete locations remain visible; no identity is guessed from a folder name.
 
 The sidebar's **Explorer** presents an expandable **Cadtree home → Workspace → Project → Branch** tree in the same theme. Workspaces are selected through this tree, without a duplicate workspace shortcut above it. Use a chevron to expand/collapse a folder; select its name to open it. Selecting the current workspace returns to its overview while retaining the loaded project context and drafts. Selecting a branch explicitly changes the active working context. Moving keyboard focus or expanding folders does not change the active branch or the revision being inspected. The tree contains product navigation rather than editable vault internals.
 
@@ -85,18 +86,18 @@ Copies are verified and their locations are reported. Recovery creates neither a
 
 ## Reopen and reconnect
 
-Choose **Reconnect Cadtree** (or the remembered home folder's name), or **Open Cadtree home** and select the home once. cAdtree reads its on-disk workspace catalogue, projects, and all intact branch locations. Renew browser permission when requested. IndexedDB remembers handles, optional paths and last context; it is not the authoritative catalogue.
+Choose **Reconnect Cadtree** (or the remembered home folder's name), or **Open Cadtree home** and select the home once. cAdtree reads its on-disk workspace catalogue, projects, and all intact branch locations. Renew browser permission when requested. The saved home address is reused when available. If it is missing, complete the required address step before connecting; cancelling leaves the on-disk home untouched. IndexedDB remembers handles, local addresses and last context; it is not the authoritative catalogue.
 
 After clearing browser convenience data, select the home again. Do not locate each workspace, project, or case separately. Missing, moved, inaccessible, or invalidly mapped folders remain unavailable; cAdtree never recreates or rebinds them by name. Restore the recorded location or permission, then use **Refresh home**, **Refresh workspace**, or **Reconnect workspace**. Usable history remains inspectable while writes are blocked.
 
 ## Bring existing workspaces such as cam 2 or autocad into Cadtree
 
-1. Open the target Cadtree home and choose **Bring existing workspace into Cadtree**.
+1. Open the target Cadtree home and choose **Home options → Import existing workspace**, then **Choose workspace folder**.
 2. Select the existing workspace folder once. Save/close CAD documents and avoid editing that workspace during copying.
 3. cAdtree coordinates same-origin writers, validates the projects and stored historical content, copies the complete workspace tree to a fresh child folder, and rechecks both copies before publishing it.
 4. Continue work only in the displayed **Cadtree/<new managed folder>/** location. Originals remain untouched. Workspace/project/branch identities, historical record bytes, checksums, notes, relative project layouts, recovery folders, empty directories, and uncaptured working edits are preserved. No revision is invented.
 
-An already published workspace identity is not copied again. Selecting its retained original while its home is connected offers the managed workspace or explicit inspection of the original. These locations are never silently merged or shown as independent identities. **Other locations → Inspect external workspaces → Open workspace** remains available for external workspaces without migrating them. External project/vault access remains under **Advanced: external projects**.
+An already published workspace identity is not copied again. Selecting its retained original while its home is connected offers the managed workspace or explicit inspection of the original. These locations are never silently merged or shown as independent identities. **Home options → Advanced → Inspect external workspaces → Open workspace** remains available for external workspaces without migrating them. External project/vault access remains under **Advanced: external projects**.
 
 An interrupted migration retains a registered incomplete destination. Retrying allocates a fresh folder and keeps the earlier attempt under that workspace's **Location details**. An ambiguous/corrupt publication or duplicate established identity must be inspected before another copy can be made. cAdtree does not delete, repair, or clean up user storage automatically.
 
@@ -117,9 +118,9 @@ An established branch with a broken publication marker remains visible as damage
 
 ## Copy folder and file paths
 
-Home/workspace creation, opening, and reconnection use native folder pickers/permissions and never open Windows-path setup automatically. Setup appears only on the first unconfigured copy request or through **Configure path shortcuts** on the home, workspace options, or project Settings. For managed descendants, copy the **Cadtree home** folder's full Explorer address, for example `D:\Cadtree`, into **Cadtree home folder path**. One local home setting covers all its workspaces. Quoted paths, drive roots, spaces, Unicode, and UNC syntax are accepted; network-share operation is not qualified.
+Home setup uses the native folder picker followed by a required Windows address entry. The address must be a nonempty absolute drive or supported UNC path; quotes, spaces, Unicode, and drive roots are accepted. Once configured, managed workspaces, projects, and branches use that home root automatically, without separate address prompts. Edit a moved or mistaken root under **All workspaces → Home options → Edit home folder address**. This is the canonical setting for managed descendants. Standalone external workspaces retain their own appropriately scoped **Configure path shortcuts** setting.
 
-This optional field never authorizes or redirects filesystem operations. The browser cannot verify the typed absolute root against its handle; check it describes the same home. The descendant mappings and actual file existence are validated before copying. The setting stays in this browser/device, keyed by home identity, and never enters portable records. External workspace settings remain separate where valid. A migrated workspace never inherits its old external absolute path. External project/recovery locations without known roots never receive invented paths. Clearing browser convenience data also clears these settings.
+This address never authorizes or redirects filesystem operations. The browser cannot verify the typed absolute root against its handle; check it describes the same home. The descendant mappings and actual file existence are validated before copying. The setting stays in this browser/device, associated with the home identity and selected folder handle, and never enters portable records. External workspace settings remain separate where valid. A migrated workspace never inherits its old external absolute path. External project/recovery locations without known roots never receive invented paths. Clearing browser convenience data also clears these settings. If preference storage fails, an entered address remains usable for this session with a warning; it must be entered again after reopening. If a copy unexpectedly has no configured address, the same required setup dialog appears and completes the pending copy after successful setup.
 
 Beside a file in Changes, the copy icon (**Copy folder path**) copies the full absolute path of its immediate containing folder, without the filename. For `Parts\Bracket.SLDPRT`, it copies the `Parts` folder; for a file directly in the branch working folder, it copies that working folder. Paste this into Explorer’s address bar and manually open the file. **More path actions → Copy full file path** includes the filename instead.
 
@@ -145,3 +146,8 @@ The project name appears above History, Changes, and Settings. History shows a s
 Drag the desktop sidebar’s right edge to resize it. You can also focus **Resize sidebar** with Tab and use Left/Right arrows, Home (minimum), or End (maximum). Width is remembered locally and bounded to leave room for the main content. The tree keeps its position and scrolls independently above the project navigation. Narrow screens retain **Browse folders**.
 
 Working-folder locations and **Reconnect workspace** are available under Settings → Folder connections. When a connection is missing, an actionable message appears in the project view. Errors, integrity warnings, incomplete operations, and progress remain visible when relevant.
+
+
+### Home options
+
+Beside **Create workspace**, **Home options** provides **Edit home folder address**, **Import existing workspace**, and **Switch Cadtree home**. **Advanced → Inspect external workspaces** preserves compatibility inspection without importing. Import-specific copy and original-file protections are explained inside the import flow. Switching homes moves no files and deletes no home. Each home retains its own address. There is no permanent management block beneath the workspace cards.

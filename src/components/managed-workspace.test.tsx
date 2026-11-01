@@ -79,7 +79,7 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   let ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -177,7 +177,7 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   picker.queue.push(nativeDirectory(root));
   const reopenCount = picker.calls();
   ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -228,7 +228,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -276,7 +276,7 @@ test("managed action preflight notices a folder lost after opening, before it di
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -329,7 +329,7 @@ test("legacy adoption is guided through the workspace UI and preserves unsaved w
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );

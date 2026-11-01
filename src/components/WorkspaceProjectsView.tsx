@@ -102,50 +102,52 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
             >
               <Plus size={16} /> Add project
             </button>
-            <details className="workspace-menu">
-              <summary>Workspace options</summary>
-              <div className="workspace-menu-content">
-                {!props.managedHome ? (
-                  <>
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={props.busy}
-                      onClick={(event) => {
-                        const disclosure =
-                          event.currentTarget.closest("details");
-                        disclosure?.removeAttribute("open");
-                        disclosure
-                          ?.querySelector<HTMLElement>("summary")
-                          ?.focus();
-                        start("create");
-                      }}
-                    >
-                      Create workspace
-                    </button>
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={props.busy}
-                      onClick={(event) => {
-                        const disclosure =
-                          event.currentTarget.closest("details");
-                        disclosure?.removeAttribute("open");
-                        disclosure
-                          ?.querySelector<HTMLElement>("summary")
-                          ?.focus();
-                        void run(async () =>
-                          props.onOpen(await pick("readwrite")),
-                        );
-                      }}
-                    >
-                      Open / switch workspace
-                    </button>
-                  </>
-                ) : null}
-                <WorkspaceLocationSetting compact />
-              </div>
-            </details>
+            {!props.managedHome ? (
+              <details className="workspace-menu">
+                <summary>Workspace options</summary>
+                <div className="workspace-menu-content">
+                  {!props.managedHome ? (
+                    <>
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={props.busy}
+                        onClick={(event) => {
+                          const disclosure =
+                            event.currentTarget.closest("details");
+                          disclosure?.removeAttribute("open");
+                          disclosure
+                            ?.querySelector<HTMLElement>("summary")
+                            ?.focus();
+                          start("create");
+                        }}
+                      >
+                        Create workspace
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        disabled={props.busy}
+                        onClick={(event) => {
+                          const disclosure =
+                            event.currentTarget.closest("details");
+                          disclosure?.removeAttribute("open");
+                          disclosure
+                            ?.querySelector<HTMLElement>("summary")
+                            ?.focus();
+                          void run(async () =>
+                            props.onOpen(await pick("readwrite")),
+                          );
+                        }}
+                      >
+                        Open / switch workspace
+                      </button>
+                    </>
+                  ) : null}
+                  <WorkspaceLocationSetting compact />
+                </div>
+              </details>
+            ) : null}
           </div>
         ) : null}
       </div>
