@@ -1,0 +1,354 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { historyState, revision } from "../../tests/history-data";
+import {
+  buildApplyPreview,
+  prepareApplyPreview,
+  type ApplyPreviewContext,
+  type ConflictDecision,
+} from "./apply-preview";
+import { compareSavedRevisions } from "./snapshot-comparison";
+import type { FileEntry, VaultState } from "./types";
+const part = "Parts/Part-X.SLDPRT";
+const file = (path: string, hash: string): FileEntry => ({
+  path,
+  sha256: hash,
+  size: hash.length,
+  lastModified: 0,
+});
+function fixture() {
+  const state = historyState(0);
+  const base = revision("base", null, 1);
+  base.manifest.files = [
+    file(part, "base-x"),
+    ...Array.from({ length: 4 }, (_, i) =>
+      file(`Parts/Stable${i}.SLDPRT`, `base-${i}`),
+    ),
+  ];
+  base.manifest.directories = ["Parts", "Empty original"];
+  const destination = revision("destination", "base", 2);
+  destination.manifest.files = [
+    ...base.manifest.files.map((f) => ({ ...f })),
+    ...Array.from({ length: 15 }, (_, i) =>
+      file(`MainOnly/New${i}.SLDPRT`, `main-${i}`),
+    ),
+  ];
+  destination.manifest.directories = [
+    "Parts",
+    "MainOnly",
+    "Empty original",
+    "Main empty",
+  ];
+  const source = revision("source", "base", 3, "case");
+  source.manifest.files = base.manifest.files.map((f) => ({
+    ...f,
+    sha256: f.path === part ? "source-x" : f.sha256,
+  }));
+  source.manifest.directories = [...base.manifest.directories, "Source empty"];
+  state.revisions = [base, destination, source];
+  state.branches.push({
+    ...state.branches[0],
+    branchId: "case",
+    name: "Old case",
+    isMain: false,
+    startingRevisionId: "base",
+  });
+  state.branchHeads = { "branch-main": "destination", case: "source" };
+  return { state, base, source, destination };
+}
+function context(
+  state: VaultState,
+  source = "source",
+  branch = "branch-main",
+): ApplyPreviewContext {
+  const result = prepareApplyPreview(state, source, branch);
+  if (result.status !== "available") throw new Error(result.reason);
+  return result.context;
+}
+const chosen = (decision: ConflictDecision = "use-source") => ({
+  selected: true,
+  decision,
+});
+test("5-file case changes only Part-X while retaining all 20 destination paths and newer unrelated files", () => {
+  const { state, destination } = fixture();
+  destination.manifest.files[1].sha256 = "newer-main-stable";
+  const before = JSON.stringify(state),
+    c = context(state);
+  assert.equal(c.base.manifest.revisionId, "base");
+  assert.equal(c.destination.manifest.revisionId, "destination");
+  assert.equal(c.rows.filter((r) => r.kind === "available").length, 1);
+  assert.equal(
+    c.rows.find((r) => r.path === "MainOnly/New0.SLDPRT")?.kind,
+    "no-source-change",
+  );
+  assert.equal(
+    c.rows.find((r) => r.path === "Parts/Stable0.SLDPRT")?.kind,
+    "no-source-change",
+  );
+  const empty = buildApplyPreview(c, {}, "Reason");
+  assert.equal(empty.ready, false);
+  assert.deepEqual(
+    empty.resultFiles,
+    [...destination.manifest.files].sort((a, b) =>
+      a.path.localeCompare(b.path),
+    ),
+  );
+  const plan = buildApplyPreview(
+    c,
+    { [part]: chosen() },
+    "Reuse the revised pin clearance",
+  );
+  assert.equal(plan.ready, true);
+  assert.equal(plan.resultFiles.length, 20);
+  assert.deepEqual(
+    plan.resultFiles.map((f) => f.path),
+    [...destination.manifest.files.map((f) => f.path)].sort((a, b) =>
+      a.localeCompare(b),
+    ),
+  );
+  assert.equal(
+    plan.resultFiles.find((f) => f.path === part)?.sha256,
+    "source-x",
+  );
+  assert.equal(
+    plan.resultFiles.find((f) => f.path === "Parts/Stable0.SLDPRT")?.sha256,
+    "newer-main-stable",
+  );
+  assert.deepEqual(
+    [
+      plan.projectId,
+      plan.baseRevisionId,
+      plan.sourceRevisionId,
+      plan.destinationRevisionId,
+      plan.destinationBranchId,
+    ],
+    [state.project.projectId, "base", "source", "destination", "branch-main"],
+  );
+  assert.equal(plan.actions[0].operation, "replace");
+  assert.equal(plan.actions[0].before?.sha256, "base-x");
+  assert.equal(plan.actions[0].after?.sha256, "source-x");
+  assert.ok(plan.resultDirectories.includes("Main empty"));
+  assert.equal(plan.resultDirectories.includes("Source empty"), false);
+  assert.equal(JSON.stringify(state), before);
+});
+test("independent modifications need explicit selected conflict decisions; unselected conflicts preserve Destination", () => {
+  const { state, source, destination } = fixture();
+  destination.manifest.files[0].sha256 = "destination-x";
+  source.manifest.files.push(file("Addition.SLDPRT", "addition"));
+  const c = context(state);
+  assert.equal(c.rows.find((r) => r.path === part)?.kind, "conflict");
+  const unresolved = buildApplyPreview(
+    c,
+    { [part]: chosen("unresolved") },
+    "Resolve this design",
+  );
+  assert.equal(unresolved.ready, false);
+  assert.deepEqual(unresolved.unresolvedPaths, [part]);
+  assert.equal(
+    unresolved.resultFiles.find((f) => f.path === part)?.sha256,
+    "destination-x",
+  );
+  const keep = buildApplyPreview(
+    c,
+    { [part]: chosen("keep-destination"), "Addition.SLDPRT": chosen() },
+    "Keep Main pin and reuse the addition",
+  );
+  assert.equal(keep.ready, true);
+  assert.equal(keep.actions.find((a) => a.path === part)?.operation, "keep");
+  assert.equal(
+    keep.resultFiles.find((f) => f.path === part)?.sha256,
+    "destination-x",
+  );
+  const use = buildApplyPreview(
+    c,
+    { [part]: chosen() },
+    "Use the case pin deliberately",
+  );
+  assert.equal(use.ready, true);
+  assert.equal(
+    use.resultFiles.find((f) => f.path === part)?.sha256,
+    "source-x",
+  );
+  const skip = buildApplyPreview(
+    c,
+    { "Addition.SLDPRT": chosen() },
+    "Only reuse the addition",
+  );
+  assert.equal(skip.ready, true);
+  assert.equal(
+    skip.resultFiles.find((f) => f.path === part)?.sha256,
+    "destination-x",
+  );
+});
+test("identical byte changes and source-unchanged paths require no application despite timestamp differences", () => {
+  const { state, source, destination } = fixture();
+  destination.manifest.files[0] = {
+    ...source.manifest.files[0],
+    lastModified: 999,
+  };
+  const c = context(state);
+  assert.equal(c.rows.find((r) => r.path === part)?.kind, "already-matches");
+  assert.equal(
+    buildApplyPreview(c, { [part]: chosen() }, "Reason").ready,
+    false,
+  );
+  assert.equal(buildApplyPreview(c, {}, "Reason").actions.length, 0);
+});
+test("source additions, deletions, add/add and modify/delete conflicts use presence and hashes consistently", () => {
+  const { state, source, destination } = fixture();
+  source.manifest.files.push(
+    file("New.SLDPRT", "new"),
+    file("Independent.SLDPRT", "case-add"),
+  );
+  destination.manifest.files.push(file("Independent.SLDPRT", "main-add"));
+  source.manifest.files = source.manifest.files.filter(
+    (f) =>
+      f.path !== "Parts/Stable0.SLDPRT" && f.path !== "Parts/Stable1.SLDPRT",
+  );
+  destination.manifest.files.find(
+    (f) => f.path === "Parts/Stable1.SLDPRT",
+  )!.sha256 = "main-modified";
+  destination.manifest.files = destination.manifest.files.filter(
+    (f) => f.path !== part,
+  );
+  const c = context(state),
+    row = (path: string) => c.rows.find((r) => r.path === path)!;
+  assert.equal(row("New.SLDPRT").kind, "available");
+  assert.equal(row("Parts/Stable0.SLDPRT").sourceChange, "deleted");
+  assert.equal(row("Parts/Stable0.SLDPRT").kind, "available");
+  assert.equal(row("Parts/Stable1.SLDPRT").kind, "conflict");
+  assert.equal(row("Independent.SLDPRT").kind, "conflict");
+  assert.equal(row(part).kind, "conflict");
+  const plan = buildApplyPreview(
+    c,
+    {
+      "New.SLDPRT": chosen(),
+      "Parts/Stable0.SLDPRT": chosen(),
+      "Parts/Stable1.SLDPRT": chosen(),
+      "Independent.SLDPRT": chosen(),
+      [part]: chosen(),
+    },
+    "Explicit additions and deletions",
+  );
+  assert.equal(plan.ready, true);
+  assert.equal(plan.actions.find((a) => a.path === part)?.operation, "add");
+  assert.equal(
+    plan.actions.find((a) => a.path === "Parts/Stable1.SLDPRT")?.operation,
+    "delete",
+  );
+  assert.equal(
+    plan.resultFiles.some((f) => f.path === "Parts/Stable0.SLDPRT"),
+    false,
+  );
+  assert.equal(
+    plan.resultFiles.find((f) => f.path === "Independent.SLDPRT")?.sha256,
+    "case-add",
+  );
+});
+test("nested cases find the nearest validated shared ancestor, not the source parent, branch root or highest project revision", () => {
+  const { state, base } = fixture();
+  const c1 = revision("c1", "base", 2, "case"),
+    d1 = revision("d1", "c1", 3, "case"),
+    n1 = revision("n1", "c1", 4, "nested"),
+    n2 = revision("n2", "n1", 5, "nested");
+  state.revisions = [base, c1, d1, n1, n2];
+  state.branchHeads = { "branch-main": "base", case: "d1", nested: "n2" };
+  state.branches.push({
+    ...state.branches[1],
+    branchId: "nested",
+    name: "Nested case",
+    startingRevisionId: "c1",
+  });
+  const c = context(state, "n2", "case");
+  assert.equal(c.base.manifest.revisionId, "c1");
+  assert.equal(c.destination.manifest.revisionId, "d1");
+  state.branches.push({
+    ...state.branches[1],
+    branchId: "uncaptured",
+    name: "Case without its own capture",
+    startingRevisionId: "c1",
+  });
+  state.branchHeads.uncaptured = "c1";
+  const inherited = context(state, "n2", "uncaptured");
+  assert.equal(inherited.destination.manifest.revisionId, "c1");
+  assert.equal(inherited.destinationBranchId, "uncaptured");
+});
+test("missing, corrupt, duplicate, conflicting or cyclic ancestry and ambiguous baselines never produce a guessed plan", () => {
+  for (const defect of [
+    "missing",
+    "corrupt",
+    "duplicate",
+    "cycle",
+    "conflict",
+    "heads",
+    "no-baseline",
+    "branch",
+  ]) {
+    const { state, source, base } = fixture();
+    if (defect === "missing") source.manifest.parentRevisionId = "missing";
+    if (defect === "corrupt") base.integrityStatus = "corrupted";
+    if (defect === "duplicate") state.revisions.push(structuredClone(base));
+    if (defect === "cycle") source.manifest.parentRevisionId = "source";
+    if (defect === "conflict")
+      state.corruptedRecords.push({
+        revisionId: "base",
+        recordPath: "duplicate",
+        reason: "conflicting",
+      });
+    if (defect === "heads")
+      state.competingHeads["branch-main"] = ["base", "destination"];
+    if (defect === "no-baseline") state.branchHeads["branch-main"] = null;
+    if (defect === "branch")
+      state.branches.push(structuredClone(state.branches[0]));
+    assert.equal(
+      prepareApplyPreview(state, "source", "branch-main").status,
+      "unavailable",
+      defect,
+    );
+    if (defect === "missing" || defect === "cycle" || defect === "heads")
+      assert.equal(
+        compareSavedRevisions(state, "source", "destination").status,
+        "compared",
+      );
+  }
+});
+test("file/directory, ancestor-file and case-insensitive collisions block readiness", () => {
+  for (const kind of ["directory", "ancestor", "case"]) {
+    const { state, source, destination } = fixture();
+    const path =
+      kind === "ancestor"
+        ? "Reserved/Child.SLDPRT"
+        : kind === "case"
+          ? "Parts/STABLE0.SLDPRT"
+          : "Reserved";
+    source.manifest.files.push(file(path, "source-add"));
+    if (kind === "directory") destination.manifest.directories.push("Reserved");
+    if (kind === "ancestor")
+      destination.manifest.files.push(file("Reserved", "main-file"));
+    const plan = buildApplyPreview(
+      context(state),
+      { [path]: chosen() },
+      "Collision review",
+    );
+    assert.equal(plan.ready, false, kind);
+    assert.ok(plan.collisions.length, kind);
+  }
+});
+test("readiness requires a reason, source actions and valid selections; preserved directories and metadata are copied without mutation", () => {
+  const { state } = fixture(),
+    c = context(state),
+    before = JSON.stringify(state);
+  assert.equal(buildApplyPreview(c, { [part]: chosen() }, " ").ready, false);
+  assert.equal(
+    buildApplyPreview(
+      c,
+      { "MainOnly/New0.SLDPRT": chosen() },
+      "Invalid path selection",
+    ).ready,
+    false,
+  );
+  const plan = buildApplyPreview(c, { [part]: chosen() }, "Reuse part");
+  plan.resultFiles[0].sha256 = "mutated-plan-only";
+  plan.actions[0].source!.sha256 = "mutated-action-only";
+  assert.equal(JSON.stringify(state), before);
+});

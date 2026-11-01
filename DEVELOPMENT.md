@@ -22,3 +22,9 @@ Reloading reuses the same samples without overwriting preview edits. For a fresh
 - `npm run test:ui` (requires Playwright browser installation or `CADTREE_BROWSER_CHANNEL=chrome`)
 
 `CADTREE_TEST_PORT` selects an isolated browser-test server port (default 2500). Browser tests use synthetic origin-private data and replace native directory pickers. They do not qualify the OS picker, real disk permission dialogs, or a CAD application integration.
+
+## Saved-state application preview (Feature 3A)
+
+`npm run test:ui -- tests/browser/apply-preview.spec.ts` runs the real application with the development-only `tests/apply-preview-seed.ts` fixture. It constructs saved revisions through the existing engine: a five-file base and Part-X case, a twenty-file Main, and independently changed source/destination cases. It also leaves a working edit uncaptured. Desktop and mobile interactions verify explicit choices, notes, readiness, collision handling, unchanged active-branch/history context, and a byte/directory fingerprint of the complete managed home. The multi-workspace `npm run dev:synthetic` entry also exposes **Review changes to apply**; no fixture or test controls enter the production build.
+
+The pure planner lives in `src/engine/apply-preview.ts`. It reuses the canonical branch baseline resolver, validated history edges, snapshot endpoint validation and snapshot comparison. It produces an ephemeral plan only; it has no working-folder handle or write callback. Keep destination baseline validation conservative and keep ordinary Compare independent of ancestry. File-only choices retain destination directories and add required parents; folder removals and empty-folder-only source changes are deferred. Actual application, working-edit checks and durable provenance are deliberately absent.
