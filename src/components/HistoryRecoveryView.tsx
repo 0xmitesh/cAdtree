@@ -22,6 +22,7 @@ import {
 import { formatBytes, formatTimestamp } from "../utils/format";
 import { fileHistory, historicalFilePaths } from "../history/file-history";
 import { layoutRevisions } from "../history/layout";
+import { ApplyPreviewDialog } from "./ApplyPreviewDialog";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
 import {
@@ -124,6 +125,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     inspectedId: string;
     initialPath: string;
   } | null>(null);
+  const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [branchSource, setBranchSource] = useState<string | null>(null);
@@ -500,6 +502,14 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   <Notice type="error">{selected.warnings.join(" · ")}</Notice>
                 ) : null}
               </div>
+              <div className="detail-preview-action">
+                <button
+                  className="button secondary revision-compare-action"
+                  onClick={() => setPreviewSourceId(rev.manifest.revisionId)}
+                >
+                  Review changes to apply
+                </button>
+              </div>
               <div className="detail-tabs" aria-label="Revision sections">
                 {(["changes", "notes", "technical"] as const).map((t) => (
                   <button
@@ -875,6 +885,14 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           ) : null}
         </div>
       )}
+      {previewSourceId ? (
+        <ApplyPreviewDialog
+          state={vaultState}
+          sourceId={previewSourceId}
+          destinationBranchId={activeBranchId}
+          onClose={() => setPreviewSourceId(null)}
+        />
+      ) : null}
       {comparison ? (
         <CompareRevisionsDialog
           state={vaultState}
