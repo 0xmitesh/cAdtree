@@ -2,26 +2,30 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Focus, Minus, Plus, CornerUpLeft, GitBranch } from "lucide-react";
 import { ancestryOf, type RevisionGraph as Graph } from "../history/layout";
 import { formatRevisionNumber } from "../engine/vault-service";
+import type { FileHistoryRecord } from "../history/file-history";
 import { formatTimestamp } from "../utils/format";
 
 const NODE_RADIUS = 22;
-const ROW_HEIGHT = 104;
 
 export function RevisionGraph({
   graph,
   selectedId,
   onSelect,
   mode,
+  highlightBranchId,
+  onHighlightBranch,
+  fileRecords,
 }: {
   graph: Graph;
   selectedId: string | null;
   onSelect: (id: string) => void;
   mode: "graph" | "list";
+  highlightBranchId: string | null;
+  onHighlightBranch: (id: string | null) => void;
+  fileRecords?: Map<string, FileHistoryRecord>;
 }) {
   const [zoom, setZoom] = useState(1);
-  const [highlightBranchId, setHighlightBranchId] = useState<string | null>(
-    null,
-  );
+  const rowHeight = fileRecords ? 140 : 104;
   const viewport = useRef<HTMLDivElement>(null);
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const centeredStructure = useRef<string | null>(null);
@@ -44,12 +48,12 @@ export function RevisionGraph({
   const positions = new Map(
     visualNodes.map((node, index) => [
       node.id,
-      { x: 60 + node.lane * 76, y: 62 + index * ROW_HEIGHT },
+      { x: 60 + node.lane * 76, y: 62 + index * rowHeight },
     ]),
   );
   const labelX = 104 + (graph.lanes - 1) * 76;
   const width = Math.max(490, labelX + 350);
-  const height = Math.max(300, graph.nodes.length * ROW_HEIGHT + 28);
+  const height = Math.max(300, graph.nodes.length * rowHeight + 28);
   const edgeColors = [...new Set(graph.edges.map((edge) => edge.color))];
   const register = (id: string, element: HTMLButtonElement | null) => {
     if (element) refs.current.set(id, element);
@@ -71,7 +75,7 @@ export function RevisionGraph({
   };
   // Imperative positioning after entering the diagram; selection itself remains shared.
   useEffect(() => {
-    const structure = `${mode}:${graph.nodes.length}`;
+    const structure = `${mode}:${graph.nodes.map((n) => n.id).join(":")}`;
     if (centeredStructure.current === structure) return;
     centeredStructure.current = structure;
     if (mode !== "graph") return;
@@ -84,10 +88,10 @@ export function RevisionGraph({
       if (index >= 0)
         container.scrollTop = Math.max(
           0,
-          (62 + index * ROW_HEIGHT) * zoom - container.clientHeight / 2,
+          (62 + index * rowHeight) * zoom - container.clientHeight / 2,
         );
     }
-  }, [mode, graph.nodes, selectedId, zoom]);
+  }, [mode, graph.nodes, selectedId, zoom, rowHeight]);
   const jump = () => {
     if (!graph.latestId) return;
     onSelect(graph.latestId);
@@ -108,7 +112,7 @@ export function RevisionGraph({
     reveal(id, true);
   };
   const toggleBranch = (id: string) =>
-    setHighlightBranchId((previous) => (previous === id ? null : id));
+    onHighlightBranch(highlightBranchId === id ? null : id);
   return (
     <section
       className="history-canvas"
@@ -116,30 +120,50 @@ export function RevisionGraph({
     >
       <div className="canvas-bar">
         <span>
-          {graph.nodes.length} revisions{" "}
-          <span className="muted">· complete project states</span>
+          {fileRecords
+            ? `${graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "change").length} file change events`
+            : `${graph.nodes.length} revisions`}{" "}
+          <span className="muted">
+            {fileRecords
+              ? `· ${graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "context").length} context markers · ${graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "unavailable").length} unavailable comparisons`
+              : "· complete project states"}
+          </span>
         </span>
         <button
           className="text-button"
           disabled={!graph.latestId}
           onClick={jump}
         >
-          <CornerUpLeft size={14} /> Latest
+          <CornerUpLeft size={14} />{" "}
+          {fileRecords ? "Current branch file state" : "Latest"}
         </button>
       </div>
       <div className="graph-toolbar">
-        <div className="branch-legend" aria-label="Highlight branch ancestry">
+        <div
+          className="branch-legend"
+          aria-label={
+            fileRecords
+              ? "Filter file history by branch ancestry"
+              : "Highlight branch ancestry"
+          }
+        >
           {graph.branches.map((branch) => (
             <button
               key={branch.id}
               className="branch-filter"
               style={{ "--branch-color": branch.color } as React.CSSProperties}
               aria-pressed={highlightBranchId === branch.id}
-              disabled={!branch.headIds.length}
+              disabled={
+                branch.available === undefined
+                  ? !branch.headIds.length
+                  : !branch.available
+              }
               title={
-                branch.current
-                  ? `Highlight ${branch.name} ancestry · current branch`
-                  : `Highlight ${branch.name} ancestry`
+                fileRecords
+                  ? `Filter to ${branch.name} ancestry; does not switch the working branch`
+                  : branch.current
+                    ? `Highlight ${branch.name} ancestry · current branch`
+                    : `Highlight ${branch.name} ancestry`
               }
               onClick={() => toggleBranch(branch.id)}
             >
@@ -197,7 +221,21 @@ export function RevisionGraph({
           </div>
         ) : null}
       </div>
+      {fileRecords ? (
+        <p className="file-history-help muted small">
+          Only recorded byte changes are shown. Branch buttons filter ancestry;
+          they do not switch the working branch. Origin markers provide context.
+        </p>
+      ) : null}
+      {fileRecords && !graph.nodes.length ? (
+        <div className="file-history-empty" role="status">
+          No recorded history for this file within{" "}
+          {highlightedBranch?.name ?? "the chosen branch filter"}. Try another
+          branch or show all branches.
+        </div>
+      ) : null}
       <div
+        hidden={Boolean(fileRecords && !graph.nodes.length)}
         className={`graph-viewport ${mode}`}
         ref={viewport}
         tabIndex={0}
@@ -270,11 +308,12 @@ export function RevisionGraph({
                 return (
                   <div
                     key={node.id}
+                    data-file-history-kind={fileRecords?.get(node.id)?.kind}
                     className={`graph-row ${selected ? "selected" : ""} ${ancestry && !ancestry.has(node.id) && !selected ? "dimmed" : ""}`}
                     style={
                       {
                         top: position.y - 42,
-                        height: 84,
+                        height: fileRecords ? 114 : 84,
                         "--branch-color": node.color,
                       } as React.CSSProperties
                     }
@@ -283,7 +322,7 @@ export function RevisionGraph({
                       ref={(element) => register(node.id, element)}
                       className="graph-hit"
                       aria-pressed={selected}
-                      aria-label={`${formatRevisionNumber(node.revision.manifest.displayNumber)}: ${node.revision.manifest.summary}${node.latest ? ", latest on current branch" : ""}${node.warnings.length ? ", needs attention" : ""}`}
+                      aria-label={`${formatRevisionNumber(node.revision.manifest.displayNumber)}: ${node.revision.manifest.summary}${fileRecords ? `, ${fileRecords.get(node.id)?.status}` : ""}${node.latest ? (fileRecords ? ", current branch file state" : ", latest on current branch") : ""}${node.warnings.length ? ", needs attention" : ""}`}
                       onClick={() => onSelect(node.id)}
                       onKeyDown={(event) => keyboard(event, index)}
                       tabIndex={
@@ -291,7 +330,7 @@ export function RevisionGraph({
                       }
                     >
                       <span
-                        className={`graph-dot ${node.latest ? "latest" : ""} ${node.warnings.length ? "damaged" : ""}`}
+                        className={`graph-dot ${fileRecords?.get(node.id)?.kind === "context" ? "context-dot" : ""} ${node.latest ? "latest" : ""} ${node.warnings.length ? "damaged" : ""}`}
                         style={{ left: position.x - NODE_RADIUS - 12 }}
                       >
                         <span aria-hidden="true">{`R${String(node.revision.manifest.displayNumber).padStart(3, "0")}`}</span>
@@ -300,7 +339,9 @@ export function RevisionGraph({
                         <span className="revision-eyebrow">
                           {node.branchName}{" "}
                           {node.latest ? (
-                            <span className="latest-label">Latest</span>
+                            <span className="latest-label">
+                              {fileRecords ? "Current file state" : "Latest"}
+                            </span>
                           ) : null}{" "}
                           {node.warnings.length ? (
                             <span className="attention-label">
@@ -308,6 +349,14 @@ export function RevisionGraph({
                             </span>
                           ) : null}
                         </span>
+                        {fileRecords ? (
+                          <span className="file-history-event">
+                            {fileRecords.get(node.id)?.status}
+                            {fileRecords.get(node.id)?.origins.length
+                              ? ` · Origin of ${fileRecords.get(node.id)!.origins.join(", ")}`
+                              : ""}
+                          </span>
+                        ) : null}
                         <strong title={node.revision.manifest.summary}>
                           {node.revision.manifest.summary}
                         </strong>
@@ -325,7 +374,7 @@ export function RevisionGraph({
                         className="graph-branches"
                         style={{
                           left: position.x + NODE_RADIUS,
-                          top: 72,
+                          top: fileRecords ? 104 : 72,
                           maxWidth: width - position.x - 54,
                         }}
                       >
@@ -338,10 +387,14 @@ export function RevisionGraph({
                                 "--branch-color": branch.color,
                               } as React.CSSProperties
                             }
-                            aria-label={`${branch.name} head at ${formatRevisionNumber(node.revision.manifest.displayNumber)}`}
+                            aria-label={`${branch.name} ${fileRecords ? "file state" : "head"} at ${formatRevisionNumber(node.revision.manifest.displayNumber)}`}
                             aria-pressed={highlightBranchId === branch.id}
                             onClick={() => toggleBranch(branch.id)}
-                            title={`Highlight ${branch.name} ancestry${branch.current ? " · active working branch" : ""}`}
+                            title={
+                              fileRecords
+                                ? `Filter to ${branch.name} ancestry; does not switch the working branch`
+                                : `Highlight ${branch.name} ancestry${branch.current ? " · active working branch" : ""}`
+                            }
                           >
                             <GitBranch size={11} />
                             {branch.name}
@@ -368,6 +421,7 @@ export function RevisionGraph({
               <button
                 key={node.id}
                 ref={(element) => register(node.id, element)}
+                data-file-history-kind={fileRecords?.get(node.id)?.kind}
                 className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry && !ancestry.has(node.id) && selectedId !== node.id ? "dimmed" : ""}`}
                 aria-pressed={selectedId === node.id}
                 onClick={() => onSelect(node.id)}
@@ -381,12 +435,24 @@ export function RevisionGraph({
                 <span className="revision-eyebrow">
                   {formatRevisionNumber(node.revision.manifest.displayNumber)}{" "}
                   <span className="branch-chip">
-                    {node.heads.join(", ") || node.branchName}
+                    {fileRecords
+                      ? node.branchName
+                      : node.heads.join(", ") || node.branchName}
                   </span>
                   {node.latest ? (
-                    <span className="latest-label">Latest</span>
+                    <span className="latest-label">
+                      {fileRecords ? "Current file state" : "Latest"}
+                    </span>
                   ) : null}
                 </span>
+                {fileRecords ? (
+                  <span className="file-history-event">
+                    {fileRecords.get(node.id)?.status}
+                    {fileRecords.get(node.id)?.origins.length
+                      ? ` · Origin of ${fileRecords.get(node.id)!.origins.join(", ")}`
+                      : ""}
+                  </span>
+                ) : null}
                 <strong>{node.revision.manifest.summary}</strong>
                 <time dateTime={node.revision.manifest.captureCompletedAt}>
                   {formatTimestamp(node.revision.manifest.captureCompletedAt)}
@@ -406,9 +472,9 @@ export function RevisionGraph({
           {highlightedBranch ? (
             <button
               className="text-button"
-              onClick={() => setHighlightBranchId(null)}
+              onClick={() => onHighlightBranch(null)}
             >
-              Clear ancestry highlight
+              {fileRecords ? "Show all branches" : "Clear ancestry highlight"}
             </button>
           ) : (
             "Select a revision to inspect · ↑ ↓ to navigate"
