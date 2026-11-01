@@ -16,6 +16,7 @@ import {
   type RememberedWorkspace,
   rememberHome,
   getRememberedHome,
+  getWorkspaceWindowsPath,
   type RememberedHome,
   bindWorkspaceWindowsPathToRoot,
 } from "./engine/idb-store";
@@ -23,6 +24,11 @@ import {
   resolveWorkingFilePath,
   resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
+import {
+  WindowsFolderAddressDialog,
+  rememberWindowsAddress,
+  type HomeAddress,
+} from "./components/WindowsFolderAddressDialog";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import {
   restoreRevisionToFolder,
@@ -120,6 +126,22 @@ export default function App() {
     null,
   );
   const [homeView, setHomeView] = useState(true);
+  const [pendingHome, setPendingHome] = useState<{
+    root: RealFileSystemAdapter;
+    next?: HomeState;
+    create: boolean;
+    saved?: RememberedHome;
+    requestId: string;
+  } | null>(null);
+  const [homeAddress, setHomeAddress] = useState<HomeAddress | null>(null);
+  const homeAddressCache = useRef<HomeAddress[]>([]);
+  const cacheHomeAddress = (address: HomeAddress) => {
+    homeAddressCache.current = [
+      ...homeAddressCache.current.filter((item) => item.root !== address.root),
+      address,
+    ];
+    setHomeAddress(address);
+  };
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [managedWorkspaceKey, setManagedWorkspaceKey] = useState<string | null>(
     null,
@@ -397,8 +419,40 @@ export default function App() {
     setHomeView(true);
     setManagedWorkspaceKey(null);
   };
+  const installHome = async (
+    next: HomeState,
+    root: RealFileSystemAdapter,
+    path: string,
+    saved?: RememberedHome,
+    warning = "",
+  ) => {
+    leaveProject();
+    setWorkspace(null);
+    setManagedWorkspaceKey(null);
+    cacheHomeAddress({ homeId: next.identity.homeId, root, path });
+    setHome(next);
+    setHomeView(true);
+    setPendingHome(null);
+    const binding = {
+      homeId: next.identity.homeId,
+      name: next.identity.name,
+      rootHandle: root.handle,
+      workspaceId: saved?.workspaceId,
+      projectPath: saved?.projectPath,
+      activeBranchId: saved?.activeBranchId,
+    };
+    setRememberedHome(binding);
+    try {
+      await rememberHome(binding);
+    } catch {
+      warning +=
+        " Home access could not be remembered. Select the folder again after reopening.";
+    }
+    setBannerScope("workspace");
+    setStatusBanner(warning ? { type: "info", message: warning } : null);
+  };
   const connectHome = async (create: boolean, saved?: RememberedHome) => {
-    // Native permission/picker starts directly from the user action.
+    // The native picker/permission starts directly from the user action.
     const root = saved
       ? new RealFileSystemAdapter(saved.rootHandle)
       : await pickFolder("readwrite");
@@ -407,31 +461,86 @@ export default function App() {
       async (context) => {
         if ((await root.requestPermission("readwrite")) !== "granted")
           throw new Error("Grant access to reconnect your Cadtree home.");
-        const next = create ? await createHome(root) : await openHome(root);
+        if (create) {
+          if ((await root.listEntries()).length)
+            throw new Error(
+              "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.",
+            );
+          if (context.current())
+            setPendingHome({
+              root,
+              create,
+              saved,
+              requestId: crypto.randomUUID(),
+            });
+          return;
+        }
+        const next = await openHome(root);
         if (saved && next.identity.homeId !== saved.homeId)
           throw new Error(
             "This folder contains a different Cadtree home. Open it explicitly.",
           );
-        if (!context.current()) return;
-        leaveProject();
-        setWorkspace(null);
-        setManagedWorkspaceKey(null);
-        setHome(next);
-        setHomeView(true);
-        const binding = {
-          homeId: next.identity.homeId,
-          name: next.identity.name,
-          rootHandle: root.handle,
-          workspaceId: saved?.workspaceId,
-          projectPath: saved?.projectPath,
-          activeBranchId: saved?.activeBranchId,
-        };
-        setRememberedHome(binding);
-        try {
-          await rememberHome(binding);
-        } catch (error) {
-          setStatusBanner({ type: "info", message: String(error) });
+        let path = "";
+        for (const address of [...homeAddressCache.current].reverse()) {
+          if (
+            address.homeId === next.identity.homeId &&
+            (await root.isSameEntry(address.root))
+          ) {
+            path = address.path;
+            break;
+          }
         }
+        if (!path) {
+          try {
+            path = await getWorkspaceWindowsPath(
+              next.identity.homeId,
+              root.handle,
+            );
+          } catch {
+            /* Required entry also works with session-only preferences. */
+          }
+        }
+        if (!context.current()) return;
+        if (path) await installHome(next, root, path, saved);
+        else
+          setPendingHome({
+            root,
+            next,
+            create,
+            saved,
+            requestId: crypto.randomUUID(),
+          });
+      },
+      true,
+    );
+  };
+  const completeHomeSetup = async (path: string) => {
+    if (!pendingHome) return;
+    const selected = pendingHome;
+    await perform(
+      "connect",
+      async (context) => {
+        if ((await selected.root.requestPermission("readwrite")) !== "granted")
+          throw new Error("Grant access to complete home setup.");
+        const next = selected.next
+          ? await openHome(selected.root)
+          : await createHome(selected.root);
+        if (
+          selected.next &&
+          next.identity.homeId !== selected.next.identity.homeId
+        )
+          throw new Error(
+            "The Cadtree home identity changed during setup. Select the intended home again.",
+          );
+        // Retain the published identity for retries; no user files are removed on cancellation.
+        if (context.current()) setPendingHome({ ...selected, next });
+        const warning = await rememberWindowsAddress(
+          next.identity.homeId,
+          path,
+          selected.root.handle,
+        );
+        if (context.current())
+          await installHome(next, selected.root, path, selected.saved, warning);
       },
       true,
     );
@@ -1500,6 +1609,8 @@ export default function App() {
     );
   const clearConnections = async () => {
     await clearAllConvenienceMetadata();
+    homeAddressCache.current = [];
+    setHomeAddress(null);
     setConvenienceEpoch((value) => value + 1);
     await refreshRememberedList();
     setRememberedWorkspace(null);
@@ -1619,6 +1730,8 @@ export default function App() {
       home={shortcutHome ?? (homeView ? home : null)}
       contextKey={`${homeView}:${workspace?.identity.workspaceId}:${managedWorkspaceKey}:${managedProject?.record.projectId}:${activeBranchId}`}
       convenienceEpoch={convenienceEpoch}
+      homeAddress={homeAddress}
+      onHomeAddressChange={cacheHomeAddress}
     >
       <div className="app-shell" style={sidebar.style}>
         <aside className="navigation-rail">
@@ -2079,6 +2192,23 @@ export default function App() {
             <span>cAdtree · CAD project history</span>
             <span>Complete revisions. Separate recovery copies.</span>
           </footer>
+          {pendingHome ? (
+            <WindowsFolderAddressDialog
+              key={pendingHome.requestId}
+              home
+              folderName={pendingHome.root.name}
+              onSave={completeHomeSetup}
+              onCancel={() => setPendingHome(null)}
+              onBack={() => {
+                const create = pendingHome.create;
+                setPendingHome(null);
+                void connectHome(create).catch((error) => {
+                  setBannerScope("workspace");
+                  setStatusBanner({ type: "error", message: String(error) });
+                });
+              }}
+            />
+          ) : null}
           {explorerOpen ? (
             <Modal
               title="Browse folders"

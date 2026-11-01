@@ -2,7 +2,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useId,
   useRef,
   useState,
   type ReactNode,
@@ -10,55 +9,26 @@ import {
 import { Copy, MoreHorizontal } from "lucide-react";
 import {
   composeWindowsFilePaths,
-  normalizeWindowsWorkspacePath,
   type ResolveFilePath,
 } from "../utils/windows-path";
-import {
-  getWorkspaceWindowsPath,
-  saveWorkspaceWindowsPath,
-} from "../engine/idb-store";
+import { getWorkspaceWindowsPath } from "../engine/idb-store";
 import type { WorkspaceState } from "../engine/workspace-service";
 import type { HomeState } from "../engine/home-service";
 import { RealFileSystemAdapter } from "../engine/fs-adapter";
 import { Modal, Notice } from "./ui";
 
-export function WindowsWorkspacePathField({
-  value,
-  onChange,
-  home = false,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  home?: boolean;
-}) {
-  const id = useId();
-  return (
-    <label className="field windows-path-field">
-      <span id={`${id}-label`}>
-        {home ? "Cadtree home folder path" : "Workspace folder path"}
-      </span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={home ? "D:\\Cadtree" : "D:\\CAD Workspace"}
-        aria-labelledby={`${id}-label`}
-        aria-describedby={id}
-        autoComplete="off"
-        spellCheck={false}
-      />
-      <span className="field-help" id={id}>
-        Copy this {home ? "Cadtree home" : "workspace"} folder’s full location
-        from Explorer’s address bar.
-      </span>
-    </label>
-  );
-}
+import {
+  WindowsFolderAddressDialog,
+  rememberWindowsAddress,
+  type HomeAddress,
+} from "./WindowsFolderAddressDialog";
 
 type CopyRequest = { resolve: ResolveFilePath; containingFolder: boolean };
 interface ShortcutContext {
   copy: (request: CopyRequest) => void;
   configure: () => void;
   windowsPath: string;
+  home: boolean;
 }
 const Shortcuts = createContext<ShortcutContext | null>(null);
 
@@ -67,12 +37,16 @@ export function FilePathShortcutsProvider({
   home,
   contextKey,
   convenienceEpoch,
+  homeAddress,
+  onHomeAddressChange,
   children,
 }: {
   workspace: WorkspaceState | null;
   home?: HomeState | null;
   contextKey?: string;
   convenienceEpoch: number;
+  homeAddress?: HomeAddress | null;
+  onHomeAddressChange?: (address: HomeAddress) => void;
   children: ReactNode;
 }) {
   const workspaceId = home?.identity.homeId ?? workspace?.identity.workspaceId;
@@ -103,6 +77,13 @@ export function FilePathShortcutsProvider({
     setWarning("");
     setSetting({ workspaceId: workspaceId ?? "", path: "" });
     if (!workspaceId) return;
+    if (
+      homeAddress?.homeId === workspaceId &&
+      homeAddress.root === accessRoot
+    ) {
+      setSetting({ workspaceId, path: homeAddress.path });
+      return;
+    }
     let cancelled = false;
     void getWorkspaceWindowsPath(workspaceId, accessHandle)
       .then((path) => {
@@ -202,6 +183,7 @@ export function FilePathShortcutsProvider({
         },
         configure,
         windowsPath,
+        home: Boolean(home),
       }}
     >
       {children}
@@ -219,94 +201,56 @@ export function FilePathShortcutsProvider({
         </Modal>
       ) : null}
       {editing && (workspace || home) ? (
-        <Modal
-          title="Set up folder-path copying"
-          busy={busy}
-          onClose={() => {
+        <WindowsFolderAddressDialog
+          home={Boolean(home)}
+          folderName={accessRoot!.name}
+          initialValue={input}
+          required={Boolean(home || pending)}
+          title={home && !pending ? "Edit home folder address" : undefined}
+          submitLabel={pending ? "Save and copy" : "Save"}
+          onCancel={() => {
             setEditing(false);
             setPending(null);
             setError("");
           }}
-        >
-          <p>
-            Paste this {home ? "Cadtree home" : "workspace"} folder’s full
-            Windows path once so cAdtree can copy locations you can paste into
-            File Explorer.
-          </p>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (copying.current) return;
-              const currentVersion = version.current;
-              copying.current = true;
-              setBusy(true);
-              setError("");
-              try {
-                const path = normalizeWindowsWorkspacePath(input);
-                if (pending && !path)
-                  throw new Error(
-                    "Enter the workspace folder path to complete this copy, or cancel.",
-                  );
-                let cacheWarning = "";
-                try {
-                  await saveWorkspaceWindowsPath(
-                    workspaceId!,
-                    path,
-                    accessHandle,
-                  );
-                } catch {
-                  cacheWarning =
-                    "Your path could not be remembered. It is available for this session only; set it again next time.";
-                }
-                if (currentVersion !== version.current) return;
-                setSetting({
-                  workspaceId: workspaceId!,
+          onSave={async (path) => {
+            if (copying.current) return;
+            const currentVersion = version.current;
+            copying.current = true;
+            setBusy(true);
+            setError("");
+            try {
+              const cacheWarning = await rememberWindowsAddress(
+                workspaceId!,
+                path,
+                accessHandle,
+              );
+              if (currentVersion !== version.current) return;
+              setSetting({ workspaceId: workspaceId!, path });
+              if (home)
+                onHomeAddressChange?.({
+                  homeId: home.identity.homeId,
+                  root: home.root,
                   path,
                 });
-                setWarning(cacheWarning);
-                const request = pending;
-                setPending(null);
-                setEditing(false);
-                if (request) await execute(request, path);
-              } catch (error) {
-                if (currentVersion === version.current)
-                  setError(
-                    error instanceof Error ? error.message : String(error),
-                  );
-              } finally {
-                if (currentVersion === version.current) {
-                  copying.current = false;
-                  setBusy(false);
-                }
+              setWarning(cacheWarning);
+              const request = pending;
+              setPending(null);
+              setEditing(false);
+              if (request) await execute(request, path);
+            } catch (error) {
+              if (currentVersion === version.current)
+                setError(
+                  error instanceof Error ? error.message : String(error),
+                );
+            } finally {
+              if (currentVersion === version.current) {
+                copying.current = false;
+                setBusy(false);
               }
-            }}
-          >
-            <fieldset disabled={busy}>
-              <WindowsWorkspacePathField
-                home={Boolean(home)}
-                value={input}
-                onChange={setInput}
-              />
-              {error ? <Notice type="error">{error}</Notice> : null}
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => {
-                    setPending(null);
-                    setEditing(false);
-                    setError("");
-                  }}
-                >
-                  Cancel
-                </button>
-                <button className="button primary">
-                  {pending ? "Save and copy" : "Save"}
-                </button>
-              </div>
-            </fieldset>
-          </form>
-        </Modal>
+            }
+          }}
+        />
       ) : null}
       {manualPath !== null ? (
         <Modal title="Copy path manually" onClose={() => setManualPath(null)}>
@@ -349,7 +293,7 @@ export function WorkspaceLocationSetting({
   compact?: boolean;
 }) {
   const context = useContext(Shortcuts);
-  if (!context) return null;
+  if (!context || context.home) return null;
   return (
     <div
       className={
@@ -378,6 +322,16 @@ export function WorkspaceLocationSetting({
         Configure path shortcuts
       </button>
     </div>
+  );
+}
+
+export function HomeFolderAddressSetting() {
+  const context = useContext(Shortcuts);
+  if (!context?.home) return null;
+  return (
+    <button type="button" className="text-button" onClick={context.configure}>
+      Edit home folder address
+    </button>
   );
 }
 

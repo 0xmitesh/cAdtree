@@ -24,3 +24,24 @@ export async function selectBranch(ui: RenderResult, branchId: string) {
   await waitFor(() => assert.equal(appBusy(ui), false));
   if (history) fireEvent.click(nav.getByRole("button", { name: "History" }));
 }
+
+/** Completes the required second step after a native test picker selection. */
+export async function completeHomeAddress(
+  ui: RenderResult,
+  address = "D:\\Cadtree",
+) {
+  await waitFor(() =>
+    assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
+  );
+  const dialog = within(
+    ui.getByRole("dialog", { name: "Complete home setup" }),
+  );
+  fireEvent.change(
+    dialog.getByRole("textbox", { name: "Cadtree home folder address" }),
+    { target: { value: address } },
+  );
+  fireEvent.click(dialog.getByRole("button", { name: "Complete setup" }));
+  await waitFor(() =>
+    assert.ok(!ui.queryByRole("dialog", { name: "Complete home setup" })),
+  );
+}

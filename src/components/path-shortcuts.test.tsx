@@ -387,7 +387,7 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
   }) as typeof globalThis.structuredClone;
   try {
     let ui = render(<App />);
-    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(ui.getByText("Home options"));
     fireEvent.click(
       ui.getByRole("button", { name: "Inspect external workspaces" }),
     );
@@ -411,7 +411,7 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
     await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
     cleanup();
     ui = render(<App />);
-    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(ui.getByText("Home options"));
     fireEvent.click(
       ui.getByRole("button", { name: "Inspect external workspaces" }),
     );
@@ -470,7 +470,7 @@ test("canceling unconfigured folder copying leaves the workspace usable with no 
     copied.push(value);
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -544,7 +544,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     copied.push(value);
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );

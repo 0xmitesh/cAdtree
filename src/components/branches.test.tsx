@@ -49,7 +49,7 @@ async function setup() {
     },
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Other locations"));
+  fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Inspect external workspaces" }),
   );
@@ -126,7 +126,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     else await ctx.vault.writeFileText(marker, "{");
     cleanup();
     const ui = render(<App />);
-    fireEvent.click(ui.getByText("Other locations"));
+    fireEvent.click(ui.getByText("Home options"));
     fireEvent.click(
       ui.getByRole("button", { name: "Inspect external workspaces" }),
     );

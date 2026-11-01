@@ -2445,3 +2445,42 @@ input::placeholder {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+.home-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.home-options-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.home-options-advanced > span {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.home-options .workspace-menu-content {
+  min-width: 240px;
+}
+@media (max-width: 700px) {
+  .home-heading-actions {
+    width: 100%;
+    gap: 8px;
+  }
+  .home-options {
+    margin-left: auto;
+  }
+  .home-options .workspace-menu-content {
+    right: 0;
+    left: auto;
+    width: min(260px, calc(100vw - 92px));
+    min-width: 0;
+  }
+}
