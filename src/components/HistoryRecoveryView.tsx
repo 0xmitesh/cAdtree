@@ -27,6 +27,7 @@ import {
   type ApplicationController,
 } from "./ApplyPreviewDialog";
 import { AppliedFrom } from "./ApplicationStatus";
+import { caseLabel } from "../engine/case-lifecycle";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
 import {
@@ -263,11 +264,11 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
               role="status"
               aria-label="Current branch"
               data-branch-id={activeBranchId}
-              title={activeBranch?.name}
+              title={caseLabel(vaultState, activeBranchId)}
             >
               <GitBranch size={13} aria-hidden="true" />
               <span>Current branch</span>
-              <strong>{activeBranch?.name ?? "Unavailable"}</strong>
+              <strong>{caseLabel(vaultState, activeBranchId)}</strong>
             </span>
             <label className="history-file-picker">
               <span>File history</span>
@@ -487,9 +488,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 <div className="detail-meta">
                   <span>
                     <GitBranch size={14} />
-                    {vaultState.branches.find(
-                      (b) => b.branchId === rev.manifest.branchId,
-                    )?.name ?? "Unknown branch"}
+                    {caseLabel(vaultState, rev.manifest.branchId)}
                   </span>
                   <time dateTime={rev.manifest.captureCompletedAt}>
                     {formatTimestamp(rev.manifest.captureCompletedAt)}

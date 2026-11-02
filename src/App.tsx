@@ -49,6 +49,9 @@ import {
   type ApplicationReview,
 } from "./engine/application-records";
 import { ApplicationStatus } from "./components/ApplicationStatus";
+import { DesignCases } from "./components/DesignCases";
+import { changeCaseLifecycle } from "./engine/case-lifecycle-service";
+import { assertCaseWritable, caseWriteBlock } from "./engine/case-lifecycle";
 import { createDesignBranch } from "./engine/branch-service";
 import {
   getBranchBaseline,
@@ -757,6 +760,8 @@ export default function App() {
     requestedBranchId?: string,
   ) => {
     if (!context.current()) return;
+    if (requestedBranchId)
+      assertCaseWritable(project.vaultState, requestedBranchId);
     if (
       requestedBranchId &&
       !project.vaultState.branches.some(
@@ -1222,17 +1227,18 @@ export default function App() {
     )
       return;
     contextVersion.current++;
-    setActiveBranchId(branchId);
     setScanResult(null);
     setLastRestoreReport(null);
     setStatusBanner(null);
-    setWorkingDir(null);
     await perform("scan", async (context) => {
       const state = await openExistingVault(vaultDir);
       if (!context.current()) return;
       applyVaultState(state);
       if (!state.branches.some((b) => b.branchId === branchId))
         throw new Error("Selected branch is missing. Reopen the vault.");
+      assertCaseWritable(state, branchId);
+      setActiveBranchId(branchId);
+      setWorkingDir(null);
       const folder = workingFolders[branchId];
       let readable = false;
       try {
@@ -1363,6 +1369,54 @@ export default function App() {
     signal: context.signal,
     onProgress: context.progress,
   });
+  const handleCaseLifecycle = async (
+    branchId: string,
+    status: "active" | "archived",
+    expectedVersion: string | null,
+  ) => {
+    if (!vaultDir || !vaultState) throw new Error("Open the project first.");
+    await perform(
+      "scan",
+      async (context) => {
+        try {
+          if (
+            (await vaultDir.queryPermission("readwrite")) !== "granted" &&
+            (await vaultDir.requestPermission("readwrite")) !== "granted"
+          )
+            throw new Error(
+              "Write access to the vault is required for lifecycle metadata.",
+            );
+          const result = await changeCaseLifecycle(
+            vaultDir,
+            {
+              projectId: vaultState.project.projectId,
+              branchId,
+              activeBranchId,
+              status,
+              expectedVersion,
+            },
+            applicationOptions(context),
+          );
+          if (context.current()) {
+            applyVaultState(result.state);
+            setStatusBanner({
+              type: "success",
+              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in Settings → Design cases or Show archived cases in Explorer." : "The working branch has not been switched."} ${result.warning ?? ""}`,
+            });
+          }
+        } finally {
+          if (context.current()) {
+            try {
+              applyVaultState(await openExistingVault(vaultDir));
+            } catch {
+              /* Original error remains visible. */
+            }
+          }
+        }
+      },
+      true,
+    );
+  };
   const handlePrepareApplication = async (review: ApplicationReview) => {
     if (!vaultDir || review.destinationBranchId !== activeBranchId)
       throw new Error("Destination context changed. Refresh and review again.");
@@ -1370,7 +1424,11 @@ export default function App() {
       "apply",
       async (context) => {
         await requestApplicationWriteAccess(vaultDir, workingDir);
-        return prepareApplication(vaultDir, review, applicationOptions(context));
+        return prepareApplication(
+          vaultDir,
+          review,
+          applicationOptions(context),
+        );
       },
       true,
     );
@@ -2222,6 +2280,7 @@ export default function App() {
                       onCancelOperation={handleCancelOperation}
                       onReattachWorkingFolder={handleReattachWorkingFolder}
                       operationBlockReason={
+                        caseWriteBlock(vaultState, branch.branchId) ??
                         applicationCaptureBlock(vaultState, branch.branchId) ??
                         managedBlockReason ??
                         (missingConnections.length
@@ -2247,6 +2306,7 @@ export default function App() {
                           ? `${workspace.root.name}/${managedProject.workingPaths[activeBranchId]}`
                           : workingDir?.name,
                       blockedReason:
+                        caseWriteBlock(vaultState, activeBranchId) ??
                         managedBlockReason ??
                         (branchApplications(vaultState, activeBranchId).some(
                           (op) =>
@@ -2337,6 +2397,16 @@ export default function App() {
                 </div>
                 <div hidden={activeTab !== "diagnostics"}>
                   <DiagnosticsView
+                    caseControls={
+                      <DesignCases
+                        state={vaultState}
+                        activeBranchId={activeBranchId}
+                        busy={busy}
+                        progress={progress}
+                        onCancel={handleCancelOperation}
+                        onChange={handleCaseLifecycle}
+                      />
+                    }
                     branchControl={
                       <ActiveBranchPicker
                         state={vaultState}

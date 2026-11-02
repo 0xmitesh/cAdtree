@@ -2710,6 +2710,55 @@ input::placeholder {
 .detail-preview-action {
   padding: 0 22px 12px;
 }
+.tree-archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 10px 9px;
+  color: #c1d2cf;
+}
+.tree-archive-help {
+  font-size: 11px;
+  padding: 0 10px 6px;
+  color: #c1d2cf;
+}
+.tree-row.archived {
+  color: #c1d2cf;
+}
+.case-lifecycle-help {
+  padding: 12px 22px;
+}
+.case-row {
+  gap: 16px;
+}
+.case-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.case-row > button {
+  flex-shrink: 0;
+}
+.case-lifecycle-error {
+  color: #a04c2f;
+}
+.case-archive-disclosure {
+  padding: 12px 22px;
+}
+.case-archive-disclosure summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #087f80;
+}
+@media (max-width: 600px) {
+  .case-row {
+    flex-wrap: wrap;
+  }
+  .design-cases .panel-heading {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
 .application-status {
   margin-bottom: 20px;
 }

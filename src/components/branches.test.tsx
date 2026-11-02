@@ -384,8 +384,13 @@ test("App clears stale scan context for unavailable handles and rejects switchin
     target: { value: "branch-main" },
   });
   await waitFor(() =>
-    assert.ok(ctx.ui.getByRole("button", { name: "Connect folder" })),
+    assert.ok(
+      within(
+        ctx.ui.container.querySelector(".settings-page") as HTMLElement,
+      ).getByRole("button", { name: "Connect folder" }),
+    ),
   );
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   assert.match(
     ctx.ui.container.querySelector(".settings-page .settings-row")!
       .textContent!,

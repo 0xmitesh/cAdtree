@@ -1,4 +1,5 @@
 import type { ReconstructedRevision, VaultState } from "../engine/types";
+import { caseLabel } from "../engine/case-lifecycle";
 
 export const branchColors = [
   "#087f80",
@@ -168,9 +169,7 @@ export function layoutRevisions(
       revision,
       row,
       lane: lanes.get(id)!,
-      branchName:
-        branches.find((b) => b.branchId === revision.manifest.branchId)?.name ??
-        "Unknown branch",
+      branchName: caseLabel(state, revision.manifest.branchId),
       color:
         branchColors[
           (branchLane.get(revision.manifest.branchId) ?? 0) %
@@ -184,7 +183,7 @@ export function layoutRevisions(
             state.branchHeads[b.branchId] === id ||
             state.competingHeads[b.branchId]?.includes(id),
         )
-        .map((b) => b.name),
+        .map((b) => caseLabel(state, b.branchId)),
     };
   });
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
@@ -192,7 +191,7 @@ export function layoutRevisions(
     nodes,
     branches: branches.map((branch, index) => ({
       id: branch.branchId,
-      name: branch.name,
+      name: caseLabel(state, branch.branchId),
       color: branchColors[index % branchColors.length],
       current: branch.branchId === activeBranchId,
       headIds: [

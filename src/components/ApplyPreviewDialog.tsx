@@ -9,6 +9,7 @@ import {
   type PreparedApplication,
 } from "../engine/application-service";
 import type { ApplicationReview } from "../engine/application-records";
+import { caseLabel } from "../engine/case-lifecycle";
 import {
   buildApplyPreview,
   prepareApplyPreview,
@@ -108,9 +109,7 @@ function ApplyPreviewBody({
     [context, choices, reason],
   );
   const branchName = (revision: ReconstructedRevision) =>
-    state.branches.find(
-      (branch) => branch.branchId === revision.manifest.branchId,
-    )?.name ?? "Unknown branch";
+    caseLabel(state, revision.manifest.branchId);
   const endpoints = [
     { side: "Base", revision: context.base },
     { side: "Source", revision: context.source },

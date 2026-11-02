@@ -6,6 +6,7 @@ import {
   type ApplicationOperation,
 } from "../engine/application-records";
 import { formatRevisionNumber } from "../engine/vault-service";
+import { caseLabel } from "../engine/case-lifecycle";
 import { Modal, Notice, OperationProgress } from "./ui";
 
 export function ApplicationStatus({
@@ -225,9 +226,7 @@ export function AppliedFrom({
         const source = state.revisions.find(
           (r) => r.manifest.revisionId === record.plan.sourceRevisionId,
         );
-        const sourceName =
-          state.branches.find((b) => b.branchId === record.sourceBranchId)
-            ?.name ?? record.sourceBranchId;
+        const sourceName = caseLabel(state, record.sourceBranchId);
         const capture = op.events.find(
           (e) => e.kind === "capture" && e.revisionId === revisionId,
         )!;

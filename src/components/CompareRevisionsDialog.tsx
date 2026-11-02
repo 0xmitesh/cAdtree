@@ -11,6 +11,7 @@ import {
 } from "../engine/snapshot-comparison";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { formatBytes } from "../utils/format";
+import { caseLabel } from "../engine/case-lifecycle";
 import { Modal, Notice, NotesText, StatusBadge } from "./ui";
 
 export function CompareRevisionsDialog({
@@ -45,7 +46,7 @@ export function CompareRevisionsDialog({
     [state, fromId, toId],
   );
   const label = (revision: ReconstructedRevision) =>
-    `${formatRevisionNumber(revision.manifest.displayNumber)} · ${state.branches.find((b) => b.branchId === revision.manifest.branchId)?.name ?? "Unknown branch"} · ${revision.manifest.summary}`;
+    `${formatRevisionNumber(revision.manifest.displayNumber)} · ${caseLabel(state, revision.manifest.branchId)} · ${revision.manifest.summary}`;
   const options = useMemo(() => {
     const revisions = new Map<string, ReconstructedRevision | undefined>();
     for (const revision of [...state.revisions].sort(
