@@ -2733,11 +2733,34 @@ input::placeholder {
   gap: 16px;
 }
 .case-row > div {
+  flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .case-row > button {
   flex-shrink: 0;
+  align-self: flex-start;
+}
+.case-activity {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.case-activity summary {
+  cursor: pointer;
+  color: #087f80;
+}
+.case-activity dl {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);
+  gap: 6px 12px;
+  margin: 12px 0;
+}
+.case-activity dt { color: var(--muted); }
+.case-activity dd { margin: 0; }
+@media (max-width: 600px) {
+  .case-row > div { flex-basis: 100%; }
+  .case-activity dl { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .case-activity dd { margin-bottom: 7px; }
 }
 .case-lifecycle-error {
   color: #a04c2f;

@@ -18,15 +18,18 @@ export function CompareRevisionsDialog({
   state,
   inspectedId,
   initialPath,
+  initialFromId,
   onClose,
 }: {
   state: VaultState;
   inspectedId: string;
   initialPath: string;
+  initialFromId?: string;
   onClose: () => void;
 }) {
   const [toId, setToId] = useState(inspectedId);
   const [fromId, setFromId] = useState(() => {
+    if (initialFromId !== undefined) return initialFromId;
     const endpoint = comparisonEndpoint(state, inspectedId);
     if (endpoint.status !== "available") return "";
     const parentId = endpoint.revision.manifest.parentRevisionId;

@@ -751,11 +751,13 @@ export async function openExistingVault(
   const branchHeads: Record<string, string | null> = {};
   const competingHeads: Record<string, string[]> = {};
   const damagedBranchHeads: Record<string, string> = {};
+  const branchBaselineEndpoints: Record<string, string | null> = {};
 
   for (const branch of branches) {
     const branchRevs = revisions.filter((r) => r.manifest.branchId === branch.branchId);
     if (branchRevs.length === 0) {
       branchHeads[branch.branchId] = branch.startingRevisionId;
+      branchBaselineEndpoints[branch.branchId] = branch.startingRevisionId;
       continue;
     }
 
@@ -793,6 +795,16 @@ export async function openExistingVault(
     const missingParentRev = branchRevs.find(
       (r) => r.manifest.parentRevisionId !== null && !allVaultRevIds.has(r.manifest.parentRevisionId)
     );
+    // Use the same reconstructed leaves for endpoint-only comparison. A broken
+    // parent path cannot invent a head, but need not invalidate a unique saved endpoint.
+    const leaves = branchRevs
+      .map((r) => r.manifest.revisionId)
+      .filter((id) => !parentIdsReferencedInBranch.has(id));
+    const hasForkOnSameBranch = Array.from(byParent.values()).some(
+      (children) => children.length > 1
+    );
+    if (leaves.length === 1 && !hasForkOnSameBranch)
+      branchBaselineEndpoints[branch.branchId] = leaves[0];
     if (missingParentRev) {
       damagedBranchHeads[branch.branchId] =
         `Revision ${formatRevisionNumber(missingParentRev.manifest.displayNumber)} references missing parent revision "${missingParentRev.manifest.parentRevisionId}".`;
@@ -800,14 +812,6 @@ export async function openExistingVault(
         branchRevs[branchRevs.length - 1]?.manifest.revisionId ?? null;
       continue;
     }
-
-    const leaves = branchRevs
-      .map((r) => r.manifest.revisionId)
-      .filter((id) => !parentIdsReferencedInBranch.has(id));
-
-    const hasForkOnSameBranch = Array.from(byParent.values()).some(
-      (children) => children.length > 1
-    );
 
     if (leaves.length > 1 || hasForkOnSameBranch) {
       competingHeads[branch.branchId] =
@@ -822,6 +826,7 @@ export async function openExistingVault(
   }
 
   for (const [branchId, reason] of Object.entries(damagedBranchPublications)) {
+    delete branchBaselineEndpoints[branchId];
     damagedBranchHeads[branchId] = [reason, damagedBranchHeads[branchId]].filter(Boolean).join(' ');
   }
 
@@ -832,12 +837,14 @@ export async function openExistingVault(
     branchHeads,
     competingHeads,
     damagedBranchHeads,
+    branchBaselineEndpoints,
     incompleteAttempts,
     corruptedRecords,
   };
   for (const branch of branches) {
     if (branches.some((other) => other !== branch && (other.branchId === branch.branchId || branchNameKey(other.name) === branchNameKey(branch.name)))) {
       damagedBranchHeads[branch.branchId] = `Branch "${branch.name}" has a duplicate identity or name. Operations are blocked.`;
+      delete branchBaselineEndpoints[branch.branchId];
     }
     try { getBranchBaseline(state, branch.branchId); }
     catch (error) { damagedBranchHeads[branch.branchId] = error instanceof Error ? error.message : String(error); }
