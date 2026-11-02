@@ -139,6 +139,9 @@ export interface IncompleteAttemptRecord {
 }
 
 export interface VaultState {
+  /** Reconstructed endpoint identities only; absence means the saved head is unavailable.
+   * Kept separate from ancestry damage so read-only Compare can remain endpoint-local. */
+  branchBaselineEndpoints?: Record<string, string | null>;
   caseLifecycles?: Record<string, import('./case-lifecycle').CaseLifecycle>;
   applicationOperations?: import('./application-records').ApplicationOperation[];
   project: ProjectIdentity;

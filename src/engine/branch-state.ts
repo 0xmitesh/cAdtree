@@ -1,6 +1,10 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
 import { validateDirectoryIsolation } from "./fs-adapter";
 import type { RevisionManifest, VaultState } from "./types";
+import {
+  comparisonEndpoint,
+  type ComparisonEndpoint,
+} from "./snapshot-comparison";
 
 export type WorkingFolderBindings = Record<
   string,
@@ -9,6 +13,64 @@ export type WorkingFolderBindings = Record<
 
 export function branchNameKey(name: string): string {
   return name.trim().normalize("NFKC").toLowerCase();
+}
+
+/** Unreadable completion evidence without an attributable owner prevents exact
+ * activity counts and automatic current-endpoint selection, not manual Compare. */
+export function hasUnattributedSavedEvidence(state: VaultState): boolean {
+  return state.corruptedRecords.some((record) =>
+    record.revisionId
+      ? !state.revisions.some(
+          (revision) => revision.manifest.revisionId === record.revisionId,
+        )
+      : record.recordPath.startsWith("completed/"),
+  );
+}
+
+/** Read-only saved endpoint from the canonical head reconstruction, independent
+ * of intervening ancestry. Never use this weaker validation for a write operation. */
+export function getBranchComparisonEndpoint(
+  state: VaultState,
+  branchId: string,
+): ComparisonEndpoint {
+  try {
+    const matches = state.branches.filter((b) => b.branchId === branchId);
+    if (
+      matches.length !== 1 ||
+      matches[0].projectId !== state.project.projectId ||
+      state.branches.some(
+        (branch) =>
+          branch !== matches[0] &&
+          branchNameKey(branch.name) === branchNameKey(matches[0].name),
+      )
+    )
+      throw new Error("Branch identity is missing or ambiguous.");
+    if (
+      state.competingHeads[branchId]?.length ||
+      hasUnattributedSavedEvidence(state)
+    )
+      throw new Error(
+        "The current saved endpoint is ambiguous or has unattributed damaged record evidence.",
+      );
+    let id: string | null;
+    if (state.branchBaselineEndpoints) {
+      if (!Object.hasOwn(state.branchBaselineEndpoints, branchId))
+        throw new Error(
+          "The current saved endpoint cannot be established from the branch records.",
+        );
+      id = state.branchBaselineEndpoints[branchId];
+    } else {
+      // Compatibility for callers with an already reconstructed legacy in-memory state.
+      // Without independent endpoint evidence retain the strict canonical rules.
+      id = getBranchBaseline(state, branchId)?.revisionId ?? null;
+    }
+    return comparisonEndpoint(state, id ?? "");
+  } catch (error) {
+    return {
+      status: "unavailable",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /** Resolve a branch's own baseline, refusing missing, damaged, or ambiguous ancestry. */
