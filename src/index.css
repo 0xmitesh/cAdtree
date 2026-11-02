@@ -415,7 +415,6 @@ h3 {
 .welcome-story { background: #fff; border: 1px solid #cbded6; border-radius: 14px; box-shadow: 0 16px 45px #253e3510; overflow: hidden; transform: rotate(-1deg); }
 .welcome-story-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 17px 19px; background: #edf4ef; border-bottom: 1px solid #dce8df; }
 .welcome-story-top > span:first-child { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #315c51; }
-.welcome-example { font-size: 8px; letter-spacing: 1px; color: #627b71; }
 .welcome-story-body { padding: 23px 22px 22px; }
 .welcome-story-step { display: flex; align-items: center; gap: 14px; position: relative; padding-bottom: 25px; }
 .welcome-story-step:not(.welcome-story-latest)::after { content: ""; position: absolute; left: 17px; top: 36px; height: 25px; border-left: 1px solid #93bfb3; }
@@ -451,7 +450,6 @@ h3 {
   .welcome-introduction h1 { font-size: 40px; }
   .welcome-story-top { padding: 14px; gap: 6px; }
   .welcome-story-top > span:first-child { font-size: 11px; }
-  .welcome-example { font-size: 7px; }
 }
 @media (max-width: 900px) {
   .welcome-hero { display: block; margin-bottom: 28px; }

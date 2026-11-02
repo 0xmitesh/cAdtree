@@ -44,7 +44,7 @@ export function HomeWelcome({
           </p>
           <p className="welcome-trust">
             <ShieldCheck size={17} aria-hidden="true" /> Your files. Your
-            storage. No account needed.
+            storage.
           </p>
         </div>
         <div
@@ -56,7 +56,6 @@ export function HomeWelcome({
             <span>
               <FolderOpen size={17} /> A design in motion
             </span>
-            <span className="welcome-example">ILLUSTRATION</span>
           </div>
           <div className="welcome-story-body">
             <div className="welcome-story-step">
