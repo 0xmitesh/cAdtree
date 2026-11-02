@@ -6,6 +6,7 @@ import {
 import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
 import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
+import { assertCaseWritable } from './case-lifecycle';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
@@ -81,6 +82,7 @@ export async function captureRevision(
     // Step 1: Reload validated vault and branch state under the writer lock
     const vaultState = await openExistingVault(vaultDir);
     if (vaultState.project.projectId !== projectId) throw new Error('Vault identity changed while waiting for the writer lock.');
+    assertCaseWritable(vaultState,input.branchId);
     const applicationBlock = applicationCaptureBlock(vaultState, input.branchId);
     if (applicationBlock) throw new Error(applicationBlock);
     // A retry of the same reviewed capture reconciles its already-published

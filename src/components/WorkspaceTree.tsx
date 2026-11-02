@@ -24,6 +24,7 @@ import type {
   WorkspaceProjectEntry,
 } from "../engine/workspace-service";
 import type { VaultState } from "../engine/types";
+import { caseLifecycle, caseLabel } from "../engine/case-lifecycle";
 
 export interface WorkspaceTreeProps {
   home: HomeState | null;
@@ -52,6 +53,7 @@ interface TreeNode {
   unavailable?: boolean;
   issue?: string;
   count?: number;
+  readOnly?: boolean;
 }
 interface VisibleNode extends TreeNode {
   depth: number;
@@ -67,6 +69,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     () => new Set(["home"]),
   );
   const [focusedKey, setFocusedKey] = useState("home");
+  const [showArchived, setShowArchived] = useState(false);
   const rows = useRef(new Map<string, HTMLDivElement>());
   const workspaceKey = props.workspace
     ? (props.managedWorkspaceKey ??
@@ -103,15 +106,36 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         issue: entry.issues.join(" "),
         count: vault?.branches.length,
         open: () => props.onProject(homeEntry, entry),
-        children: (vault?.branches ?? []).map((branch) => ({
-          key: `${keyForProject}/branch:${branch.branchId}`,
-          label: branch.name,
-          accessibleLabel: `${branch.name}, ${entry.name}, ${workspace.identity.name}`,
-          kind: "branch",
-          children: [],
-          unavailable,
-          open: () => props.onProject(homeEntry, entry, branch.branchId),
-        })),
+        children: (vault?.branches ?? [])
+          .filter(
+            (branch) =>
+              !vault ||
+              caseLifecycle(vault, branch.branchId).status !== "archived" ||
+              showArchived ||
+              (active && branch.branchId === props.activeBranchId),
+          )
+          .map((branch) => ({
+            key: `${keyForProject}/branch:${branch.branchId}`,
+            label: vault ? caseLabel(vault, branch.branchId) : branch.name,
+            accessibleLabel: `${vault ? caseLabel(vault, branch.branchId) : branch.name}, ${entry.name}, ${workspace.identity.name}`,
+            kind: "branch",
+            children: [],
+            unavailable:
+              unavailable ||
+              Boolean(
+                vault &&
+                caseLifecycle(vault, branch.branchId).status === "unavailable",
+              ),
+            readOnly: Boolean(
+              vault &&
+              caseLifecycle(vault, branch.branchId).status === "archived",
+            ),
+            issue:
+              vault && caseLifecycle(vault, branch.branchId).status !== "active"
+                ? "Reopen archived cases in Settings → Design cases. Unavailable lifecycle records require inspection."
+                : undefined,
+            open: () => props.onProject(homeEntry, entry, branch.branchId),
+          })),
       };
     });
   const workspaces: TreeNode[] = homeWorkspaceGroups(
@@ -192,7 +216,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       return next;
     });
   const open = (node: TreeNode) => {
-    if (props.busy || node.unavailable) return;
+    if (props.busy || node.unavailable || node.readOnly) return;
     focus(node.key);
     void Promise.resolve(node.open()).catch(() => {
       /* App surfaces connection errors. */
@@ -235,6 +259,19 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
           <ChevronsDownUp size={14} />
         </button>
       </div>
+      <label className="tree-archive-toggle">
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={(event) => setShowArchived(event.target.checked)}
+        />
+        Show archived cases
+      </label>
+      {showArchived ? (
+        <p className="tree-archive-help">
+          Reopen cases in Settings → Design cases.
+        </p>
+      ) : null}
       <div
         role="tree"
         aria-label="Workspace explorer"
@@ -270,9 +307,11 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
               aria-setsize={node.siblings}
               aria-expanded={node.children.length ? isExpanded : undefined}
               aria-selected={node.key === selectedKey}
-              aria-disabled={props.busy || node.unavailable || undefined}
+              aria-disabled={
+                props.busy || node.unavailable || node.readOnly || undefined
+              }
               tabIndex={node.key === tabKey ? 0 : -1}
-              className={`tree-row ${node.kind}${node.unavailable ? " unavailable" : ""}`}
+              className={`tree-row ${node.kind}${node.unavailable ? " unavailable" : ""}${node.readOnly ? " archived" : ""}`}
               title={node.issue ? `${node.label} — ${node.issue}` : node.label}
               style={{ "--tree-depth": node.depth } as CSSProperties}
               onFocus={() => setFocusedKey(node.key)}

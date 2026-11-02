@@ -30,6 +30,7 @@ import {
   type CopyOptions,
 } from "./copy-service";
 import { openExistingVault } from "./vault-service";
+import { assertCaseWritable } from "./case-lifecycle";
 import type { FileEntry, VaultState } from "./types";
 
 export interface ApplicationOptions extends CopyOptions {
@@ -79,6 +80,7 @@ export function applicationReview(
   };
 }
 function recompute(state: VaultState, review: ApplicationReview) {
+  assertCaseWritable(state,review.destinationBranchId);
   if (state.project.projectId !== review.projectId)
     throw new Error("Project identity changed. Refresh and review again.");
   const preparation = prepareApplyPreview(

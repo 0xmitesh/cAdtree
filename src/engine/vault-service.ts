@@ -6,6 +6,7 @@ import { hashString } from './hash';
 import { compareSnapshotContents } from './snapshot-comparison';
 import { verifyStoredObject } from './object-store';
 import { readApplicationOperations } from './application-records';
+import { readCaseLifecycles } from './case-lifecycle';
 import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
   BranchRecord,
@@ -842,6 +843,7 @@ export async function openExistingVault(
     catch (error) { damagedBranchHeads[branch.branchId] = error instanceof Error ? error.message : String(error); }
   }
   state.applicationOperations = await readApplicationOperations(vaultDir, state);
+  state.caseLifecycles = await readCaseLifecycles(vaultDir, state);
   return state;
 }
 

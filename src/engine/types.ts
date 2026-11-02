@@ -139,6 +139,7 @@ export interface IncompleteAttemptRecord {
 }
 
 export interface VaultState {
+  caseLifecycles?: Record<string, import('./case-lifecycle').CaseLifecycle>;
   applicationOperations?: import('./application-records').ApplicationOperation[];
   project: ProjectIdentity;
   branches: BranchRecord[];
