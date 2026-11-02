@@ -27,24 +27,7 @@ export function HomeWelcome({
 }) {
   return (
     <>
-      <section className="welcome-hero" aria-labelledby="welcome-title">
-        <div className="welcome-introduction">
-          <h1 id="welcome-title" className="sr-only">
-            Welcome to cAdtree
-          </h1>
-          <figure className="welcome-quote">
-            <blockquote>
-              Great ideas rarely arrive in one take. Give your projects,
-              alternatives and all those “final_final” files a place to belong.
-            </blockquote>
-            <figcaption>~0xmitesh</figcaption>
-          </figure>
-        </div>
-        <div className="welcome-showcase">
-          <WelcomeGraphPreview />
-        </div>
-      </section>
-
+      <h1 id="welcome-title" className="sr-only">Welcome to cAdtree</h1>
       <section className="welcome-paths" aria-label="Choose your beginning">
         {["new", "return"].map((path) =>
           path === "new" ? (
@@ -128,6 +111,21 @@ export function HomeWelcome({
             </article>
           ),
         )}
+      </section>
+
+      <section className="welcome-hero" aria-labelledby="welcome-title">
+        <div className="welcome-introduction">
+          <figure className="welcome-quote">
+            <blockquote>
+              “Great ideas rarely arrive in one take. Give your projects,
+              alternatives and all those ‘final_final’ files a place to belong.”
+            </blockquote>
+            <figcaption>~0xmitesh</figcaption>
+          </figure>
+        </div>
+        <div className="welcome-showcase">
+          <WelcomeGraphPreview />
+        </div>
       </section>
 
       <section
