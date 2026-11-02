@@ -414,10 +414,11 @@ h3 {
 .welcome-trust { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4d6c64; margin-top: 22px; }
 .welcome-trust svg { flex-shrink: 0; color: var(--teal); }
 .welcome-introduction { align-self: stretch; display: flex; flex-direction: column; justify-content: flex-end; }
-.welcome-quote { position: relative; top: 20px; margin: 0; padding: 20px 22px 0 4px; color: #29433d; }
+.welcome-quote { position: relative; top: 20px; margin: 0; padding: 20px 22px 0; color: #29433d; text-align: center; }
 .welcome-quote::before { content: "“"; display: block; height: 54px; font: 110px/1 Georgia, serif; color: #aac6b7; }
-.welcome-quote blockquote { margin: 0; font: 400 clamp(23px, 2.15vw, 30px)/1.5 Georgia, "Times New Roman", serif; letter-spacing: -0.4px; }
-.welcome-quote figcaption { margin-top: 20px; text-align: right; font: 13px/1.5 ui-monospace, Consolas, monospace; color: #547368; }
+.welcome-quote blockquote { margin: 0; font: 400 21px/1.5 Georgia, "Times New Roman", serif; letter-spacing: -0.4px; }
+.welcome-quote blockquote::after { content: "”"; display: block; height: 54px; margin-top: 8px; font: 110px/1 Georgia, serif; color: #aac6b7; }
+.welcome-quote figcaption { margin-top: 20px; font: 13px/1.5 ui-monospace, Consolas, monospace; color: #547368; }
 .welcome-showcase { display: flex; align-self: stretch; width: 100%; justify-self: stretch; }
 .welcome-graph-preview { display: flex; flex-direction: column; width: 100%; box-shadow: 0 16px 45px #253e3510; }
 .welcome-preview-heading > span { display: flex; align-items: center; gap: 8px; color: #315c51; }
@@ -463,10 +464,10 @@ h3 {
   .welcome-showcase { display: none; }
   .welcome-introduction { display: block; }
   .welcome-quote { top: 0; padding: 0; }
-  .welcome-quote blockquote { font-size: 23px; }
 }
 @media (max-width: 600px) {
   .home-welcome { padding-top: 32px; padding-bottom: 0; }
+  .welcome-quote blockquote { font-size: 20px; }
   .welcome-trust { font-size: 10px; gap: 6px; }
   .welcome-paths { grid-template-columns: minmax(0, 1fr); gap: 15px; }
   .welcome-path { padding: 21px; }
