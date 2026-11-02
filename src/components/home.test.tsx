@@ -89,7 +89,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   let ui = render(<App />);
   assert.equal(ui.queryByRole("button", { name: "History" }), null);
   assert.equal(ui.queryByRole("combobox", { name: "Active branch" }), null);
-  fireEvent.click(ui.getByRole("button", { name: "Create Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
   await completeHomeAddress(ui);
   await ready(ui, "Create workspace");
   assert.equal(ui.queryByRole("dialog"), null);
@@ -121,7 +121,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   await clearAllConvenienceMetadata();
   picker.queue.push(nativeDirectory(root));
   ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
   await waitFor(() =>
     assert.equal(
@@ -172,7 +172,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
   await waitFor(() =>
     assert.equal(
@@ -300,7 +300,7 @@ test("guided whole-workspace migration identifies managed location and never reu
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(home), nativeDirectory(original));
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
   fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
@@ -356,7 +356,7 @@ test("home groups retained migration attempts, shows missing workspaces, and res
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(home), nativeDirectory(original));
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   assert.equal(ui.getAllByRole("article").length, 2);
@@ -416,7 +416,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(home));
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   const tree = within(ui.getByRole("tree", { name: "Workspace explorer" }));
@@ -508,7 +508,7 @@ test("folder browser opens in a dialog, supports keyboard traversal, and closes 
   const picker = pickerQueue();
   picker.queue.push(nativeDirectory(home));
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   fireEvent.click(ui.getByRole("button", { name: "Browse folders" }));

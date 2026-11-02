@@ -9,6 +9,7 @@ import type { RememberedHome } from "../engine/idb-store";
 import type { ProgressUpdate } from "../engine/types";
 import { Modal, Notice, OperationProgress } from "./ui";
 import { HomeFolderAddressSetting } from "./FilePathShortcuts";
+import { HomeWelcome } from "./HomeWelcome";
 
 export function HomeWorkspacesView(props: {
   home: HomeState | null;
@@ -38,125 +39,101 @@ export function HomeWorkspacesView(props: {
     }
   };
   return (
-    <div className="page projects-page">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">CADTREE HOME</p>
-          <h1>
-            All workspaces<span className="heading-dot">.</span>
-          </h1>
-          <p>
-            {props.home
-              ? props.home.identity.name
-              : "Your designs. Your versions. Your storage."}
-          </p>
-        </div>
-        <div className="home-heading-actions">
-          {props.home ? (
-            <button
-              className="button primary"
-              disabled={props.busy}
-              onClick={() => {
-                setName("");
-                setError("");
-                setCreating(true);
-              }}
-            >
-              <Plus size={16} />
-              Create workspace
-            </button>
-          ) : null}
-          <details className="workspace-menu home-options" ref={options}>
-            <summary
-              onClick={(event) => {
-                if (props.busy) event.preventDefault();
-              }}
-              aria-disabled={props.busy || undefined}
-            >
-              Home options
-            </summary>
-            <div
-              className="workspace-menu-content"
-              onClick={(event) => {
-                if ((event.target as HTMLElement).closest("button")) {
-                  options.current?.removeAttribute("open");
-                  options.current
-                    ?.querySelector<HTMLElement>("summary")
-                    ?.focus();
-                }
-              }}
-            >
-              {props.home ? (
-                <>
-                  <HomeFolderAddressSetting />
-                  <button
-                    className="text-button"
-                    disabled={props.busy}
-                    onClick={() => {
-                      setError("");
-                      setImporting(true);
-                    }}
-                  >
-                    Import existing workspace
-                  </button>
-                </>
-              ) : null}
+    <div className={`page projects-page${props.home ? "" : " home-welcome"}`}>
+      {props.home ? (
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">CADTREE HOME</p>
+            <h1>
+              All workspaces<span className="heading-dot">.</span>
+            </h1>
+            <p>
+              {props.home
+                ? props.home.identity.name
+                : "Your designs. Your versions. Your storage."}
+            </p>
+          </div>
+          <div className="home-heading-actions">
+            {props.home ? (
               <button
-                className="text-button"
+                className="button primary"
                 disabled={props.busy}
-                onClick={() => void run(() => props.onConnect(false))}
+                onClick={() => {
+                  setName("");
+                  setError("");
+                  setCreating(true);
+                }}
               >
-                Switch Cadtree home
+                <Plus size={16} />
+                Create workspace
               </button>
-              <div className="home-options-advanced">
-                <span>Advanced</span>
+            ) : null}
+            <details className="workspace-menu home-options" ref={options}>
+              <summary
+                onClick={(event) => {
+                  if (props.busy) event.preventDefault();
+                }}
+                aria-disabled={props.busy || undefined}
+              >
+                Home options
+              </summary>
+              <div
+                className="workspace-menu-content"
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("button")) {
+                    options.current?.removeAttribute("open");
+                    options.current
+                      ?.querySelector<HTMLElement>("summary")
+                      ?.focus();
+                  }
+                }}
+              >
+                {props.home ? (
+                  <>
+                    <HomeFolderAddressSetting />
+                    <button
+                      className="text-button"
+                      disabled={props.busy}
+                      onClick={() => {
+                        setError("");
+                        setImporting(true);
+                      }}
+                    >
+                      Import existing workspace
+                    </button>
+                  </>
+                ) : null}
                 <button
                   className="text-button"
                   disabled={props.busy}
-                  onClick={props.onExternal}
+                  onClick={() => void run(() => props.onConnect(false))}
                 >
-                  Inspect external workspaces
+                  Switch Cadtree home
                 </button>
+                <div className="home-options-advanced">
+                  <span>Advanced</span>
+                  <button
+                    className="text-button"
+                    disabled={props.busy}
+                    onClick={props.onExternal}
+                  >
+                    Inspect external workspaces
+                  </button>
+                </div>
               </div>
-            </div>
-          </details>
+            </details>
+          </div>
         </div>
-      </div>
+      ) : null}
       {error ? <Notice type="error">{error}</Notice> : null}
       {!props.home ? (
-        <section className="panel form-body">
-          <h2>Choose your Cadtree home</h2>
-          <p>
-            Create a dedicated empty folder named Cadtree in the folder picker,
-            or open an existing Cadtree home. Workspaces will be created inside
-            it.
-          </p>
-          <div className="home-actions">
-            <button
-              className="button primary"
-              disabled={props.busy}
-              onClick={() => void run(() => props.onConnect(true))}
-            >
-              Create Cadtree home
-            </button>
-            <button
-              className="button secondary"
-              disabled={props.busy}
-              onClick={() => void run(() => props.onConnect(false))}
-            >
-              Open Cadtree home
-            </button>
-            {props.remembered ? (
-              <button
-                className="button secondary"
-                disabled={props.busy}
-                onClick={() => void run(props.onReconnect)}
-              >
-                Reconnect {props.remembered.name}
-              </button>
-            ) : null}
-          </div>
-        </section>
+        <HomeWelcome
+          remembered={props.remembered}
+          busy={props.busy}
+          onStart={() => void run(() => props.onConnect(true))}
+          onOpen={() => void run(() => props.onConnect(false))}
+          onReturn={() => void run(props.onReconnect)}
+        />
       ) : (
         <>
           <div className="section-heading">

@@ -24,7 +24,7 @@ test("required home address and compact Home options support cancel, keyboard ac
     });
   });
   await page
-    .getByRole("button", { name: "Create Cadtree home", exact: true })
+    .getByRole("button", { name: "Start my Cadtree home", exact: true })
     .click();
   const setup = page.getByRole("dialog", { name: "Complete home setup" });
   const address = setup.getByRole("textbox", {
@@ -62,7 +62,7 @@ test("required home address and compact Home options support cancel, keyboard ac
     }),
   ).toEqual([]);
   await page
-    .getByRole("button", { name: "Create Cadtree home", exact: true })
+    .getByRole("button", { name: "Start my Cadtree home", exact: true })
     .click();
   await address.fill('"d:\\工程 Designs\\Cadtree\\"');
   await setup
@@ -133,7 +133,7 @@ test("required home address and compact Home options support cancel, keyboard ac
     .getByRole("button", { name: "All workspaces", exact: true })
     .click();
   await page.reload();
-  await page.getByRole("button", { name: /^Reconnect setup-/ }).click();
+  await page.getByRole("button", { name: /^Return to setup-/ }).click();
   await expect(
     page.getByRole("button", { name: "Open workspace", exact: true }),
   ).toBeVisible();

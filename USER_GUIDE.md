@@ -26,7 +26,7 @@ Open `http://127.0.0.1:2501/`. The separate static-build ZIP contains `index.htm
 
 The hierarchy is **Cadtree home → Workspaces → Projects → Design branches and revisions**. Workspaces can represent clients, CAD tools, organisations, or other groups. They are organisational folders; no accounts, collaboration roles, or access controls are added.
 
-1. Choose **Create Cadtree home**. In the native folder picker, create/select a dedicated empty folder, suggested name **Cadtree**. Unrelated populated storage is rejected. **Open Cadtree home** opens an existing recognized home.
+1. The welcome screen introduces saved design history, separate cases and recovery. Choose **Start my Cadtree home** for a new beginning. In the native folder picker, create/select a dedicated empty folder, suggested name **Cadtree**. Unrelated populated storage is rejected. **Open my Cadtree home** opens an existing recognized home. Home management options appear after connecting a home.
 2. In **Complete home setup**, enter the selected folder’s full **Cadtree home folder address**, for example `D:\Cadtree`, copied from File Explorer’s address bar. This is required before the home is connected. Cancel or Back leaves the selected folder untouched; Back starts a new native folder selection and clears the address. The browser grants folder access but does not share its full Windows address, so cAdtree cannot compare your entry with the selected folder.
 3. On **All workspaces**, choose **Create workspace** and enter a readable name. cAdtree allocates a unique child folder automatically. No second parent picker is needed. Repeated display names receive independent identities and folders.
 4. **Open workspace** opens its projects. Use **Explorer** to move between connected workspaces, or **All workspaces** to return home. Switching never removes another workspace's registration.
@@ -86,7 +86,7 @@ Copies are verified and their locations are reported. Recovery creates neither a
 
 ## Reopen and reconnect
 
-Choose **Reconnect Cadtree** (or the remembered home folder's name), or **Open Cadtree home** and select the home once. cAdtree reads its on-disk workspace catalogue, projects, and all intact branch locations. Renew browser permission when requested. The saved home address is reused when available. If it is missing, complete the required address step before connecting; cancelling leaves the on-disk home untouched. IndexedDB remembers handles, local addresses and last context; it is not the authoritative catalogue.
+Choose **Return to Cadtree** (or the remembered home folder's name), or **Open my Cadtree home** and select the home once. cAdtree reads its on-disk workspace catalogue, projects, and all intact branch locations. Renew browser permission when requested. The saved home address is reused when available. If it is missing, complete the required address step before connecting; cancelling leaves the on-disk home untouched. IndexedDB remembers handles, local addresses and last context; it is not the authoritative catalogue.
 
 After clearing browser convenience data, select the home again. Do not locate each workspace, project, or case separately. Missing, moved, inaccessible, or invalidly mapped folders remain unavailable; cAdtree never recreates or rebinds them by name. Restore the recorded location or permission, then use **Refresh home**, **Refresh workspace**, or **Reconnect workspace**. Usable history remains inspectable while writes are blocked.
 
@@ -150,7 +150,7 @@ Working-folder locations and **Reconnect workspace** are available under Setting
 
 ### Home options
 
-Beside **Create workspace**, **Home options** provides **Edit home folder address**, **Import existing workspace**, and **Switch Cadtree home**. **Advanced → Inspect external workspaces** preserves compatibility inspection without importing. Import-specific copy and original-file protections are explained inside the import flow. Switching homes moves no files and deletes no home. Each home retains its own address. There is no permanent management block beneath the workspace cards.
+After connecting a home, **Home options** appears beside **Create workspace** and provides **Edit home folder address**, **Import existing workspace**, and **Switch Cadtree home**. It is absent from the welcome screen. **Advanced → Inspect external workspaces** preserves compatibility inspection without importing. Import-specific copy and original-file protections are explained inside the import flow. Switching homes moves no files and deletes no home. Each home retains its own address. There is no permanent management block beneath the workspace cards.
 
 ### File history
 

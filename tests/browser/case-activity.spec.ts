@@ -14,7 +14,7 @@ for (const width of [1366, 390])
     });
     await page.reload();
     await page
-      .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+      .getByRole("button", { name: /Return to Synthetic application preview/ })
       .click();
     await page
       .getByRole("textbox", { name: "Cadtree home folder address" })

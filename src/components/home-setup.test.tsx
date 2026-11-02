@@ -76,7 +76,7 @@ test("native folder selection precedes required address; invalid, empty and canc
     ui.queryByRole("textbox", { name: "Cadtree home folder address" }),
     null,
   );
-  fireEvent.click(ui.getByRole("button", { name: "Create Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
   await waitFor(() =>
     assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
   );
@@ -110,7 +110,7 @@ test("native folder selection precedes required address; invalid, empty and canc
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   assert.equal((await second.listEntries()).length, 0);
   assert.equal(ui.queryByRole("button", { name: "Create workspace" }), null);
-  fireEvent.click(ui.getByRole("button", { name: "Create Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
   await completeHomeAddress(ui, '"d:\\工程 Designs\\Cadtree\\"');
   await ready(ui);
   const home = await openHome(first);
@@ -132,7 +132,7 @@ test("two homes retain isolated addresses; saved paths reconnect without a promp
     homeB = await createHome(b);
   const picked = picker(a, b, a);
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui, "D:\\Home A");
   await ready(ui);
   menu(ui);
@@ -180,7 +180,7 @@ test("two homes retain isolated addresses; saved paths reconnect without a promp
   await clearAllConvenienceMetadata();
   picked.add(a);
   const reopened = render(<App />);
-  fireEvent.click(reopened.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(reopened.getByRole("button", { name: "Open my Cadtree home" }));
   await waitFor(() =>
     assert.ok(reopened.getByRole("dialog", { name: "Complete home setup" })),
   );
@@ -210,7 +210,7 @@ test("configured homes provide one-click descendant copies and one canonical add
     },
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui, "D:\\Cadtree");
   await ready(ui);
   menu(ui);
@@ -318,7 +318,7 @@ test("home-address preference failures remain truthful and the address survives 
   Object.assign(globalThis, { indexedDB: undefined });
   try {
     const ui = render(<App />);
-    fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+    fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
     await completeHomeAddress(ui, "D:\\Session Cadtree");
     await ready(ui);
     assert.match(ui.container.textContent!, /available for this session only/);
@@ -353,7 +353,7 @@ test("home identity is rechecked after address entry before saving or completing
   const different = await createHome(replacement);
   picker(root);
   const ui = render(<App />);
-  fireEvent.click(ui.getByRole("button", { name: "Open Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await waitFor(() =>
     assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
   );

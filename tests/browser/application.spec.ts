@@ -15,7 +15,7 @@ for (const width of [1366, 390])
     });
     await page.reload();
     await page
-      .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+      .getByRole("button", { name: /Return to Synthetic application preview/ })
       .click();
     await page
       .getByRole("textbox", { name: "Cadtree home folder address" })
@@ -169,7 +169,7 @@ for (const width of [1366, 390])
     expect(applied.state.revisions).toHaveLength(5);
     await page.reload();
     await page
-      .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+      .getByRole("button", { name: /Return to Synthetic application preview/ })
       .click();
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     // Reconnection may restore project context; opening it explicitly is deterministic.
@@ -292,7 +292,7 @@ test("actual App: interrupted apply survives reload and recovery preserves unexp
   }, fixture);
   await page.reload();
   await page
-    .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+    .getByRole("button", { name: /Return to Synthetic application preview/ })
     .click();
   await page
     .getByRole("textbox", { name: "Cadtree home folder address" })
@@ -372,7 +372,7 @@ test("actual App: interrupted apply survives reload and recovery preserves unexp
   await expect(status).toContainText("Interrupted application");
   await page.reload();
   await page
-    .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+    .getByRole("button", { name: /Return to Synthetic application preview/ })
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   if (!(await status.isVisible())) await openProject();

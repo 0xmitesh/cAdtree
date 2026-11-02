@@ -38,7 +38,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       testSource: source,
     });
   });
-  await page.getByRole("button", { name: "Create Cadtree home" }).click();
+  await page.getByRole("button", { name: "Start my Cadtree home" }).click();
   await page
     .getByRole("textbox", { name: "Cadtree home folder address" })
     .fill("D:\\Cadtree");
@@ -172,7 +172,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     .click();
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.reload();
-  await page.getByRole("button", { name: "Reconnect Cadtree" }).click();
+  await page.getByRole("button", { name: "Return to Cadtree" }).click();
   await expect(
     page.getByRole("button", { name: "Open workspace", exact: true }),
   ).toHaveCount(3);

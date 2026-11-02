@@ -1,5 +1,6 @@
 import "../../tests/dom";
 import {
+  openExternalWorkspaces,
   appBusy,
   currentBranchId,
   selectBranch,
@@ -387,10 +388,7 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
   }) as typeof globalThis.structuredClone;
   try {
     let ui = render(<App />);
-    fireEvent.click(ui.getByText("Home options"));
-    fireEvent.click(
-      ui.getByRole("button", { name: "Inspect external workspaces" }),
-    );
+    await openExternalWorkspaces(ui);
     fireEvent.click(ui.getByRole("button", { name: /Create workspace/ }));
     let dialog = within(ui.getByRole("dialog"));
     assert.ok(
@@ -411,10 +409,7 @@ test("workspace create, open, and remembered reconnect use pickers/permissions w
     await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
     cleanup();
     ui = render(<App />);
-    fireEvent.click(ui.getByText("Home options"));
-    fireEvent.click(
-      ui.getByRole("button", { name: "Inspect external workspaces" }),
-    );
+    await openExternalWorkspaces(ui);
     await waitFor(() =>
       assert.ok(ui.getByRole("button", { name: "Reconnect Picker workspace" })),
     );
@@ -470,10 +465,7 @@ test("canceling unconfigured folder copying leaves the workspace usable with no 
     copied.push(value);
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Home options"));
-  fireEvent.click(
-    ui.getByRole("button", { name: "Inspect external workspaces" }),
-  );
+  await openExternalWorkspaces(ui);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.equal(
@@ -544,10 +536,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     copied.push(value);
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Home options"));
-  fireEvent.click(
-    ui.getByRole("button", { name: "Inspect external workspaces" }),
-  );
+  await openExternalWorkspaces(ui);
   fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
   await waitFor(() =>
     assert.ok(ui.getByRole("heading", { name: "Engineering workspace." })),
