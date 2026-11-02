@@ -111,7 +111,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
         false,
       ),
     );
-    nav(ui, "All workspaces");
+    nav(ui, "My workspaces");
   }
   assert.equal(picker.calls(), 1);
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 3);
@@ -266,7 +266,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
     "true",
   );
   fireEvent.click(ui.getByRole("treeitem", { name: "autocad" }));
-  nav(ui, "All workspaces");
+  nav(ui, "My workspaces");
   release();
   await idle(ui);
   root.setHooks({ onBeforeRead: undefined });
@@ -279,7 +279,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
     "Case A draft",
   );
   assert.equal(currentBranchId(ui), caseId);
-  nav(ui, "All workspaces");
+  nav(ui, "My workspaces");
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 3);
 });
 
@@ -373,7 +373,7 @@ test("home groups retained migration attempts, shows missing workspaces, and res
   fireEvent.click(ui.getByRole("button", { name: "Open managed workspace" }));
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "cam 2." })));
   await ready(ui, "Add project");
-  nav(ui, "All workspaces");
+  nav(ui, "My workspaces");
   assert.equal(ui.getAllByRole("article").length, 2);
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 1);
 });

@@ -13,6 +13,7 @@ import { HomeWelcome } from "./HomeWelcome";
 
 export function HomeWorkspacesView(props: {
   home: HomeState | null;
+  intro?: boolean;
   remembered: RememberedHome | null;
   busy: boolean;
   progress: ProgressUpdate | null;
@@ -39,13 +40,15 @@ export function HomeWorkspacesView(props: {
     }
   };
   return (
-    <div className={`page projects-page${props.home ? "" : " home-welcome"}`}>
-      {props.home ? (
+    <div
+      className={`page projects-page${props.home && !props.intro ? "" : " home-welcome"}`}
+    >
+      {props.home && !props.intro ? (
         <div className="page-heading">
           <div>
             <p className="eyebrow">CADTREE HOME</p>
             <h1>
-              All workspaces<span className="heading-dot">.</span>
+              My workspaces<span className="heading-dot">.</span>
             </h1>
             <p>
               {props.home
@@ -126,7 +129,7 @@ export function HomeWorkspacesView(props: {
         </div>
       ) : null}
       {error ? <Notice type="error">{error}</Notice> : null}
-      {!props.home ? (
+      {!props.home || props.intro ? (
         <HomeWelcome
           remembered={props.remembered}
           busy={props.busy}
