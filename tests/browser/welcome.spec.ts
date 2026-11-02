@@ -9,7 +9,7 @@ for (const width of [1366, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/");
     const title = page.getByRole("heading", {
-      name: "Create. Adapt. Define.",
+      name: "Welcome to cAdtree",
       exact: true,
     });
     await expect(title).toBeVisible();

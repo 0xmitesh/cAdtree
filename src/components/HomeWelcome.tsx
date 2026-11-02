@@ -29,25 +29,16 @@ export function HomeWelcome({
     <>
       <section className="welcome-hero" aria-labelledby="welcome-title">
         <div className="welcome-introduction">
-          <h1
-            id="welcome-title"
-            className="welcome-tagline"
-            aria-label="Create. Adapt. Define."
-          >
-            <span className="welcome-create">
-              Create<span className="welcome-period">.</span>
-            </span>{" "}
-            <span className="welcome-adapt">
-              Adapt<span className="welcome-period">.</span>
-            </span>{" "}
-            <span className="welcome-define">
-              Define<span className="welcome-period">.</span>
-            </span>
+          <h1 id="welcome-title" className="sr-only">
+            Welcome to cAdtree
           </h1>
-          <p className="welcome-lead">
-            Great ideas rarely arrive in one take. Give your projects,
-            alternatives and all those “final_final” files a place to belong.
-          </p>
+          <figure className="welcome-quote">
+            <blockquote>
+              Great ideas rarely arrive in one take. Give your projects,
+              alternatives and all those “final_final” files a place to belong.
+            </blockquote>
+            <figcaption>~0xmitesh</figcaption>
+          </figure>
         </div>
         <div className="welcome-showcase">
           <WelcomeGraphPreview />
