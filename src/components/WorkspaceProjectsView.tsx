@@ -77,7 +77,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
           disabled={props.busy}
           onClick={props.onAllWorkspaces}
         >
-          Back to All workspaces
+          Back to My workspaces
         </button>
       ) : null}
       <div className="page-heading">

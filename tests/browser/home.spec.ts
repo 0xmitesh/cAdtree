@@ -118,7 +118,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     }
     await page
       .getByRole("navigation")
-      .getByRole("button", { name: "All workspaces" })
+      .getByRole("button", { name: "My workspaces" })
       .click();
   }
   await expect(
@@ -168,7 +168,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
   ).toHaveCount(0);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "All workspaces" })
+    .getByRole("button", { name: "My workspaces" })
     .click();
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.reload();

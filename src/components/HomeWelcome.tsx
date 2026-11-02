@@ -120,7 +120,6 @@ export function HomeWelcome({
               “Great ideas rarely arrive in one take. Give your projects,
               alternatives and all those ‘final_final’ files a place to belong.”
             </blockquote>
-            <figcaption>~0xmitesh</figcaption>
           </figure>
         </div>
         <div className="welcome-showcase">

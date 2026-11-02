@@ -113,6 +113,40 @@ for (const width of [1366, 390]) {
     ).toBeEnabled();
     await expect(page.getByText("Home options", { exact: true })).toBeVisible();
     await expect(title).toHaveCount(0);
+    const logo = page.getByRole("link", {
+      name: "cAdtree introduction",
+      exact: true,
+    });
+    const workspaces = page
+      .getByRole("navigation")
+      .getByRole("button", { name: "My workspaces", exact: true });
+    const pickerCalls = await page.evaluate(
+      () => (window as any).welcomePickerCalls,
+    );
+    await logo.click();
+    await expect(title).toBeVisible();
+    await expect(logo).toHaveAttribute("aria-current", "page");
+    await expect(page.getByText("Home options", { exact: true })).toHaveCount(
+      0,
+    );
+    await workspaces.click();
+    await expect(
+      page.getByRole("heading", { name: "My workspaces.", exact: true }),
+    ).toBeVisible();
+    await expect(workspaces).toHaveAttribute("aria-current", "page");
+    await logo.focus();
+    await logo.press("Enter");
+    await expect(title).toBeVisible();
+    await page
+      .getByRole("button", { name: `Return to ${rootName}`, exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "My workspaces.", exact: true }),
+    ).toBeVisible();
+    expect(await page.evaluate(() => (window as any).welcomePickerCalls)).toBe(
+      pickerCalls,
+    );
+    await expect(setup).toHaveCount(0);
     await page.reload();
     await expect(title).toBeVisible();
     const returning = page.getByRole("button", {

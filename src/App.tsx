@@ -143,6 +143,7 @@ export default function App() {
     null,
   );
   const [homeView, setHomeView] = useState(true);
+  const [introView, setIntroView] = useState(false);
   const [pendingHome, setPendingHome] = useState<{
     root: RealFileSystemAdapter;
     next?: HomeState;
@@ -434,6 +435,7 @@ export default function App() {
     leaveProject();
     setWorkspace(null);
     setHomeView(true);
+    setIntroView(false);
     setManagedWorkspaceKey(null);
   };
   const installHome = async (
@@ -449,6 +451,7 @@ export default function App() {
     cacheHomeAddress({ homeId: next.identity.homeId, root, path });
     setHome(next);
     setHomeView(true);
+    setIntroView(false);
     setPendingHome(null);
     const binding = {
       homeId: next.identity.homeId,
@@ -1937,11 +1940,14 @@ export default function App() {
         <aside className="navigation-rail">
           <a
             className="wordmark"
-            aria-label="cAdtree workspace"
-            href="#workspace"
+            aria-label="cAdtree introduction"
+            aria-current={homeView && (introView || !home) ? "page" : undefined}
+            href="#intro"
             onClick={(e) => {
               e.preventDefault();
+              if (operationRef.current) return;
               allWorkspaces();
+              setIntroView(true);
             }}
           >
             <svg
@@ -1967,13 +1973,13 @@ export default function App() {
           <p className="rail-caption">CREATE. ADAPT. DEFINE.</p>
           <nav aria-label="Primary navigation" className="rail-navigation">
             <button
-              aria-label="All workspaces"
+              aria-label="My workspaces"
               disabled={busy}
-              aria-current={homeView ? "page" : undefined}
+              aria-current={homeView && !introView && home ? "page" : undefined}
               onClick={allWorkspaces}
             >
               <FolderOpen size={18} />
-              <span>All workspaces</span>
+              <span>My workspaces</span>
             </button>
             {home || workspace ? (
               <button
@@ -2138,15 +2144,18 @@ export default function App() {
             {homeView ? (
               <HomeWorkspacesView
                 home={home}
+                intro={introView}
                 remembered={rememberedHome}
                 busy={busy}
                 progress={progress}
                 onConnect={connectHome}
-                onReconnect={() =>
-                  rememberedHome
-                    ? connectHome(false, rememberedHome)
-                    : Promise.resolve()
-                }
+                onReconnect={async () => {
+                  if (home) {
+                    allWorkspaces();
+                    return;
+                  }
+                  if (rememberedHome) await connectHome(false, rememberedHome);
+                }}
                 onCreate={addHomeWorkspace}
                 onBring={() => addHomeWorkspace()}
                 onOpen={openHomeEntry}

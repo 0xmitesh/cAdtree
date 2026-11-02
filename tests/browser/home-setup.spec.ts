@@ -130,7 +130,7 @@ test("required home address and compact Home options support cancel, keyboard ac
   ).toHaveCount(0);
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "All workspaces", exact: true })
+    .getByRole("button", { name: "My workspaces", exact: true })
     .click();
   await page.reload();
   await page.getByRole("button", { name: /^Return to setup-/ }).click();
