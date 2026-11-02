@@ -47,10 +47,6 @@ export function HomeWelcome({
             Great ideas rarely arrive in one take. Give your projects,
             alternatives and all those “final_final” files a place to belong.
           </p>
-          <p className="welcome-promise">
-            cAdtree keeps your saved design story clear so you can explore the
-            next idea and find your way back.
-          </p>
           <p className="welcome-trust">
             <ShieldCheck size={17} aria-hidden="true" /> Your files. Your
             storage.
@@ -101,7 +97,7 @@ export function HomeWelcome({
       </section>
 
       <section
-        className={`welcome-paths${remembered ? " welcome-has-home" : ""}`}
+        className="welcome-paths"
         aria-label="Choose your beginning"
       >
         {["new", "return"].map((path) =>
@@ -119,7 +115,7 @@ export function HomeWelcome({
                 projects and saved design history.
               </p>
               <button
-                className={`button ${remembered ? "secondary" : "primary"} welcome-action`}
+                className="button primary welcome-action"
                 disabled={busy}
                 onClick={onStart}
               >
@@ -151,7 +147,7 @@ export function HomeWelcome({
               {remembered ? (
                 <>
                   <button
-                    className="button primary welcome-action welcome-return-action"
+                    className="button secondary welcome-action welcome-return-action"
                     disabled={busy}
                     onClick={onReturn}
                     title={remembered.name}

@@ -406,13 +406,10 @@ h3 {
   margin-bottom: 38px;
 }
 .welcome-introduction h1 { font-size: clamp(36px, 3.8vw, 54px); line-height: 1.08; letter-spacing: -2px; font-weight: 650; }
-.welcome-tagline { display: flex; flex-wrap: wrap; column-gap: 0.22em; row-gap: 0.03em; }
+.welcome-tagline { display: flex; flex-direction: column; align-items: flex-start; gap: 0.02em; }
 .welcome-tagline > span { white-space: nowrap; }
-.welcome-tagline .welcome-adapt { font-style: italic; font-weight: 500; color: #487d72; }
-.welcome-tagline .welcome-define { color: var(--teal); }
 .welcome-tagline .welcome-period { color: var(--teal); }
-.welcome-lead { max-width: 540px; font-size: 16px; line-height: 1.65; margin-top: 22px; }
-.welcome-promise { max-width: 520px; font-size: 14px; color: var(--muted); line-height: 1.65; margin-top: 10px; }
+.welcome-lead { max-width: 540px; font-size: 16px; font-weight: 550; line-height: 1.65; margin-top: 22px; padding: 12px 16px; color: #29433d; background: #eeeadd; border-left: 3px solid #5a9b89; border-radius: 0 8px 8px 0; }
 .welcome-trust { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4d6c64; margin-top: 22px; }
 .welcome-trust svg { flex-shrink: 0; color: var(--teal); }
 .welcome-story { background: #fff; border: 1px solid #cbded6; border-radius: 14px; box-shadow: 0 16px 45px #253e3510; overflow: hidden; transform: rotate(-1deg); }
@@ -431,7 +428,13 @@ h3 {
 .welcome-saved-dot { width: 5px; height: 5px; border-radius: 50%; background: #53a68d; }
 .welcome-paths { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .welcome-path { display: flex; flex-direction: column; align-items: flex-start; padding: 25px 27px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
-.welcome-new { border-top: 3px solid var(--teal); padding-top: 23px; background: linear-gradient(140deg, #f0f7f1 0%, #fff 75%); }
+.welcome-new { border: 1px solid #32665c; border-top: 3px solid #64bea9; padding-top: 23px; background: linear-gradient(135deg, #173e3e, #24584f); box-shadow: 0 8px 24px #173e3e18; color: #f2fbf6; }
+.welcome-new .welcome-path-icon { background: #ffffff15; color: #a5e0cb; }
+.welcome-new .welcome-path-heading .eyebrow { color: #b8ddce; }
+.welcome-path.welcome-new > p:not(.welcome-path-hint) { color: #d0e4d9; }
+.welcome-path.welcome-new .welcome-path-hint { color: #afcdbf; }
+.welcome-new .button.primary { background: #b9ead5; border-color: #b9ead5; color: #153e35; }
+.welcome-new .button.primary:hover:not(:disabled) { background: #d0f4e3; border-color: #d0f4e3; }
 .welcome-path-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .welcome-path-heading .eyebrow { margin: 0; font-size: 9px; letter-spacing: 1.2px; }
 .welcome-path-icon { display: flex; align-items: center; justify-content: center; width: 33px; height: 33px; background: #e9f2ec; border-radius: 9px; color: var(--teal); flex-shrink: 0; }
@@ -440,8 +443,6 @@ h3 {
 .welcome-path > p:not(.welcome-path-hint) { font-size: 13px; line-height: 1.65; color: #5f7370; margin: 10px 0 20px; max-width: 450px; }
 .welcome-action { min-height: 42px; max-width: 100%; margin-top: auto; padding: 11px 17px; font-size: 13px; text-align: left; overflow-wrap: anywhere; }
 .welcome-action svg { flex-shrink: 0; }
-.welcome-has-home .welcome-new { background: #fff; border-top: 1px solid var(--border); padding-top: 25px; }
-.welcome-has-home .welcome-return { border-top: 3px solid var(--teal); padding-top: 23px; background: linear-gradient(140deg, #f0f7f1 0%, #fff 75%); }
 .welcome-path .welcome-path-hint { font-size: 11px; color: #6b7e75; margin-top: 12px; }
 .welcome-open-another { margin-top: 12px; font-size: 11px; }
 .welcome-benefits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; padding: 29px 3px 18px; margin-top: 8px; }
@@ -463,13 +464,10 @@ h3 {
   .home-welcome { padding-top: 24px; }
   .welcome-introduction h1 { font-size: clamp(30px, 8vw, 40px); letter-spacing: -1.3px; }
   .welcome-lead { font-size: 14px; margin-top: 16px; }
-  .welcome-promise { font-size: 12px; }
   .welcome-trust { font-size: 10px; gap: 6px; margin-top: 15px; }
   .welcome-paths { grid-template-columns: minmax(0, 1fr); gap: 15px; }
   .welcome-path { padding: 21px; }
   .welcome-new { padding-top: 19px; }
-  .welcome-has-home .welcome-new { padding-top: 21px; }
-  .welcome-has-home .welcome-return { padding-top: 19px; }
   .welcome-path h2 { font-size: 20px; }
   .welcome-action { width: 100%; justify-content: space-between; font-size: 12px; }
   .welcome-benefits { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 25px 4px; }
