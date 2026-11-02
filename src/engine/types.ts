@@ -139,6 +139,7 @@ export interface IncompleteAttemptRecord {
 }
 
 export interface VaultState {
+  applicationOperations?: import('./application-records').ApplicationOperation[];
   project: ProjectIdentity;
   branches: BranchRecord[];
   revisions: ReconstructedRevision[];

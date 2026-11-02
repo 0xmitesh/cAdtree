@@ -22,7 +22,11 @@ import {
 import { formatBytes, formatTimestamp } from "../utils/format";
 import { fileHistory, historicalFilePaths } from "../history/file-history";
 import { layoutRevisions } from "../history/layout";
-import { ApplyPreviewDialog } from "./ApplyPreviewDialog";
+import {
+  ApplyPreviewDialog,
+  type ApplicationController,
+} from "./ApplyPreviewDialog";
+import { AppliedFrom } from "./ApplicationStatus";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
 import {
@@ -34,6 +38,7 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
 
 export interface HistoryRecoveryViewProps {
+  application?: ApplicationController;
   vaultState: VaultState;
   activeBranchId: string;
   isRestoring: boolean;
@@ -510,6 +515,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   Review changes to apply
                 </button>
               </div>
+              <AppliedFrom
+                state={vaultState}
+                revisionId={rev.manifest.revisionId}
+              />
               <div className="detail-tabs" aria-label="Revision sections">
                 {(["changes", "notes", "technical"] as const).map((t) => (
                   <button
@@ -887,6 +896,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
       )}
       {previewSourceId ? (
         <ApplyPreviewDialog
+          application={props.application}
           state={vaultState}
           sourceId={previewSourceId}
           destinationBranchId={activeBranchId}

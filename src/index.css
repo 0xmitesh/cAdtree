@@ -2710,6 +2710,27 @@ input::placeholder {
 .detail-preview-action {
   padding: 0 22px 12px;
 }
+.application-status {
+  margin-bottom: 20px;
+}
+.application-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.application-actions {
+  list-style: disc;
+  padding-left: 20px;
+  overflow-wrap: anywhere;
+}
+.application-actions li {
+  margin: 10px 0;
+}
+.applied-from {
+  margin: 0 22px 12px;
+  overflow-wrap: anywhere;
+}
 .modal:has(.apply-preview) {
   width: min(960px, calc(100vw - 32px));
 }
