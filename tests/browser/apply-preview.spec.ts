@@ -79,8 +79,11 @@ test("actual App: read-only application preview retains Main's 20 files and requ
   await expect(summary).toContainText("Proposed result: 20 files");
   await expect(summary).toContainText("1 replacements");
   await expect(
-    dialog.getByRole("button", { name: "Apply — unavailable in preview" }),
-  ).toBeDisabled();
+    dialog.getByRole("button", { name: "Prepare application" }),
+  ).toBeEnabled();
+  await expect(
+    dialog.getByRole("button", { name: "Apply confirmed changes" }),
+  ).toHaveCount(0);
   await dialog
     .getByText("Overall engineering notes · Base, Source and Destination", {
       exact: true,
@@ -266,8 +269,11 @@ test("actual App: read-only application preview retains Main's 20 files and requ
     .uncheck();
   await expect(readiness).toContainText("Ready as a saved-state preview");
   await expect(
-    dialog.getByRole("button", { name: "Apply — unavailable in preview" }),
-  ).toBeDisabled();
+    dialog.getByRole("button", { name: "Prepare application" }),
+  ).toBeEnabled();
+  await expect(
+    dialog.getByRole("button", { name: "Apply confirmed changes" }),
+  ).toHaveCount(0);
   expect(
     await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
   ).toBe(true);

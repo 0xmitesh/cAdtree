@@ -5,6 +5,7 @@ import {
 } from './fs-adapter';
 import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
+import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
@@ -80,6 +81,17 @@ export async function captureRevision(
     // Step 1: Reload validated vault and branch state under the writer lock
     const vaultState = await openExistingVault(vaultDir);
     if (vaultState.project.projectId !== projectId) throw new Error('Vault identity changed while waiting for the writer lock.');
+    const applicationBlock = applicationCaptureBlock(vaultState, input.branchId);
+    if (applicationBlock) throw new Error(applicationBlock);
+    // A retry of the same reviewed capture reconciles its already-published
+    // revision. Provenance is consumed by a verified completion, not a cache or
+    // a fallible post-publication acknowledgement.
+    const reconciled = input.reviewedChangesSignature && branchApplications(vaultState, input.branchId).find(op => op.status === 'captured' && op.events.some(event => event.kind === 'capture' && event.revisionId === op.capturedRevisionId && event.reviewedChangesSignature === input.reviewedChangesSignature));
+    if (reconciled) {
+      const revision = vaultState.revisions.find(r => r.manifest.revisionId === reconciled.capturedRevisionId)!;
+      return { revision, vaultState, cacheWarning: 'Reconciled the existing published application revision; no duplicate capture was created.' };
+    }
+    const pendingApplication = branchApplications(vaultState, input.branchId).find(op => op.status === 'applied');
     getBranchBaseline(vaultState, input.branchId);
     const workingFolders = input.resolveWorkingFolders ? await input.resolveWorkingFolders(vaultState) : input.workingFolders;
     await validateOperationWorkingFolders(vaultState, vaultDir, workingFolders);
@@ -106,6 +118,7 @@ export async function captureRevision(
 
     const parentRevisionId =
       vaultState.branchHeads[branch.branchId] ?? branch.startingRevisionId ?? null;
+    if (pendingApplication && pendingApplication.record!.plan.destinationRevisionId !== parentRevisionId) throw new Error('The pending application baseline no longer matches this branch. Inspect its provenance before saving.');
     let baselineManifest: RevisionManifest | null = null;
 
     if (parentRevisionId) {
@@ -377,6 +390,11 @@ export async function captureRevision(
       manifestSha256: actualManifestFileSha256,
       completedAt: new Date().toISOString(),
     };
+
+    // Additive sidecar, outside the historical manifest/checksum format. Its
+    // exact manifest hash and completion establish capture exactly once after
+    // reload, even if the caller loses the final acknowledgement.
+    if (pendingApplication) await linkApplicationCapture(vaultDir, pendingApplication, manifest, actualManifestFileSha256, freshScan.changesSignature);
 
     const completionJson = JSON.stringify(completion, null, 2);
     const expectedCompletionSha256 = hashString(completionJson);

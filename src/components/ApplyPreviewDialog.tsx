@@ -1,5 +1,14 @@
-import { useMemo, useState } from "react";
-import type { ReconstructedRevision, VaultState } from "../engine/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ReconstructedRevision,
+  VaultState,
+  ProgressUpdate,
+} from "../engine/types";
+import {
+  applicationReview,
+  type PreparedApplication,
+} from "../engine/application-service";
+import type { ApplicationReview } from "../engine/application-records";
 import {
   buildApplyPreview,
   prepareApplyPreview,
@@ -10,18 +19,30 @@ import {
 } from "../engine/apply-preview";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { formatBytes } from "../utils/format";
-import { Modal, Notice, NotesText, StatusBadge } from "./ui";
+import { Modal, Notice, NotesText, StatusBadge, OperationProgress } from "./ui";
+
+export interface ApplicationController {
+  prepare: (review: ApplicationReview) => Promise<PreparedApplication>;
+  apply: (prepared: PreparedApplication) => Promise<void>;
+  progress: ProgressUpdate | null;
+  cancel: () => void;
+  blockedReason?: string;
+  destinationLocation?: string;
+  refresh?: () => Promise<void>;
+}
 
 export function ApplyPreviewDialog({
   state,
   sourceId,
   destinationBranchId,
   onClose,
+  application,
 }: {
   state: VaultState;
   sourceId: string;
   destinationBranchId: string;
   onClose: () => void;
+  application?: ApplicationController;
 }) {
   const preparation = useMemo(
     () => prepareApplyPreview(state, sourceId, destinationBranchId),
@@ -49,6 +70,7 @@ export function ApplyPreviewDialog({
       context={context}
       state={state}
       onClose={onClose}
+      application={application}
     />
   );
 }
@@ -56,13 +78,31 @@ function ApplyPreviewBody({
   context,
   state,
   onClose,
+  application,
 }: {
   context: ApplyPreviewContext;
   state: VaultState;
   onClose: () => void;
+  application?: ApplicationController;
 }) {
   const [choices, setChoices] = useState<Record<string, PreviewChoice>>({});
   const [reason, setReason] = useState("");
+  const [prepared, setPrepared] = useState<PreparedApplication | null>(null);
+  const [running, setRunning] = useState(false);
+  const runningRef = useRef(false);
+  const [applied, setApplied] = useState(false);
+  const [applicationError, setApplicationError] = useState("");
+  const [cadClosed, setCadClosed] = useState(false);
+  const destinationFocus = useRef<HTMLParagraphElement>(null);
+  const completionFocus = useRef<HTMLButtonElement>(null);
+  const reasonFocus = useRef<HTMLTextAreaElement>(null);
+  const errorFocus = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (prepared) destinationFocus.current?.focus();
+    else if (applied) completionFocus.current?.focus();
+    else if (applicationError) errorFocus.current?.focus();
+    else reasonFocus.current?.focus();
+  }, [prepared, applied, applicationError]);
   const plan = useMemo(
     () => buildApplyPreview(context, choices, reason),
     [context, choices, reason],
@@ -147,11 +187,171 @@ function ApplyPreviewBody({
   const operations = plan.actions.filter((action) =>
     ["add", "replace", "delete"].includes(action.operation),
   );
-  return (
-    <Modal title="Review changes to apply — preview" onClose={onClose}>
-      <div className="apply-preview">
+  const prepare = async () => {
+    if (!application || runningRef.current) return;
+    runningRef.current = true;
+    setRunning(true);
+    setApplicationError("");
+    setCadClosed(false);
+    try {
+      setPrepared(await application.prepare(applicationReview(plan, choices)));
+    } catch (error) {
+      setApplicationError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      runningRef.current = false;
+      setRunning(false);
+    }
+  };
+  const apply = async () => {
+    if (!application || !prepared || runningRef.current || !cadClosed) return;
+    runningRef.current = true;
+    setRunning(true);
+    setApplicationError("");
+    try {
+      await application.apply(prepared);
+      setApplied(true);
+      setPrepared(null);
+    } catch (error) {
+      setApplicationError(
+        error instanceof Error ? error.message : String(error),
+      );
+      setPrepared(null);
+      setCadClosed(false);
+    } finally {
+      runningRef.current = false;
+      setRunning(false);
+    }
+  };
+  if (applied)
+    return (
+      <Modal title="Application completed" onClose={onClose}>
+        <Notice type="success">
+          Applied to working files — revision not yet saved.
+        </Notice>
+        <p>
+          Open the destination in CAD, check references and rebuild, and make
+          any necessary adjustments. Use the normal Changes → Save revision flow
+          to preserve the final complete snapshot and application provenance.
+        </p>
+        <p>No source branch was merged or closed.</p>
+        <div className="modal-actions">
+          <button
+            ref={completionFocus}
+            className="button primary"
+            onClick={onClose}
+          >
+            Return to History
+          </button>
+        </div>
+      </Modal>
+    );
+  if (prepared)
+    return (
+      <Modal
+        title="Confirm working-file application"
+        onClose={onClose}
+        busy={running}
+      >
         <Notice>
-          Preview only — no files will be applied. This uses saved states.
+          This will write to the active destination branch's connected working
+          folder. Save and close relevant CAD documents before proceeding. Other
+          applications and cloud sync are not locked; the multi-file operation
+          is not atomic.
+        </Notice>
+        <p ref={destinationFocus} tabIndex={-1}>
+          <strong>
+            Project: {state.project.name} · Destination: {prepared.branchName}
+          </strong>{" "}
+          · Working folder: {prepared.destinationName}
+        </p>
+        {application?.destinationLocation ? (
+          <p className="file-path">
+            Connected location: {application.destinationLocation}
+          </p>
+        ) : null}
+        <p>
+          Saved baseline:{" "}
+          {formatRevisionNumber(context.destination.manifest.displayNumber)} ·
+          Source: {formatRevisionNumber(context.source.manifest.displayNumber)}{" "}
+          on {branchName(context.source)}.
+        </p>
+        <p>
+          The destination matched its saved baseline during preparation. It will
+          be rechecked under the project writer lock before application.
+        </p>
+        <h3>Confirmed additions, replacements and deletions</h3>
+        <ul className="application-actions">
+          {prepared.plan.actions.map((action) => (
+            <li key={action.path}>
+              <strong>
+                {action.operation === "delete"
+                  ? "DELETE destination file"
+                  : action.operation === "replace"
+                    ? "Replace with Source"
+                    : action.operation === "add"
+                      ? "Add Source file"
+                      : "Keep Destination"}
+              </strong>{" "}
+              · <span className="file-path">{action.path}</span>
+            </li>
+          ))}
+        </ul>
+        <p>
+          <strong>Engineering reason:</strong> {prepared.plan.reason}
+        </p>
+        <label className="file-choice">
+          <input
+            type="checkbox"
+            checked={cadClosed}
+            disabled={running}
+            onChange={(event) => setCadClosed(event.target.checked)}
+          />
+          I have saved and closed relevant CAD documents and confirm this
+          destination.
+        </label>
+        <OperationProgress
+          progress={application?.progress ?? null}
+          onCancel={() => application?.cancel()}
+        />
+        <div className="modal-actions">
+          <button
+            className="button secondary"
+            disabled={running}
+            onClick={() => setPrepared(null)}
+          >
+            Back to review
+          </button>
+          <button
+            className="button primary"
+            disabled={running || !cadClosed}
+            onClick={() => void apply()}
+          >
+            Apply confirmed changes
+          </button>
+        </div>
+      </Modal>
+    );
+  return (
+    <Modal
+      title="Review changes to apply — preview"
+      onClose={onClose}
+      busy={running}
+    >
+      <div className="apply-preview">
+        {applicationError ? (
+          <div ref={errorFocus} tabIndex={-1}>
+            <Notice type="error">{applicationError}</Notice>
+          </div>
+        ) : null}
+        {application?.blockedReason ? (
+          <Notice type="error">{application.blockedReason}</Notice>
+        ) : null}
+        <Notice>
+          {application
+            ? "Saved-state review — no files change until preparation and final confirmation. Preparation rejects uncaptured destination edits."
+            : "Preview only — no files will be applied. This uses saved states."}
           Current uncaptured working edits are not included and are not
           authorized for replacement.
         </Notice>
@@ -222,8 +422,10 @@ function ApplyPreviewBody({
             </ul>
           ) : (
             <p>
-              Nothing has been written. Working edits and actual application
-              require a later, separate step.
+              Nothing has been written.{" "}
+              {application
+                ? "Prepare application to check the destination, then review and confirm the working-file changes."
+                : "Working edits and actual application require a later, separate step."}
             </p>
           )}
         </div>
@@ -240,12 +442,14 @@ function ApplyPreviewBody({
         <label className="field preview-reason">
           <span>Engineering reason for proposed application</span>
           <textarea
+            ref={reasonFocus}
             aria-label="Engineering reason for proposed application"
             aria-required="true"
             rows={2}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             placeholder="Explain which design changes you want to reuse and why."
+            disabled={running}
           />
         </label>
         <details className="disclosure">
@@ -307,6 +511,7 @@ function ApplyPreviewBody({
                       type="checkbox"
                       aria-label={`Select source ${sourceWord(row)}: ${row.path}`}
                       checked={selected}
+                      disabled={running}
                       onChange={(event) =>
                         setSelection(row, event.target.checked)
                       }
@@ -337,7 +542,7 @@ function ApplyPreviewBody({
                       <span>Conflict decision</span>
                       <select
                         aria-label={`Conflict decision: ${row.path}`}
-                        disabled={!selected}
+                        disabled={!selected || running}
                         value={choices[row.path]?.decision ?? "unresolved"}
                         onChange={(event) =>
                           setChoices((previous) => ({
@@ -448,12 +653,57 @@ function ApplyPreviewBody({
             ))}
           </ul>
         </details>
+        <OperationProgress
+          progress={application?.progress ?? null}
+          onCancel={() => application?.cancel()}
+        />
         <div className="modal-actions">
-          <button className="button secondary" onClick={onClose}>
+          <button
+            className="button secondary"
+            onClick={onClose}
+            disabled={running}
+          >
             Close preview
           </button>
-          <button className="button primary" disabled>
-            Apply — unavailable in preview
+          {application?.refresh ? (
+            <button
+              className="button secondary"
+              disabled={running}
+              onClick={async () => {
+                if (runningRef.current) return;
+                runningRef.current = true;
+                setRunning(true);
+                setApplicationError("");
+                try {
+                  await application.refresh!();
+                  setChoices({});
+                  setReason("");
+                } catch (error) {
+                  setApplicationError(
+                    error instanceof Error ? error.message : String(error),
+                  );
+                } finally {
+                  runningRef.current = false;
+                  setRunning(false);
+                }
+              }}
+            >
+              Refresh saved states
+            </button>
+          ) : null}
+          <button
+            className="button primary"
+            disabled={
+              !application ||
+              !plan.ready ||
+              running ||
+              Boolean(application.blockedReason)
+            }
+            onClick={() => void prepare()}
+          >
+            {application
+              ? "Prepare application"
+              : "Apply — unavailable in preview"}
           </button>
         </div>
       </div>

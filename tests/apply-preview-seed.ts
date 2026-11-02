@@ -175,6 +175,15 @@ export async function seedApplyPreviewReview() {
     rootHandle: root.handle,
   });
   return {
+    vaultPath: await root.resolveRelativePath(project.vaultDir),
+    workingPaths: Object.fromEntries(
+      await Promise.all(
+        Object.entries(project.workingFolders).map(async ([id, dir]) => [
+          id,
+          await root.resolveRelativePath(dir!),
+        ]),
+      ),
+    ),
     ids,
     safeCaseId,
     conflictDestinationId,
