@@ -43,63 +43,62 @@ export function HomeWelcome({
               Define<span className="welcome-period">.</span>
             </span>
           </h1>
-          <p className="welcome-lead">
-            Great ideas rarely arrive in one take. Give your projects,
-            alternatives and all those “final_final” files a place to belong.
-          </p>
           <p className="welcome-trust">
             <ShieldCheck size={17} aria-hidden="true" /> Your files. Your
             storage.
           </p>
         </div>
-        <div
-          className="welcome-story"
-          role="img"
-          aria-label="Illustration: a project develops through saved milestones and a separate design alternative."
-        >
-          <div className="welcome-story-top">
-            <span>
-              <FolderOpen size={17} /> A design in motion
-            </span>
-          </div>
-          <div className="welcome-story-body">
-            <div className="welcome-story-step">
-              <span className="welcome-revision">01</span>
-              <div>
-                <strong>The first idea</strong>
-                <span>A starting point worth keeping</span>
+        <div className="welcome-showcase">
+          <p className="welcome-lead">
+            Great ideas rarely arrive in one take. Give your projects,
+            alternatives and all those “final_final” files a place to belong.
+          </p>
+          <div
+            className="welcome-story"
+            role="img"
+            aria-label="Illustration: a project develops through saved milestones and a separate design alternative."
+          >
+            <div className="welcome-story-top">
+              <span>
+                <FolderOpen size={17} /> A design in motion
+              </span>
+            </div>
+            <div className="welcome-story-body">
+              <div className="welcome-story-step">
+                <span className="welcome-revision">01</span>
+                <div>
+                  <strong>The first idea</strong>
+                  <span>A starting point worth keeping</span>
+                </div>
+              </div>
+              <div className="welcome-story-step">
+                <span className="welcome-revision">02</span>
+                <div>
+                  <strong>A better fit</strong>
+                  <span>The change, and the reason behind it</span>
+                </div>
+              </div>
+              <div className="welcome-story-fork">
+                <GitBranch size={17} />
+                <span>A different direction</span>
+              </div>
+              <div className="welcome-story-step welcome-story-latest">
+                <span className="welcome-revision">03</span>
+                <div>
+                  <strong>Your next breakthrough</strong>
+                  <span>Room to explore. A way back.</span>
+                </div>
               </div>
             </div>
-            <div className="welcome-story-step">
-              <span className="welcome-revision">02</span>
-              <div>
-                <strong>A better fit</strong>
-                <span>The change, and the reason behind it</span>
-              </div>
+            <div className="welcome-story-foot">
+              <span className="welcome-saved-dot" /> A clear history. A fresh
+              possibility.
             </div>
-            <div className="welcome-story-fork">
-              <GitBranch size={17} />
-              <span>A different direction</span>
-            </div>
-            <div className="welcome-story-step welcome-story-latest">
-              <span className="welcome-revision">03</span>
-              <div>
-                <strong>Your next breakthrough</strong>
-                <span>Room to explore. A way back.</span>
-              </div>
-            </div>
-          </div>
-          <div className="welcome-story-foot">
-            <span className="welcome-saved-dot" /> A clear history. A fresh
-            possibility.
           </div>
         </div>
       </section>
 
-      <section
-        className="welcome-paths"
-        aria-label="Choose your beginning"
-      >
+      <section className="welcome-paths" aria-label="Choose your beginning">
         {["new", "return"].map((path) =>
           path === "new" ? (
             <article key="new" className="welcome-path welcome-new">
