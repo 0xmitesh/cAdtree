@@ -1964,7 +1964,7 @@ export default function App() {
               cAdtree<span className="wordmark-dot">.</span>
             </span>
           </a>
-          <p className="rail-caption">DESIGN. RECORD. EVOLVE.</p>
+          <p className="rail-caption">CREATE. ADAPT. DEFINE.</p>
           <nav aria-label="Primary navigation" className="rail-navigation">
             <button
               aria-label="All workspaces"
@@ -2434,10 +2434,6 @@ export default function App() {
               </div>
             ) : null}
           </main>
-          <footer className="workspace-footer">
-            <span>cAdtree · CAD project history</span>
-            <span>Complete revisions. Separate recovery copies.</span>
-          </footer>
           {pendingHome ? (
             <WindowsFolderAddressDialog
               key={pendingHome.requestId}

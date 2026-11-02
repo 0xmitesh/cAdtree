@@ -28,18 +28,27 @@ export function HomeWelcome({
     <>
       <section className="welcome-hero" aria-labelledby="welcome-title">
         <div className="welcome-introduction">
-          <p className="eyebrow">A CLEARER SPACE TO CREATE</p>
-          <h1 id="welcome-title">
-            Your best work.
-            <br />
-            <span>Every version of it.</span>
+          <h1
+            id="welcome-title"
+            className="welcome-tagline"
+            aria-label="Create. Adapt. Define."
+          >
+            <span className="welcome-create">
+              Create<span className="welcome-period">.</span>
+            </span>{" "}
+            <span className="welcome-adapt">
+              Adapt<span className="welcome-period">.</span>
+            </span>{" "}
+            <span className="welcome-define">
+              Define<span className="welcome-period">.</span>
+            </span>
           </h1>
           <p className="welcome-lead">
             Great ideas rarely arrive in one take. Give your projects,
             alternatives and all those “final_final” files a place to belong.
           </p>
           <p className="welcome-promise">
-            cAdtree keeps your saved design story clear—so you can explore the
+            cAdtree keeps your saved design story clear so you can explore the
             next idea and find your way back.
           </p>
           <p className="welcome-trust">
@@ -95,7 +104,7 @@ export function HomeWelcome({
         className={`welcome-paths${remembered ? " welcome-has-home" : ""}`}
         aria-label="Choose your beginning"
       >
-        {(remembered ? ["return", "new"] : ["new", "return"]).map((path) =>
+        {["new", "return"].map((path) =>
           path === "new" ? (
             <article key="new" className="welcome-path welcome-new">
               <div className="welcome-path-heading">

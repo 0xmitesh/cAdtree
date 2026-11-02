@@ -9,7 +9,7 @@ for (const width of [1366, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/");
     const title = page.getByRole("heading", {
-      name: "Your best work. Every version of it.",
+      name: "Create. Adapt. Define.",
       exact: true,
     });
     await expect(title).toBeVisible();
@@ -36,7 +36,7 @@ for (const width of [1366, 390]) {
     await expect(start).toBeEnabled();
     await expect(open).toBeEnabled();
     await expect(
-      page.getByText("Your files. Your storage.", {
+      page.getByRole("main").getByText("Your files. Your storage.", {
         exact: true,
       }),
     ).toBeVisible();
@@ -122,9 +122,11 @@ for (const width of [1366, 390]) {
     await expect(returning).toBeVisible();
     await expect(returning).toBeEnabled();
     await expect(returning).toHaveAttribute("title", rootName);
-    expect(
-      await returning.evaluate((el) => el.getBoundingClientRect().bottom),
-    ).toBeLessThan(844);
+    const firstChapter = await page.locator(".welcome-new").boundingBox();
+    const welcomeHome = await page.locator(".welcome-return").boundingBox();
+    expect(width > 600 ? firstChapter!.x : firstChapter!.y).toBeLessThan(
+      width > 600 ? welcomeHome!.x : welcomeHome!.y,
+    );
     await expect(page.getByText("Home options", { exact: true })).toHaveCount(
       0,
     );
