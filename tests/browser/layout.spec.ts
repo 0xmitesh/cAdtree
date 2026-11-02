@@ -14,7 +14,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
     { timeout: 90_000 },
   );
   await page
-    .getByRole("button", { name: /Reconnect cAdtree Synthetic Preview v2/ })
+    .getByRole("button", { name: /Return to cAdtree Synthetic Preview v2/ })
     .click();
   await page
     .getByRole("textbox", { name: "Cadtree home folder address" })
@@ -187,7 +187,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(resize).toHaveAttribute("aria-valuenow", "256");
   await page.reload();
   await page
-    .getByRole("button", { name: /Reconnect cAdtree Synthetic Preview v2/ })
+    .getByRole("button", { name: /Return to cAdtree Synthetic Preview v2/ })
     .click();
   await expect(resize).toHaveAttribute("aria-valuenow", "256");
   await tree

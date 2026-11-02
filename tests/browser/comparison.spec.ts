@@ -14,7 +14,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
   });
   await page.reload();
   await page
-    .getByRole("button", { name: /Reconnect Synthetic comparison/ })
+    .getByRole("button", { name: /Return to Synthetic comparison/ })
     .click();
   await page
     .getByRole("textbox", { name: "Cadtree home folder address" })

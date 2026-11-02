@@ -1,5 +1,6 @@
 import "../../tests/dom";
 import {
+  openExternalWorkspaces,
   appBusy,
   currentBranchId,
   selectBranch,
@@ -49,10 +50,7 @@ async function setup() {
     },
   });
   const ui = render(<App />);
-  fireEvent.click(ui.getByText("Home options"));
-  fireEvent.click(
-    ui.getByRole("button", { name: "Inspect external workspaces" }),
-  );
+  await openExternalWorkspaces(ui);
   fireEvent.click(ui.getByText("Advanced: external projects"));
   fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
   fireEvent.click(ui.getByRole("button", { name: /Open existing vault/ }));
@@ -126,10 +124,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     else await ctx.vault.writeFileText(marker, "{");
     cleanup();
     const ui = render(<App />);
-    fireEvent.click(ui.getByText("Home options"));
-    fireEvent.click(
-      ui.getByRole("button", { name: "Inspect external workspaces" }),
-    );
+    await openExternalWorkspaces(ui);
     fireEvent.click(ui.getByText("Advanced: external projects"));
     fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
     ctx.queue.push(nativeDirectory(ctx.vault));

@@ -13,7 +13,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   });
   await page.reload();
   await page
-    .getByRole("button", { name: /Reconnect Synthetic file history/ })
+    .getByRole("button", { name: /Return to Synthetic file history/ })
     .click();
   await page
     .getByRole("textbox", { name: "Cadtree home folder address" })

@@ -13,7 +13,7 @@ test("actual App: read-only application preview retains Main's 20 files and requ
   });
   await page.reload();
   await page
-    .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+    .getByRole("button", { name: /Return to Synthetic application preview/ })
     .click();
   await page
     .getByRole("textbox", { name: "Cadtree home folder address" })

@@ -22,7 +22,7 @@ for (const width of [1366, 390])
     const before = await read();
     await page.reload();
     await page
-      .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+      .getByRole("button", { name: /Return to Synthetic application preview/ })
       .click();
     await page
       .getByRole("textbox", { name: "Cadtree home folder address" })
@@ -271,11 +271,11 @@ for (const width of [1366, 390])
     ).toHaveAttribute("data-branch-id", "branch-main");
     await page.reload();
     await page
-      .getByRole("button", { name: /Reconnect Synthetic application preview/ })
+      .getByRole("button", { name: /Return to Synthetic application preview/ })
       .click();
     await expect(
       page.getByRole("button", {
-        name: /Reconnect Synthetic application preview/,
+        name: /Return to Synthetic application preview/,
       }),
     ).toHaveCount(0);
     // Use explicit project navigation if reconnection restores only the home overview.
