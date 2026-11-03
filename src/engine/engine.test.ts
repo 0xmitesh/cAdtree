@@ -727,7 +727,8 @@ test('Backward compatibility: existing vault manifests without fileNotes open an
 test('Production UI files do not import fixture generators, InMemoryFileSystemAdapter, or expose Fixture Lab controls', () => {
   const uiFiles = [
     'src/App.tsx',
-    'src/components/ProjectConnectView.tsx',
+    'src/components/HomeWorkspacesView.tsx',
+    'src/components/WorkspaceProjectsView.tsx',
     'src/components/ChangesCaptureView.tsx',
     'src/components/HistoryRecoveryView.tsx',
     'src/components/DiagnosticsView.tsx',

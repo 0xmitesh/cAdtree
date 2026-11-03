@@ -1,6 +1,6 @@
 import "../../tests/dom";
 import {
-  openExternalWorkspaces,
+  openHomeWorkspace,
   appBusy,
   currentBranchId,
   selectBranch,
@@ -16,12 +16,10 @@ import {
   act,
 } from "@testing-library/react";
 import App from "../App";
-import { nativeDirectory } from "../../tests/native-fs";
+import { createHome, createHomeWorkspace } from "../engine/home-service";
+import { importProject, resolveManagedProject } from "../engine/workspace-service";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
-import {
-  initializeProjectVault,
-  openExistingVault,
-} from "../engine/vault-service";
+import { openExistingVault } from "../engine/vault-service";
 import { captureRevision } from "../engine/revision-service";
 import { createDesignBranch } from "../engine/branch-service";
 import { HistoryRecoveryView } from "./HistoryRecoveryView";
@@ -29,11 +27,15 @@ import { HistoryRecoveryView } from "./HistoryRecoveryView";
 afterEach(cleanup);
 const notes = { problem: "", modification: "", observations: "" };
 async function setup() {
-  const main = new InMemoryFileSystemAdapter("Main CAD");
-  const vault = new InMemoryFileSystemAdapter("Vault");
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
+  const source = new InMemoryFileSystemAdapter("Main CAD");
+  await source.writeFileBytes(["Part.SLDPRT"], new Uint8Array([0, 255, 9]));
+  const project = await importProject(root, source, "Actuator");
+  const main = project.workingFolders["branch-main"] as InMemoryFileSystemAdapter;
+  const vault = project.vaultDir;
   const parent = new InMemoryFileSystemAdapter("Cases");
-  await main.writeFileBytes(["Part.SLDPRT"], new Uint8Array([0, 255, 9]));
-  await initializeProjectVault(main, vault, "Actuator");
   const first = (
     await captureRevision(main, vault, {
       branchId: "branch-main",
@@ -41,7 +43,7 @@ async function setup() {
       notes,
     })
   ).revision;
-  const queue = [nativeDirectory(vault), nativeDirectory(main)];
+  const queue: FileSystemDirectoryHandle[] = [];
   Object.assign(window, {
     showDirectoryPicker: async () => {
       const next = queue.shift();
@@ -50,21 +52,14 @@ async function setup() {
     },
   });
   const ui = render(<App />);
-  await openExternalWorkspaces(ui);
-  fireEvent.click(ui.getByText("Advanced: external projects"));
-  fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
-  fireEvent.click(ui.getByRole("button", { name: /Open existing vault/ }));
-  const dialog = within(ui.getByRole("dialog"));
-  fireEvent.click(dialog.getByRole("button", { name: "Choose vault" }));
-  await waitFor(() => assert.ok(dialog.getByText("Vault", { exact: true })));
-  fireEvent.click(dialog.getByRole("button", { name: "Connect" }));
-  await waitFor(() => assert.ok(dialog.getByText("Main CAD", { exact: true })));
-  fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
+  await openHomeWorkspace(ui, home);
+  fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await waitFor(() =>
     assert.ok(ui.getByRole("status", { name: "Current branch" })),
   );
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-  return { main, vault, parent, first, queue, ui };
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  return { home, root, project, main, vault, parent, first, queue, ui };
 }
 function visibleChanges(container: HTMLElement) {
   return within(
@@ -84,6 +79,7 @@ async function createFromUI(
   fireEvent.click(
     ctx.ui.getByRole("button", { name: "Create branch from here" }),
   );
+  await waitFor(() => assert.ok(ctx.ui.queryByRole("dialog")));
   const dialog = within(ctx.ui.getByRole("dialog"));
   assert.ok(dialog.getByText(/Rev 001 on Main/));
   fireEvent.change(dialog.getByRole("textbox", { name: "Branch name" }), {
@@ -93,9 +89,6 @@ async function createFromUI(
     dialog.getByRole("textbox", { name: "Engineering reason" }),
     { target: { value: `Explore ${name}` } },
   );
-  ctx.queue.push(nativeDirectory(ctx.parent));
-  fireEvent.click(dialog.getByRole("button", { name: "Choose parent folder" }));
-  await waitFor(() => assert.ok(dialog.getByText("Cases", { exact: true })));
   fireEvent.click(dialog.getByRole("button", { name: "Create branch" }));
   await waitFor(() => assert.ok(!ctx.ui.queryByRole("dialog")));
   const state = await openExistingVault(ctx.vault);
@@ -109,9 +102,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
   for (const mode of ["missing", "malformed"]) {
     const ctx = await setup();
     const branch = await createFromUI(ctx, "Case A");
-    const folder = await ctx.parent.getDirectory([
-      (await ctx.parent.listEntries())[0].name,
-    ]);
+    const folder = (await resolveManagedProject(ctx.root, ctx.project.record.containerPath)).workingFolders[branch.branchId]!;
     await folder.writeFileBytes(["Part.SLDPRT"], new Uint8Array([4, 0, 255]));
     await captureRevision(folder, ctx.vault, {
       branchId: branch.branchId,
@@ -124,16 +115,9 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     else await ctx.vault.writeFileText(marker, "{");
     cleanup();
     const ui = render(<App />);
-    await openExternalWorkspaces(ui);
-    fireEvent.click(ui.getByText("Advanced: external projects"));
-    fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
-    ctx.queue.push(nativeDirectory(ctx.vault));
-    fireEvent.click(ui.getByRole("button", { name: /Open existing vault/ }));
-    const dialog = within(ui.getByRole("dialog"));
-    fireEvent.click(dialog.getByRole("button", { name: "Choose vault" }));
-    await waitFor(() => assert.ok(dialog.getByText("Vault", { exact: true })));
-    fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
-    await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+    await openHomeWorkspace(ui, ctx.home);
+    fireEvent.click(ui.getByRole("button", { name: "Inspect project" }));
+    await waitFor(() => assert.equal(appBusy(ui), false));
     assert.ok(
       within(
         ui.container.querySelector<HTMLElement>(".settings-page")!,
@@ -208,12 +192,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.ok(
     ctx.ui.getByRole("button", { name: "Started from Rev 001 on Main" }),
   );
-  assert.match(
-    ctx.ui.container.textContent!,
-    /Browser convenience data could not be saved/,
-  );
-  const branchFolderEntry = (await ctx.parent.listEntries())[0];
-  const branchFolder = await ctx.parent.getDirectory([branchFolderEntry.name]);
+  const branchFolder = (await resolveManagedProject(ctx.root, ctx.project.record.containerPath)).workingFolders[branch.branchId]!;
   await branchFolder.writeFileBytes(["Part.SLDPRT"], new Uint8Array([7, 8]));
   fireEvent.click(
     within(ctx.ui.getByRole("navigation")).getByRole("button", {
@@ -309,7 +288,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.ok(ctx.ui.getByText("Metadata and file contents verified"));
 });
 
-test("App clears stale scan context for unavailable handles and rejects switching during an asynchronous scan", async () => {
+test("App rejects branch switching during an asynchronous scan", async () => {
   const ctx = await setup();
   const branch = await createFromUI(ctx, "Case A");
   let release!: () => void;
@@ -361,48 +340,7 @@ test("App clears stale scan context for unavailable handles and rejects switchin
     ).value,
     "branch-main",
   );
-  ctx.main.setHooks({ onBeforeRead: undefined, readPermission: "denied" });
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: branch.branchId },
-  });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Active branch",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
-    target: { value: "branch-main" },
-  });
-  await waitFor(() =>
-    assert.ok(
-      within(
-        ctx.ui.container.querySelector(".settings-page") as HTMLElement,
-      ).getByRole("button", { name: "Connect folder" }),
-    ),
-  );
-  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.match(
-    ctx.ui.container.querySelector(".settings-page .settings-row")!
-      .textContent!,
-    /Not connected/,
-  );
-  fireEvent.click(
-    within(ctx.ui.getByRole("navigation")).getByRole("button", {
-      name: "Changes",
-    }),
-  );
-  assert.ok(visibleChanges(ctx.ui.container).getByText("Scan needed"));
-  assert.equal(
-    visibleChanges(ctx.ui.container).queryByRole("button", {
-      name: "Save revision",
-    }),
-    null,
-  );
+  ctx.main.setHooks({ onBeforeRead: undefined });
 });
 
 test("multiple unmodified branch labels share their actual baseline node without creating revisions", async () => {
@@ -444,61 +382,6 @@ test("multiple unmodified branch labels share their actual baseline node without
   );
 });
 
-test("clearing browser bindings reconstructs all branches and requires explicit isolated reconnection one folder at a time", async () => {
-  const ctx = await setup();
-  const branch = await createFromUI(ctx, "Case A");
-  const caseDir = await ctx.parent.getDirectory([
-    (await ctx.parent.listEntries())[0].name,
-  ]);
-  fireEvent.click(ctx.ui.getByRole("button", { name: "Settings" }));
-  fireEvent.click(ctx.ui.getByText("Advanced record information"));
-  fireEvent.click(
-    ctx.ui.getByRole("button", {
-      name: "Clear remembered connections and reopen vault",
-    }),
-  );
-  const dialog = within(ctx.ui.getByRole("dialog"));
-  fireEvent.click(
-    dialog.getByRole("button", { name: "Clear connections and reopen" }),
-  );
-  await waitFor(() => assert.ok(!ctx.ui.queryByRole("dialog")));
-  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.equal(
-    ctx.ui.container.querySelectorAll(".settings-page option").length,
-    2,
-  );
-  assert.match(
-    ctx.ui.container.querySelector(".settings-page .settings-row")!
-      .textContent!,
-    /Not connected/,
-  );
-  await selectBranch(ctx.ui, "branch-main");
-  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  ctx.queue.push(nativeDirectory(ctx.main));
-  fireEvent.click(ctx.ui.getByRole("button", { name: "Connect folder" }));
-  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.match(
-    ctx.ui.container.querySelector(".settings-page .settings-row")!
-      .textContent!,
-    /Main CAD/,
-  );
-  assert.match(
-    ctx.ui.container.querySelector(".global-integrity")!.textContent!,
-    /Case A/,
-  );
-  await selectBranch(ctx.ui, branch.branchId);
-  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  ctx.queue.push(nativeDirectory(caseDir));
-  fireEvent.click(ctx.ui.getByRole("button", { name: "Connect folder" }));
-  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.ok(
-    !ctx.ui.container
-      .querySelector(".global-integrity")!
-      .textContent!.includes("Connect the working folders"),
-  );
-  assert.equal((await openExistingVault(ctx.vault)).revisions.length, 1);
-});
-
 test("branch creation shows cancellable progress and reports the incomplete folder without publishing it", async () => {
   const ctx = await setup();
   let release!: () => void;
@@ -506,7 +389,7 @@ test("branch creation shows cancellable progress and reports the incomplete fold
     release = resolve;
   });
   let paused = false;
-  ctx.parent.setHooks({
+  (ctx.root as InMemoryFileSystemAdapter).setHooks({
     onBeforeWrite: async () => {
       paused = true;
       await gate;
@@ -515,6 +398,7 @@ test("branch creation shows cancellable progress and reports the incomplete fold
   fireEvent.click(
     ctx.ui.getByRole("button", { name: "Create branch from here" }),
   );
+  await waitFor(() => assert.ok(ctx.ui.queryByRole("dialog")));
   const dialog = within(ctx.ui.getByRole("dialog"));
   fireEvent.change(dialog.getByRole("textbox", { name: "Branch name" }), {
     target: { value: "Cancelled Case" },
@@ -523,9 +407,6 @@ test("branch creation shows cancellable progress and reports the incomplete fold
     dialog.getByRole("textbox", { name: "Engineering reason" }),
     { target: { value: "Test interrupted copy" } },
   );
-  ctx.queue.push(nativeDirectory(ctx.parent));
-  fireEvent.click(dialog.getByRole("button", { name: "Choose parent folder" }));
-  await waitFor(() => assert.ok(dialog.getByText("Cases")));
   fireEvent.click(dialog.getByRole("button", { name: "Create branch" }));
   try {
     await waitFor(() => assert.equal(paused, true));
@@ -543,5 +424,5 @@ test("branch creation shows cancellable progress and reports the incomplete fold
     ),
   );
   assert.equal((await openExistingVault(ctx.vault)).branches.length, 1);
-  assert.equal((await ctx.parent.listEntries()).length, 1);
+  (ctx.root as InMemoryFileSystemAdapter).setHooks({ onBeforeWrite: undefined });
 });

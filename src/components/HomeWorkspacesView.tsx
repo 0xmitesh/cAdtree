@@ -23,7 +23,6 @@ export function HomeWorkspacesView(props: {
   onBring: () => Promise<void>;
   onOpen: (entry: HomeWorkspaceEntry) => Promise<void>;
   onRefresh: () => Promise<void>;
-  onExternal: () => void;
   onCancel: () => void;
 }) {
   const options = useRef<HTMLDetailsElement>(null);
@@ -113,16 +112,6 @@ export function HomeWorkspacesView(props: {
                 >
                   Switch Cadtree home
                 </button>
-                <div className="home-options-advanced">
-                  <span>Advanced</span>
-                  <button
-                    className="text-button"
-                    disabled={props.busy}
-                    onClick={props.onExternal}
-                  >
-                    Inspect external workspaces
-                  </button>
-                </div>
               </div>
             </details>
           </div>

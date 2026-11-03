@@ -106,7 +106,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
     );
     await waitFor(() =>
       assert.equal(
-        (ui.getByRole("button", { name: "Add project" }) as HTMLButtonElement)
+        (ui.getByRole("button", { name: "Create project" }) as HTMLButtonElement)
           .disabled,
         false,
       ),
@@ -336,7 +336,7 @@ test("guided whole-workspace migration identifies managed location and never reu
   assert.equal(picker.calls(), 2);
 });
 
-test("home groups retained migration attempts, shows missing workspaces, and resolves original/managed identity explicitly", async () => {
+test("home groups retained migration attempts and opens the managed workspace while missing workspaces remain unavailable", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const original = new InMemoryFileSystemAdapter("cam 2");
@@ -362,17 +362,9 @@ test("home groups retained migration attempts, shows missing workspaces, and res
   assert.equal(ui.getAllByRole("article").length, 2);
   assert.ok(ui.getByText("Location details · 2 retained locations"));
   assert.ok(ui.getByText("Unavailable · Needs attention"));
-  fireEvent.click(ui.getByText("Home options"));
-  fireEvent.click(
-    ui.getByRole("button", { name: "Inspect external workspaces" }),
-  );
-  fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
-  await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Choose workspace location" })),
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Open managed workspace" }));
+  fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "cam 2." })));
-  await ready(ui, "Add project");
+  await ready(ui, "Create project");
   nav(ui, "My workspaces");
   assert.equal(ui.getAllByRole("article").length, 2);
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 1);

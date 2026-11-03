@@ -65,20 +65,6 @@ for (const viewport of [
     await expect(
       page.getByRole("textbox", { name: "Parts/Housing.SLDPRT: problem" }),
     ).toHaveValue("Shaft binds at operating temperature.");
-    await page.getByRole("button", { name: "Projects", exact: true }).click();
-    await page.screenshot({
-      path: path.join(screenshotDir, `projects-${viewport.width}.png`),
-      fullPage: true,
-    });
-    await page
-      .getByRole("button", { name: "New project", exact: true })
-      .click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog")).not.toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "New project", exact: true }),
-    ).toBeFocused();
   });
 }
 for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {

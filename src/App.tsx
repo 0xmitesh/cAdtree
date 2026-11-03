@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
@@ -6,11 +6,6 @@ import {
 } from "./engine/fs-adapter";
 import {
   clearAllConvenienceMetadata,
-  getRememberedProjectBinding,
-  listRememberedProjectBindings,
-  type RememberedProjectBinding,
-  removeRememberedProjectBinding,
-  rememberBranchConnection,
   rememberWorkspace,
   getRememberedWorkspace,
   type RememberedWorkspace,
@@ -52,7 +47,6 @@ import { ApplicationStatus } from "./components/ApplicationStatus";
 import { DesignCases } from "./components/DesignCases";
 import { changeCaseLifecycle } from "./engine/case-lifecycle-service";
 import { assertCaseWritable, caseWriteBlock } from "./engine/case-lifecycle";
-import { createDesignBranch } from "./engine/branch-service";
 import {
   getBranchBaseline,
   validateWorkingFolderBindings,
@@ -69,11 +63,9 @@ import {
 } from "./engine/types";
 import {
   formatRevisionNumber,
-  initializeProjectVault,
   openExistingVault,
   verifyRevisionObjects,
 } from "./engine/vault-service";
-import { ProjectConnectView } from "./components/ProjectConnectView";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ActiveBranchPicker } from "./components/ActiveBranchPicker";
@@ -114,13 +106,12 @@ import {
 import { resolveHomeFilePath } from "./engine/path-shortcuts";
 import type { CaptureDraft } from "./components/ChangesCaptureView";
 import {
-  createWorkspace,
   openWorkspace,
+  createProject,
   importProject,
   resolveManagedProject,
   createManagedBranch,
   recoverManagedCopy,
-  adoptProject,
   type WorkspaceState,
   type ManagedProject,
   type WorkspaceProjectEntry,
@@ -164,16 +155,9 @@ export default function App() {
   const [managedWorkspaceKey, setManagedWorkspaceKey] = useState<string | null>(
     null,
   );
-  const [workspaceLocationConflict, setWorkspaceLocationConflict] = useState<{
-    external: WorkspaceState;
-    managed: HomeWorkspaceEntry;
-  } | null>(null);
   const draftCache = useRef(new Map<string, CaptureDraft>());
   const branchContexts = useRef(new Map<string, string>());
   const [activeTab, setActiveTab] = useState<ActiveTab>("connect");
-  const [rememberedBindings, setRememberedBindings] = useState<
-    RememberedProjectBinding[]
-  >([]);
   const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
   useEffect(() => {
     if (workspace && managedWorkspaceKey)
@@ -193,17 +177,11 @@ export default function App() {
   );
   const [rememberedWorkspace, setRememberedWorkspace] =
     useState<RememberedWorkspace | null>(null);
-  const [legacyMode, setLegacyMode] = useState(false);
   const [convenienceEpoch, setConvenienceEpoch] = useState(0);
   const [bannerScope, setBannerScope] = useState<"workspace" | "project">(
     "workspace",
   );
   const [projectSession, setProjectSession] = useState(0);
-  const [locationConflict, setLocationConflict] = useState<{
-    name: string;
-    external: () => Promise<void>;
-    managed: WorkspaceProjectEntry[];
-  } | null>(null);
   const [vaultDir, setVaultDir] = useState<FileSystemDirectoryAdapter | null>(
     null,
   );
@@ -230,17 +208,12 @@ export default function App() {
   // Synchronous guards also cover rapid double clicks before React renders disabled controls.
   const operationRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
-  const refreshRememberedList = useCallback(
-    async () => setRememberedBindings(await listRememberedProjectBindings()),
-    [],
-  );
   useEffect(() => {
-    void refreshRememberedList();
     void getRememberedWorkspace().then(setRememberedWorkspace);
     void getRememberedHome()
       .then(setRememberedHome)
       .catch(() => {});
-  }, [refreshRememberedList]);
+  }, []);
   useEffect(
     () => () => {
       contextVersion.current++;
@@ -337,37 +310,6 @@ export default function App() {
       };
     });
   };
-  const persistBinding = async (
-    state: VaultState,
-    vault: FileSystemDirectoryAdapter,
-    branchId: string,
-    working?: FileSystemDirectoryAdapter | null,
-    managed: ManagedProject | null = managedProject,
-  ): Promise<string> => {
-    if (managed && workspace)
-      return persistWorkspace(
-        workspace,
-        managed.record.containerPath,
-        branchId,
-      );
-    if (!(vault instanceof RealFileSystemAdapter)) return "";
-    try {
-      await rememberBranchConnection(
-        {
-          projectId: state.project.projectId,
-          projectName: state.project.name,
-          vaultHandle: vault.handle,
-          vaultFolderName: vault.name,
-        },
-        branchId,
-        working instanceof RealFileSystemAdapter ? working.handle : undefined,
-      );
-      await refreshRememberedList();
-      return "";
-    } catch (error) {
-      return `Browser convenience data could not be saved (${error instanceof Error ? error.message : String(error)}). Vault publication is independent; reconnect folders explicitly after reopening.`;
-    }
-  };
   const persistWorkspace = async (
     current: WorkspaceState,
     projectPath?: string,
@@ -425,8 +367,6 @@ export default function App() {
     setScanResult(null);
     setLastRestoreReport(null);
     setActiveBranchId(MAIN_BRANCH_ID);
-    setLocationConflict(null);
-    setLegacyMode(false);
     setActiveTab("connect");
     setStatusBanner(null);
   };
@@ -671,68 +611,6 @@ export default function App() {
       true,
     );
   };
-  const chooseWorkspace = async (
-    root: FileSystemDirectoryAdapter,
-    name?: string,
-    expectedId?: string,
-  ) => {
-    await perform(
-      "connect",
-      async (context) => {
-        if ((await root.requestPermission("readwrite")) !== "granted")
-          throw new Error(
-            "Workspace permission was not granted. Reconnect it to renew access.",
-          );
-        const current =
-          name === undefined
-            ? await openWorkspace(root)
-            : await createWorkspace(root, name);
-        if (expectedId && current.identity.workspaceId !== expectedId)
-          throw new Error(
-            "The remembered root contains a different workspace identity. Open it explicitly to choose its projects.",
-          );
-        if (!context.current()) return;
-        const registered =
-          home?.workspaces.find(
-            (e) =>
-              e.workspaceId === current.identity.workspaceId && e.workspace,
-          ) ??
-          home?.workspaces.find(
-            (e) => e.workspaceId === current.identity.workspaceId,
-          );
-        if (registered) {
-          setWorkspaceLocationConflict({
-            external: current,
-            managed: registered,
-          });
-          return;
-        }
-        setManagedWorkspaceKey(null);
-        setHomeView(false);
-        setWorkspace(current);
-        if (!vaultState || managedProject) {
-          setManagedProject(null);
-          setVaultState(null);
-          setVaultDir(null);
-          setWorkingFolders({});
-          setWorkingDir(null);
-          setScanResult(null);
-          setLastRestoreReport(null);
-          setActiveBranchId(MAIN_BRANCH_ID);
-        }
-        setLegacyMode(false);
-        setActiveTab("connect");
-        setBannerScope("workspace");
-        const warning = await persistWorkspace(current);
-        if (context.current())
-          setStatusBanner({
-            type: "info",
-            message: `Opened workspace "${current.identity.name}". Projects and branch locations were read from its records. ${warning}`,
-          });
-      },
-      true,
-    );
-  };
   const refreshWorkspace = async () => {
     if (!workspace) return;
     await perform("connect", async (context) => {
@@ -792,7 +670,6 @@ export default function App() {
       ? preferred!
       : MAIN_BRANCH_ID;
     setManagedProject(project);
-    setLegacyMode(false);
     setBannerScope("project");
     await installProject(
       project.vaultState,
@@ -918,18 +795,21 @@ export default function App() {
       true,
     );
   };
-  const importManaged = async (
-    source: FileSystemDirectoryAdapter,
+  const addManagedProject = async (
     name: string,
+    source?: FileSystemDirectoryAdapter,
   ) => {
     if (!workspace) throw new Error("Choose a workspace first.");
     await perform(
       "connect",
       async (context) => {
-        const project = await importProject(workspace.root, source, name, {
+        const options = {
           signal: context.signal,
           onProgress: context.progress,
-        });
+        };
+        const project = source
+          ? await importProject(workspace.root, source, name, options)
+          : await createProject(workspace.root, name, options);
         if (!context.current()) return;
         const current = {
           ...workspace,
@@ -950,45 +830,9 @@ export default function App() {
           current,
           project,
           context,
-          `Continue working in this copy: ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`,
-        );
-      },
-      true,
-    );
-  };
-  const bringIntoWorkspace = async () => {
-    if (!workspace || !vaultDir || managedProject)
-      throw new Error("Open an external project and choose a workspace first.");
-    await perform(
-      "connect",
-      async (context) => {
-        const project = await adoptProject(
-          workspace.root,
-          vaultDir,
-          workingFolders,
-          { signal: context.signal, onProgress: context.progress },
-        );
-        if (!context.current()) return;
-        const current = {
-          ...workspace,
-          projects: [
-            ...workspace.projects,
-            {
-              containerPath: project.record.containerPath,
-              projectId: project.record.projectId,
-              name: project.record.name,
-              status: "ready" as const,
-              issues: [],
-              project,
-            },
-          ],
-        };
-        setWorkspace(current);
-        await activateManaged(
-          current,
-          project,
-          context,
-          `Continue working in this copy: ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Existing history and uncaptured edits were copied and verified. The old locations were retained; editing both copies concurrently is unsupported.`,
+          source
+            ? `Continue working in this copy: ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
+            : `Created project "${project.record.name}". Save your CAD files in ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`,
         );
       },
       true,
@@ -1071,156 +915,6 @@ export default function App() {
     setLastRestoreReport(null);
     setActiveTab(state.revisions.length ? "history" : "changes");
   };
-  const handleCreateRealProject = async (
-    name: string,
-    working: FileSystemDirectoryAdapter,
-    vault: FileSystemDirectoryAdapter,
-  ) => {
-    await perform(
-      "connect",
-      async (context) => {
-        if (
-          (await working.requestPermission("read")) !== "granted" ||
-          (await vault.requestPermission("readwrite")) !== "granted"
-        )
-          throw new Error("Folder permission was not granted.");
-        const state = await initializeProjectVault(working, vault, name);
-        if (!context.current()) return;
-        setManagedProject(null);
-        await installProject(
-          state,
-          vault,
-          { [MAIN_BRANCH_ID]: working },
-          MAIN_BRANCH_ID,
-        );
-        let warning = await persistBinding(
-          state,
-          vault,
-          MAIN_BRANCH_ID,
-          working,
-          null,
-        );
-        try {
-          await scan(
-            vault,
-            { [MAIN_BRANCH_ID]: working },
-            MAIN_BRANCH_ID,
-            context,
-            null,
-          );
-        } catch (error) {
-          warning += ` Scan needed: ${error instanceof Error ? error.message : String(error)}`;
-        }
-        if (!context.current()) return;
-        setStatusBanner({
-          type: warning ? "info" : "success",
-          message: `Created project "${name}". Save a revision to preserve the complete working project. ${warning}`,
-        });
-      },
-      true,
-    );
-  };
-  const openProject = async (
-    vault: FileSystemDirectoryAdapter,
-    selectedWorking: FileSystemDirectoryAdapter | null,
-    saved?: RememberedProjectBinding,
-    explicitExternalLocation = false,
-  ) => {
-    await perform(
-      "connect",
-      async (context) => {
-        if ((await vault.requestPermission("readwrite")) !== "granted")
-          throw new Error(
-            "Read/write permission is required for the revision vault.",
-          );
-        const state = await openExistingVault(vault);
-        if (!context.current()) return;
-        const managedLocations =
-          workspace?.projects.filter(
-            (entry) => entry.projectId === state.project.projectId,
-          ) ?? [];
-        if (managedLocations.length && !explicitExternalLocation) {
-          setLocationConflict({
-            name: state.project.name,
-            managed: managedLocations,
-            external: () => openProject(vault, selectedWorking, saved, true),
-          });
-          return;
-        }
-        if (saved && saved.projectId !== state.project.projectId)
-          throw new Error(
-            "The remembered vault now contains a different project. Reopen it manually before connecting working folders.",
-          );
-        const remembered =
-          saved ?? (await getRememberedProjectBinding(state.project.projectId));
-        const branchId =
-          saved &&
-          state.branches.some((b) => b.branchId === saved.activeBranchId)
-            ? saved.activeBranchId!
-            : MAIN_BRANCH_ID;
-        const folders: WorkingFolderBindings = {};
-        for (const branch of state.branches) {
-          const handle = remembered?.branchWorkingHandles[branch.branchId];
-          if (handle) {
-            const adapter = new RealFileSystemAdapter(handle);
-            try {
-              if ((await adapter.queryPermission("read")) === "granted")
-                folders[branch.branchId] = adapter;
-            } catch {
-              /* Invalid remembered handles are reconnected explicitly. */
-            }
-          }
-        }
-        if (selectedWorking) {
-          if ((await selectedWorking.requestPermission("read")) !== "granted")
-            throw new Error(
-              "Read permission was not granted for the selected working folder.",
-            );
-          folders[MAIN_BRANCH_ID] = selectedWorking;
-        }
-        await validateWorkingFolderBindings(state, vault, folders, false);
-        setManagedProject(null);
-        await installProject(state, vault, folders, branchId);
-        let warning = await persistBinding(
-          state,
-          vault,
-          branchId,
-          folders[branchId],
-          null,
-        );
-        if (folders[branchId]) {
-          try {
-            await scan(vault, folders, branchId, context, null);
-          } catch (error) {
-            warning += ` Scan unavailable: ${error instanceof Error ? error.message : String(error)}`;
-          }
-        }
-        if (!context.current()) return;
-        setStatusBanner({
-          type: "info",
-          message: `Opened "${state.project.name}" from vault records with ${state.branches.length} branches and ${state.revisions.length} revisions. Select a branch to work on it; connect missing folders explicitly. ${warning}`,
-        });
-      },
-      true,
-    );
-  };
-  const handleOpenRealVault = (
-    vault: FileSystemDirectoryAdapter,
-    working: FileSystemDirectoryAdapter | null,
-  ) => openProject(vault, working);
-  const handleReconnectRemembered = async (
-    binding: RememberedProjectBinding,
-  ) => {
-    if (!binding.vaultHandle)
-      throw new Error(
-        "Reopen the vault folder manually to restore its connection.",
-      );
-    return openProject(
-      new RealFileSystemAdapter(binding.vaultHandle),
-      null,
-      binding,
-    );
-  };
   const handleSelectBranch = async (branchId: string) => {
     if (
       operationRef.current ||
@@ -1262,7 +956,9 @@ export default function App() {
           return updated;
         });
       }
-      const warning = await persistBinding(state, vaultDir, branchId);
+      const warning = workspace && managedProject
+        ? await persistWorkspace(workspace, managedProject.record.containerPath, branchId)
+        : "";
       if (context.current())
         setStatusBanner(
           !readable || warning
@@ -1536,37 +1232,11 @@ export default function App() {
     );
   };
   const handleReattachWorkingFolder = async () => {
-    if (!vaultDir || !vaultState) return;
-    if (managedProject && workspace) {
-      await refreshWorkspace();
-      return;
-    }
-    await perform("connect", async (context) => {
-      const selected = await pickFolder("read");
-      const state = await openExistingVault(vaultDir);
-      const folders = { ...workingFolders, [activeBranchId]: selected };
-      await validateWorkingFolderBindings(state, vaultDir, folders, false);
-      if (!context.current()) return;
-      setWorkingFolders(folders);
-      setWorkingDir(selected);
-      setScanResult(null);
-      const warning = await persistBinding(
-        state,
-        vaultDir,
-        activeBranchId,
-        selected,
-      );
-      await scan(vaultDir, folders, activeBranchId, context);
-      if (context.current())
-        setStatusBanner({
-          type: "info",
-          message: `Connected "${selected.name}" to this branch. Open this folder manually in SolidWorks. ${warning}`,
-        });
-    });
+    if (managedProject && workspace) await refreshWorkspace();
   };
   const handleCreateBranch = async (params: CreateBranchParams) => {
-    if (!vaultDir || !vaultState)
-      throw new Error("Open a project vault first.");
+    if (!vaultDir || !vaultState || !managedProject || !workspace)
+      throw new Error("Open a project in a Cadtree workspace first.");
     await perform(
       "branch",
       async (context) => {
@@ -1612,46 +1282,6 @@ export default function App() {
             });
           return;
         }
-        if (!params.destinationParent)
-          throw new Error(
-            "Choose a destination parent for this external project.",
-          );
-        const result = await createDesignBranch({
-          ...params,
-          destinationParent: params.destinationParent,
-          vaultDir,
-          workingFolders,
-          signal: context.signal,
-          onProgress: context.progress,
-        });
-        if (!context.current()) return;
-        const folders = {
-          ...workingFolders,
-          [result.branch.branchId]: result.workingDir,
-        };
-        setVaultState(result.vaultState);
-        setWorkingFolders(folders);
-        setWorkingDir(result.workingDir);
-        setActiveBranchId(result.branch.branchId);
-        setScanResult(null);
-        setLastRestoreReport(null);
-        const warning = await persistBinding(
-          result.vaultState,
-          vaultDir,
-          result.branch.branchId,
-          result.workingDir,
-        );
-        let scanWarning = "";
-        try {
-          await scan(vaultDir, folders, result.branch.branchId, context);
-        } catch (error) {
-          scanWarning = `Scan needed: ${error instanceof Error ? error.message : String(error)}`;
-        }
-        if (context.current())
-          setStatusBanner({
-            type: "success",
-            message: `Created and verified "${result.branch.name}". Open "${result.workingDir.name}" manually in SolidWorks. ${result.publicationWarning ?? ""} ${warning} ${scanWarning}`,
-          });
       },
       true,
     );
@@ -1815,7 +1445,6 @@ export default function App() {
     homeAddressCache.current = [];
     setHomeAddress(null);
     setConvenienceEpoch((value) => value + 1);
-    await refreshRememberedList();
     setRememberedWorkspace(null);
     setRememberedHome(null);
     if (workspace && managedProject) {
@@ -1866,7 +1495,6 @@ export default function App() {
   const navigate = (tab: ActiveTab) => {
     if (!operationRef.current) {
       setActiveTab(tab);
-      if (tab === "connect") setLegacyMode(false);
     }
   };
   const missingConnections =
@@ -2160,75 +1788,20 @@ export default function App() {
                 onBring={() => addHomeWorkspace()}
                 onOpen={openHomeEntry}
                 onRefresh={refreshHome}
-                onExternal={() => {
-                  setHomeView(false);
-                  setWorkspace(null);
-                }}
                 onCancel={handleCancelOperation}
               />
-            ) : activeTab === "connect" || !vaultState || !vaultDir ? (
-              legacyMode ? (
-                <>
-                  <div className="global-feedback">
-                    <button
-                      className="text-button"
-                      onClick={() => setLegacyMode(false)}
-                    >
-                      Back to workspace
-                    </button>
-                  </div>
-                  <ProjectConnectView
-                    rememberedBindings={rememberedBindings}
-                    onCreateRealProject={handleCreateRealProject}
-                    onOpenRealVault={handleOpenRealVault}
-                    onReconnectRemembered={handleReconnectRemembered}
-                    onRemoveRemembered={async (id) => {
-                      await removeRememberedProjectBinding(id);
-                      await refreshRememberedList();
-                    }}
-                    onClearAllConvenienceMetadata={async () => {
-                      await perform("connect", clearConnections);
-                    }}
-                  />
-                </>
-              ) : (
-                <WorkspaceProjectsView
-                  onAllWorkspaces={allWorkspaces}
-                  managedHome={Boolean(homeEntry)}
-                  workspace={workspace}
-                  remembered={rememberedWorkspace}
-                  busy={busy}
-                  progress={progress}
-                  externalProjectName={
-                    !managedProject ? vaultState?.project.name : undefined
-                  }
-                  adoptionBlockedReason={
-                    missingConnections.length
-                      ? `Connect the external working folders for ${missingConnections.join(", ")} once before adoption.`
-                      : vaultState &&
-                          (vaultState.corruptedRecords.length ||
-                            Object.keys(vaultState.damagedBranchHeads).length)
-                        ? "The external history needs attention before it can be adopted."
-                        : undefined
-                  }
-                  onCreate={(root, name) => chooseWorkspace(root, name)}
-                  onOpen={(root) => chooseWorkspace(root)}
-                  onReconnect={async () => {
-                    if (!rememberedWorkspace) return;
-                    await chooseWorkspace(
-                      new RealFileSystemAdapter(rememberedWorkspace.rootHandle),
-                      undefined,
-                      rememberedWorkspace.workspaceId,
-                    );
-                  }}
-                  onRefresh={refreshWorkspace}
-                  onImport={importManaged}
-                  onOpenProject={openManaged}
-                  onAdopt={bringIntoWorkspace}
-                  onExternal={() => setLegacyMode(true)}
-                  onCancel={handleCancelOperation}
-                />
-              )
+            ) : workspace && (activeTab === "connect" || !vaultState || !vaultDir) ? (
+              <WorkspaceProjectsView
+                onAllWorkspaces={allWorkspaces}
+                workspace={workspace}
+                busy={busy}
+                progress={progress}
+                onRefresh={refreshWorkspace}
+                onCreate={(name) => addManagedProject(name)}
+                onImport={(source) => addManagedProject(source.name, source)}
+                onOpenProject={openManaged}
+                onCancel={handleCancelOperation}
+              />
             ) : null}
             {vaultState && vaultDir ? (
               <div key={`${vaultState.project.projectId}:${projectSession}`}>
@@ -2469,87 +2042,6 @@ export default function App() {
               <div className="mobile-workspace-tree">
                 <WorkspaceTree {...treeProps} />
               </div>
-            </Modal>
-          ) : null}
-          {workspaceLocationConflict ? (
-            <Modal
-              title="Choose workspace location"
-              busy={busy}
-              onClose={() => setWorkspaceLocationConflict(null)}
-            >
-              <p>
-                {workspaceLocationConflict.external.identity.name} already has a
-                managed registration in Cadtree. Continue work in the managed
-                copy. Inspecting the retained original does not create a second
-                workspace identity.
-              </p>
-              <div className="modal-actions">
-                <button
-                  className="button primary"
-                  disabled={
-                    busy || !workspaceLocationConflict.managed.workspace
-                  }
-                  onClick={() => {
-                    const e = workspaceLocationConflict.managed;
-                    setWorkspaceLocationConflict(null);
-                    void openHomeEntry(e).catch(() => {});
-                  }}
-                >
-                  Open managed workspace
-                </button>
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    const external = workspaceLocationConflict.external;
-                    setWorkspaceLocationConflict(null);
-                    leaveProject();
-                    setManagedWorkspaceKey(null);
-                    setWorkspace(external);
-                    setHomeView(false);
-                  }}
-                >
-                  Inspect retained original
-                </button>
-              </div>
-            </Modal>
-          ) : null}
-          {locationConflict ? (
-            <Modal
-              title="Choose project location"
-              onClose={() => setLocationConflict(null)}
-              busy={busy}
-            >
-              <p>
-                {locationConflict.name} has the same project identity in
-                external and managed storage. Choose the location to work in.
-                Editing both copies concurrently is unsupported; histories will
-                not be merged.
-              </p>
-              {locationConflict.managed.map((entry) => (
-                <button
-                  className="button secondary"
-                  key={entry.containerPath}
-                  disabled={busy || !entry.project}
-                  onClick={async () => {
-                    setLocationConflict(null);
-                    await openManaged(entry);
-                  }}
-                >
-                  Use {entry.containerPath}
-                </button>
-              ))}
-              <button
-                className="button secondary"
-                disabled={busy}
-                onClick={async () => {
-                  const action = locationConflict.external;
-                  setLocationConflict(null);
-                  await action();
-                }}
-              >
-                Use the selected external location
-              </button>
             </Modal>
           ) : null}
         </div>
