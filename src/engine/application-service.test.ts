@@ -578,6 +578,8 @@ test("resolved conflicts use only explicit source decisions and ignore arbitrary
   const selection = {
     ...review.choices,
     [part]: { selected: true, decision: "keep-destination" as const },
+    // Independent additions at the same path are distinct components.
+    'Added.txt': { selected: true, decision: 'keep-destination' as const },
   };
   const request = await f.review(selection);
   const prepared = await prepareApplication(f.vault, request, f.options);
@@ -587,7 +589,7 @@ test("resolved conflicts use only explicit source decisions and ignore arbitrary
     await f.main.readFileText(part.split("/")),
     "independent main Part-X",
   );
-  assert.equal(await f.main.readFileText(["Added.txt"]), "source addition");
+  assert.equal(await f.main.readFileText(["Added.txt"]), "independently added on Main");
   assert.equal(await f.main.hasFile(["DeleteMe.txt"]), false);
   assert.equal(
     (await f.op()).record!.plan.actions.find((a) => a.path === part)!.decision,

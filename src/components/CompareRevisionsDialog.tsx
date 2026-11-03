@@ -126,6 +126,15 @@ export function CompareRevisionsDialog({
   };
   const result = comparison.status === "compared" ? comparison : null;
   const diff = result?.diff;
+  const fromComponents = state.components?.revisions[fromId];
+  const toComponents = state.components?.revisions[toId];
+  const identityChanges = fromComponents && toComponents ? [
+    ...fromComponents.files.flatMap(file => {
+      const next = toComponents.files.find(f => f.componentId === file.componentId);
+      return next && next.path !== file.path ? [`Same component: ${file.path} → ${next.path}`] : [];
+    }),
+    ...fromComponents.files.flatMap(file => toComponents.files.some(f => f.path === file.path && f.componentId !== file.componentId) ? [`Different components at ${file.path}`] : []),
+  ] : [];
   type Row = {
     path: string;
     status: "Added" | "Deleted" | "Modified" | "Unchanged";
@@ -276,6 +285,8 @@ export function CompareRevisionsDialog({
             </button>
           ) : null}
         </div>
+        {identityChanges.length ? <Notice><strong>Component identity between endpoints</strong>{identityChanges.map(message => <p className="file-path" key={message}>{message}</p>)}<p>Byte differences below remain grouped by saved path.</p></Notice> : null}
+        {fromId && toId && (!fromComponents || !toComponents) ? <p className="muted small">Component continuity is unavailable at one or both endpoints. This comparison uses saved paths and byte hashes.</p> : null}
         {!fromId || !toId ? (
           <Notice>
             {!fromId

@@ -7,6 +7,7 @@ import { compareSnapshotContents } from './snapshot-comparison';
 import { verifyStoredObject } from './object-store';
 import { readApplicationOperations } from './application-records';
 import { readCaseLifecycles } from './case-lifecycle';
+import { readComponentEvidence, writeComponentBoundary } from './component-identity';
 import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
   BranchRecord,
@@ -337,6 +338,8 @@ export async function initializeProjectVault(
     throw new Error('Failed to verify Main branch record after initialization.');
   }
 
+  const initialized = await openExistingVault(vaultDir);
+  await writeComponentBoundary(vaultDir, initialized);
   return openExistingVault(vaultDir);
 }
 
@@ -851,6 +854,7 @@ export async function openExistingVault(
   }
   state.applicationOperations = await readApplicationOperations(vaultDir, state);
   state.caseLifecycles = await readCaseLifecycles(vaultDir, state);
+  state.components = await readComponentEvidence(vaultDir, state);
   return state;
 }
 

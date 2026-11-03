@@ -2,6 +2,7 @@ import {
   type FileSystemDirectoryAdapter,
   validateDirectoryIsolation,
 } from "./fs-adapter";
+import { componentWriteBlock } from './component-identity';
 import {
   createWorkspace,
   openWorkspace,
@@ -394,7 +395,7 @@ async function register(
           const current = await openWorkspace(source);
           if (
             current.identity.workspaceId !== workspaceId ||
-            current.projects.some((p) => p.status !== "ready")
+            current.projects.some((p) => p.status !== "ready" || (p.project && componentWriteBlock(p.project.vaultState)))
           )
             throw new Error(
               "Existing workspace has damaged, duplicate, or incomplete projects. Inspect the original before bringing it into Cadtree.",

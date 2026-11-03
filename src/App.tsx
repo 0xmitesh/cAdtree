@@ -30,6 +30,7 @@ import {
   restoreSelectedFilesToFolder,
 } from "./engine/recovery-service";
 import { captureRevision, ReviewStaleError } from "./engine/revision-service";
+import { componentWriteBlock, enableComponentTracking, type IdentityReview } from './engine/component-identity';
 import {
   prepareApplication,
   applyPreparedApplication,
@@ -1004,6 +1005,7 @@ export default function App() {
       notes: { problem: string; modification: string; observations: string };
       fileNotes: FileSpecificNote[];
       reviewedChangesSignature: string;
+      identityReview?: IdentityReview;
     },
   ) => {
     if (!workingDir || !vaultDir || branchId !== activeBranchId)
@@ -1866,9 +1868,21 @@ export default function App() {
                       onCapture={(params) =>
                         handleCaptureRevision(branch.branchId, params)
                       }
+                      onEnableComponentTracking={async () => {
+                        if (!vaultDir || !workingDir) return;
+                        await perform('capture', async (context) => {
+                          await requestApplicationWriteAccess(vaultDir, workingDir);
+                          const updated = await enableComponentTracking(vaultDir);
+                          if (context.current()) {
+                            setVaultState(updated);
+                            setScanResult(null);
+                          }
+                        }, true);
+                      }}
                       onCancelOperation={handleCancelOperation}
                       onReattachWorkingFolder={handleReattachWorkingFolder}
                       operationBlockReason={
+                        componentWriteBlock(vaultState) ??
                         caseWriteBlock(vaultState, branch.branchId) ??
                         applicationCaptureBlock(vaultState, branch.branchId) ??
                         managedBlockReason ??

@@ -7,6 +7,7 @@ import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
 import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
 import { assertCaseWritable } from './case-lifecycle';
+import { prepareComponentRecord, publishComponentRecord } from './component-identity';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
@@ -189,7 +190,8 @@ export async function captureRevision(
       );
     }
 
-    if (!freshScan.hasChanges) {
+    const componentDraft = prepareComponentRecord(vaultState, freshScan, input.identityReview);
+    if (!freshScan.hasChanges && !input.identityReview?.replacements.length) {
       throw new Error(
         'No changes detected between the working folder and the latest saved revision. Capture skipped to avoid an unnecessary revision.'
       );
@@ -397,6 +399,10 @@ export async function captureRevision(
     // exact manifest hash and completion establish capture exactly once after
     // reload, even if the caller loses the final acknowledgement.
     if (pendingApplication) await linkApplicationCapture(vaultDir, pendingApplication, manifest, actualManifestFileSha256, freshScan.changesSignature);
+    // Same completion marker commits both the immutable manifest and its mapping.
+    // Uncompleted sidecars are never visible as component history.
+    if (componentDraft) await publishComponentRecord(vaultDir, componentDraft, revisionId, actualManifestFileSha256);
+    if (input.signal?.aborted) throw new DOMException('Capture cancelled before completion publication.', 'AbortError');
 
     const completionJson = JSON.stringify(completion, null, 2);
     const expectedCompletionSha256 = hashString(completionJson);
@@ -447,6 +453,7 @@ export async function captureRevision(
     if (!publishedRevision) {
       throw new Error('Unexpected state: published revision not found when reloading vault.');
     }
+    if (componentDraft && updatedVaultState.components?.status !== 'available') throw new Error(updatedVaultState.components?.reason ?? 'Component publication could not be verified.');
 
     return {
       revision: {

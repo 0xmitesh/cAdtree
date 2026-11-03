@@ -279,9 +279,10 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
           busy={busy}
         >
           <p>
-            Create a verified copy of an existing CAD folder inside{" "}
-            {props.workspace.identity.name}. Its folder name becomes the project
-            name. The original folder and its files remain untouched.
+            Import a verified copy inside {props.workspace.identity.name}.
+            An ordinary CAD folder becomes a new project named after the folder.
+            A complete cAdtree project keeps its name, document IDs and saved history.
+            The original folder and its files remain untouched.
           </p>
           <p>
             Save and close CAD documents before selecting the folder. Continue
