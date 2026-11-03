@@ -412,13 +412,21 @@ export default function App() {
     setStatusBanner(warning ? { type: "info", message: warning } : null);
   };
   const connectHome = async (create: boolean, saved?: RememberedHome) => {
-    // The native picker/permission starts directly from the user action.
-    const root = saved
-      ? new RealFileSystemAdapter(saved.rootHandle)
-      : await pickFolder("readwrite");
     await perform(
       "connect",
       async (context) => {
+        // Start the picker in the user action; perform owns connection errors.
+        const root = saved
+          ? new RealFileSystemAdapter(saved.rootHandle)
+          : await pickFolder("readwrite").catch((error: unknown) => {
+              if (error instanceof DOMException && error.name === "AbortError")
+                throw new Error(
+                  create
+                    ? "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home."
+                    : "Folder selection was cancelled. Choose your existing Cadtree home folder to continue.",
+                );
+              throw error;
+            });
         if ((await root.requestPermission("readwrite")) !== "granted")
           throw new Error("Grant access to reconnect your Cadtree home.");
         if (create) {
@@ -471,7 +479,6 @@ export default function App() {
             requestId: crypto.randomUUID(),
           });
       },
-      true,
     );
   };
   const completeHomeSetup = async (path: string) => {
@@ -1702,7 +1709,7 @@ export default function App() {
               </div>
             ) : null}
             {statusBanner && (projectView || bannerScope === "workspace") ? (
-              <div className="global-feedback">
+              <div className="global-feedback app-status-feedback">
                 <Notice
                   type={statusBanner.type}
                   onDismiss={() => setStatusBanner(null)}

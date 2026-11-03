@@ -70,8 +70,9 @@ export function Notice({
     >
       {type === "success" ? <Check size={17} /> : <AlertCircle size={17} />}
       <div>{children}</div>
-      {onDismiss && type !== "error" ? (
+      {onDismiss ? (
         <button
+          type="button"
           className="icon-button"
           aria-label="Dismiss message"
           onClick={onDismiss}
