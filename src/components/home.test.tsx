@@ -82,6 +82,52 @@ async function source(name = "CAD source") {
   return dir;
 }
 
+test("cancelled home folder selection shows one red warning and leaves the welcome actions usable", async () => {
+  Object.assign(window, {
+    showDirectoryPicker: async () => {
+      throw new DOMException("The user aborted a request.", "AbortError");
+    },
+  });
+  const ui = render(<App />);
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
+  await waitFor(() => assert.ok(ui.getByRole("alert")));
+  await idle(ui);
+  const alert = ui.getByRole("alert");
+  assert.equal(ui.getAllByRole("alert").length, 1);
+  assert.ok(alert.classList.contains("error"));
+  assert.equal(alert.textContent, "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.");
+  assert.ok(alert.closest(".app-status-feedback"));
+  assert.equal(ui.queryByRole("dialog"), null);
+  assert.equal((ui.getByRole("button", { name: "Start my Cadtree home" }) as HTMLButtonElement).disabled, false);
+  fireEvent.click(within(alert).getByRole("button", { name: "Dismiss message" }));
+  assert.equal(ui.queryByRole("alert"), null);
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
+  await waitFor(() => assert.match(ui.getByRole("alert").textContent!, /Choose your existing Cadtree home folder/));
+  assert.equal(ui.getAllByRole("alert").length, 1);
+});
+
+test("rejecting a populated new-home folder shows one warning and retry clears it without touching files", async () => {
+  const occupied = new InMemoryFileSystemAdapter("Existing files");
+  await occupied.writeFileText(["Keep.SLDPRT"], "unchanged CAD bytes");
+  const empty = new InMemoryFileSystemAdapter("New Cadtree");
+  const picker = pickerQueue();
+  picker.queue.push(nativeDirectory(occupied), nativeDirectory(empty));
+  const ui = render(<App />);
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
+  await waitFor(() => assert.equal(ui.getAllByRole("alert").length, 1));
+  await idle(ui);
+  assert.equal(ui.getAllByRole("alert").length, 1);
+  assert.match(ui.getByRole("alert").textContent!, /Choose an empty dedicated folder/);
+  assert.equal(ui.getAllByText(/Choose an empty dedicated folder/).length, 1);
+  assert.equal(await occupied.readFileText(["Keep.SLDPRT"]), "unchanged CAD bytes");
+  assert.equal((await occupied.listEntries()).length, 1);
+  assert.equal(ui.queryByRole("dialog"), null);
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
+  await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })));
+  assert.equal(ui.queryByRole("alert"), null);
+  assert.equal((await empty.listEntries()).length, 0);
+});
+
 test("home creation uses one picker, workspace allocation uses names, and all three workspaces survive navigation and reopening", async () => {
   const picker = pickerQueue();
   const root = new InMemoryFileSystemAdapter("Cadtree");

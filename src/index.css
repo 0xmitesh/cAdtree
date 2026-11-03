@@ -556,6 +556,39 @@ h3 {
 .global-integrity:empty {
   display: none;
 }
+.global-feedback.app-status-feedback {
+  position: fixed;
+  inset: 0 0 0 var(--sidebar-width, 260px);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  margin: 0;
+  pointer-events: none;
+}
+.app-status-feedback .notice {
+  width: 100%;
+  max-width: 680px;
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  margin: 0;
+  align-items: center;
+  box-shadow: 0 12px 36px #25333826;
+  pointer-events: auto;
+}
+.app-status-feedback .notice > div {
+  text-align: center;
+}
+@media (max-width: 960px) {
+  .global-feedback.app-status-feedback {
+    left: 70px;
+  }
+}
+@media (max-width: 460px) {
+  .global-feedback.app-status-feedback {
+    left: 54px;
+  }
+}
 .notice {
   display: flex;
   align-items: flex-start;

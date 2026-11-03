@@ -52,6 +52,38 @@ for (const width of [1366, 390]) {
       path: `artifacts/screenshots/welcome-first-${width}.png`,
       fullPage: true,
     });
+    await page.evaluate(() => {
+      Object.assign(window, {
+        showDirectoryPicker: async () => {
+          throw new DOMException("The user aborted a request.", "AbortError");
+        },
+      });
+    });
+    const contentBeforeWarning = await page.locator(".welcome-paths").boundingBox();
+    await start.click();
+    const cancelled = page.getByRole("alert");
+    await expect(cancelled).toHaveCount(1);
+    await expect(cancelled).toHaveClass(/error/);
+    await expect(cancelled).toContainText("Choose an empty dedicated folder");
+    const noticeBounds = (await cancelled.boundingBox())!;
+    const labelBounds = (await page.locator(".compact-local-indicator").boundingBox())!;
+    const mainBounds = (await page.getByRole("main").boundingBox())!;
+    expect(noticeBounds.y).toBeGreaterThan(labelBounds.y + labelBounds.height + 8);
+    expect(Math.abs(noticeBounds.x + noticeBounds.width / 2 - (mainBounds.x + mainBounds.width / 2))).toBeLessThan(1);
+    expect(Math.abs(noticeBounds.y + noticeBounds.height / 2 - 844 / 2)).toBeLessThan(1);
+    expect(noticeBounds.width).toBeLessThanOrEqual(680);
+    expect(await page.locator(".welcome-paths").boundingBox()).toEqual(contentBeforeWarning);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(cancelled).toHaveCSS("color", "rgb(155, 61, 46)");
+    await page.screenshot({
+      path: `artifacts/screenshots/welcome-centred-warning-${width}.png`,
+      fullPage: false,
+    });
+    const dismiss = cancelled.getByRole("button", { name: "Dismiss message" });
+    await dismiss.focus();
+    await dismiss.press("Enter");
+    await expect(cancelled).toHaveCount(0);
+    expect(await page.locator(".welcome-paths").boundingBox()).toEqual(contentBeforeWarning);
     const rootName = await page.evaluate(async () => {
       const storage = await navigator.storage.getDirectory();
       const name = `Welcome home ${crypto.randomUUID()}`;
@@ -74,12 +106,31 @@ for (const width of [1366, 390]) {
         return names;
       });
     expect(await entries()).toEqual([]);
+    // Reject a populated new-home folder once, without changing its files.
+    await page.evaluate(async () => {
+      const root = (window as any).welcomeRoot as FileSystemDirectoryHandle;
+      const file = await root.getFileHandle("Existing-part.SLDPRT", { create: true });
+      const writer = await file.createWritable();
+      await writer.write("disposable synthetic CAD bytes");
+      await writer.close();
+    });
+    await start.click();
+    await expect(page.getByRole("alert")).toHaveCount(1);
+    await expect(page.getByRole("alert")).toContainText("Choose an empty dedicated folder");
+    expect(await entries()).toEqual(["Existing-part.SLDPRT"]);
+    await page.screenshot({
+      path: `artifacts/screenshots/welcome-single-warning-${width}.png`,
+      fullPage: true,
+    });
+    await page.evaluate(async () => {
+      const root = (window as any).welcomeRoot as FileSystemDirectoryHandle;
+      await root.removeEntry("Existing-part.SLDPRT");
+    });
     // Both existing native picker routes stay distinct; opening an empty folder
     // reports the existing error rather than silently creating a home.
     await open.click();
-    await expect(
-      page.locator(".home-welcome").getByRole("alert"),
-    ).toBeVisible();
+    await expect(page.getByRole("alert")).toHaveCount(1);
+    await expect(page.getByRole("alert")).toBeVisible();
     expect(await entries()).toEqual([]);
     await start.focus();
     await start.press("Enter");
@@ -89,7 +140,7 @@ for (const width of [1366, 390]) {
     });
     await expect(setup).toBeVisible();
     expect(await page.evaluate(() => (window as any).welcomePickerCalls)).toBe(
-      2,
+      3,
     );
     await setup.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(title).toBeVisible();
