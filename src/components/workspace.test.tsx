@@ -2,7 +2,6 @@ import "../../tests/dom";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { useState } from "react";
-import { ProjectConnectView } from "./ProjectConnectView";
 import { scenarioState } from "../../tests/history-data";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import {
@@ -146,43 +145,6 @@ test("branch highlighting and zoom controls change only viewing state", () => {
     ui.getByRole("button", { name: "Fit graph width and reset scroll" }),
   );
   assert.ok(ui.getByText("80%")); // jsdom clientWidth is zero; zoom is bounded.
-});
-test("project setup is focused and forgetting a project removes only its remembered entry", async () => {
-  const removed: string[] = [];
-  const ui = render(
-    <ProjectConnectView
-      rememberedBindings={[
-        {
-          projectId: "p",
-          projectName: "Actuator",
-          lastOpenedAt: "2026-10-29T12:00:00Z",
-          vaultFolderName: "Vault",
-          branchWorkingHandles: {},
-          workingFolderNames: {},
-        },
-      ]}
-      onCreateRealProject={async () => {}}
-      onOpenRealVault={async () => {}}
-      onReconnectRemembered={async () => {}}
-      onRemoveRemembered={async (id) => {
-        removed.push(id);
-      }}
-      onClearAllConvenienceMetadata={async () => {}}
-    />,
-  );
-  assert.equal(ui.queryByRole("dialog"), null);
-  fireEvent.click(ui.getByRole("button", { name: "New project" }));
-  assert.ok(ui.getByRole("dialog", { name: "New project" }));
-  assert.ok(ui.getByRole("textbox", { name: "Project name" }));
-  assert.equal(ui.queryByRole("button", { name: "Open project" }), null);
-  fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
-  fireEvent.click(ui.getByRole("button", { name: "Forget" }));
-  assert.equal(removed.length, 0);
-  assert.ok(
-    ui.getByText(/Your CAD files and saved revisions stay in their folders/),
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Forget project" }));
-  await waitFor(() => assert.deepEqual(removed, ["p"]));
 });
 const noop = async () => {};
 test("recovery review sends the exact snapshot and selected paths to the existing engine", async () => {

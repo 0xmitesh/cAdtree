@@ -1,8 +1,7 @@
 import "../../tests/dom";
 import {
-  openExternalWorkspaces,
-  appBusy,
-  currentBranchId,
+  openTestHome,
+  openHomeWorkspace,
   selectBranch,
 } from "../../tests/app-controls";
 import test, { afterEach } from "node:test";
@@ -15,19 +14,15 @@ import {
   within,
 } from "@testing-library/react";
 import App from "../App";
+import { createHome, createHomeWorkspace, openHome } from "../engine/home-service";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { nativeDirectory } from "../../tests/native-fs";
 import {
-  createWorkspace,
   openWorkspace,
   importProject,
 } from "../engine/workspace-service";
-import {
-  openExistingVault,
-  initializeProjectVault,
-} from "../engine/vault-service";
+import { openExistingVault } from "../engine/vault-service";
 import { captureRevision } from "../engine/revision-service";
-import { createDesignBranch } from "../engine/branch-service";
 import {
   readVerifiedInventory,
   inventorySignature,
@@ -68,8 +63,47 @@ const idle = (ui: ReturnType<typeof render>) =>
       "false",
     ),
   );
+test("projects use name-only creation and picker-only import, including cancellation and duplicate-name feedback", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
+  const picker = pickerQueue();
+  const ui = render(<App />);
+  await openHomeWorkspace(ui, home);
+  fireEvent.click(ui.getByRole("button", { name: "Create project" }));
+  let dialog = within(ui.getByRole("dialog", { name: "Create project" }));
+  assert.equal(dialog.getAllByRole("textbox").length, 1);
+  assert.equal(dialog.queryByRole("button", { name: /Choose/ }), null);
+  fireEvent.change(dialog.getByRole("textbox", { name: "Project name" }), { target: { value: "New design" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Create project" }));
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  await idle(ui);
+  assert.equal(picker.calls(), 0);
+  const project = (await openWorkspace(root)).projects[0].project!;
+  assert.equal(project.record.name, "New design");
+  assert.deepEqual(await project.workingFolders["branch-main"]!.listEntries(), []);
+  assert.equal(project.vaultState.revisions.length, 0);
+  fireEvent.click(ui.getByRole("treeitem", { name: "Workbench" }));
+  fireEvent.click(ui.getByRole("button", { name: "Create project" }));
+  dialog = within(ui.getByRole("dialog"));
+  fireEvent.change(dialog.getByRole("textbox", { name: "Project name" }), { target: { value: " new DESIGN " } });
+  fireEvent.click(dialog.getByRole("button", { name: "Create project" }));
+  await waitFor(() => assert.match(dialog.getByRole("alert").textContent!, /already present/));
+  fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+  Object.assign(window, { showDirectoryPicker: async () => { throw new DOMException("Cancelled", "AbortError"); } });
+  fireEvent.click(ui.getByRole("button", { name: "Import existing project" }));
+  dialog = within(ui.getByRole("dialog"));
+  assert.equal(dialog.queryByRole("textbox"), null);
+  fireEvent.click(dialog.getByRole("button", { name: "Choose project folder" }));
+  await waitFor(() => assert.equal((dialog.getByRole("button", { name: "Choose project folder" }) as HTMLButtonElement).disabled, false));
+  assert.equal(dialog.queryByRole("alert"), null);
+  fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
+  assert.equal((await openWorkspace(root)).projects.length, 1);
+});
+
 test("UI imports into a workspace, creates cases without parent pickers, recovers copies, and reconnects all cases with one root", async () => {
-  const root = new InMemoryFileSystemAdapter("Workbench");
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
   const source = new InMemoryFileSystemAdapter("Original CAD");
   await source.writeFileBytes(
     ["Parts", "Part.SLDPRT"],
@@ -78,36 +112,27 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   await source.getDirectory(["Empty"], { create: true });
   const before = await snap(source);
   const picker = pickerQueue();
-  picker.queue.push(nativeDirectory(root));
   let ui = render(<App />);
-  await openExternalWorkspaces(ui);
+  await openTestHome(ui, home);
   fireEvent.click(ui.getByRole("button", { name: /Create workspace/ }));
   let dialog = within(ui.getByRole("dialog"));
   fireEvent.change(dialog.getByRole("textbox", { name: "Workspace name" }), {
     target: { value: "Workbench" },
   });
-  fireEvent.click(dialog.getByRole("button", { name: "Choose folder" }));
-  await waitFor(() =>
-    assert.ok(dialog.getByText("Workbench", { exact: true })),
-  );
   fireEvent.click(dialog.getByRole("button", { name: "Create workspace" }));
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-  fireEvent.click(ui.getByRole("button", { name: "Add project" }));
+  const root = (await openHome(home)).workspaces[0].workspace!.root;
+  fireEvent.click(ui.getByRole("button", { name: "Import existing project" }));
   dialog = within(ui.getByRole("dialog"));
+  assert.equal(dialog.queryByRole("textbox"), null);
   picker.queue.push(nativeDirectory(source));
-  fireEvent.change(dialog.getByRole("textbox", { name: "Project name" }), {
-    target: { value: "Actuator" },
-  });
-  fireEvent.click(dialog.getByRole("button", { name: "Choose folder" }));
-  await waitFor(() =>
-    assert.ok(dialog.getByText("Original CAD", { exact: true })),
-  );
-  fireEvent.click(dialog.getByRole("button", { name: "Import project" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Choose project folder" }));
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   await idle(ui);
   assert.match(ui.container.textContent!, /Continue working in this copy/);
   let project = (await openWorkspace(root)).projects[0].project!;
   assert.equal(project.vaultState.revisions.length, 0);
+  assert.equal(project.record.name, source.name);
   assert.equal(await snap(source), before);
   fireEvent.change(
     changes(ui.container).getByRole("textbox", { name: /Revision summary/ }),
@@ -172,11 +197,9 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   assert.equal((await openExistingVault(project.vaultDir)).branches.length, 4);
   // Reopening from a clean app has no per-branch handle cache.
   cleanup();
-  picker.queue.push(nativeDirectory(root));
   const reopenCount = picker.calls();
   ui = render(<App />);
-  await openExternalWorkspaces(ui);
-  fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await openHomeWorkspace(ui, home);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Open project" })),
   );
@@ -186,13 +209,13 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
     ui.container.querySelectorAll(".settings-page option").length,
     4,
   );
-  assert.equal(picker.calls(), reopenCount + 1);
+  assert.equal(picker.calls(), reopenCount);
   const caseA = project.vaultState.branches.find(
     (branch) => branch.name === "Case A",
   )!;
   await selectBranch(ui, caseA.branchId);
   await idle(ui);
-  assert.equal(picker.calls(), reopenCount + 1);
+  assert.equal(picker.calls(), reopenCount);
   assert.ok(
     !ui.container
       .querySelector(".settings-page .settings-row")!
@@ -202,8 +225,9 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
 });
 
 test("UI surfaces missing managed leaves before branch actions and preserves read-only history", async () => {
-  const root = new InMemoryFileSystemAdapter("Workbench");
-  await createWorkspace(root);
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
   const source = new InMemoryFileSystemAdapter("Source");
   await source.writeFileBytes(["Part"], new Uint8Array([1, 2, 3]));
   const project = await importProject(root, source, "Actuator");
@@ -221,10 +245,8 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
     recursive: true,
   });
   const picker = pickerQueue();
-  picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
-  await openExternalWorkspaces(ui);
-  fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await openHomeWorkspace(ui, home);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Inspect project" })),
   );
@@ -255,8 +277,9 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
 });
 
 test("managed action preflight notices a folder lost after opening, before it displays a branch form", async () => {
-  const root = new InMemoryFileSystemAdapter("Workbench");
-  await createWorkspace(root);
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
   const source = new InMemoryFileSystemAdapter("Source");
   await source.writeFileBytes(["Part"], new Uint8Array([1]));
   const project = await importProject(root, source, "Actuator");
@@ -266,10 +289,8 @@ test("managed action preflight notices a folder lost after opening, before it di
     { branchId: "branch-main", summary: "Baseline", notes },
   );
   const picker = pickerQueue();
-  picker.queue.push(nativeDirectory(root));
   const ui = render(<App />);
-  await openExternalWorkspaces(ui);
-  fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
+  await openHomeWorkspace(ui, home);
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Open project" })),
   );
@@ -290,71 +311,4 @@ test("managed action preflight notices a folder lost after opening, before it di
     await root.hasDirectory(project.workingPaths["branch-main"].split("/")),
     false,
   );
-});
-
-test("legacy adoption is guided through the workspace UI and preserves unsaved working bytes and history", async () => {
-  const root = new InMemoryFileSystemAdapter("Workbench");
-  await createWorkspace(root);
-  const main = new InMemoryFileSystemAdapter("Old Main");
-  await main.writeFileBytes(["Part"], new Uint8Array([1, 0, 255]));
-  const vault = new InMemoryFileSystemAdapter("Old Vault");
-  await initializeProjectVault(main, vault, "Legacy");
-  const baseline = await captureRevision(main, vault, {
-    branchId: "branch-main",
-    summary: "Legacy baseline",
-    notes,
-  });
-  const branch = await createDesignBranch({
-    vaultDir: vault,
-    destinationParent: new InMemoryFileSystemAdapter("Old Cases"),
-    workingFolders: { "branch-main": main },
-    sourceRevisionId: baseline.revision.manifest.revisionId,
-    name: "Case A",
-    reason: "Test adoption",
-  });
-  await main.writeFileBytes(["Uncaptured"], new Uint8Array([11, 22]));
-  const vaultBefore = await snap(vault),
-    mainBefore = await snap(main);
-  const picker = pickerQueue();
-  picker.queue.push(nativeDirectory(root));
-  const ui = render(<App />);
-  await openExternalWorkspaces(ui);
-  fireEvent.click(ui.getByRole("button", { name: /Open workspace/ }));
-  await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Add project" })),
-  );
-  fireEvent.click(ui.getByText("Advanced: external projects"));
-  fireEvent.click(ui.getByRole("button", { name: "Open external projects" }));
-  fireEvent.click(ui.getByRole("button", { name: /Open existing vault/ }));
-  let dialog = within(ui.getByRole("dialog"));
-  picker.queue.push(nativeDirectory(vault), nativeDirectory(main));
-  fireEvent.click(dialog.getByRole("button", { name: "Choose vault" }));
-  await waitFor(() => assert.ok(dialog.getByText("Old Vault")));
-  fireEvent.click(dialog.getByRole("button", { name: "Connect" }));
-  await waitFor(() => assert.ok(dialog.getByText("Old Main")));
-  fireEvent.click(dialog.getByRole("button", { name: "Open project" }));
-  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-  await idle(ui);
-  await selectBranch(ui, branch.branch.branchId);
-  await idle(ui);
-  picker.queue.push(nativeDirectory(branch.workingDir));
-  fireEvent.click(ui.getByRole("button", { name: "Connect folder" }));
-  await idle(ui);
-  fireEvent.click(ui.getByRole("treeitem", { name: "Workbench · External" }));
-  fireEvent.click(ui.getByRole("button", { name: "Bring into workspace" }));
-  dialog = within(ui.getByRole("dialog"));
-  fireEvent.click(
-    dialog.getByRole("button", { name: "Copy project into workspace" }),
-  );
-  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-  await idle(ui);
-  assert.match(ui.container.textContent!, /Continue working in this copy/);
-  const adopted = (await openWorkspace(root)).projects[0].project!;
-  assert.equal(adopted.record.projectId, baseline.vaultState.project.projectId);
-  assert.ok(
-    await adopted.workingFolders["branch-main"]!.hasFile(["Uncaptured"]),
-  );
-  assert.equal(await snap(vault), vaultBefore);
-  assert.equal(await snap(main), mainBefore);
-  assert.equal(adopted.vaultState.revisions.length, 1);
 });

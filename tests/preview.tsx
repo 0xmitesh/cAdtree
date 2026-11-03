@@ -2,7 +2,6 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { HistoryRecoveryView } from "../src/components/HistoryRecoveryView";
 import { ChangesCaptureView } from "../src/components/ChangesCaptureView";
-import { ProjectConnectView } from "../src/components/ProjectConnectView";
 import { DiagnosticsView } from "../src/components/DiagnosticsView";
 import {
   FolderOpen,
@@ -70,7 +69,6 @@ function Preview() {
         <p className="rail-caption">DESIGN. RECORD. EVOLVE.</p>
         <nav aria-label="Primary navigation">
           {[
-            ["projects", FolderOpen, "Projects"],
             ["history", History, "History"],
             ["changes", ScanLine, "Changes"],
             ["settings", Settings, "Settings"],
@@ -156,25 +154,6 @@ function Preview() {
               onReattachWorkingFolder={noop}
             />
           </div>
-          {view === "projects" ? (
-            <ProjectConnectView
-              rememberedBindings={[
-                {
-                  projectId: "visual-project",
-                  projectName: "Linear actuator",
-                  vaultFolderName: "Actuator vault",
-                  workingFolderNames: {},
-                  branchWorkingHandles: {},
-                  lastOpenedAt: "2026-10-29T13:28:00Z",
-                },
-              ]}
-              onCreateRealProject={noop}
-              onOpenRealVault={noop}
-              onReconnectRemembered={async () => setView("history")}
-              onRemoveRemembered={noop}
-              onClearAllConvenienceMetadata={noop}
-            />
-          ) : null}
           {view === "settings" ? (
             <DiagnosticsView
               vaultState={state}

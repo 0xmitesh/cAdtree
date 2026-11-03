@@ -76,14 +76,12 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
               .testSource,
         }),
       );
-      await page.getByRole("button", { name: "Add project" }).click();
       await page
-        .getByRole("textbox", { name: "Project name" })
-        .fill("Actuator");
-      await page.getByRole("button", { name: "Choose folder" }).click();
-      await page
-        .getByRole("button", { name: "Import project", exact: true })
+        .getByRole("button", { name: "Import existing project", exact: true })
         .click();
+      await expect(page.getByRole("dialog").getByRole("textbox")).toHaveCount(0);
+      await page.screenshot({ path: "artifacts/screenshots/import-project.png" });
+      await page.getByRole("button", { name: "Choose project folder" }).click();
       await expect(
         page.getByRole("textbox", { name: /Revision summary/ }),
       ).toBeEnabled();
@@ -115,6 +113,25 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       await expect(
         page.getByRole("heading", { name: `Baseline ${name}` }),
       ).toBeVisible();
+    }
+    if (index === 2) {
+      await page.getByRole("button", { name: "Create project", exact: true }).click();
+      const projectDialog = page.getByRole("dialog", { name: "Create project" });
+      await expect(projectDialog.getByRole("textbox")).toHaveCount(1);
+      await expect(
+        projectDialog.getByRole("button", { name: /Choose/ }),
+      ).toHaveCount(0);
+      await projectDialog
+        .getByRole("textbox", { name: "Project name" })
+        .fill("New design");
+      await page.screenshot({ path: "artifacts/screenshots/create-project.png" });
+      await projectDialog
+        .getByRole("button", { name: "Create project", exact: true })
+        .click();
+      await expect(projectDialog).toHaveCount(0);
+      await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+      await expect(page.getByRole("heading", { name: "0 changed files" })).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Active branch" })).toHaveValue("branch-main");
     }
     await page
       .getByRole("navigation")

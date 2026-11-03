@@ -6,6 +6,7 @@ import {
 } from "./fs-adapter";
 import {
   createWorkspace,
+  createProject,
   openWorkspace,
   importProject,
   resolveManagedProject,
@@ -58,6 +59,53 @@ async function save(project: ManagedProject, branchId: string, value: number) {
     workingFolders: project.workingFolders,
   });
 }
+
+test("name-only project creation reopens an empty Main, then captures CAD files normally", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  await assert.rejects(createProject(root, "  "), /name is required/);
+  assert.equal((await openWorkspace(root)).projects.length, 0);
+  const project = await createProject(root, " New design ");
+  assert.equal(project.record.name, "New design");
+  assert.equal(project.record.origin, "create");
+  assert.equal(project.ready, true);
+  assert.equal(project.vaultState.revisions.length, 0);
+  const reopened = (await openWorkspace(root)).projects[0].project!;
+  assert.equal(reopened.record.projectId, project.record.projectId);
+  assert.deepEqual(await reopened.workingFolders["branch-main"]!.listEntries(), []);
+  assert.ok(await root.hasDirectory([...project.record.containerPath.split("/"), "recoveries"]));
+  await reopened.workingFolders["branch-main"]!.writeFileBytes(["Part.SLDPRT"], new Uint8Array([0, 255, 42]));
+  const saved = await captureRevision(reopened.workingFolders["branch-main"]!, reopened.vaultDir, {
+    branchId: "branch-main", summary: "First design", notes,
+    workingFolders: reopened.workingFolders,
+  });
+  assert.equal(saved.revision.manifest.files[0].path, "Part.SLDPRT");
+  assert.equal(saved.revision.manifest.parentRevisionId, null);
+  assert.equal((await openWorkspace(root)).projects[0].project!.vaultState.revisions.length, 1);
+});
+
+test("new-project cancellation retains an incomplete folder and creation/import share name protection", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const abort = new AbortController();
+  await assert.rejects(createProject(root, "New design", {
+    signal: abort.signal,
+    onProgress: (progress) => {
+      if (progress.phase === "publishing_completion") abort.abort();
+    },
+  }), /cancelled/);
+  const incomplete = (await openWorkspace(root)).projects[0];
+  assert.equal(incomplete.status, "incomplete");
+  const retry = await createProject(root, "New design");
+  assert.notEqual(retry.record.containerPath, incomplete.containerPath);
+  await assert.rejects(importProject(root, await cadSource(), " new DESIGN "), /already present/);
+  const race = await Promise.allSettled([
+    createProject(root, "Other design"),
+    importProject(root, await cadSource(), " other DESIGN "),
+  ]);
+  assert.equal(race.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal((await openWorkspace(root)).projects.length, 3);
+});
 
 test("two projects import and reopen from one root with exact independent leaves and no artificial revisions", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");

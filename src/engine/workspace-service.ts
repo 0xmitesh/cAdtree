@@ -46,7 +46,7 @@ export interface ManagedProjectRecord {
   containerPath: string;
   vaultPath: string;
   createdAt: string;
-  origin: "import" | "adoption";
+  origin: "create" | "import" | "adoption";
   payloadSha256: string;
 }
 export interface BranchLocationRecord {
@@ -239,7 +239,7 @@ async function readProjectRecord(
     record.workspaceId !== workspace.workspaceId ||
     record.containerPath !== containerPath ||
     record.vaultPath !== `${containerPath}/vault` ||
-    !["import", "adoption"].includes(String(record.origin))
+    !["create", "import", "adoption"].includes(String(record.origin))
   )
     throw new Error(
       "Managed project identity or location does not match this workspace.",
@@ -394,7 +394,7 @@ export async function openWorkspace(
         );
         if (
           attempt.containerPath === containerPath &&
-          ["import", "adoption"].includes(attempt.operation) &&
+          ["create", "import", "adoption"].includes(attempt.operation) &&
           typeof attempt.name === "string" &&
           !(await container.hasFile([".cadtree", "ready.json"]))
         ) {
@@ -796,7 +796,7 @@ async function publishProject(
   path: string,
   state: VaultState,
   folders: WorkingFolderBindings,
-  origin: "import" | "adoption",
+  origin: "create" | "import" | "adoption",
   options: CopyOptions,
   verifyCopies?: () => Promise<void>,
 ) {
@@ -863,13 +863,32 @@ export async function importProject(
   name: string,
   options: CopyOptions = {},
 ): Promise<ManagedProject> {
+  return initializeManagedProject(root, name, options, source);
+}
+
+/** Allocate an empty project using the same verified publication as imports. */
+export async function createProject(
+  root: FileSystemDirectoryAdapter,
+  name: string,
+  options: CopyOptions = {},
+): Promise<ManagedProject> {
+  return initializeManagedProject(root, name, options);
+}
+
+async function initializeManagedProject(
+  root: FileSystemDirectoryAdapter,
+  name: string,
+  options: CopyOptions,
+  source?: FileSystemDirectoryAdapter,
+): Promise<ManagedProject> {
   if (!name.trim()) throw new Error("Project name is required.");
-  await validateDirectoryIsolation(
-    source,
-    root,
-    "Original CAD source",
-    "cAdtree workspace",
-  );
+  if (source)
+    await validateDirectoryIsolation(
+      source,
+      root,
+      "Original CAD source",
+      "cAdtree workspace",
+    );
   const workspace = await workspaceIdentity(root);
   return withProjectWriterLock(
     `workspace:${workspace.workspaceId}`,
@@ -890,13 +909,16 @@ export async function importProject(
           "A project with that name is already present in this workspace.",
         );
       throwIfCancelled(options.signal);
-      const { path, container } = await allocateProject(root, name, "import");
+      const origin = source ? "import" : "create";
+      const { path, container } = await allocateProject(root, name, origin);
       try {
         const main = await container.getDirectory(["working", "main"], {
           create: true,
           exclusiveCreate: true,
         });
-        const copied = await copyVerifiedTree(source, main, options);
+        const copied = source
+          ? await copyVerifiedTree(source, main, options)
+          : await readVerifiedInventory(main, options);
         const vault = await container.getDirectory(["vault"], {
           create: true,
           exclusiveCreate: true,
@@ -908,13 +930,14 @@ export async function importProject(
           path,
           state,
           { [MAIN_BRANCH_ID]: main },
-          "import",
+          origin,
           options,
           async () => {
             if (
-              inventorySignature(
-                await readVerifiedInventory(source, options),
-              ) !== inventorySignature(copied) ||
+              (source &&
+                inventorySignature(
+                  await readVerifiedInventory(source, options),
+                ) !== inventorySignature(copied)) ||
               inventorySignature(await readVerifiedInventory(main, options)) !==
                 inventorySignature(copied)
             )

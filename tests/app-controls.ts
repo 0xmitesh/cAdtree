@@ -15,7 +15,7 @@ export const currentBranchId = (ui: RenderResult) =>
     .querySelector(".current-branch-indicator")
     ?.getAttribute("data-branch-id");
 
-/** External projects can still switch from Settings when History has no picker. */
+/** Switch from Settings when History has no picker. */
 export async function selectBranch(ui: RenderResult, branchId: string) {
   const history = Boolean(ui.queryByRole("heading", { name: "History." }));
   const nav = within(ui.getByRole("navigation"));
@@ -48,33 +48,21 @@ export async function completeHomeAddress(
   );
 }
 
-/** Legacy regression fixtures enter their tools from a connected home now.
- * Keep their own queued workspace/vault pickers and call counts independent. */
-export async function openExternalWorkspaces(ui: RenderResult) {
-  if (!ui.queryByText("Home options")) {
-    const previous = Object.getOwnPropertyDescriptor(
-      window,
-      "showDirectoryPicker",
-    );
-    Object.defineProperty(window, "showDirectoryPicker", {
-      configurable: true,
-      value: async () =>
-        nativeDirectory(new InMemoryFileSystemAdapter("Regression home")),
-    });
-    try {
-      fireEvent.click(
-        ui.getByRole("button", { name: "Start my Cadtree home" }),
-      );
-      await completeHomeAddress(ui, "D:\\Regression home");
-      await waitFor(() => assert.equal(appBusy(ui), false));
-    } finally {
-      if (previous)
-        Object.defineProperty(window, "showDirectoryPicker", previous);
-      else Reflect.deleteProperty(window, "showDirectoryPicker");
-    }
+/** Connect a disposable test home without consuming the action-specific picker queue. */
+export async function openTestHome(ui: RenderResult, home: InMemoryFileSystemAdapter) {
+  const previous = Object.getOwnPropertyDescriptor(window, "showDirectoryPicker");
+  Object.defineProperty(window, "showDirectoryPicker", { configurable: true, value: async () => nativeDirectory(home) });
+  try {
+    fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
+    await completeHomeAddress(ui);
+    await waitFor(() => assert.equal(appBusy(ui), false));
+  } finally {
+    if (previous) Object.defineProperty(window, "showDirectoryPicker", previous);
+    else Reflect.deleteProperty(window, "showDirectoryPicker");
   }
-  fireEvent.click(ui.getByText("Home options"));
-  fireEvent.click(
-    ui.getByRole("button", { name: "Inspect external workspaces" }),
-  );
+}
+export async function openHomeWorkspace(ui: RenderResult, home: InMemoryFileSystemAdapter) {
+  await openTestHome(ui, home);
+  fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
 }

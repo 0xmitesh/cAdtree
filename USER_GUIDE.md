@@ -49,14 +49,13 @@ Cadtree/
   AutoCAD-<unique-id>/
 ```
 
-## Import a project inside a workspace
+## Create or import a project inside a workspace
 
-**Add project** is the primary action inside a workspace. Project cards keep technical identities and paths under **Location details**. History, Changes, Settings, the active branch selector, and the working-folder banner belong to an opened project.
+Choose **Create project**, enter a name, and confirm. cAdtree creates an empty managed project and its Main working folder inside the workspace automatically. Save CAD files in the displayed Main folder, then scan and save your first revision explicitly.
 
-1. Choose **Add project**. Enter a project name and select the original CAD source folder. Save and close its CAD documents first. Click **Import project** explicitly.
-2. Wait for copying, destination verification, and source-stability checks. cAdtree retains the original and shows **Continue working in this copy** with the new location.
-3. Open that managed Main copy manually in SolidWorks. Check component, drawing, and external-reference paths before editing. Editing the original will not update the managed copy.
-4. In Changes, review the scan, enter a summary, and save the first revision explicitly. Importing creates no revision.
+Choose **Import existing project**, then **Choose project folder**. Save and close CAD documents before selecting the original CAD folder. Its folder name becomes the project name; copying and verification begin after selection, without a second name or submit step. The original stays untouched. Continue editing the managed Main copy and check CAD references. Import creates no revision automatically.
+
+Project cards keep technical identities and paths under **Location details**. History, Changes, Settings, and branch controls belong to an opened project.
 
 Typical layout, relative to the selected workspace:
 
@@ -99,18 +98,9 @@ After clearing browser convenience data, select the home again. Do not locate ea
 3. cAdtree coordinates same-origin writers, validates the projects and stored historical content, copies the complete workspace tree to a fresh child folder, and rechecks both copies before publishing it.
 4. Continue work only in the displayed **Cadtree/<new managed folder>/** location. Originals remain untouched. Workspace/project/branch identities, historical record bytes, checksums, notes, relative project layouts, recovery folders, empty directories, and uncaptured working edits are preserved. No revision is invented.
 
-An already published workspace identity is not copied again. Selecting its retained original while its home is connected offers the managed workspace or explicit inspection of the original. These locations are never silently merged or shown as independent identities. **Home options → Advanced → Inspect external workspaces → Open workspace** remains available for external workspaces without migrating them. External project/vault access remains under **Advanced: external projects**.
+An already published workspace identity is not copied again. Open its managed location from My workspaces. Use Import existing workspace to bring other existing workspaces into the home.
 
 An interrupted migration retains a registered incomplete destination. Retrying allocates a fresh folder and keeps the earlier attempt under that workspace's **Location details**. An ambiguous/corrupt publication or duplicate established identity must be inspected before another copy can be made. cAdtree does not delete, repair, or clean up user storage automatically.
-
-## Bring an existing M1/M2 project into the workspace
-
-1. Open/select the target workspace.
-2. Expand **Advanced: external projects**, choose **Open external projects**, and open the existing vault. Connect its current Main and case working folders once through the legacy branch selector and folder controls.
-3. Return to Workspace and choose **Bring into workspace**. Confirm the verified copy of its vault and every connected current working folder.
-4. Continue at the displayed managed location. Historical IDs, record bytes, notes, and revision numbers are preserved, and uncaptured working edits survive. Original folders remain untouched.
-
-If the same project identity is encountered at several locations, choose the location explicitly. Histories are not merged or represented as unrelated projects. Editing both retained copies concurrently is unsupported.
 
 ## Incomplete or damaged operations
 
@@ -120,9 +110,9 @@ An established branch with a broken publication marker remains visible as damage
 
 ## Copy folder and file paths
 
-Home setup uses the native folder picker followed by a required Windows address entry. The address must be a nonempty absolute drive or supported UNC path; quotes, spaces, Unicode, and drive roots are accepted. Once configured, managed workspaces, projects, and branches use that home root automatically, without separate address prompts. Edit a moved or mistaken root under **My workspaces → Home options → Edit home folder address**. This is the canonical setting for managed descendants. Standalone external workspaces retain their own appropriately scoped **Configure path shortcuts** setting.
+Home setup uses the native folder picker followed by a required Windows address entry. The address must be a nonempty absolute drive or supported UNC path; quotes, spaces, Unicode, and drive roots are accepted. Once configured, managed workspaces, projects, and branches use that home root automatically, without separate address prompts. Edit a moved or mistaken root under **My workspaces → Home options → Edit home folder address**. This is the canonical setting for managed descendants.
 
-This address never authorizes or redirects filesystem operations. The browser cannot verify the typed absolute root against its handle; check it describes the same home. The descendant mappings and actual file existence are validated before copying. The setting stays in this browser/device, associated with the home identity and selected folder handle, and never enters portable records. External workspace settings remain separate where valid. A migrated workspace never inherits its old external absolute path. External project/recovery locations without known roots never receive invented paths. Clearing browser convenience data also clears these settings. If preference storage fails, an entered address remains usable for this session with a warning; it must be entered again after reopening. If a copy unexpectedly has no configured address, the same required setup dialog appears and completes the pending copy after successful setup.
+This address never authorizes or redirects filesystem operations. The browser cannot verify the typed absolute root against its handle; check it describes the same home. The descendant mappings and actual file existence are validated before copying. The setting stays in this browser/device, associated with the home identity and selected folder handle, and never enters portable records. A migrated workspace never inherits its old external absolute path. External recovery locations without known roots never receive invented paths. Clearing browser convenience data also clears these settings. If preference storage fails, an entered address remains usable for this session with a warning; it must be entered again after reopening. If a copy unexpectedly has no configured address, the same required setup dialog appears and completes the pending copy after successful setup.
 
 Beside a file in Changes, the copy icon (**Copy folder path**) copies the full absolute path of its immediate containing folder, without the filename. For `Parts\Bracket.SLDPRT`, it copies the `Parts` folder; for a file directly in the branch working folder, it copies that working folder. Paste this into Explorer’s address bar and manually open the file. **More path actions → Copy full file path** includes the filename instead.
 
@@ -152,7 +142,7 @@ Working-folder locations and **Reconnect workspace** are available under Setting
 
 ### Home options
 
-After connecting a home, **Home options** appears beside **Create workspace** and provides **Edit home folder address**, **Import existing workspace**, and **Switch Cadtree home**. It is absent from the welcome screen. **Advanced → Inspect external workspaces** preserves compatibility inspection without importing. Import-specific copy and original-file protections are explained inside the import flow. Switching homes moves no files and deletes no home. Each home retains its own address. There is no permanent management block beneath the workspace cards.
+After connecting a home, **Home options** appears beside **Create workspace** and provides **Edit home folder address**, **Import existing workspace**, and **Switch Cadtree home**. It is absent from the welcome screen. Import-specific copy and original-file protections are explained inside the import flow. Switching homes moves no files and deletes no home. Each home retains its own address. There is no permanent management block beneath the workspace cards.
 
 ### File history
 

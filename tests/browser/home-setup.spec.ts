@@ -92,7 +92,7 @@ test("required home address and compact Home options support cancel, keyboard ac
       name: "Inspect external workspaces",
       exact: true,
     }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await page.screenshot({
     path: "artifacts/screenshots/home-options-menu.png",
     fullPage: false,
