@@ -6,11 +6,13 @@ export interface FileHistoryRecord {
   status:
     | "Added"
     | "Modified"
+    | "Renamed"
     | "Deleted"
     | "Reintroduced"
     | "Inherited state"
     | "Inherited absence"
     | "History unavailable";
+  previousPath?: string;
   file?: FileEntry;
   origins: string[];
 }
@@ -23,6 +25,19 @@ export function historicalFilePaths(state: VaultState): string[] {
   ].sort();
 }
 
+export function historicalComponents(state: VaultState): { componentId: string; paths: string[]; label: string }[] {
+  if (state.components?.status !== 'available') return [];
+  const components = new Map<string, string[]>();
+  for (const revision of state.revisions) {
+    for (const file of state.components.revisions[revision.manifest.revisionId]?.files ?? []) {
+      const paths = components.get(file.componentId) ?? [];
+      if (!paths.includes(file.path)) paths.push(file.path);
+      components.set(file.componentId, paths);
+    }
+  }
+  return [...components].map(([componentId, paths]) => ({ componentId, paths, label: `${paths[paths.length - 1]} · ${componentId.slice(10, 18)}` })).sort((a,b) => a.label.localeCompare(b.label));
+}
+
 /** A read-only projection of complete snapshots. Only validated parent edges from
  * layoutRevisions may establish comparisons or compress unchanged ancestry. */
 export function fileHistory(
@@ -31,13 +46,16 @@ export function fileHistory(
   path: string,
   branchId: string | null = null,
   contextId: string | null = null,
+  componentId: string | null = null,
 ): { graph: RevisionGraph; records: Map<string, FileHistoryRecord> } {
   const parent = new Map(graph.edges.map((e) => [e.child, e.parent]));
   const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
   const files = new Map(
     graph.nodes.map((n) => [
       n.id,
-      n.revision.manifest.files.find((f) => f.path === path),
+      n.revision.manifest.files.find((f) => f.path === (componentId
+        ? state.components?.revisions[n.id]?.files.find(entry => entry.componentId === componentId)?.path
+        : path)),
     ]),
   );
   const records = new Map<string, FileHistoryRecord>();
@@ -48,6 +66,7 @@ export function fileHistory(
     const file = files.get(node.id);
     const previous = pid ? files.get(pid) : undefined;
     const uncertain =
+      Boolean(componentId && (!state.components?.revisions[node.id] || (pid && !state.components?.revisions[pid]))) ||
       node.revision.integrityStatus === "corrupted" ||
       node.warnings.some((w) => /Duplicate|Cyclic/.test(w)) ||
       (node.revision.manifest.parentRevisionId !== null && !pid);
@@ -72,10 +91,11 @@ export function fileHistory(
         file,
         origins: [],
       });
-    } else if (file && previous && file.sha256 !== previous.sha256) {
+    } else if (file && previous && (file.sha256 !== previous.sha256 || file.path !== previous.path)) {
       records.set(node.id, {
         kind: "change",
-        status: "Modified",
+        status: file.path !== previous.path ? "Renamed" : "Modified",
+        previousPath: file.path !== previous.path ? previous.path : undefined,
         file,
         origins: [],
       });

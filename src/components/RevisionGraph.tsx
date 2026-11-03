@@ -223,7 +223,7 @@ export function RevisionGraph({
       </div>
       {fileRecords ? (
         <p className="file-history-help muted small">
-          Only recorded byte changes are shown. Branch buttons filter ancestry;
+            Recorded file and confirmed name changes are shown. Branch buttons filter ancestry;
           they do not switch the working branch. Origin markers provide context.
         </p>
       ) : null}
@@ -352,6 +352,7 @@ export function RevisionGraph({
                         {fileRecords ? (
                           <span className="file-history-event">
                             {fileRecords.get(node.id)?.status}
+                            {fileRecords.get(node.id)?.file ? ` · ${fileRecords.get(node.id)!.file!.path}` : ''}
                             {fileRecords.get(node.id)?.origins.length
                               ? ` · Origin of ${fileRecords.get(node.id)!.origins.join(", ")}`
                               : ""}
@@ -448,6 +449,7 @@ export function RevisionGraph({
                 {fileRecords ? (
                   <span className="file-history-event">
                     {fileRecords.get(node.id)?.status}
+                    {fileRecords.get(node.id)?.file ? ` · ${fileRecords.get(node.id)!.file!.path}` : ''}
                     {fileRecords.get(node.id)?.origins.length
                       ? ` · Origin of ${fileRecords.get(node.id)!.origins.join(", ")}`
                       : ""}

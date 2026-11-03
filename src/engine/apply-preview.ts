@@ -5,6 +5,7 @@ import {
   comparisonEndpoint,
 } from "./snapshot-comparison";
 import { ancestryOf, layoutRevisions } from "../history/layout";
+import { componentWriteBlock } from './component-identity';
 import {
   checkCaseInsensitiveCollisions,
   splitAndValidatePath,
@@ -13,6 +14,7 @@ import {
 export type SourceChange = "added" | "modified" | "deleted";
 export type ConflictDecision = "unresolved" | "keep-destination" | "use-source";
 export interface PreviewFileRow {
+  identityBlock?: string;
   path: string;
   kind: "no-source-change" | "already-matches" | "available" | "conflict";
   sourceChange: SourceChange | null;
@@ -72,6 +74,8 @@ export function prepareApplyPreview(
   destinationBranchId: string,
 ): ApplyPreviewPreparation {
   try {
+    const identityBlock = componentWriteBlock(state);
+    if (identityBlock) throw new Error(identityBlock);
     const assertBranch = (id: string) => {
       const matches = state.branches.filter((branch) => branch.branchId === id);
       if (
@@ -174,7 +178,22 @@ export function prepareApplyPreview(
       const b = baseFiles.get(path) ?? null,
         s = sourceFiles.get(path) ?? null,
         d = destinationFiles.get(path) ?? null;
+      const evidence = state.components;
+      const endpoints = [base, source, destination].map(r => evidence?.revisions[r.manifest.revisionId]);
+      let identityBlock: string | undefined;
+      if (evidence?.status === 'available') {
+        if (endpoints.some((e, index) => !e && [base, source, destination][index].manifest.files.some(f => f.path === path))) identityBlock = 'Component evidence is unavailable at a legacy endpoint. Use a saved revision after its registration boundary.';
+        else {
+          const ids = endpoints.map(e => e?.files.find(f => f.path === path)?.componentId);
+          const presentIds = ids.filter(Boolean);
+          if (new Set(presentIds).size > 1) identityBlock = 'Different components occupy this path. Applying across component identities is not supported.';
+          for (const componentId of presentIds) {
+            if (endpoints.some(e => e?.files.some(f => f.componentId === componentId && f.path !== path))) identityBlock = 'This component has different paths across the saved endpoints. Rename-dependent application is blocked; no destination filename is guessed.';
+          }
+        }
+      }
       return {
+        identityBlock,
         path,
         base: b,
         source: s,
@@ -253,6 +272,10 @@ export function buildApplyPreview(
               ? "replace"
               : "add"
             : "delete";
+    if (row.identityBlock && choice.decision !== 'keep-destination') {
+      blockers.push(`${path}: ${row.identityBlock}`);
+      continue;
+    }
     const after =
       choice.decision === "use-source" ? row.source : row.destination;
     if (choice.decision === "use-source") {

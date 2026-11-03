@@ -7,6 +7,7 @@ import {
   type WorkingFolderBindings,
 } from "./branch-state";
 import { withProjectWriterLock } from "./locks";
+import { componentWriteBlock } from './component-identity';
 import { hashString } from "./hash";
 import { restoreRevisionToFolder } from "./recovery-service";
 import { enumerateWorkingFolder } from "./scanner";
@@ -105,6 +106,8 @@ export async function createDesignBranch(
     validateName(state, name); // Concurrent creation must recheck under the capture lock.
     const workingFolders = options.resolveWorkingFolders ? await options.resolveWorkingFolders(state) : initialWorkingFolders;
     const source = assertRevisionAncestry(state, sourceRevisionId);
+    const componentBlock = componentWriteBlock(state);
+    if (componentBlock) throw new Error(componentBlock);
     await validateWorkingFolderBindings(state, vaultDir, workingFolders);
     if ((await vaultDir.queryPermission("readwrite")) !== "granted")
       throw new Error("Reconnect the revision vault with write permission.");

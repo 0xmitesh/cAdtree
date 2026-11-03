@@ -3024,3 +3024,6 @@ input::placeholder {
     flex-wrap: wrap;
   }
 }
+.component-identity { margin-bottom: 20px; }
+.identity-association { padding: 12px 0; border-top: 1px solid var(--border, #d8e1dc); }
+.identity-decision { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }

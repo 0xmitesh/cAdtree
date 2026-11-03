@@ -347,6 +347,7 @@ function ApplyPreviewBody({
         {application?.blockedReason ? (
           <Notice type="error">{application.blockedReason}</Notice>
         ) : null}
+        {context.rows.some(row => row.identityBlock) ? <Notice>Some saved paths have different or unavailable component identities. Affected actions are blocked. Review their identity messages; unaffected file actions remain available.</Notice> : null}
         <Notice>
           {application
             ? "Saved-state review — no files change until preparation and final confirmation. Preparation rejects uncaptured destination edits."
@@ -510,7 +511,7 @@ function ApplyPreviewBody({
                       type="checkbox"
                       aria-label={`Select source ${sourceWord(row)}: ${row.path}`}
                       checked={selected}
-                      disabled={running}
+                      disabled={running || Boolean(row.identityBlock)}
                       onChange={(event) =>
                         setSelection(row, event.target.checked)
                       }
@@ -525,6 +526,7 @@ function ApplyPreviewBody({
                     }
                   />
                 </div>
+                {row.identityBlock ? <Notice type="error">{row.identityBlock}</Notice> : null}
                 {row.source === null ? (
                   <p className="preview-deletion">
                     Source deletes this file. Choosing source state would DELETE

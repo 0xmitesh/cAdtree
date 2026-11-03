@@ -306,14 +306,15 @@ test("import failures and source instability remain incomplete; retry uses anoth
       }),
     );
     const failed = await openWorkspace(root);
-    assert.equal(failed.projects.length, 1);
-    assert.equal(failed.projects[0].status, "incomplete");
+    // Import classification reads metadata before allocating a destination.
+    assert.equal(failed.projects.length, failure === 'read' ? 0 : 1);
+    if (failure !== 'read') assert.equal(failed.projects[0].status, "incomplete");
     source.setHooks({ readPermission: "granted" });
     root.setHooks({ onBeforeWrite: undefined });
     const retry = await importProject(root, source, "Retry project");
     assert.notEqual(
       retry.record.containerPath,
-      failed.projects[0].containerPath,
+      failed.projects[0]?.containerPath,
     );
     assert.equal(
       (await root.getDirectory(["projects"])).listEntries instanceof Function,

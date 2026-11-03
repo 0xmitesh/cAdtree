@@ -23,6 +23,7 @@ import {
   verifyRevisionObjects,
 } from "./vault-service";
 import { createDesignBranch } from "./branch-service";
+import { componentWriteBlock } from './component-identity';
 import {
   restoreRevisionToFolder,
   restoreSelectedFilesToFolder,
@@ -478,6 +479,7 @@ export async function adoptProject(
         throw new Error("Source vault identity changed.");
       if (
         state.corruptedRecords.length ||
+        componentWriteBlock(state) ||
         Object.keys(state.damagedBranchHeads).length ||
         Object.values(state.competingHeads).some((heads) => heads.length)
       )
@@ -863,6 +865,34 @@ export async function importProject(
   name: string,
   options: CopyOptions = {},
 ): Promise<ManagedProject> {
+  // Complete managed projects are history-bearing imports, never raw CAD sources.
+  await validateDirectoryIsolation(source, root, 'Original project', 'cAdtree workspace');
+  const entries = await source.listEntries();
+  if (entries.some(e => e.name === '.cadtree-workspace.json' || e.name === '.cadtree-home.json')) throw new Error('Choose a project folder here. Use Import existing workspace for a workspace.');
+  if (entries.some(e => e.name === '.cadtree') || await source.hasFile(['vault', 'project.json']) || await source.hasDirectory(['vault', 'components']) || await source.hasDirectory(['vault', 'completed'])) {
+    if (!await source.hasFile(['.cadtree', 'project.json']) || !await source.hasFile(['.cadtree', 'ready.json']) || !await source.hasFile(['vault', 'project.json'])) throw new Error('Incomplete cAdtree project metadata. No new project identities were generated.');
+    const text = await source.readFileText(['.cadtree', 'project.json']);
+    const record = JSON.parse(text);
+    checkRecord(record, 'imported managed project');
+    requireStrings(record, ['projectId', 'workspaceId', 'containerPath', 'vaultPath'], 'Imported project');
+    const ready = JSON.parse(await source.readFileText(['.cadtree', 'ready.json']));
+    if (ready.schemaVersion !== VERSION || ready.projectId !== record.projectId || ready.workspaceId !== record.workspaceId || ready.recordSha256 !== hashString(text) || record.vaultPath !== `${record.containerPath}/vault`) throw new Error('Imported project publication does not match its location records.');
+    const vault = await source.getDirectory(['vault']);
+    const state = await openExistingVault(vault);
+    if (state.project.projectId !== record.projectId || componentWriteBlock(state)) throw new Error(componentWriteBlock(state) ?? 'Imported project identity mismatch.');
+    const folders: WorkingFolderBindings = {};
+    for (const branch of state.branches) {
+      const location = JSON.parse(await source.readFileText(['.cadtree', 'branches', `${idSegment(branch.branchId)}.json`]));
+      checkRecord(location, 'imported branch location');
+      requireStrings(location, ['workingPath'], 'Imported branch');
+      if (location.projectId !== record.projectId || location.workspaceId !== record.workspaceId || location.branchId !== branch.branchId) throw new Error('Imported branch location identity mismatch.');
+      const segments = managedPath(String(location.workingPath), `${record.containerPath}/working`);
+      if (segments.length !== 4 || managedPath(String(record.containerPath), 'projects').length !== 2) throw new Error('Imported branch is not an independent working leaf.');
+      folders[branch.branchId] = await source.getDirectory(segments.slice(2));
+    }
+    return adoptProject(root, vault, folders, options);
+  }
+  if ((await source.hasFile(['project.json']) || await source.hasDirectory(['completed'])) && await source.hasDirectory(['revisions'])) throw new Error('Select the complete project folder, including working branches; a vault alone cannot be imported as CAD files.');
   return initializeManagedProject(root, name, options, source);
 }
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { File, RefreshCw, Save, StickyNote } from "lucide-react";
 import type {
   FileSpecificNote,
@@ -13,8 +13,11 @@ import { formatBytes, formatTimestamp } from "../utils/format";
 import { NotesFields, Notice, OperationProgress, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
+import { prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
+import { ComponentIdentityControls } from './ComponentIdentityControls';
 
 export interface ChangesCaptureViewProps {
+  onEnableComponentTracking?: () => Promise<void>;
   branchControl?: ReactNode;
   draftCache?: Map<string, CaptureDraft>;
   draftKey?: string;
@@ -34,6 +37,7 @@ export interface ChangesCaptureViewProps {
     notes: RevisionNotes;
     fileNotes: FileSpecificNote[];
     reviewedChangesSignature: string;
+    identityReview?: IdentityReview;
   }) => Promise<void>;
   onCancelOperation: () => void;
   onReattachWorkingFolder: () => Promise<void>;
@@ -41,6 +45,7 @@ export interface ChangesCaptureViewProps {
   resolveFilePath?: (path: string) => Promise<FilePathLocation>;
 }
 export interface CaptureDraft {
+  identityReview?: IdentityReview;
   summary: string;
   notes: RevisionNotes;
   fileNotes: Record<string, FileSpecificNote>;
@@ -70,9 +75,11 @@ export function ChangesCaptureView({
   draftCache,
   draftKey,
   branchControl,
+  onEnableComponentTracking,
 }: ChangesCaptureViewProps) {
   const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
   const [summary, setSummary] = useState(savedDraft?.summary ?? "");
+  const [identityReview, setIdentityReview] = useState<IdentityReview | undefined>(savedDraft?.identityReview);
   const [notes, setNotes] = useState<RevisionNotes>(
     savedDraft?.notes ?? emptyNotes,
   );
@@ -93,8 +100,9 @@ export function ChangesCaptureView({
         fileNotes,
         notePath,
         showOverall,
+        identityReview,
       });
-  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall]);
+  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState("");
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
@@ -112,22 +120,38 @@ export function ChangesCaptureView({
         r.integrityStatus === "corrupted",
     );
   const busy = isScanning || isCapturing;
+  const identityConflict = useMemo(() => {
+    if (!scan) return undefined;
+    try {
+      prepareComponentRecord(vaultState, scan, identityReview);
+      return undefined;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }, [vaultState, scan, identityReview]);
+  const renames = identityReview?.changesSignature === scan?.changesSignature ? identityReview?.renames ?? [] : [];
   const changes = [
-    ...(scan?.added ?? []).map((file) => ({ file, status: "Added" })),
+    ...(scan?.added ?? []).filter(file => !renames.some(r => r.to === file.path)).map((file) => ({ file, status: "Added", from: '' })),
     ...(scan?.modified ?? []).map((m) => ({
       file: m.current,
       status: "Modified",
+      from: '',
     })),
-    ...(scan?.deleted ?? []).map((file) => ({ file, status: "Deleted" })),
+    ...(scan?.deleted ?? []).filter(file => !renames.some(r => r.from === file.path)).map((file) => ({ file, status: "Deleted", from: '' })),
+    ...renames.flatMap(rename => {
+      const file = scan?.added.find(f => f.path === rename.to);
+      return file ? [{ file, status: 'Renamed', from: rename.from }] : [];
+    }),
   ].sort((a, b) => a.file.path.localeCompare(b.file.path));
   const rows = [
     ...changes,
     ...(showUnchanged
-      ? (scan?.unchanged ?? []).map((file) => ({ file, status: "Unchanged" }))
+      ? (scan?.unchanged ?? []).map((file) => ({ file, status: "Unchanged", from: '' }))
       : []),
   ];
-  const validPaths = new Set(changes.map((c) => c.file.path));
+  const validPaths = new Set([...(scan?.added ?? []).map(f => f.path), ...(scan?.modified ?? []).map(m => m.current.path), ...(scan?.deleted ?? []).map(f => f.path)]);
   const hasDraft =
+    Boolean(identityReview?.replacements.length) ||
     summary ||
     Object.values(notes).some((v) => v) ||
     Object.values(fileNotes).some(
@@ -143,6 +167,7 @@ export function ChangesCaptureView({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (identityConflict) return;
     if (operationBlockReason) {
       setError(operationBlockReason);
       return;
@@ -171,12 +196,14 @@ export function ChangesCaptureView({
             n.problem.trim() || n.modification.trim() || n.observations.trim(),
         ),
         reviewedChangesSignature: scan.changesSignature,
+        identityReview,
       });
       setSummary("");
       setNotes(emptyNotes);
       setFileNotes({});
       setNotePath(null);
       setReviewedSignature(null);
+      setIdentityReview(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -252,6 +279,8 @@ export function ChangesCaptureView({
         <OperationProgress progress={progress} onCancel={onCancelOperation} />
       ) : null}
       {error ? <Notice type="error">{error}</Notice> : null}
+      <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} onEnable={onEnableComponentTracking} busy={busy} />
+      {identityConflict ? <Notice type="error">{identityConflict}</Notice> : null}
       {needsReview ? (
         <Notice type="error">
           The latest scan differs from the file set you reviewed. Review the
@@ -295,9 +324,10 @@ export function ChangesCaptureView({
             </h2>
             {scan ? (
               <div className="change-counts">
-                <StatusBadge status={`Added ${scan.added.length}`} />
+                <StatusBadge status={`Added ${scan.added.length - renames.length}`} />
                 <StatusBadge status={`Modified ${scan.modified.length}`} />
-                <StatusBadge status={`Deleted ${scan.deleted.length}`} />
+                <StatusBadge status={`Deleted ${scan.deleted.length - renames.length}`} />
+                {renames.length ? <StatusBadge status={`Renamed ${renames.length}`} /> : null}
               </div>
             ) : null}
           </div>
@@ -312,11 +342,12 @@ export function ChangesCaptureView({
           ) : (
             <>
               <div className="change-table">
-                {rows.map(({ file, status }) => (
+                {rows.map(({ file, status, from }) => (
                   <div className="change-row" key={file.path}>
                     <File size={18} />
                     <div className="change-path">
                       <strong className="file-path">{file.path}</strong>
+                      {from ? <span className="file-path">Previously {from}</span> : null}
                       <span>
                         <StatusBadge status={status} /> {formatBytes(file.size)}
                       </span>
@@ -504,10 +535,11 @@ export function ChangesCaptureView({
                 className="button primary save-button"
                 disabled={
                   busy ||
-                  !scan?.canCapture ||
-                  !scan?.hasChanges ||
+                  !scan || Boolean(scan.errors.length) ||
+                  (!scan.hasChanges && !identityReview?.replacements.length) ||
                   Boolean(damaged) ||
                   Boolean(operationBlockReason) ||
+                  Boolean(identityConflict) ||
                   needsReview ||
                   Boolean(staleNotes.length)
                 }

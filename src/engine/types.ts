@@ -133,12 +133,13 @@ export interface CorruptedVaultRecord {
 
 export interface IncompleteAttemptRecord {
   id: string;
-  kind: 'uncompleted_manifest' | 'staging_artifact' | 'uncompleted_branch';
+  kind: 'uncompleted_manifest' | 'staging_artifact' | 'uncompleted_branch' | 'uncompleted_component';
   path: string;
   detail: string;
 }
 
 export interface VaultState {
+  components?: import('./component-identity').ComponentEvidence;
   /** Reconstructed endpoint identities only; absence means the saved head is unavailable.
    * Kept separate from ancestry damage so read-only Compare can remain endpoint-local. */
   branchBaselineEndpoints?: Record<string, string | null>;
@@ -176,6 +177,7 @@ export interface ProgressUpdate {
 }
 
 export interface CaptureRevisionInput {
+  identityReview?: import('./component-identity').IdentityReview;
   workingFolders?: Record<string, FileSystemDirectoryAdapter | undefined>;
   resolveWorkingFolders?: (state: VaultState) => Promise<Record<string, FileSystemDirectoryAdapter | undefined>>;
   branchId: string;

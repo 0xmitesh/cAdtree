@@ -20,7 +20,7 @@ import {
   formatRevisionNumber,
 } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
-import { fileHistory, historicalFilePaths } from "../history/file-history";
+import { fileHistory, historicalFilePaths, historicalComponents } from "../history/file-history";
 import { layoutRevisions } from "../history/layout";
 import {
   ApplyPreviewDialog,
@@ -98,6 +98,8 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     [vaultState, activeBranchId],
   );
   const [filePath, setFilePath] = useState("");
+  const componentId = filePath.startsWith('component:') ? filePath.slice(10) : null;
+  const components = useMemo(() => historicalComponents(vaultState), [vaultState]);
   const [highlightBranchId, setHighlightBranchId] = useState<string | null>(
     null,
   );
@@ -112,9 +114,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
             filePath,
             highlightBranchId,
             contextId,
+            componentId,
           )
         : null,
-    [vaultState, fullGraph, filePath, highlightBranchId, contextId],
+    [vaultState, fullGraph, filePath, highlightBranchId, contextId, componentId],
   );
   const graph = projection?.graph ?? fullGraph;
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -168,9 +171,11 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     graph.nodes[0];
   const rev = selected?.revision;
   const fileRecord = selected && projection?.records.get(selected.id);
+  const historicalPath = componentId ? fileRecord?.file?.path ?? '' : filePath;
+  const componentPresent = !componentId || Boolean(rev && vaultState.components?.revisions[rev.manifest.revisionId]?.files.some(f => f.componentId === componentId));
   const fileNotes =
     rev?.manifest.fileNotes?.filter(
-      (note) => !filePath || note.path === filePath,
+      (note) => !filePath || note.path === historicalPath || note.path === fileRecord?.previousPath,
     ) ?? [];
   const changeFile = (path: string) => {
     setFilePath(path);
@@ -279,11 +284,12 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 onChange={(event) => changeFile(event.target.value)}
               >
                 <option value="">All files</option>
-                {paths.map((path) => (
+                {components.length ? <optgroup label="Components (confirmed identity)">{components.map(c => <option key={c.componentId} value={`component:${c.componentId}`}>{c.label}</option>)}</optgroup> : null}
+                <optgroup label="Path history (no identity inferred)">{paths.map((path) => (
                   <option key={path} value={path}>
                     {path}
                   </option>
-                ))}
+                ))}</optgroup>
               </select>
             </label>
           </div>
@@ -309,6 +315,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           </div>
         </div>
       </div>
+      {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Path history and snapshot comparison remain available.</Notice> : null}
+      {filePath && !componentId ? <p className="muted small">Path history: renames and reused filenames are not linked in this view.</p> : null}
+      {componentId ? <p className="muted small">Component {componentId}. Older history before its registration boundary is available separately by path.</p> : null}
       {activeBranch && !activeBranch.isMain ? (
         <section className="branch-origin">
           <strong>{activeBranch.name}</strong>
@@ -438,7 +447,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     onClick={() =>
                       setComparison({
                         inspectedId: rev.manifest.revisionId,
-                        initialPath: filePath,
+                        initialPath: historicalPath,
                       })
                     }
                   >
@@ -451,9 +460,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     className="selected-file-context"
                     aria-label="Selected file history"
                   >
-                    <strong className="file-path" title={filePath}>
-                      {filePath}
+                    <strong className="file-path" title={historicalPath}>
+                      {historicalPath || 'Component absent'}
                     </strong>
+                    {fileRecord.previousPath ? <p className="file-path">Confirmed rename: {fileRecord.previousPath} → {historicalPath}</p> : null}
                     <p>
                       <StatusBadge status={fileRecord.status} />
                       {fileRecord.origins.length
@@ -598,10 +608,11 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         className="text-button"
                         disabled={
                           damaged ||
+                          !componentPresent ||
                           Boolean(
                             filePath &&
                             !rev.manifest.files.some(
-                              (f) => f.path === filePath,
+                                (f) => f.path === historicalPath,
                             ),
                           )
                         }
@@ -610,7 +621,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                             new Set(
                               (filePath
                                 ? rev.manifest.files.filter(
-                                    (f) => f.path === filePath,
+                                    (f) => f.path === historicalPath,
                                   )
                                 : rev.manifest.files
                               ).map((f) => f.path),
@@ -637,7 +648,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                             <input
                               type="checkbox"
                               aria-label={`Select ${file.path} for recovery`}
-                              disabled={damaged || status === "Deleted"}
+                              disabled={damaged || status === "Deleted" || !componentPresent}
                               checked={selectedPaths.has(file.path)}
                               onChange={() => toggle(file.path)}
                             />
@@ -679,7 +690,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                           ) : null}
                           {status === "Deleted" ? (
                             <div className="deleted-help">
-                              Absent from this revision.{" "}
+                              {componentId ? 'This component is absent from this revision; a different component may use its old path.' : 'Absent from this revision.'}{" "}
                               {diff.parentRevisionId &&
                               vaultState.revisions.some(
                                 (r) =>
