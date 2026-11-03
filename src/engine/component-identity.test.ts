@@ -297,6 +297,48 @@ test('cross-branch rename and unrelated same-path replacement are blocked while 
   if(conflict.status === 'available') assert.match(conflict.context.rows.find(r=>r.path==='safe-new')!.identityBlock!,/Different components/);
   assert.ok(replaced.vaultState.components);
 });
+test('an applied addition cannot also be a confirmed rename target; rejection preserves evidence and corrected retry succeeds', async () => {
+  const f = await fixture();
+  const branch = await createDesignBranch({ vaultDir: f.vault, destinationParent: new InMemoryFileSystemAdapter('Cases'), workingFolders: f.folders, sourceRevisionId: f.first.revision.manifest.revisionId, name: 'Addition', reason: 'New component' });
+  f.folders[branch.branch.branchId] = branch.workingDir;
+  await branch.workingDir.writeFileText(['new.SLDPRT'], 'source addition');
+  const source = await f.save({}, branch.workingDir, branch.branch.branchId);
+  const prepared = prepareApplyPreview(source.vaultState, source.revision.manifest.revisionId, mainId);
+  assert.equal(prepared.status, 'available');
+  if (prepared.status !== 'available') throw new Error('Expected available preview');
+  const choices = { 'new.SLDPRT': { selected: true, decision: 'use-source' as const } };
+  const plan = buildApplyPreview(prepared.context, choices, 'Use addition');
+  const application = await prepareApplication(f.vault, applicationReview(plan, choices), { workingFolders: f.folders });
+  const applied = await applyPreparedApplication(f.vault, application, { workingFolders: f.folders });
+  await f.working.removeEntry(['caliper.SLDPRT']);
+  const { state, scan } = await f.scan();
+  const review = createIdentityReview(state, scan, [{ from: 'caliper.SLDPRT', to: 'new.SLDPRT' }], []);
+  const before = await inventory(f.vault);
+  const writes: string[] = [];
+  const original = f.vault.writeFileText.bind(f.vault);
+  f.vault.writeFileText = async (path, text, options) => {
+    writes.push(path.join('/'));
+    return original(path, text, options);
+  };
+  await assert.rejects(f.save({ identityReview: review, reviewedChangesSignature: scan.changesSignature }), /Component identity conflict.*new\.SLDPRT.*confirmed rename/);
+  assert.deepEqual(writes, [], 'reject before capture provenance, component sidecar or completion writes');
+  assert.equal(await inventory(f.vault), before, 'rejection leaves all vault evidence unchanged');
+  const rejected = await openExistingVault(f.vault);
+  assert.equal(rejected.revisions.length, state.revisions.length);
+  assert.equal(rejected.components?.status, 'available');
+  assert.deepEqual(rejected.components, state.components);
+  assert.equal(rejected.applicationOperations?.find(op => op.operationId === applied.operationId)?.status, 'applied');
+  // Cancel the association: the deletion and applied addition retain separate identities.
+  const corrected = createIdentityReview(rejected, scan, [], []);
+  const saved = await f.save({ identityReview: corrected, reviewedChangesSignature: scan.changesSignature });
+  const reopened = await openExistingVault(f.vault);
+  assert.equal(reopened.revisions.length, state.revisions.length + 1);
+  assert.equal(reopened.components?.status, 'available');
+  assert.equal(mapping(reopened, saved.revision.manifest.revisionId, 'new.SLDPRT'), mapping(source.vaultState, source.revision.manifest.revisionId, 'new.SLDPRT'));
+  assert.notEqual(mapping(reopened, saved.revision.manifest.revisionId, 'new.SLDPRT'), f.componentId);
+  assert.equal(reopened.applicationOperations?.find(op => op.operationId === applied.operationId)?.status, 'captured');
+});
+
 test('a legacy shared ancestor does not block a safely unrelated source addition absent at that ancestor', async () => {
   const f = await fixture();
   await f.vault.removeEntry(['components'],{recursive:true});

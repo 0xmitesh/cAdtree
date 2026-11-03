@@ -3,7 +3,7 @@ import { splitAndValidatePath } from './fs-adapter';
 import { hashString } from './hash';
 import { getBranchBaseline } from './branch-state';
 import { withProjectWriterLock } from './locks';
-import type { RevisionManifest, ScanResult, VaultState } from './types';
+import type { ScanResult, VaultState } from './types';
 
 export interface ComponentFile { path: string; componentId: string }
 export interface RenameDecision { from: string; to: string }
@@ -50,13 +50,37 @@ function validateSeal(value: { schemaVersion: number; projectId: string; payload
   if (value.schemaVersion !== 1) throw new Error(`Unsupported component identity schema (${String(value.schemaVersion)}).`);
   if (value.projectId !== projectId || value.payloadSha256 !== componentChecksum(value)) throw new Error('Component identity checksum or project binding mismatch.');
 }
-function validateFiles(files: ComponentFile[], manifest: RevisionManifest) {
+function validateFiles(files: ComponentFile[], manifest: { files: { path: string }[] }) {
   if (!Array.isArray(files) || files.length !== manifest.files.length) throw new Error('Component mapping does not cover the complete snapshot.');
   const paths = new Set<string>(), ids = new Set<string>();
   for (const file of files) {
     splitAndValidatePath(file.path);
     if (!/^component-[0-9a-f-]{36}$/.test(file.componentId) || paths.has(file.path) || ids.has(file.componentId) || !manifest.files.some(f => f.path === file.path)) throw new Error('Duplicate or invalid component identity/path mapping.');
     paths.add(file.path); ids.add(file.componentId);
+  }
+}
+/** Publication and reconstruction must accept the same complete associations. */
+function validateAssociations(
+  record: Pick<ComponentRecord, 'files' | 'renames' | 'replacements' | 'transfers'>,
+  parentFiles: ComponentFile[],
+  snapshot: { files: { path: string }[] },
+  allocated: Set<string>,
+) {
+  validateFiles(record.files, snapshot);
+  validateDecisions(record.renames, record.replacements, parentFiles, snapshot.files.map(f => f.path));
+  if (!Array.isArray(record.transfers) || new Set(record.transfers.map(t => t.path)).size !== record.transfers.length) throw new Error('Invalid applied component transfers.');
+  const before = new Map(parentFiles.map(f => [f.path, f.componentId]));
+  for (const transfer of record.transfers) {
+    const conflict = (reason: string) => new Error(`Component identity conflict at "${transfer.path}": ${reason} Resolve the association in Changes before saving.`);
+    if (record.renames.some(r => r.to === transfer.path)) throw conflict('an applied addition cannot also be a confirmed rename target. Cancel the rename association to keep the applied component identity.');
+    if (record.replacements.includes(transfer.path) || before.has(transfer.path)) throw conflict('an applied addition cannot also replace a tracked component.');
+    if (!record.files.some(f => f.path === transfer.path && f.componentId === transfer.componentId)) throw conflict('the applied component does not match the proposed snapshot mapping.');
+  }
+  for (const file of record.files) {
+    const rename = record.renames.find(r => r.to === file.path);
+    const inherited = record.replacements.includes(file.path) ? undefined : before.get(rename?.from ?? file.path);
+    const transfer = record.transfers.find(t => t.path === file.path);
+    if (inherited ? inherited !== file.componentId : !transfer && allocated.has(file.componentId)) throw new Error(`Component identity conflict at "${file.path}": continuity contradicts the parent mapping or an existing registration. Resolve the association in Changes before saving.`);
   }
 }
 async function writeVerified(vault: FileSystemDirectoryAdapter, path: string[], value: object) {
@@ -124,17 +148,7 @@ export async function readComponentEvidence(vault: FileSystemDirectoryAdapter, s
       if (record.revisionId !== revision.manifest.revisionId || record.branchId !== revision.manifest.branchId || record.manifestSha256 !== revision.completion.manifestSha256 || record.boundarySha256 !== boundary.payloadSha256) throw new Error('Component record does not bind to the exact committed manifest.');
       const parent = revision.manifest.parentRevisionId ? result.revisions[revision.manifest.parentRevisionId] : undefined;
       if (record.parentIdentitySha256 !== (parent?.payloadSha256 ?? null)) throw new Error('Component parent mapping checksum mismatch.');
-      validateFiles(record.files, revision.manifest);
-      if (!Array.isArray(record.transfers) || new Set(record.transfers.map(t => t.path)).size !== record.transfers.length) throw new Error('Invalid applied component transfers.');
-      validateDecisions(record.renames, record.replacements, parent?.files ?? [], revision.manifest.files.map(f => f.path));
-      const before = new Map((parent?.files ?? []).map(f => [f.path, f.componentId]));
-      for (const file of record.files) {
-        const rename = record.renames.find(r => r.to === file.path);
-        const inherited = record.replacements.includes(file.path) ? undefined : before.get(rename?.from ?? file.path);
-        const transfer = record.transfers.find(t => t.path === file.path);
-        if (transfer && (before.has(file.path) || rename || record.replacements.includes(file.path) || transfer.componentId !== file.componentId)) throw new Error('Applied identity transfer conflicts with a tracked component.');
-        if (inherited ? inherited !== file.componentId : !transfer && allocated.has(file.componentId)) throw new Error('Component continuity conflicts with the parent mapping or an existing registration.');
-      }
+      validateAssociations(record, parent?.files ?? [], revision.manifest, allocated);
       for (const file of record.files) allocated.add(file.componentId);
       result.revisions[record.revisionId] = record;
       loaded.push(record);
@@ -238,10 +252,15 @@ export function prepareComponentRecord(state: VaultState, scan: ScanResult, revi
     if (!component) throw new Error('Applied source component evidence is unavailable.');
     return { path: a.path, componentId: component.componentId, sourceRevisionId, operationId: application!.operationId };
   });
-  return { schemaVersion: 1, projectId: state.project.projectId, branchId: scan.branchId, boundarySha256: state.components.boundary!.payloadSha256,
+  const draft = { schemaVersion: 1, projectId: state.project.projectId, branchId: scan.branchId, boundarySha256: state.components.boundary!.payloadSha256,
     parentIdentitySha256: parent?.payloadSha256 ?? null, renames, replacements, transfers,
     files: files.map(file => ({ path: file.path, componentId: replacements.includes(file.path) ? id() : transfers.find(t => t.path === file.path)?.componentId ?? parent?.files.find(f => f.path === (renames.find(r => r.to === file.path)?.from ?? file.path))?.componentId ?? id() })),
   };
+  // Check the whole proposed snapshot while still read-only, before capture can
+  // write application provenance, component evidence or a completion marker.
+  const allocated = new Set(Object.values(state.components.revisions).flatMap(r => r.files.map(f => f.componentId)));
+  validateAssociations(draft, parent?.files ?? [], { files }, allocated);
+  return draft;
 }
 export async function publishComponentRecord(vault: FileSystemDirectoryAdapter, draft: NonNullable<ReturnType<typeof prepareComponentRecord>>, revisionId: string, manifestSha256: string) {
   await writeVerified(vault, recordPath(revisionId), seal({ ...draft, revisionId, manifestSha256 }));

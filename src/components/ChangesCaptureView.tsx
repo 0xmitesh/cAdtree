@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { File, RefreshCw, Save, StickyNote } from "lucide-react";
 import type {
   FileSpecificNote,
@@ -13,7 +13,7 @@ import { formatBytes, formatTimestamp } from "../utils/format";
 import { NotesFields, Notice, OperationProgress, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/windows-path";
-import type { IdentityReview } from '../engine/component-identity';
+import { prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
 import { ComponentIdentityControls } from './ComponentIdentityControls';
 
 export interface ChangesCaptureViewProps {
@@ -120,6 +120,15 @@ export function ChangesCaptureView({
         r.integrityStatus === "corrupted",
     );
   const busy = isScanning || isCapturing;
+  const identityConflict = useMemo(() => {
+    if (!scan) return undefined;
+    try {
+      prepareComponentRecord(vaultState, scan, identityReview);
+      return undefined;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }, [vaultState, scan, identityReview]);
   const renames = identityReview?.changesSignature === scan?.changesSignature ? identityReview?.renames ?? [] : [];
   const changes = [
     ...(scan?.added ?? []).filter(file => !renames.some(r => r.to === file.path)).map((file) => ({ file, status: "Added", from: '' })),
@@ -158,6 +167,7 @@ export function ChangesCaptureView({
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (identityConflict) return;
     if (operationBlockReason) {
       setError(operationBlockReason);
       return;
@@ -270,6 +280,7 @@ export function ChangesCaptureView({
       ) : null}
       {error ? <Notice type="error">{error}</Notice> : null}
       <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} onEnable={onEnableComponentTracking} busy={busy} />
+      {identityConflict ? <Notice type="error">{identityConflict}</Notice> : null}
       {needsReview ? (
         <Notice type="error">
           The latest scan differs from the file set you reviewed. Review the
@@ -528,6 +539,7 @@ export function ChangesCaptureView({
                   (!scan.hasChanges && !identityReview?.replacements.length) ||
                   Boolean(damaged) ||
                   Boolean(operationBlockReason) ||
+                  Boolean(identityConflict) ||
                   needsReview ||
                   Boolean(staleNotes.length)
                 }
