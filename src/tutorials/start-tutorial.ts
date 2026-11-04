@@ -65,12 +65,10 @@ export const START_TUTORIAL: TutorialDefinition = {
     },
     {
       id: "create-connect-home",
-      title: "Create or connect Cadtree Home",
+      title: "Create Cadtree Home",
       summary:
         "Click Start my Cadtree home and select an empty dedicated folder, or click Open my Cadtree home for an existing one.",
-      points: [
-        "In Complete home setup, paste the folder's full absolute address (for example, D:\\Cadtree or /Users/name/Documents/Cadtree) and click Complete setup.",
-      ],
+      points: [],
       visuals: [
         {
           src: "/tutorials/start-with-cadtree/step-2-start-home.png",
@@ -84,15 +82,33 @@ export const START_TUTORIAL: TutorialDefinition = {
           caption: "2. Select a dedicated empty folder for Cadtree Home.",
           kind: "os",
         },
+      ],
+    },
+    {
+      id: "copy-home-address",
+      title: "Copy the Cadtree Home address",
+      summary:
+        "Copy the absolute path of the Cadtree Home folder you selected, then paste it into cAdtree.",
+      points: [
+        "Windows may copy the path in quotation marks. Paste it directly; cAdtree removes matching surrounding quotes automatically.",
+        "Use the address of your own selected folder. D:\\Cadtree is only an example.",
+      ],
+      visuals: [
+        {
+          src: "/tutorials/start-with-cadtree/step-3-windows-copy-as-path.png",
+          alt: "Synthetic Windows 11 File Explorer in Documents with the generic Cadtree folder selected and the cursor pointing to Copy as path in its context menu",
+          caption: "1. In File Explorer, right-click Cadtree Home and choose Copy as path.",
+          kind: "os",
+        },
         {
           src: "/tutorials/start-with-cadtree/step-2-complete-home-setup.png",
-          alt: "cAdtree Complete home setup dialog with D:\\Cadtree entered in Cadtree home folder address",
-          caption: "3. Paste the folder's full address and complete setup.",
+          alt: "Real cAdtree Complete home setup dialog with D:\\Cadtree in Cadtree home folder address and Complete setup highlighted",
+          caption: "2. Paste the folder address into cAdtree and click Complete setup.",
           kind: "cadtree",
         },
       ],
       note:
-        "The browser grants access to the selected folder, but cannot provide or verify its full local filesystem address. cAdtree uses the manually entered address for Copy path shortcuts.",
+        "The browser can access the selected folder but cannot provide or verify its full local filesystem address. cAdtree uses the address you enter for Copy path shortcuts.",
     },
     {
       id: "workspace",
@@ -106,13 +122,13 @@ export const START_TUTORIAL: TutorialDefinition = {
         {
           src: "/tutorials/start-with-cadtree/step-3-my-workspaces.png",
           alt: "My workspaces screen showing the Create workspace button",
-          caption: "1. On My workspaces, click Create workspace.",
+          caption: "1. Click Create workspace.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/start-with-cadtree/step-3-create-workspace-dialog.png",
           alt: "Create workspace dialog with My Workspace entered as the workspace name",
-          caption: "2. Enter a workspace name and click Create workspace.",
+          caption: "2. Name the workspace and create it.",
           kind: "cadtree",
         },
       ],
@@ -129,13 +145,13 @@ export const START_TUTORIAL: TutorialDefinition = {
         {
           src: "/tutorials/start-with-cadtree/step-4-workspace-projects.png",
           alt: "My Workspace screen showing the Create project button",
-          caption: "1. Inside your workspace, click Create project.",
+          caption: "1. Click Create project.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/start-with-cadtree/step-4-create-project-dialog.png",
           alt: "Create project dialog with My Project entered as the project name",
-          caption: "2. Enter a project name and click Create project.",
+          caption: "2. Name the project and create it.",
           kind: "cadtree",
         },
       ],
