@@ -14,9 +14,13 @@ const source = () => new File([bytes], 'requirement.pdf', { type: 'application/p
 
 /** The real adapter creates the file through getFileHandle before createWritable.
  * Keep that empty native file when opening/writing/closing the stream fails. */
-function faultingNative(handle: FileSystemDirectoryHandle, fault: { match?: (path: string) => boolean; phase: 'open' | 'write' | 'close'; created?: string }, parent: string[] = []): FileSystemDirectoryHandle {
+function faultingNative(handle: FileSystemDirectoryHandle, fault: { match?: (path: string) => boolean; beforeDirectory?: (path: string) => boolean; phase: 'open' | 'write' | 'close'; created?: string }, parent: string[] = []): FileSystemDirectoryHandle {
   return new Proxy(handle, { get(target, key) {
-    if (key === 'getDirectoryHandle') return async (name: string, options?: FileSystemGetDirectoryOptions) => faultingNative(await target.getDirectoryHandle(name, options), fault, [...parent, name]);
+    if (key === 'getDirectoryHandle') return async (name: string, options?: FileSystemGetDirectoryOptions) => {
+      const path = [...parent, name];
+      if (options?.create && fault.beforeDirectory?.(path.join('/'))) { fault.beforeDirectory = undefined; throw new Error('Injected interruption before enrollment directory creation'); }
+      return faultingNative(await target.getDirectoryHandle(name, options), fault, path);
+    };
     if (key === 'getFileHandle') return async (name: string, options?: FileSystemGetFileOptions) => {
       const file = await target.getFileHandle(name, options), path = [...parent, name].join('/');
       if (!options?.create || !fault.match?.(path)) return file;
@@ -175,4 +179,53 @@ test('first reference enrollment interrupted after file creation preserves an ex
   assert.deepEqual(next.vaultState.references!.contexts[next.revision.manifest.revisionId].record!.links, []);
   assert.equal(await f.disk.readFileText(['revisions', `${id}.manifest.json`]), manifest);
   assert.equal((await importReferenceAttachment(f.vault, f.projectId, source(), metadata)).references!.library.length, 1);
+});
+
+for (const nextAction of ['import', 'capture'] as const) test(`empty references parent after native interruption permits ${nextAction} first and records an incomplete setup diagnostic`, async () => {
+  const f = await fixture();
+  f.fault.beforeDirectory = path => path === 'references/enrollment';
+  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /before enrollment directory creation/);
+  assert.equal(await f.disk.hasDirectory(['references']), true);
+  assert.equal(await f.disk.hasDirectory(['references', 'enrollment']), false);
+  assert.deepEqual(await (await f.disk.getDirectory(['references'])).listEntries(), []);
+  const reopened = await openExistingVault(f.vault);
+  assert.equal(reopened.references!.status, 'legacy');
+  assert.equal(reopened.references!.enrollmentIncomplete, true);
+  assert.deepEqual(reopened.references!.library, []);
+  assert.equal(reopened.revisions.length, 0);
+  assert.ok(reopened.incompleteAttempts.some(a => a.kind === 'uncompleted_reference' && a.path === 'references'));
+  if (nextAction === 'import') {
+    const retry = await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
+    assert.equal(retry.references!.status, 'available'); assert.equal(retry.references!.library.length, 1);
+    const ref = retry.references!.library[0];
+    assert.deepEqual((await retrieveReferenceAttachment(f.vault, f.projectId, ref.referenceId, ref.versions[0].versionId)).bytes, bytes);
+  }
+  await f.working.writeFileText(['part'], 'CAD after interrupted parent setup');
+  const saved = await f.save(); assert.equal(saved.vaultState.revisions.length, 1);
+  assert.equal(saved.vaultState.references!.status, 'available');
+  if (nextAction === 'capture') assert.equal((await importReferenceAttachment(f.vault, f.projectId, source(), metadata)).references!.library.length, 1);
+});
+
+test('an empty references parent cannot replace enrollment required by a committed revision', async () => {
+  const f = await fixture(); await f.working.writeFileText(['part'], 'saved CAD'); const saved = await f.save();
+  await f.disk.removeEntry(['references'], { recursive: true });
+  await f.disk.getDirectory(['references'], { create: true });
+  const reopened = await openExistingVault(f.vault);
+  assert.equal(reopened.references!.status, 'unavailable');
+  assert.equal(reopened.references!.enrollmentIncomplete, undefined);
+  assert.equal(reopened.references!.contexts[saved.revision.manifest.revisionId].status, 'unavailable');
+  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Committed reference enrollment evidence is missing/);
+  await f.working.writeFileText(['part'], 'new CAD'); await assert.rejects(f.save(), /Committed reference enrollment evidence is missing/);
+  assert.equal((await openExistingVault(f.vault)).revisions.length, 1);
+  assert.deepEqual(await (await f.disk.getDirectory(['references'])).listEntries(), []);
+});
+
+test('nonempty reference storage requiring a missing enrollment remains unavailable without revision links', async () => {
+  const f = await fixture(); await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
+  await f.disk.removeEntry(['references', 'enrollment'], { recursive: true });
+  const reopened = await openExistingVault(f.vault);
+  assert.equal(reopened.revisions.length, 0); assert.equal(reopened.references!.status, 'unavailable');
+  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /existing storage cannot be regenerated/);
+  await f.working.writeFileText(['part'], 'CAD'); await assert.rejects(f.save(), /existing storage cannot be regenerated/);
+  assert.equal(await f.disk.hasDirectory(['references', 'enrollment']), false);
 });

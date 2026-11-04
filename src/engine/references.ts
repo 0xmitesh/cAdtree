@@ -136,9 +136,13 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
       for (const revision of state.revisions.filter(r => r.completion.referenceContext !== undefined)) result.contexts[revision.manifest.revisionId] = { status: 'unavailable', reason: 'Committed reference context evidence is missing.' };
       if (state.revisions.some(r => r.completion.referenceContext !== undefined)) throw new Error('Committed reference enrollment evidence is missing; it cannot be regenerated as legacy history.');
       const entries = await vault.listEntries();
-      const onlyPendingEnrollment = enrollment.pending && (await (await vault.getDirectory(DATA)).listEntries()).every(e => e.name === 'enrollment' && e.kind === 'directory');
+      const dataEntry = entries.find(e => e.name === DATA[0]);
+      const dataEntries = dataEntry?.kind === 'directory' ? await (await vault.getDirectory(DATA)).listEntries() : undefined;
+      const emptyParent = dataEntries?.length === 0;
+      const onlyPendingEnrollment = emptyParent || (enrollment.pending && Boolean(dataEntries?.every(e => e.name === 'enrollment' && e.kind === 'directory')));
       if (entries.some(e => e.name === ROOT[0]) || (entries.some(e => e.name === DATA[0]) && !onlyPendingEnrollment)) throw new Error('Reference enrollment evidence is missing; existing storage cannot be regenerated.');
       if (onlyPendingEnrollment) result.enrollmentIncomplete = true;
+      if (emptyParent) state.incompleteAttempts.push({ id: 'reference-setup', kind: 'uncompleted_reference', path: DATA.join('/'), detail: 'Reference setup stopped after creating its empty parent folder; enrollment may be retried.' });
       for (const key of Object.keys(result.contexts)) result.contexts[key] = { status: 'legacy' };
       return result;
     }
