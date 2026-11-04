@@ -168,7 +168,12 @@ test('required content and catalog are checked again immediately before completi
 test('interrupted and cancelled imports publish no reference identity and allow fresh import', async () => {
   for (const cancelled of [false, true]) {
     const f = await fixture(), originalWrite = f.vault.writeFileText.bind(f.vault), abort = new AbortController();
+    const originalDirectory = f.vault.getDirectory.bind(f.vault);
     let fail = true;
+    f.vault.getDirectory = async (path, options) => {
+      if (!cancelled && fail && options?.exclusiveCreate && path[0] === 'references' && path[1] === 'completed') { fail = false; throw new Error('Interrupted reference publication'); }
+      return originalDirectory(path, options);
+    };
     f.vault.writeFileText = async (path, text, options) => {
       if (fail && path[0] === 'references' && path[1] === (cancelled ? 'catalogs' : 'completed')) {
         fail = false;
@@ -222,7 +227,8 @@ test('complete project copy, adoption, workspace import and disk-only relocation
 
 test('legacy revisions remain unannotated without rewriting manifests and missing or unsupported evidence is never regenerated', async () => {
   const f = await fixture(); await f.working.writeFileText(['part'], 'legacy bytes'); const first = await f.save();
-  await f.vault.removeEntry(['reference-context.json']); await f.vault.removeEntry(['references'], { recursive: true });
+  if (await f.vault.hasFile(['reference-context.json'])) await f.vault.removeEntry(['reference-context.json']);
+  await f.vault.removeEntry(['references'], { recursive: true });
   // Model an actual pre-feature completion rather than erasing evidence from a new capture.
   const completionPath = ['completed', `${first.revision.manifest.revisionId}.done.json`];
   const legacyCompletion = JSON.parse(await f.vault.readFileText(completionPath)); delete legacyCompletion.referenceContext;
@@ -233,7 +239,9 @@ test('legacy revisions remain unannotated without rewriting manifests and missin
   await updateProjectReference(f.vault, f.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
   const next = await f.save(); assert.equal(next.vaultState.references!.contexts[id].status, 'legacy');
   assert.equal(await f.vault.readFileText(['revisions', `${id}.manifest.json`]), manifest);
-  const root = JSON.parse(await f.vault.readFileText(['reference-context.json'])); root.schemaVersion = 99; root.payloadSha256 = referenceChecksum(root);
+  // The old single-file boundary remains readable and strict for compatibility.
+  const root = structuredClone(next.vaultState.references!.boundary!); root.schemaVersion = 99; root.payloadSha256 = referenceChecksum(root);
+  await f.vault.removeEntry(['references', 'enrollment'], { recursive: true });
   await f.vault.writeFileText(['reference-context.json'], JSON.stringify(root));
   assert.equal((await openExistingVault(f.vault)).references!.status, 'unsupported');
   await assert.rejects(importReferenceAttachment(f.vault, f.projectId, attachment(), metadata), /Unsupported/);
@@ -278,10 +286,12 @@ test('a missing committed context or a rechecksummed wrong revision binding is u
 
 test('lost import and capture acknowledgements reconstruct one completed publication instead of duplicating it', async () => {
   const f = await fixture(), write = f.vault.writeFileText.bind(f.vault);
+  const directory = f.vault.getDirectory.bind(f.vault);
   let importAck = true;
-  f.vault.writeFileText = async (path, text, options) => {
-    await write(path, text, options);
-    if (importAck && path[0] === 'references' && path[1] === 'completed') { importAck = false; throw new Error('Lost import acknowledgement'); }
+  f.vault.getDirectory = async (path, options) => {
+    const result = await directory(path, options);
+    if (importAck && options?.exclusiveCreate && path[0] === 'references' && path[1] === 'completed') { importAck = false; throw new Error('Lost import acknowledgement'); }
+    return result;
   };
   await assert.rejects(importReferenceAttachment(f.vault, f.projectId, attachment('transcript.md'), metadata), /Lost import/);
   const imported = await openExistingVault(f.vault); assert.equal(imported.references!.library.length, 2); assert.equal(imported.references!.status, 'available');
@@ -298,7 +308,8 @@ test('new completion binding detects loss of all reference sidecars and refuses 
   const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'geometry'); const first = await f.save();
   assert.ok(first.revision.completion.referenceContext);
-  await f.vault.removeEntry(['reference-context.json']); await f.vault.removeEntry(['references'], { recursive: true });
+  if (await f.vault.hasFile(['reference-context.json'])) await f.vault.removeEntry(['reference-context.json']);
+  await f.vault.removeEntry(['references'], { recursive: true });
   const state = await openExistingVault(f.vault);
   assert.equal(state.references!.status, 'unavailable'); assert.equal(state.references!.contexts[first.revision.manifest.revisionId].status, 'unavailable');
   await assert.rejects(importReferenceAttachment(f.vault, f.projectId, attachment(), metadata), /cannot be regenerated/);

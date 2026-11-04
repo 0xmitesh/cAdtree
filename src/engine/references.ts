@@ -17,6 +17,7 @@ export interface RevisionReferenceContext { schemaVersion: number; projectId: st
 export interface ReferenceEvidence {
   status: 'legacy' | 'available' | 'unavailable' | 'unsupported'; reason?: string;
   boundary?: Boundary; library: ProjectReference[]; catalogId: string | null; catalogSha256: string | null;
+  enrollmentIncomplete?: boolean;
   catalogs: Record<string, { record: ReferenceCatalog; sha256: string }>;
   contexts: Record<string, { status: 'legacy' | 'available' | 'unavailable'; record?: RevisionReferenceContext; reason?: string }>;
 }
@@ -60,6 +61,42 @@ async function writeVerified(vault: FileSystemDirectoryAdapter, path: string[], 
   if (await vault.readFileText(path) !== content) throw new Error('Reference publication readback failed.');
   return hashString(content);
 }
+// The browser creates files before writing them. Only directory creation is the
+// final publication step: its name binds the already verified immutable bytes.
+async function commitDirectory(vault: FileSystemDirectoryAdapter, path: string[]) {
+  const marker = await vault.getDirectory(path, { create: true, exclusiveCreate: true });
+  if ((await marker.listEntries()).length) throw new Error('Reference publication directory is not empty.');
+}
+function directoryPublication(name: string, prefix: string) {
+  const match = /^(.+)\.([a-f0-9]{64})\.done$/.exec(name);
+  if (!match || !safeId(match[1], prefix)) throw new Error('Unexpected reference publication directory.');
+  return { id: match[1], sha256: match[2] };
+}
+async function readDirectoryPublication(vault: FileSystemDirectoryAdapter, markerPath: string[], recordPath: string[], sha256: string) {
+  if ((await (await vault.getDirectory(markerPath)).listEntries()).length) throw new Error('Reference publication directory was modified.');
+  const content = await vault.readFileText(recordPath);
+  if (hashString(content) !== sha256) throw new Error('Committed reference record checksum mismatch.');
+  return JSON.parse(content);
+}
+async function readEnrollment(vault: FileSystemDirectoryAdapter, state: VaultState) {
+  const path = [...DATA, 'enrollment'];
+  const published: Boundary[] = [], prepared: string[] = [], completed = new Set<string>();
+  const pending = await vault.hasDirectory(path);
+  if (pending) for (const entry of await (await vault.getDirectory(path)).listEntries()) {
+    if (entry.kind === 'file' && entry.name.endsWith('.json') && safeId(entry.name.slice(0, -5), 'reference-enrollment')) prepared.push(entry.name);
+    else {
+      const marker = directoryPublication(entry.name, 'reference-enrollment');
+      if (entry.kind !== 'directory' || completed.has(marker.id)) throw new Error('Invalid or competing reference enrollment publication.');
+      completed.add(marker.id);
+      published.push(await readDirectoryPublication(vault, [...path, entry.name], [...path, `${marker.id}.json`], marker.sha256));
+    }
+  }
+  for (const name of prepared) if (!completed.has(name.slice(0, -5))) state.incompleteAttempts.push({ id: name.slice(0, -5), kind: 'uncompleted_reference', path: [...path, name].join('/'), detail: 'Reference enrollment was interrupted before publication; a fresh enrollment may be retried.' });
+  if (pending && !prepared.length && !published.length) state.incompleteAttempts.push({ id: 'reference-enrollment', kind: 'uncompleted_reference', path: path.join('/'), detail: 'Reference enrollment stopped before its record was written; a fresh enrollment may be retried.' });
+  if (await vault.hasFile(ROOT)) published.push(JSON.parse(await vault.readFileText(ROOT)));
+  if (published.length > 1) throw new Error('Competing reference enrollment evidence.');
+  return { boundary: published[0], pending };
+}
 function versionIn(library: ProjectReference[], referenceId: string, versionId: string) {
   const ref = library.find(r => r.referenceId === referenceId);
   const version = ref?.versions.find(v => v.versionId === versionId);
@@ -93,15 +130,21 @@ function validateLinks(links: ReferenceLink[], library: ProjectReference[], comp
 export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, state: VaultState): Promise<ReferenceEvidence> {
   const result: ReferenceEvidence = { status: 'legacy', library: [], catalogId: null, catalogSha256: null, catalogs: {}, contexts: Object.fromEntries(state.revisions.map(r => [r.manifest.revisionId, { status: 'legacy' }])) };
   try {
-    if (!await vault.hasFile(ROOT)) {
+    for (const key of Object.keys(result.contexts)) result.contexts[key] = { status: 'unavailable', reason: 'Reference enrollment is unavailable.' };
+    const enrollment = await readEnrollment(vault, state);
+    if (!enrollment.boundary) {
       for (const revision of state.revisions.filter(r => r.completion.referenceContext !== undefined)) result.contexts[revision.manifest.revisionId] = { status: 'unavailable', reason: 'Committed reference context evidence is missing.' };
       if (state.revisions.some(r => r.completion.referenceContext !== undefined)) throw new Error('Committed reference enrollment evidence is missing; it cannot be regenerated as legacy history.');
-      if ((await vault.listEntries()).some(e => e.name === ROOT[0] || e.name === DATA[0])) throw new Error('Reference enrollment evidence is missing; existing storage cannot be regenerated.');
+      const entries = await vault.listEntries();
+      const onlyPendingEnrollment = enrollment.pending && (await (await vault.getDirectory(DATA)).listEntries()).every(e => e.name === 'enrollment' && e.kind === 'directory');
+      if (entries.some(e => e.name === ROOT[0]) || (entries.some(e => e.name === DATA[0]) && !onlyPendingEnrollment)) throw new Error('Reference enrollment evidence is missing; existing storage cannot be regenerated.');
+      if (onlyPendingEnrollment) result.enrollmentIncomplete = true;
+      for (const key of Object.keys(result.contexts)) result.contexts[key] = { status: 'legacy' };
       return result;
     }
     result.status = 'unavailable';
     for (const key of Object.keys(result.contexts)) result.contexts[key] = { status: 'unavailable', reason: 'Reference enrollment is unavailable.' };
-    const boundary: Boundary = JSON.parse(await vault.readFileText(ROOT)); validateSeal(boundary, state.project.projectId);
+    const boundary = enrollment.boundary; validateSeal(boundary, state.project.projectId);
     if (!Array.isArray(boundary.legacy) || new Set(boundary.legacy.map(r => r.revisionId)).size !== boundary.legacy.length) throw new Error('Invalid reference enrollment boundary.');
     result.boundary = boundary;
     const legacy = new Set<string>();
@@ -112,6 +155,16 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     }
     const catalogs: { record: ReferenceCatalog; sha256: string }[] = [];
     if (await vault.hasDirectory([...DATA, 'completed'])) for (const entry of await (await vault.getDirectory([...DATA, 'completed'])).listEntries()) {
+      if (entry.kind === 'directory') {
+        const marker = directoryPublication(entry.name, 'reference-catalog');
+        const record: ReferenceCatalog = await readDirectoryPublication(vault, [...DATA, 'completed', entry.name], [...DATA, 'catalogs', `${marker.id}.json`], marker.sha256);
+        validateSeal(record, state.project.projectId);
+        if (record.catalogId !== marker.id) throw new Error('Reference catalog publication mismatch.');
+        catalogs.push({ record, sha256: marker.sha256 });
+        continue;
+      }
+      // Existing file markers remain strict: malformed committed evidence is
+      // not reclassified as an interrupted attempt or silently discarded.
       const catalogId = entry.name.replace(/\.done\.json$/, '');
       if (entry.kind !== 'file' || !safeId(catalogId, 'reference-catalog') || entry.name !== `${catalogId}.done.json`) throw new Error('Unexpected reference catalog publication.');
       const marker = JSON.parse(await vault.readFileText([...DATA, 'completed', entry.name])); validateSeal(marker, state.project.projectId);
@@ -175,9 +228,11 @@ export function referenceWriteBlock(state: VaultState): string | undefined { ret
 export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, state: VaultState): Promise<Boundary> {
   const block = referenceWriteBlock(state); if (block) throw new Error(block);
   if (state.references?.boundary) return state.references.boundary;
-  if (await vault.hasFile(ROOT) || await vault.hasDirectory(DATA)) throw new Error('Existing reference evidence cannot be regenerated.');
+  if (await vault.hasFile(ROOT) || (await vault.hasDirectory(DATA) && !state.references?.enrollmentIncomplete)) throw new Error('Existing reference evidence cannot be regenerated.');
   const boundary = seal({ schemaVersion: 1, projectId: state.project.projectId, createdAt: new Date().toISOString(), legacy: state.revisions.map(r => ({ revisionId: r.manifest.revisionId, manifestSha256: r.completion.manifestSha256 })) });
-  await writeVerified(vault, ROOT, boundary);
+  const id = uuid('reference-enrollment');
+  const sha256 = await writeVerified(vault, [...DATA, 'enrollment', `${id}.json`], boundary);
+  await commitDirectory(vault, [...DATA, 'enrollment', `${id}.${sha256}.done`]);
   return boundary;
 }
 async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultState, library: ProjectReference[], signal?: AbortSignal, importedVersion?: ReferenceVersion) {
@@ -191,7 +246,7 @@ async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultSta
     if (!checked.valid) throw new Error('Attachment changed before reference publication.');
   }
   throwIfCancelled(signal);
-  await writeVerified(vault, [...DATA, 'completed', `${record.catalogId}.done.json`], seal({ schemaVersion: 1, projectId: state.project.projectId, catalogId: record.catalogId, recordSha256 }));
+  await commitDirectory(vault, [...DATA, 'completed', `${record.catalogId}.${recordSha256}.done`]);
 }
 export interface ReferenceMetadata { title: string; description: string; tags: string[] }
 function cleanMetadata(input: ReferenceMetadata): ReferenceMetadata { return { title: input.title.trim(), description: input.description, tags: [...new Set(input.tags.map(t => t.trim()).filter(Boolean))] }; }
