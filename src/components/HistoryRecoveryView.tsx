@@ -37,8 +37,11 @@ import {
 import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
+import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialog';
 
 export interface HistoryRecoveryViewProps {
+  onExportForReview?: ExportReviewAction;
+  isExporting?: boolean;
   application?: ApplicationController;
   vaultState: VaultState;
   activeBranchId: string;
@@ -138,6 +141,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [branchSource, setBranchSource] = useState<string | null>(null);
+  const [exportRevisionId, setExportRevisionId] = useState<string | null>(null);
   const [externalRecovery, setExternalRecovery] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const prepareWrite = async (action: () => void) => {
@@ -896,14 +900,14 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 >
                   Copy selected files ({selectedPaths.size})
                 </button>
-                <p>
-                  Recovery creates a separate copy in a fresh, empty folder.
-                </p>
+                {props.onExportForReview ? <button className="button secondary" disabled={damaged || isRestoring || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export for review</button> : null}
+                <p>Recovery creates a separate copy in a fresh, empty folder.</p>
               </div>
             </aside>
           ) : null}
         </div>
       )}
+      {exportRevisionId && props.onExportForReview ? <ReviewExportDialog key={exportRevisionId} state={vaultState} revisionId={exportRevisionId} initialPaths={[...selectedPaths]} busy={props.isExporting ?? false} progress={progress} onExport={props.onExportForReview} onClose={() => setExportRevisionId(null)} onCancel={onCancelOperation} /> : null}
       {previewSourceId ? (
         <ApplyPreviewDialog
           application={props.application}

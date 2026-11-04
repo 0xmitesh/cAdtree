@@ -25,6 +25,8 @@ import {
   type HomeAddress,
 } from "./components/FolderAddressDialog";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
+import { exportRevisionForReview } from './engine/review-export';
+import type { ExportReviewAction } from './components/ReviewExportDialog';
 import {
   restoreRevisionToFolder,
   restoreSelectedFilesToFolder,
@@ -120,7 +122,7 @@ import {
 
 type ActiveTab = "connect" | "changes" | "history" | "diagnostics";
 type Operation =
-  "scan" | "capture" | "restore" | "verify" | "branch" | "connect" | "apply";
+  "scan" | "capture" | "restore" | "verify" | "branch" | "connect" | "apply" | "export";
 type Context = {
   version: number;
   signal: AbortSignal;
@@ -1358,6 +1360,20 @@ export default function App() {
       }
     });
   };
+  const handleExportForReview: ExportReviewAction = async (plan, parent, folderName) => {
+    if (!vaultDir || !vaultState) throw new Error('Open the saved project before exporting.');
+    const result = await perform('export', async context => exportRevisionForReview({
+      vaultDir, parent, plan, folderName, workingFolders,
+      signal: context.signal, onProgress: context.progress,
+      resolveWorkingFolders: managedProject && workspace ? async () => {
+        const current = await resolveManagedProject(workspace.root, managedProject.record.containerPath);
+        if (current.record.projectId !== plan.projectId || !current.ready || current.issues.length) throw new Error('Reconnect the project to validate its working-folder isolation before exporting.');
+        return current.workingFolders;
+      } : undefined,
+    }), true);
+    if (!result) throw new Error('Export did not complete.');
+    return result;
+  };
   const handleRestoreFullProject = (revisionId: string, external?: boolean) =>
     restore(revisionId, undefined, external);
   const handleRestoreSelectedFiles = (
@@ -1916,6 +1932,8 @@ export default function App() {
                     lastRestoreReport={lastRestoreReport}
                     statusBanner={null}
                     onRestoreFullProject={handleRestoreFullProject}
+                    onExportForReview={handleExportForReview}
+                    isExporting={operation === 'export'}
                     onRestoreSelectedFiles={handleRestoreSelectedFiles}
                     onVerifySingleRevisionObjects={
                       handleVerifySingleRevisionObjects

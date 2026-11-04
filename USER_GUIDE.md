@@ -267,6 +267,22 @@ Keep the complete project when copying or moving it. Do not remove or edit vault
 5. Close/reopen the project or import its complete container into a different disposable workspace; verify the IDs/history persist. Inspect CAD references/rebuilds separately in the native application.
 
 
+## Export a saved revision for review
+
+Select the saved revision in **History**, then choose **Export for review**. The dialog identifies that revision's recorded project, branch and project-wide revision number, even when another branch is active. All exported bytes come from the saved snapshot, so newer working edits are excluded.
+
+- **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator_Alternative_R03`.
+- **Selected files** lists only files present in that snapshot. It preserves their relative paths and filenames by default and clearly marks the output as partial. CAD dependencies are not discovered or added automatically.
+- **Add branch and revision to filenames** is an explicit selected-files option for standalone review. For example, `Parts/Pin.SLDPRT` becomes `Parts/Pin_Alternative_R03.SLDPRT`. Extensions are retained. Other documents may require reference repair; native CAD references are not rewritten.
+
+Choose a destination parent and review the proposed child folder and every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator_Alternative_R03-2`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
+
+Each output includes a readable `_CADTREE_REVIEW.txt` summary (or the proposed numbered summary name if that name already belongs to a saved file). It identifies the saved revision/date/notes, original-to-exported paths, available component IDs, file sizes and SHA-256 content hashes. Configured machine addresses, directory handles and destination absolute paths are not added to the summary. Saved notes remain user-authored content.
+
+Success appears only after the exported files, summary and directory structure have been read back and verified. A failed/cancelled attempt is identified in the dialog and retained with an incomplete marker where writing is possible. Do not distribute that incomplete folder; a retry proposes a fresh child and leaves the old attempt untouched. If failure happens before child creation, no export folder is created.
+
+Exports are ordinary review copies. They do not create revisions or branches, change the active branch, alter working files, rewrite CAD references or change component metadata. No files are sent automatically.
+
 ## Real-device checklist: macOS and Linux
 
 Run separately on a real Mac and a real Linux desktop with current Chrome or Edge over HTTPS/localhost. Use disposable folders and record OS, browser version, CAD/file types and results. Windows-host simulations of POSIX addresses do not establish native compatibility.
