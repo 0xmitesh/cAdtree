@@ -68,6 +68,8 @@ export interface CompletionRecord {
   displayNumber: number;
   manifestSha256: string;
   completedAt: string;
+  /** Additive binding for new captures only; old completion records stay unchanged. */
+  referenceContext?: { schemaVersion: number; contextSha256: string; boundarySha256: string };
 }
 
 export interface ScanErrorEntry {
@@ -133,12 +135,13 @@ export interface CorruptedVaultRecord {
 
 export interface IncompleteAttemptRecord {
   id: string;
-  kind: 'uncompleted_manifest' | 'staging_artifact' | 'uncompleted_branch' | 'uncompleted_component';
+  kind: 'uncompleted_manifest' | 'staging_artifact' | 'uncompleted_branch' | 'uncompleted_component' | 'uncompleted_reference';
   path: string;
   detail: string;
 }
 
 export interface VaultState {
+  references?: import('./references').ReferenceEvidence;
   components?: import('./component-identity').ComponentEvidence;
   /** Reconstructed endpoint identities only; absence means the saved head is unavailable.
    * Kept separate from ancestry damage so read-only Compare can remain endpoint-local. */
@@ -177,6 +180,7 @@ export interface ProgressUpdate {
 }
 
 export interface CaptureRevisionInput {
+  referenceReview?: import('./references').ReferenceReview;
   identityReview?: import('./component-identity').IdentityReview;
   workingFolders?: Record<string, FileSystemDirectoryAdapter | undefined>;
   resolveWorkingFolders?: (state: VaultState) => Promise<Record<string, FileSystemDirectoryAdapter | undefined>>;

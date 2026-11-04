@@ -21,6 +21,7 @@ import {
 import { withProjectWriterLock } from "./locks";
 import { hashString } from "./hash";
 import { verifyRevisionObjects } from "./vault-service";
+import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
 
 const IDENTITY = ".cadtree-home.json";
 const RECORDS = [".cadtree-home", "workspaces"];
@@ -395,7 +396,7 @@ async function register(
           const current = await openWorkspace(source);
           if (
             current.identity.workspaceId !== workspaceId ||
-            current.projects.some((p) => p.status !== "ready" || (p.project && componentWriteBlock(p.project.vaultState)))
+            current.projects.some((p) => p.status !== "ready" || (p.project && (componentWriteBlock(p.project.vaultState) || referenceWriteBlock(p.project.vaultState))))
           )
             throw new Error(
               "Existing workspace has damaged, duplicate, or incomplete projects. Inspect the original before bringing it into Cadtree.",
@@ -423,6 +424,7 @@ async function register(
                   "Existing workspace contains damaged historical content.",
                 );
             }
+          for (const p of current.projects) await verifyReferenceLibraryContent(p.project!.vaultDir, p.project!.vaultState, options.signal);
           signature = inventorySignature(
             await copyVerifiedTree(source, destination, options),
           );
@@ -433,7 +435,7 @@ async function register(
           workspaceId,
           directory,
         );
-        if (verified.projects.some((p) => p.status !== "ready"))
+        if (verified.projects.some((p) => p.status !== "ready" || (p.project && referenceWriteBlock(p.project.vaultState))))
           throw new Error(
             "Copied workspace needs attention and was not published.",
           );

@@ -103,6 +103,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     `Engineering change: ${quote(manifest.notes.modification)}`,
     `Observations: ${quote(manifest.notes.observations)}`,
     'These are ordinary review copies. Editing them does not update saved history.',
+    'Project reference attachments are not included in this review export.',
     request.labelFilenames ? 'Filenames were labelled for standalone review. Other documents may require reference repair. Native references were not rewritten.' : 'Original internal filenames and relative paths were preserved.',
     '', 'Exported files (original -> exported; content verified against the saved hash):',
     ...files.flatMap(file => [

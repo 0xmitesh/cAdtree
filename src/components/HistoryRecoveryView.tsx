@@ -38,8 +38,10 @@ import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
 import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialog';
+import { RevisionReferenceContext } from './RevisionReferenceContext';
 
 export interface HistoryRecoveryViewProps {
+  onRetrieveReference?: (referenceId: string, versionId: string) => Promise<void>;
   onExportForReview?: ExportReviewAction;
   isExporting?: boolean;
   application?: ApplicationController;
@@ -127,7 +129,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     () => graph.latestId ?? graph.nodes[0]?.id ?? null,
   );
   const [mode, setMode] = useState<"graph" | "list">("graph");
-  const [tab, setTab] = useState<"changes" | "notes" | "technical">("changes");
+  const [tab, setTab] = useState<"changes" | "references" | "notes" | "technical">("changes");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
   const [restoreKind, setRestoreKind] = useState<"full" | "selected" | null>(
@@ -533,7 +535,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 revisionId={rev.manifest.revisionId}
               />
               <div className="detail-tabs" aria-label="Revision sections">
-                {(["changes", "notes", "technical"] as const).map((t) => (
+                {(["changes", "references", "notes", "technical"] as const).map((t) => (
                   <button
                     key={t}
                     aria-pressed={tab === t}
@@ -544,7 +546,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       ? "Technical details"
                       : t === "notes"
                         ? "Notes"
-                        : "Changes"}
+                        : t === "references" ? "References" : "Changes"}
                   </button>
                 ))}
               </div>
@@ -747,6 +749,8 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       </details>
                     ) : null}
                   </>
+                ) : tab === "references" ? (
+                  <RevisionReferenceContext key={rev.manifest.revisionId} state={vaultState} revisionId={rev.manifest.revisionId} onRetrieve={props.onRetrieveReference} />
                 ) : tab === "notes" ? (
                   <>
                     <h3>Overall engineering notes</h3>
