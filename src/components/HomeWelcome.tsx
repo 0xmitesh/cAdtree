@@ -1,17 +1,14 @@
-import { useState } from "react";
 import {
   ArrowRight,
-  BookOpen,
   FolderOpen,
   FolderTree,
   GitBranch,
   History,
   House,
   Plus,
-  ShieldCheck,
 } from "lucide-react";
 import type { RememberedHome } from "../engine/idb-store";
-import { TutorialViewerModal } from "./TutorialViewerModal";
+import { LearnCadtree } from "./LearnCadtree";
 import { WelcomeGraphPreview } from "./WelcomeGraphPreview";
 
 /** Introduction only. The illustration is not a project or a saved revision. */
@@ -28,7 +25,6 @@ export function HomeWelcome({
   onOpen: () => void;
   onReturn: () => void;
 }) {
-  const [tutorialOpen, setTutorialOpen] = useState(false);
   return (
     <>
       <h1 id="welcome-title" className="sr-only">Welcome to cAdtree</h1>
@@ -131,43 +127,29 @@ export function HomeWelcome({
         </div>
       </section>
 
-      <section
-        className="welcome-benefits"
-        aria-label="Make space for better work"
-      >
-        <div>
-          <FolderTree size={20} aria-hidden="true" />
-          <h3>A place for every project</h3>
-          <p>Organize workspaces around your tools, clients or ideas.</p>
-        </div>
-        <div>
-          <GitBranch size={20} aria-hidden="true" />
-          <h3>Freedom to try “what if”</h3>
-          <p>Explore a separate design case from a saved revision.</p>
-        </div>
-        <div>
-          <History size={20} aria-hidden="true" />
-          <h3>A way back, whenever you need it</h3>
-          <p>Compare saved versions and recover a copy of the one you need.</p>
-        </div>
-      </section>
+      <LearnCadtree busy={busy} />
       <footer className="welcome-footer">
-        <p className="welcome-trust">
-          <ShieldCheck size={17} aria-hidden="true" /> Your files. Your storage.
-        </p>
-        <button
-          type="button"
-          className="text-button welcome-tutorial-trigger"
-          disabled={busy}
-          onClick={() => setTutorialOpen(true)}
+        <section
+          className="welcome-benefits"
+          aria-label="Make space for better work"
         >
-          <BookOpen size={14} aria-hidden="true" />
-          Tutorial: Start with cAdtree
-        </button>
+          <div>
+            <FolderTree size={20} aria-hidden="true" />
+            <h3>A place for every project</h3>
+            <p>Organize workspaces around your tools, clients or ideas.</p>
+          </div>
+          <div>
+            <GitBranch size={20} aria-hidden="true" />
+            <h3>Freedom to try “what if”</h3>
+            <p>Explore a separate design case from a saved revision.</p>
+          </div>
+          <div>
+            <History size={20} aria-hidden="true" />
+            <h3>A way back, whenever you need it</h3>
+            <p>Compare saved versions and recover a copy of the one you need.</p>
+          </div>
+        </section>
       </footer>
-      {tutorialOpen ? (
-        <TutorialViewerModal onClose={() => setTutorialOpen(false)} />
-      ) : null}
     </>
   );
 }

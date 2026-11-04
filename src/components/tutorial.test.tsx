@@ -19,7 +19,7 @@ test("Tutorial 1 keeps visual navigation separate across all six steps, resets e
   let pickerCalls = 0;
   Object.assign(window, { showDirectoryPicker: async () => { pickerCalls++; throw new Error("Tutorial must not invoke directory picker"); } });
   const ui = render(<App />);
-  const trigger = ui.getByRole("button", { name: "Tutorial: Start with cAdtree" });
+  const trigger = ui.getByRole("button", { name: "Start tutorial" });
   fireEvent.click(trigger);
   const dialog = within(ui.getByRole("dialog", { name: "Start with cAdtree" }));
   const nextStep = () => fireEvent.click(dialog.getByRole("button", { name: "Next" }));

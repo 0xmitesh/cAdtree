@@ -36,7 +36,7 @@ for (const width of [1366, 390]) {
     await expect(start).toBeEnabled();
     await expect(open).toBeEnabled();
     await expect(
-      page.getByRole("main").getByText("Your files. Your storage.", {
+      page.getByRole("complementary").getByText("Your files. Your storage.", {
         exact: true,
       }),
     ).toBeVisible();
