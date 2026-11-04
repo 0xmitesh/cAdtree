@@ -1,3 +1,5 @@
+import { folderAccessBlock } from './folder-access';
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -50,10 +52,6 @@ export function isEmbeddedIframe(): boolean {
 }
 
 export function supportsFileSystemAccessApi(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker ===
-      'function'
-  );
+  return !folderAccessBlock();
 }
 

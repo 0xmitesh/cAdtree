@@ -1,3 +1,4 @@
+import { pickDirectory } from "../utils/folder-access";
 import { useRef, useState } from "react";
 import { FolderOpen, Plus, RefreshCw } from "lucide-react";
 import {
@@ -30,31 +31,27 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
   const busy = props.busy || choosingFolder;
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [pickerMessage, setPickerMessage] = useState("");
   const [choosingLocation, setChoosingLocation] = useState<string | null>(null);
   const run = async (action: () => Promise<void>) => {
     setError("");
+    setPickerMessage("");
     try {
       await action();
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setPickerMessage("Folder selection was cancelled. Choose a project folder when you are ready.");
+        return;
+      }
       setError(error instanceof Error ? error.message : String(error));
     }
   };
   const pickSource = async () => {
     if (picking.current) return;
-    const picker = (
-      window as unknown as {
-        showDirectoryPicker?: (options: {
-          mode: string;
-        }) => Promise<FileSystemDirectoryHandle>;
-      }
-    ).showDirectoryPicker;
-    if (!picker)
-      throw new Error("Local folders require a standalone Edge or Chrome tab.");
     picking.current = true;
     setChoosingFolder(true);
     try {
-      const chosen = new RealFileSystemAdapter(await picker({ mode: "read" }));
+      const chosen = new RealFileSystemAdapter(await pickDirectory("read"));
       await props.onImport(chosen);
       setFlow(null);
     } finally {
@@ -288,6 +285,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
             Save and close CAD documents before selecting the folder. Continue
             working in the new copy after import and check its CAD references.
           </p>
+          {pickerMessage ? <Notice>{pickerMessage}</Notice> : null}
           {error ? <Notice type="error">{error}</Notice> : null}
           <div className="modal-actions">
             <button

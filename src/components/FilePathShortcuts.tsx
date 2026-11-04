@@ -8,26 +8,26 @@ import {
 } from "react";
 import { Copy, MoreHorizontal } from "lucide-react";
 import {
-  composeWindowsFilePaths,
+  composeFilePaths,
   type ResolveFilePath,
-} from "../utils/windows-path";
-import { getWorkspaceWindowsPath } from "../engine/idb-store";
+} from "../utils/folder-path";
+import { getWorkspacePath } from "../engine/idb-store";
 import type { WorkspaceState } from "../engine/workspace-service";
 import type { HomeState } from "../engine/home-service";
 import { RealFileSystemAdapter } from "../engine/fs-adapter";
 import { Modal, Notice } from "./ui";
 
 import {
-  WindowsFolderAddressDialog,
-  rememberWindowsAddress,
+  FolderAddressDialog,
+  rememberFolderAddress,
   type HomeAddress,
-} from "./WindowsFolderAddressDialog";
+} from "./FolderAddressDialog";
 
 type CopyRequest = { resolve: ResolveFilePath; containingFolder: boolean };
 interface ShortcutContext {
   copy: (request: CopyRequest) => void;
   configure: () => void;
-  windowsPath: string;
+  folderPath: string;
   home: boolean;
 }
 const Shortcuts = createContext<ShortcutContext | null>(null);
@@ -53,7 +53,7 @@ export function FilePathShortcutsProvider({
   const accessRoot = home?.root ?? workspace?.root;
   const accessHandle =
     accessRoot instanceof RealFileSystemAdapter ? accessRoot.handle : undefined;
-  const [setting, setSetting] = useState({ workspaceId: "", path: "" });
+  const [setting, setSetting] = useState<{ workspaceId: string; path: string; root?: typeof accessRoot }>({ workspaceId: "", path: "" });
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<CopyRequest | null>(null);
@@ -64,7 +64,9 @@ export function FilePathShortcutsProvider({
   const [busy, setBusy] = useState(false);
   const copying = useRef(false);
   const version = useRef(0);
-  const windowsPath = setting.workspaceId === workspaceId ? setting.path : "";
+  const folderPath = homeAddress && homeAddress.homeId === workspaceId && homeAddress.root === accessRoot
+    ? homeAddress.path
+    : setting.workspaceId === workspaceId && setting.root === accessRoot ? setting.path : "";
   useEffect(() => {
     const currentVersion = ++version.current;
     copying.current = false;
@@ -81,14 +83,14 @@ export function FilePathShortcutsProvider({
       homeAddress?.homeId === workspaceId &&
       homeAddress.root === accessRoot
     ) {
-      setSetting({ workspaceId, path: homeAddress.path });
+      setSetting({ workspaceId, path: homeAddress.path, root: accessRoot });
       return;
     }
     let cancelled = false;
-    void getWorkspaceWindowsPath(workspaceId, accessHandle)
+    void getWorkspacePath(workspaceId, accessHandle)
       .then((path) => {
         if (cancelled || version.current !== currentVersion) return;
-        setSetting({ workspaceId, path });
+        setSetting({ workspaceId, path, root: accessRoot });
       })
       .catch(() => {
         /* Path setup is offered only on request. */
@@ -114,7 +116,7 @@ export function FilePathShortcutsProvider({
     // A click can arrive before the initial preference read finishes.
     if (!root) {
       try {
-        root = await getWorkspaceWindowsPath(workspaceId, accessHandle);
+        root = await getWorkspacePath(workspaceId, accessHandle);
       } catch {
         /* Setup also works with session-only preferences. */
       }
@@ -126,7 +128,7 @@ export function FilePathShortcutsProvider({
       setEditing(true);
       return;
     }
-    const paths = composeWindowsFilePaths(root, location);
+    const paths = composeFilePaths(root, location);
     const path = request.containingFolder ? paths.folder : paths.file;
     try {
       if (!navigator.clipboard?.writeText)
@@ -148,7 +150,7 @@ export function FilePathShortcutsProvider({
     setError("");
     setFeedback("");
     try {
-      await execute(request, windowsPath);
+      await execute(request, folderPath);
     } catch (error) {
       if (currentVersion === version.current)
         setError(error instanceof Error ? error.message : String(error));
@@ -161,10 +163,10 @@ export function FilePathShortcutsProvider({
   };
   const configure = async () => {
     const currentVersion = version.current;
-    let path = windowsPath;
+    let path = folderPath;
     if (!path && workspaceId) {
       try {
-        path = await getWorkspaceWindowsPath(workspaceId, accessHandle);
+        path = await getWorkspacePath(workspaceId, accessHandle);
       } catch {
         /* Session-only setup remains available. */
       }
@@ -182,7 +184,7 @@ export function FilePathShortcutsProvider({
           void copy(request);
         },
         configure,
-        windowsPath,
+        folderPath,
         home: Boolean(home),
       }}
     >
@@ -201,7 +203,7 @@ export function FilePathShortcutsProvider({
         </Modal>
       ) : null}
       {editing && (workspace || home) ? (
-        <WindowsFolderAddressDialog
+        <FolderAddressDialog
           home={Boolean(home)}
           folderName={accessRoot!.name}
           initialValue={input}
@@ -220,13 +222,13 @@ export function FilePathShortcutsProvider({
             setBusy(true);
             setError("");
             try {
-              const cacheWarning = await rememberWindowsAddress(
+              const cacheWarning = await rememberFolderAddress(
                 workspaceId!,
                 path,
                 accessHandle,
               );
               if (currentVersion !== version.current) return;
-              setSetting({ workspaceId: workspaceId!, path });
+              setSetting({ workspaceId: workspaceId!, path, root: accessRoot });
               if (home)
                 onHomeAddressChange?.({
                   homeId: home.identity.homeId,
@@ -256,7 +258,7 @@ export function FilePathShortcutsProvider({
         <Modal title="Copy path manually" onClose={() => setManualPath(null)}>
           <p>
             Clipboard access was denied or is unavailable. Select the plain path
-            below and press Ctrl+C. No clipboard success has been confirmed.
+            below and press Ctrl+C (Windows/Linux) or Command+C (macOS). No clipboard success has been confirmed.
           </p>
           <label className="field">
             <span>Path to copy</span>
@@ -304,9 +306,9 @@ export function WorkspaceLocationSetting({
     >
       {!compact ? (
         <div>
-          <strong>Windows workspace location</strong>
+          <strong>Local workspace location</strong>
           <p className="file-path">
-            {context.windowsPath || "Not set — path shortcuts are optional"}
+            {context.folderPath || "Not set — path shortcuts are optional"}
           </p>
           <p>
             Used for copying paths only. Clear this field or browser data to

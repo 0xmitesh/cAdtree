@@ -12,7 +12,7 @@ import { formatRevisionNumber } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
 import { NotesFields, Notice, OperationProgress, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
-import type { FilePathLocation } from "../utils/windows-path";
+import type { FilePathLocation } from "../utils/folder-path";
 import { prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
 import { ComponentIdentityControls } from './ComponentIdentityControls';
 

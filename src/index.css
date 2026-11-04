@@ -1376,13 +1376,13 @@ summary {
 .project-location-details {
   margin: 0 20px 16px;
 }
-.windows-path-field .field-help {
+.folder-path-field .field-help {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted);
   line-height: 1.6;
 }
-.windows-path-field input,
+.folder-path-field input,
 .workspace-path-setting p {
   overflow-wrap: anywhere;
 }

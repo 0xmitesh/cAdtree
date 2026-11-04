@@ -4,7 +4,7 @@ Your designs. Your versions. Your storage.
 
 ## Run locally
 
-Use a current standalone Microsoft Edge or Google Chrome tab on Windows. From the source folder:
+Use a current standalone desktop Microsoft Edge or Google Chrome tab on Windows, macOS or Linux. Folder access is checked by browser capability, not by operating-system name. Use HTTPS or localhost; an embedded preview, Safari or Firefox cannot provide this folder workflow. If access is denied or revoked, allow local folder access in the browser site settings and explicitly reconnect the home. Cancelling a picker makes no connection or revision. From the source folder:
 
 ```powershell
 npm ci
@@ -27,7 +27,7 @@ Open `http://127.0.0.1:2501/`. The separate static-build ZIP contains `index.htm
 The hierarchy is **Cadtree home → Workspaces → Projects → Design branches and revisions**. Workspaces can represent clients, CAD tools, organisations, or other groups. They are organisational folders; no accounts, collaboration roles, or access controls are added.
 
 1. The welcome screen introduces saved design history, separate cases and recovery. Choose **Start my Cadtree home** for a new beginning. In the native folder picker, create/select a dedicated empty folder, suggested name **Cadtree**. Unrelated populated storage is rejected. **Open my Cadtree home** opens an existing recognized home. Home management options appear after connecting a home.
-2. In **Complete home setup**, enter the selected folder’s full **Cadtree home folder address**, for example `D:\Cadtree`, copied from File Explorer’s address bar. This is required before the home is connected. Cancel or Back leaves the selected folder untouched; Back starts a new native folder selection and clears the address. The browser grants folder access but does not share its full Windows address, so cAdtree cannot compare your entry with the selected folder.
+2. In **Complete home setup**, enter the selected folder’s full **Cadtree home folder address**, for example `D:\Cadtree`, copied from File Explorer’s address bar. This is required before the home is connected. Cancel or Back leaves the selected folder untouched; Back starts a new native folder selection and clears the address. The browser grants folder access but does not share its full absolute address, so cAdtree cannot compare your entry with the selected folder.
 3. On **My workspaces**, choose **Create workspace** and enter a readable name. cAdtree allocates a unique child folder automatically. No second parent picker is needed. Repeated display names receive independent identities and folders.
 4. **Open workspace** opens its projects. Use **Explorer** to move between connected workspaces, or **My workspaces** to return home. Switching never removes another workspace's registration.
 5. The home shows actual discovered project counts and connection state. Missing, damaged, duplicate, and incomplete locations remain visible; no identity is guessed from a folder name.
@@ -87,7 +87,7 @@ Copies are verified and their locations are reported. Recovery creates neither a
 
 ## Reopen and reconnect
 
-Choose **Return to Cadtree** (or the remembered home folder's name), or **Open my Cadtree home** and select the home once. cAdtree reads its on-disk workspace catalogue, projects, and all intact branch locations. Renew browser permission when requested. The saved home address is reused when available. If it is missing, complete the required address step before connecting; cancelling leaves the on-disk home untouched. IndexedDB remembers handles, local addresses and last context; it is not the authoritative catalogue.
+Choose **Return to Cadtree** (or the remembered home folder's name), or **Open my Cadtree home** and select the home once. cAdtree reads its on-disk workspace catalogue, projects, and all intact branch locations. Renew browser permission when requested. The saved home address is reused only for the same selected directory entry. A copied home with the same portable ID needs its own address; an older unbound Windows setting is reused only when remembered access proves the original location. Otherwise the required address step appears, while the old preference text is retained. If it is missing, complete the required address step before connecting; cancelling leaves the on-disk home untouched. IndexedDB remembers handles, local addresses and last context; it is not the authoritative catalogue.
 
 After clearing browser convenience data, select the home again. Do not locate each workspace, project, or case separately. Missing, moved, inaccessible, or invalidly mapped folders remain unavailable; cAdtree never recreates or rebinds them by name. Restore the recorded location or permission, then use **Refresh home**, **Refresh workspace**, or **Reconnect workspace**. Usable history remains inspectable while writes are blocked.
 
@@ -110,19 +110,29 @@ An established branch with a broken publication marker remains visible as damage
 
 ## Copy folder and file paths
 
-Home setup uses the native folder picker followed by a required Windows address entry. The address must be a nonempty absolute drive or supported UNC path; quotes, spaces, Unicode, and drive roots are accepted. Once configured, managed workspaces, projects, and branches use that home root automatically, without separate address prompts. Edit a moved or mistaken root under **My workspaces → Home options → Edit home folder address**. This is the canonical setting for managed descendants.
+Home setup uses the native folder picker followed by a required absolute address entry. Windows drive addresses, Windows UNC addresses and absolute POSIX addresses are supported. The entered root determines separators; platform detection does not rewrite it. Quotes around pasted addresses, spaces, Unicode and drive/filesystem roots are accepted. POSIX case, Unicode spelling and literal backslashes are preserved. Use the expanded absolute address: `~`, `$HOME`, `${HOME}` and `%USERPROFILE%` shorthand are not expanded. Once configured, managed workspaces, projects and branches use that home root automatically. Edit a moved or mistaken root under **My workspaces → Home options → Edit home folder address**. This is the canonical local setting for managed descendants.
 
 This address never authorizes or redirects filesystem operations. The browser cannot verify the typed absolute root against its handle; check it describes the same home. The descendant mappings and actual file existence are validated before copying. The setting stays in this browser/device, associated with the home identity and selected folder handle, and never enters portable records. A migrated workspace never inherits its old external absolute path. External recovery locations without known roots never receive invented paths. Clearing browser convenience data also clears these settings. If preference storage fails, an entered address remains usable for this session with a warning; it must be entered again after reopening. If a copy unexpectedly has no configured address, the same required setup dialog appears and completes the pending copy after successful setup.
 
-Beside a file in Changes, the copy icon (**Copy folder path**) copies the full absolute path of its immediate containing folder, without the filename. For `Parts\Bracket.SLDPRT`, it copies the `Parts` folder; for a file directly in the branch working folder, it copies that working folder. Paste this into Explorer’s address bar and manually open the file. **More path actions → Copy full file path** includes the filename instead.
+Beside a file in Changes, the copy icon (**Copy folder path**) copies the full absolute path of its immediate containing folder, without the filename. For `Parts\Bracket.SLDPRT`, it copies the `Parts` folder; for a file directly in the branch working folder, it copies that working folder. Use this in your platform's file manager to open the folder, then open the file manually. **More path actions → Copy full file path** includes the filename instead.
 
-Without a saved root, the **Set up folder-path copying** dialog offers **Cancel** or **Save and copy**. Saving completes the original request. Canceling leaves your workspace usable and copies nothing. **Folder path copied** appears only after clipboard success; denied/unavailable access offers a selectable plain path for manual copying with Ctrl+C.
+Without a saved root, the **Set up folder-path copying** dialog offers **Cancel** or **Save and copy**. Saving completes the original request. Canceling leaves your workspace usable and copies nothing. **Folder path copied** appears only after clipboard success; denied/unavailable access offers a selectable plain path for manual copying with Ctrl+C on Windows/Linux or Command+C on macOS.
 
 Revision details identify **Current file on [branch]** beside the folder-copy action. This refers to the revision's recorded branch, even if another branch is active, and locates its current working copy rather than historical bytes. The secondary full-file action uses that same branch. Missing/inaccessible files or folders produce an unavailable message; cAdtree does not guess another branch or recreate missing folders.
 
-For exact historical bytes, restore a full or selected-file copy. After a managed recovery succeeds, expand **Restored files — copy paths** for shortcuts to those restored files. External recovery folders have no known full Windows location, so cAdtree explains that limit instead of inventing a path. Vault objects are never presented as editable CAD-file locations.
+For exact historical bytes, restore a full or selected-file copy. After a managed recovery succeeds, expand **Restored files — copy paths** for shortcuts to those restored files. External recovery folders have no known full local location, so cAdtree explains that limit instead of inventing a path. Vault objects are never presented as editable CAD-file locations.
 
-Shortcuts copy plain text only. They do not open Explorer, launch SolidWorks, switch branches, save revisions, or change CAD files.
+Shortcuts copy plain text only. They do not open a file manager, launch SolidWorks, switch branches, save revisions, or change CAD files.
+
+### Get and use a folder address
+
+| Platform | Copy the selected folder's address | Open a copied folder path |
+| --- | --- | --- |
+| Windows | Open the folder in File Explorer, press Ctrl+L and copy the address bar. | Paste into File Explorer's address bar and press Enter. |
+| macOS | Select the folder in Finder and press Option+Command+C (Copy as Pathname). | In Finder press Shift+Command+G, paste, then Return. |
+| Linux | Open the folder in your file manager and copy its location bar (usually Ctrl+L). | Paste into the file manager's location bar and press Enter. |
+
+Choose the folder itself before copying its address. The browser cannot verify this text against the granted directory. If the OS moves a directory while retaining its handle, the browser cannot discover its new absolute address: update the home address explicitly. The address grants no access and never enters project metadata. cAdtree's **Explorer** remains its own navigation panel.
 
 ## Qualifications still needed
 
@@ -255,3 +265,18 @@ Keep the complete project when copying or moving it. Do not remove or edit vault
 3. Select the component in History. Verify both filenames and the rename event, then recover each revision into a separate fresh destination and check its original filename.
 4. Make a Save As copy while retaining the original. Save and verify two distinct component entries. Try an explicit same-path replacement and verify the older component remains selectable.
 5. Close/reopen the project or import its complete container into a different disposable workspace; verify the IDs/history persist. Inspect CAD references/rebuilds separately in the native application.
+
+
+## Real-device checklist: macOS and Linux
+
+Run separately on a real Mac and a real Linux desktop with current Chrome or Edge over HTTPS/localhost. Use disposable folders and record OS, browser version, CAD/file types and results. Windows-host simulations of POSIX addresses do not establish native compatibility.
+
+1. Create an empty Cadtree folder in Finder/the file manager, select it in **Start my Cadtree home**, copy its absolute address using the platform instructions above and complete the required step. Repeat opening an existing home. Cancel and deny a picker once; confirm the guidance is clear and the folder is unchanged.
+2. Create a workspace and project. Add a small CAD/document set with nested folders, spaces, mixed case and Unicode names. Close the files, scan and capture. Confirm no absolute address enters portable metadata and collision protections still reject conflicting names.
+3. Create a design branch from that revision. Check the actual branch folder, independent bytes and inherited component IDs. Save a branch edit and verify Main is unchanged.
+4. Rename a file externally, confirm its association in Changes, capture and reopen. Verify one component history across old/new names. Confirm the UI does not rename files or repair CAD references itself.
+5. Recover old and new snapshots into fresh destinations. Check historical filenames, bytes and counts. Managed recovery shortcuts must point to the recovered folder; an external destination with no configured root must explain that a full path is unavailable.
+6. Fully quit/reopen the browser, reconnect the same home and renew permissions. Revoke permission and retry: writes must remain blocked until explicit reconnection. Open a second physical copy with the same home/project IDs; it must request its own address. After moving the original, update its address explicitly.
+7. Use **Copy folder path** in Changes, History (including a different inspected branch), and recovery. Paste into Finder's Go to Folder / the Linux location bar and check the exact containing directory opens. Test a file directly in a branch folder and a nested file. **Copy full file path** must additionally include the filename. Test manual copy when clipboard permission is denied.
+
+This change was tested on a Windows host using Node engine tests and simulated App/DOM tests. The added Chrome browser suite could not navigate to localhost in the restricted execution sandbox (`ERR_NETWORK_ACCESS_DENIED`), so no browser or native filesystem qualification is claimed for this change. macOS/Linux native pickers, permissions, disk behaviour and CAD references remain pending. Windows native picker/disk/CAD qualification was not performed either.

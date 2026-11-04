@@ -9,9 +9,8 @@ import {
   type HomeWorkspaceEntry,
 } from "./home-service";
 import {
-  validateWindowsSegments,
   type FilePathLocation,
-} from "../utils/windows-path";
+} from "../utils/folder-path";
 
 /** Prefix only a freshly validated managed descendant; external paths keep their own settings. */
 export async function resolveHomeFilePath(
@@ -47,7 +46,6 @@ async function existingFile(
   location: FilePathLocation,
 ) {
   const segments = splitAndValidatePath(location.filePath);
-  validateWindowsSegments(segments);
   if ((await directory.queryPermission("read")) !== "granted")
     throw new Error(
       "File path unavailable. Reconnect the workspace to renew folder access.",
