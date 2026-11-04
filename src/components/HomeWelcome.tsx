@@ -1,5 +1,7 @@
+import { useState } from "react";
 import {
   ArrowRight,
+  BookOpen,
   FolderOpen,
   FolderTree,
   GitBranch,
@@ -9,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { RememberedHome } from "../engine/idb-store";
+import { TutorialViewerModal } from "./TutorialViewerModal";
 import { WelcomeGraphPreview } from "./WelcomeGraphPreview";
 
 /** Introduction only. The illustration is not a project or a saved revision. */
@@ -25,6 +28,7 @@ export function HomeWelcome({
   onOpen: () => void;
   onReturn: () => void;
 }) {
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   return (
     <>
       <h1 id="welcome-title" className="sr-only">Welcome to cAdtree</h1>
@@ -151,7 +155,19 @@ export function HomeWelcome({
         <p className="welcome-trust">
           <ShieldCheck size={17} aria-hidden="true" /> Your files. Your storage.
         </p>
+        <button
+          type="button"
+          className="text-button welcome-tutorial-trigger"
+          disabled={busy}
+          onClick={() => setTutorialOpen(true)}
+        >
+          <BookOpen size={14} aria-hidden="true" />
+          Tutorial: Start with cAdtree
+        </button>
       </footer>
+      {tutorialOpen ? (
+        <TutorialViewerModal onClose={() => setTutorialOpen(false)} />
+      ) : null}
     </>
   );
 }

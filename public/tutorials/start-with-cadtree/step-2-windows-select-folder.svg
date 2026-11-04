@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 360" width="520" height="360" role="img" aria-label="Windows Select Folder dialog with Documents and Cadtree folder selected">
+  <defs>
+    <filter id="winShadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.14" />
+    </filter>
+    <filter id="cursorShadow" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="1" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+    <linearGradient id="winFolderBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f7b529" />
+      <stop offset="100%" stop-color="#e39d14" />
+    </linearGradient>
+    <linearGradient id="winFolderFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffda6c" />
+      <stop offset="100%" stop-color="#f8c237" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer backdrop -->
+  <rect width="520" height="360" fill="#e9edf2" />
+
+  <!-- Windows 11 Dialog Window -->
+  <g filter="url(#winShadow)">
+    <rect x="12" y="10" width="496" height="340" rx="8" fill="#f3f3f3" stroke="#b8bec7" stroke-width="1" />
+
+    <!-- Title Bar -->
+    <rect x="12.5" y="10.5" width="495" height="34" rx="7.5" fill="#f3f3f3" />
+    <!-- Small Folder Icon in Title Bar -->
+    <path d="M26 22 h6 l2 2 h8 a1.5 1.5 0 0 1 1.5 1.5 v8 a1.5 1.5 0 0 1 -1.5 1.5 h-16 a1.5 1.5 0 0 1 -1.5 -1.5 v-10 a1.5 1.5 0 0 1 1.5 -1.5 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" />
+    <text x="50" y="31" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="12" font-weight="400" fill="#1b1b1b">Select Folder</text>
+    <!-- Close Button X -->
+    <g stroke="#444444" stroke-width="1.2" stroke-linecap="round">
+      <line x1="482" y1="23" x2="490" y2="31" />
+      <line x1="490" y1="23" x2="482" y2="31" />
+    </g>
+
+    <!-- Address / Navigation Bar -->
+    <rect x="12.5" y="44" width="495" height="38" fill="#f9f9f9" stroke="#e3e3e3" stroke-width="1" />
+    <!-- Back / Up arrows -->
+    <g stroke="#5f6368" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M31 63 h-8 m0 0 l3.5 -3.5 m-3.5 3.5 l3.5 3.5" />
+      <path d="M52 67 v-8 m0 0 l-3.5 3.5 m3.5 -3.5 l3.5 3.5" />
+    </g>
+    <!-- Address Breadcrumb Box -->
+    <rect x="68" y="51" width="428" height="24" rx="4" fill="#ffffff" stroke="#d6d6d6" stroke-width="1" />
+    <path d="M77 58 h5 l1.5 1.5 h6.5 v7.5 h-13 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.5" />
+    <text x="97" y="67" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#222222">This PC   ›   Documents   ›   Cadtree</text>
+
+    <!-- Main Explorer Body -->
+    <rect x="12.5" y="82" width="495" height="206" fill="#ffffff" />
+
+    <!-- Left Navigation Tree Pane -->
+    <rect x="12.5" y="82" width="166" height="206" fill="#fbfbfb" />
+    <line x1="178.5" y1="82" x2="178.5" y2="288" stroke="#e5e5e5" stroke-width="1" />
+
+    <!-- Tree Item: Desktop -->
+    <text x="24" y="106" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="10" fill="#666666">›</text>
+    <rect x="34" y="96" width="13" height="10" rx="1.5" fill="#69b5ff" stroke="#2b7cd3" stroke-width="0.7" />
+    <text x="53" y="105" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#2b2b2b">Desktop</text>
+
+    <!-- Tree Item: Documents (Expanded) -->
+    <text x="23" y="131" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="10" fill="#333333">⌄</text>
+    <path d="M34 121 h5 l1.5 1.5 h6.5 v7.5 h-13 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" />
+    <text x="53" y="130" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" font-weight="600" fill="#1a1a1a">Documents</text>
+
+    <!-- Tree Child: Cadtree (Selected in tree) -->
+    <rect x="26" y="138" width="144" height="25" rx="4" fill="#e5f3ff" stroke="#99d1ff" stroke-width="1" />
+    <rect x="26" y="143" width="3" height="15" rx="1.5" fill="#0067c0" />
+    <path d="M48 145 h5 l1.5 1.5 h6.5 v7.5 h-13 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" />
+    <text x="67" y="155" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" font-weight="600" fill="#0f172a">Cadtree</text>
+
+    <!-- Tree Child: Reference Specs -->
+    <path d="M48 173 h5 l1.5 1.5 h6.5 v7.5 h-13 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" />
+    <text x="67" y="182" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#444444">Reference Specs</text>
+
+    <!-- Tree Item: Downloads -->
+    <text x="24" y="209" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="10" fill="#666666">›</text>
+    <path d="M34 199 h5 l1.5 1.5 h6.5 v7.5 h-13 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" />
+    <text x="53" y="208" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#2b2b2b">Downloads</text>
+
+    <!-- Right Content Pane: Inside Documents -->
+    <!-- Column Headers -->
+    <text x="196" y="102" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#5f6368">Name</text>
+    <line x1="358" y1="90" x2="358" y2="106" stroke="#e5e5e5" stroke-width="1" />
+    <text x="368" y="102" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#5f6368">Status</text>
+    <line x1="186" y1="110" x2="498" y2="110" stroke="#ededed" stroke-width="1" />
+
+    <!-- Selected Folder Row: Cadtree -->
+    <rect x="190" y="118" width="304" height="36" rx="5" fill="#def0ff" stroke="#0067c0" stroke-width="1.5" />
+    <!-- Windows 11 Folder Icon -->
+    <path d="M202 127 h8 l2.5 2.5 h10.5 a1.5 1.5 0 0 1 1.5 1.5 v11 a1.5 1.5 0 0 1 -1.5 1.5 h-21 a1.5 1.5 0 0 1 -1.5 -1.5 v-13.5 a1.5 1.5 0 0 1 1.5 -1.5 z" fill="url(#winFolderBack)" />
+    <path d="M200.5 131 h24 v11 a1.5 1.5 0 0 1 -1.5 1.5 h-21 a1.5 1.5 0 0 1 -1.5 -1.5 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" />
+    <text x="233" y="140" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="12.5" font-weight="600" fill="#0f172a">Cadtree</text>
+    <text x="368" y="140" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#1e3a5f">Empty folder</text>
+
+    <!-- Unselected Folder Row: Reference Specs -->
+    <path d="M202 167 h8 l2.5 2.5 h10.5 a1.5 1.5 0 0 1 1.5 1.5 v11 a1.5 1.5 0 0 1 -1.5 1.5 h-21 a1.5 1.5 0 0 1 -1.5 -1.5 v-13.5 a1.5 1.5 0 0 1 1.5 -1.5 z" fill="url(#winFolderBack)" opacity="0.85" />
+    <path d="M200.5 171 h24 v11 a1.5 1.5 0 0 1 -1.5 1.5 h-21 a1.5 1.5 0 0 1 -1.5 -1.5 z" fill="url(#winFolderFront)" stroke="#d3961b" stroke-width="0.6" opacity="0.85" />
+    <text x="233" y="180" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#3b3b3b">Reference Specs</text>
+    <text x="368" y="180" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#6b7280">File folder</text>
+
+    <!-- Bottom Dialog Footer -->
+    <rect x="12.5" y="288" width="495" height="61.5" rx="0" fill="#f3f3f3" />
+    <line x1="12.5" y1="288" x2="507.5" y2="288" stroke="#dcdcdc" stroke-width="1" />
+
+    <!-- Folder Name Box -->
+    <text x="26" y="309" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#333333">Folder:</text>
+    <rect x="70" y="294" width="424" height="23" rx="3.5" fill="#ffffff" stroke="#c8c8c8" stroke-width="1" />
+    <text x="78" y="310" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#1b1b1b">Cadtree</text>
+
+    <!-- Dialog Action Buttons -->
+    <!-- Select Folder Button (Targeted with subtle highlight) -->
+    <rect x="304" y="322" width="96" height="24" rx="4" fill="#e5f1fb" stroke="#0067c0" stroke-width="1.6" />
+    <text x="352" y="338" text-anchor="middle" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" font-weight="600" fill="#003e73">Select Folder</text>
+
+    <!-- Cancel Button -->
+    <rect x="408" y="322" width="86" height="24" rx="4" fill="#ffffff" stroke="#cccccc" stroke-width="1" />
+    <text x="451" y="338" text-anchor="middle" font-family="'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif" font-size="11.5" fill="#2b2b2b">Cancel</text>
+  </g>
+
+  <!-- Single Windows-Style Standard Arrow Cursor over the Select Folder confirmation action -->
+  <g transform="translate(380, 337)" filter="url(#cursorShadow)">
+    <path
+      d="M 0 0 L 0 19 L 4.8 14.5 L 8.2 22 L 11.1 20.7 L 7.7 13.2 L 13.8 13.2 Z"
+      fill="#ffffff"
+      stroke="#141414"
+      stroke-width="1.35"
+      stroke-linejoin="round"
+    />
+  </g>
+</svg>
