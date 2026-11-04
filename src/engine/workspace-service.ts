@@ -24,6 +24,7 @@ import {
 } from "./vault-service";
 import { createDesignBranch } from "./branch-service";
 import { componentWriteBlock } from './component-identity';
+import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
 import {
   restoreRevisionToFolder,
   restoreSelectedFilesToFolder,
@@ -480,6 +481,7 @@ export async function adoptProject(
       if (
         state.corruptedRecords.length ||
         componentWriteBlock(state) ||
+        referenceWriteBlock(state) ||
         Object.keys(state.damagedBranchHeads).length ||
         Object.values(state.competingHeads).some((heads) => heads.length)
       )
@@ -487,6 +489,7 @@ export async function adoptProject(
           "The existing vault has damaged or ambiguous history and cannot be safely adopted. Read-only inspection of the original remains available.",
         );
       await validateWorkingFolderBindings(state, sourceVault, sourceFolders);
+      await verifyReferenceLibraryContent(sourceVault, state, options.signal);
       throwIfCancelled(options.signal);
       const { path, container } = await allocateProject(
         root,
@@ -538,6 +541,7 @@ export async function adoptProject(
               "An adoption source changed before activation. Save and close CAD documents and retry.",
             );
         const reopened = await openExistingVault(vault);
+        await verifyReferenceLibraryContent(vault, reopened, options.signal);
         if (
           reopened.project.projectId !== state.project.projectId ||
           reopened.branches.length !== state.branches.length ||
@@ -879,7 +883,7 @@ export async function importProject(
     if (ready.schemaVersion !== VERSION || ready.projectId !== record.projectId || ready.workspaceId !== record.workspaceId || ready.recordSha256 !== hashString(text) || record.vaultPath !== `${record.containerPath}/vault`) throw new Error('Imported project publication does not match its location records.');
     const vault = await source.getDirectory(['vault']);
     const state = await openExistingVault(vault);
-    if (state.project.projectId !== record.projectId || componentWriteBlock(state)) throw new Error(componentWriteBlock(state) ?? 'Imported project identity mismatch.');
+    if (state.project.projectId !== record.projectId || componentWriteBlock(state) || referenceWriteBlock(state)) throw new Error(componentWriteBlock(state) ?? referenceWriteBlock(state) ?? 'Imported project identity mismatch.');
     const folders: WorkingFolderBindings = {};
     for (const branch of state.branches) {
       const location = JSON.parse(await source.readFileText(['.cadtree', 'branches', `${idSegment(branch.branchId)}.json`]));

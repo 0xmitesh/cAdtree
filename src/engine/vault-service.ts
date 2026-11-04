@@ -8,6 +8,7 @@ import { verifyStoredObject } from './object-store';
 import { readApplicationOperations } from './application-records';
 import { readCaseLifecycles } from './case-lifecycle';
 import { readComponentEvidence, writeComponentBoundary } from './component-identity';
+import { readReferenceEvidence } from './references';
 import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
   BranchRecord,
@@ -855,6 +856,7 @@ export async function openExistingVault(
   state.applicationOperations = await readApplicationOperations(vaultDir, state);
   state.caseLifecycles = await readCaseLifecycles(vaultDir, state);
   state.components = await readComponentEvidence(vaultDir, state);
+  state.references = await readReferenceEvidence(vaultDir, state);
   return state;
 }
 

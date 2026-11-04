@@ -8,6 +8,7 @@ import { withProjectWriterLock } from './locks';
 import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
 import { assertCaseWritable } from './case-lifecycle';
 import { prepareComponentRecord, publishComponentRecord } from './component-identity';
+import { prepareReferenceContext, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext } from './references';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
@@ -190,26 +191,23 @@ export async function captureRevision(
       );
     }
 
+    // Refresh the scan through the existing review path before validating either
+    // identity or reference selections bound to that scan.
+    if (input.reviewedChangesSignature && freshScan.changesSignature !== input.reviewedChangesSignature) {
+      throw new ReviewStaleError('Working folder changes differ from the file list you reviewed. The change list has been refreshed - please review your file changes and note associations before saving.', freshScan);
+    }
     const componentDraft = prepareComponentRecord(vaultState, freshScan, input.identityReview);
-    if (!freshScan.hasChanges && !input.identityReview?.replacements.length) {
+    const referenceDraft = prepareReferenceContext(vaultState, freshScan, componentDraft?.files ?? [], input.referenceReview);
+    const previousReferences = parentRevisionId ? vaultState.references?.contexts[parentRevisionId]?.record?.links ?? [] : [];
+    const referenceChanged = referenceContextSignature(referenceDraft.links) !== referenceContextSignature(previousReferences);
+    const referenceContextOnly = !freshScan.hasChanges && referenceChanged && !input.identityReview?.replacements.length;
+    if (!freshScan.hasChanges && !input.identityReview?.replacements.length && !referenceChanged) {
       throw new Error(
         'No changes detected between the working folder and the latest saved revision. Capture skipped to avoid an unnecessary revision.'
       );
     }
 
     const sanitizedFileNotes = sanitizeFileSpecificNotes(input.fileNotes);
-
-    // If the user reviewed a specific change list and files changed on disk before save,
-    // require review again before publishing file-associated notes.
-    if (
-      input.reviewedChangesSignature &&
-      freshScan.changesSignature !== input.reviewedChangesSignature
-    ) {
-      throw new ReviewStaleError(
-        'Working folder changes differ from the file list you reviewed. The change list has been refreshed — please review your file changes and note associations before saving.',
-        freshScan
-      );
-    }
 
     const allSnapshotFiles = [
       ...freshScan.added,
@@ -231,6 +229,9 @@ export async function captureRevision(
         }
       }
     }
+
+    await verifyReferenceContextContent(vaultDir, vaultState, referenceDraft, input.signal);
+    const referenceBoundary = await ensureReferenceStore(vaultDir, vaultState);
 
     // Step 3: Write new objects, close writes, reopen stored bytes, and verify size/hash.
     // Reused objects are also verified before the new revision relies on them.
@@ -398,6 +399,9 @@ export async function captureRevision(
     // Additive sidecar, outside the historical manifest/checksum format. Its
     // exact manifest hash and completion establish capture exactly once after
     // reload, even if the caller loses the final acknowledgement.
+    await verifyReferencePublication(vaultDir, vaultState, referenceBoundary, referenceDraft, input.signal);
+    const referenceContextSha256 = await publishReferenceContext(vaultDir, referenceBoundary, referenceDraft, manifest, actualManifestFileSha256, referenceContextOnly);
+    completion.referenceContext = { schemaVersion: 1, contextSha256: referenceContextSha256, boundarySha256: referenceBoundary.payloadSha256 };
     if (pendingApplication) await linkApplicationCapture(vaultDir, pendingApplication, manifest, actualManifestFileSha256, freshScan.changesSignature);
     // Same completion marker commits both the immutable manifest and its mapping.
     // Uncompleted sidecars are never visible as component history.
@@ -454,6 +458,7 @@ export async function captureRevision(
       throw new Error('Unexpected state: published revision not found when reloading vault.');
     }
     if (componentDraft && updatedVaultState.components?.status !== 'available') throw new Error(updatedVaultState.components?.reason ?? 'Component publication could not be verified.');
+    if (updatedVaultState.references?.status !== 'available') throw new Error(updatedVaultState.references?.reason ?? 'Reference context publication could not be verified.');
 
     return {
       revision: {

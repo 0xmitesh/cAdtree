@@ -15,6 +15,8 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
 import { prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
 import { ComponentIdentityControls } from './ComponentIdentityControls';
+import { createReferenceReview, referenceSelectionChanged, type ReferenceReview } from '../engine/references';
+import { ReferenceSelector } from './ReferenceSelector';
 
 export interface ChangesCaptureViewProps {
   onEnableComponentTracking?: () => Promise<void>;
@@ -38,6 +40,7 @@ export interface ChangesCaptureViewProps {
     fileNotes: FileSpecificNote[];
     reviewedChangesSignature: string;
     identityReview?: IdentityReview;
+    referenceReview?: ReferenceReview;
   }) => Promise<void>;
   onCancelOperation: () => void;
   onReattachWorkingFolder: () => Promise<void>;
@@ -46,6 +49,7 @@ export interface ChangesCaptureViewProps {
 }
 export interface CaptureDraft {
   identityReview?: IdentityReview;
+  referenceReview?: ReferenceReview;
   summary: string;
   notes: RevisionNotes;
   fileNotes: Record<string, FileSpecificNote>;
@@ -80,6 +84,9 @@ export function ChangesCaptureView({
   const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
   const [summary, setSummary] = useState(savedDraft?.summary ?? "");
   const [identityReview, setIdentityReview] = useState<IdentityReview | undefined>(savedDraft?.identityReview);
+  const [referenceReview, setReferenceReview] = useState<ReferenceReview | undefined>(savedDraft?.referenceReview);
+  const effectiveReferences = scan ? referenceReview ?? createReferenceReview(vaultState, scan) : undefined;
+  const referenceChanged = Boolean(scan && referenceSelectionChanged(vaultState, scan, effectiveReferences));
   const [notes, setNotes] = useState<RevisionNotes>(
     savedDraft?.notes ?? emptyNotes,
   );
@@ -101,8 +108,9 @@ export function ChangesCaptureView({
         notePath,
         showOverall,
         identityReview,
+        referenceReview,
       });
-  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview]);
+  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview, referenceReview]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState("");
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
@@ -151,6 +159,7 @@ export function ChangesCaptureView({
   ];
   const validPaths = new Set([...(scan?.added ?? []).map(f => f.path), ...(scan?.modified ?? []).map(m => m.current.path), ...(scan?.deleted ?? []).map(f => f.path)]);
   const hasDraft =
+    referenceChanged ||
     Boolean(identityReview?.replacements.length) ||
     summary ||
     Object.values(notes).some((v) => v) ||
@@ -197,6 +206,7 @@ export function ChangesCaptureView({
         ),
         reviewedChangesSignature: scan.changesSignature,
         identityReview,
+        referenceReview: effectiveReferences,
       });
       setSummary("");
       setNotes(emptyNotes);
@@ -204,6 +214,7 @@ export function ChangesCaptureView({
       setNotePath(null);
       setReviewedSignature(null);
       setIdentityReview(undefined);
+      setReferenceReview(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -281,6 +292,8 @@ export function ChangesCaptureView({
       {error ? <Notice type="error">{error}</Notice> : null}
       <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} onEnable={onEnableComponentTracking} busy={busy} />
       {identityConflict ? <Notice type="error">{identityConflict}</Notice> : null}
+      {scan && effectiveReferences ? <ReferenceSelector state={vaultState} scan={scan} identityReview={identityReview} value={effectiveReferences} onChange={setReferenceReview} busy={busy} /> : null}
+      {scan && !scan.hasChanges && referenceChanged ? <Notice>Reference-context-only revision — no design-file bytes changed.</Notice> : null}
       {needsReview ? (
         <Notice type="error">
           The latest scan differs from the file set you reviewed. Review the
@@ -297,7 +310,7 @@ export function ChangesCaptureView({
           .
         </Notice>
       ) : null}
-      {scan && !scan.hasChanges ? (
+      {scan && !scan.hasChanges && !referenceChanged ? (
         <div className="calm-state">
           <span className="calm-check">✓</span>
           <div>
@@ -536,7 +549,7 @@ export function ChangesCaptureView({
                 disabled={
                   busy ||
                   !scan || Boolean(scan.errors.length) ||
-                  (!scan.hasChanges && !identityReview?.replacements.length) ||
+                  (!scan.hasChanges && !identityReview?.replacements.length && !referenceChanged) ||
                   Boolean(damaged) ||
                   Boolean(operationBlockReason) ||
                   Boolean(identityConflict) ||

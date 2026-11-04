@@ -116,6 +116,7 @@ export function DiagnosticsView({
               ? "Verifying file contents…"
               : "Verify all file contents"}
           </button>
+          {state.references?.reason ? <Notice type="error">{state.references.reason} Reference retrieval and new captures require valid reference evidence. CAD verification and recovery use their own required evidence.</Notice> : null}
           {Object.entries(state.damagedBranchHeads).map(([id, reason]) => (
             <Notice type="error" key={id}>
               <strong>Damaged branch baseline</strong>
@@ -178,11 +179,11 @@ export function DiagnosticsView({
               {state.incompleteAttempts.length})
             </summary>
             <p>
-              These attempts are not committed revisions and are excluded from
-              history.
+              These attempts are not committed revisions or published references and are excluded from
+              history and the reference library.
             </p>
             {state.incompleteAttempts.map((r) => (
-              <div key={r.id} className="record-row">
+              <div key={r.path} className="record-row">
                 <strong className="file-path">{r.path}</strong>
                 <p>{r.detail}</p>
               </div>

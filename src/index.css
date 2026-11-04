@@ -3027,3 +3027,11 @@ input::placeholder {
 .component-identity { margin-bottom: 20px; }
 .identity-association { padding: 12px 0; border-top: 1px solid var(--border, #d8e1dc); }
 .identity-decision { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+
+.reference-card { padding: 1rem; margin-block: 1rem; border: 1px solid var(--border); border-radius: 8px; }
+.reference-selector { margin-block: 1rem; padding: 1rem; }
+.reference-card .button-row, .reference-selector .button-row, .modal .button-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.reference-card p { overflow-wrap: anywhere; }
+.reference-card .panel-heading, .reference-selector .panel-heading { flex-wrap: wrap; }
+.reference-selector fieldset { min-width: 0; }
+.detail-tabs { flex-wrap: wrap; }

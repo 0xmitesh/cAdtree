@@ -267,9 +267,39 @@ Keep the complete project when copying or moving it. Do not remove or edit vault
 5. Close/reopen the project or import its complete container into a different disposable workspace; verify the IDs/history persist. Inspect CAD references/rebuilds separately in the native application.
 
 
+## Project references and revision context
+
+Open a project and choose **References**. **Import reference** copies an original PDF, image, text/Markdown transcript or other supporting file into local project storage and verifies its SHA-256 and size. Add a title, description and comma-separated tags. Search matches titles, original filenames and tags across all preserved versions. The displayed timestamp is the **import time**, not the document's creation date. No document parsing, editing, transcription or AI extraction takes place.
+
+Choose an attachment version and **Retrieve exact attachment** to download verified original bytes. Browser download settings control the download location; the original filename is suggested. Use your usual document viewer. Reference IDs identify sources independently of their content hashes, so importing the same file twice creates two references.
+
+Use **Add new version** on an existing reference only when you mean to version that source. Earlier versions and their bytes remain available. Select a version and **Use this version in project context** to pin it as a default for future captures. Adding another version does not advance that default automatically. **Stop inheriting in future revisions** clears the default; **Remove from current context** also hides the reference from the normal library list. **Show removed references** permits retrieval and restoration. None of these actions deletes historical sources or changes saved revisions.
+
+In **Changes**, scan the working folder. **Revision references** shows inherited project references separately from explicitly selected revision references. Choose **Add revision reference**, choose its exact version, and optionally enter a locator, explanation and component. Examples: `page 4, section 2.1` or `00:12:30–00:13:10`. These are user-entered pointers, not verified quotations or proof a requirement is satisfied. Component associations use permanent component IDs; a newly registered component resolves to its committed ID during capture. Confirm CAD renames using the existing identity controls. If a selected component is deleted or replaced, review its association explicitly before saving.
+
+Save with the usual revision summary and engineering notes. Explicit reference links carry forward from the branch baseline until edited or removed; current project defaults are captured at save time. With unchanged CAD bytes and changed associations, Changes offers a **reference-context-only revision** and explains that no design-file bytes changed. Repeated saves with identical context are rejected. Editing a source title or tags alone does not require or create a revision.
+
+Inspect a saved revision in **History → References** to see its captured source versions, original filenames, origins, locators, explanations and component IDs/filenames at capture. A confirmed rename follows the component ID while older revisions retain their historical filenames. Older revisions show **No reference context recorded.** Today's project defaults are never backfilled. Retrospective annotation of saved revisions is deferred.
+
+All evidence is on disk under the project vault, outside branch working folders. Reconnect the complete project/home after clearing browser convenience data. Use cAdtree's complete project/workspace copy or adoption workflows to preserve all versions, associations and attachment objects. Copying only a branch working folder does not copy project history or references. Reference attachments do not appear as CAD changes and never receive component IDs.
+
+If import/save is cancelled or interrupted, incomplete metadata remains identifiable in **Settings → Storage and verification** and does not become a published reference or saved context. Reopen to inspect the outcome before a fresh retry, especially after a lost browser acknowledgement. Missing, corrupt or unsupported evidence is reported; it is never regenerated silently. Exact retrieval, linked captures and complete copies verify required content and refuse damaged evidence. CAD inspection and recovery remain available wherever their own saved evidence is valid. Permanent deletion and garbage collection are outside this stage.
+
+Manual walkthrough (disposable project, supported desktop browser):
+
+1. Import a PDF, image and Markdown transcript; edit details, search by tag and retrieve each. Compare the downloaded size/hash with the originals. Check import timestamps and that no attachment appears in Changes.
+2. Pin a project reference. Add a design file, select a reference version with locator/explanation and associate it with the new component. Save; inspect **History → References** and engineering notes.
+3. Add a second source version, explicitly advance project context and save without changing CAD. Check the context-only notice, unchanged CAD bytes, and rejection of another identical save. Inspect the older revision and retrieve version one.
+4. Confirm a CAD rename, capture and compare the component ID across revisions, retaining old filenames. Make a branch from the older revision and verify its explicit links carry forward without changing the older revision.
+5. Reopen after clearing browser convenience data. Copy/import/adopt the complete project or workspace and check IDs, exact versions, old context and retrieved hashes in the copy. Recover an older CAD snapshot and check its original filenames.
+6. On disposable copies only, remove/corrupt an attachment or context sidecar, revoke permission, and interrupt an import/capture. Verify clear errors, no dangling committed context, unchanged revision count on pre-completion rejection, usable independent CAD recovery, and a fresh retry after restoring evidence.
+7. Export a saved CAD revision for review. Check the dialog/summary explicitly exclude reference attachments and the output contains only snapshot design files and its review summary.
+
 ## Export a saved revision for review
 
 Select the saved revision in **History**, then choose **Export for review**. The dialog identifies that revision's recorded project, branch and project-wide revision number, even when another branch is active. All exported bytes come from the saved snapshot, so newer working edits are excluded.
+
+Project reference attachments are excluded from review exports in this stage. The dialog and readable export summary state this explicitly.
 
 - **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator_Alternative_R03`.
 - **Selected files** lists only files present in that snapshot. It preserves their relative paths and filenames by default and clearly marks the output as partial. CAD dependencies are not discovered or added automatically.

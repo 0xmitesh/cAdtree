@@ -53,6 +53,7 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
   return <Modal title="Export revision for review" busy={busy} onClose={onClose}>
     <p><strong>{plan ? `${plan.projectName} · ${plan.branchName} · ${plan.revisionLabel}` : revision?.manifest.summary}</strong></p>
     <p>Exports verified saved bytes. Open documents and newer working edits are not included.</p>
+    <p className="muted small">Project reference attachments are not included.</p>
     <fieldset disabled={busy || Boolean(result)}>
       <legend>Export contents</legend>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'complete'} onChange={() => { setKind('complete'); setError(''); }} /> Complete project</span></label>

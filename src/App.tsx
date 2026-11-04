@@ -70,6 +70,8 @@ import {
   verifyRevisionObjects,
 } from "./engine/vault-service";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
+import { ReferencesView } from './components/ReferencesView';
+import { importReferenceAttachment, updateProjectReference, retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ActiveBranchPicker } from "./components/ActiveBranchPicker";
 import {
@@ -80,6 +82,7 @@ import { DiagnosticsView } from "./components/DiagnosticsView";
 import type { CreateBranchParams } from "./components/CreateBranchDialog";
 import {
   FolderOpen,
+  BookOpen,
   History,
   Settings,
   ScanLine,
@@ -120,9 +123,9 @@ import {
   type WorkspaceProjectEntry,
 } from "./engine/workspace-service";
 
-type ActiveTab = "connect" | "changes" | "history" | "diagnostics";
+type ActiveTab = "connect" | "changes" | "history" | "references" | "diagnostics";
 type Operation =
-  "scan" | "capture" | "restore" | "verify" | "branch" | "connect" | "apply" | "export";
+  "scan" | "capture" | "restore" | "verify" | "branch" | "connect" | "apply" | "export" | "references";
 type Context = {
   version: number;
   signal: AbortSignal;
@@ -997,6 +1000,7 @@ export default function App() {
       fileNotes: FileSpecificNote[];
       reviewedChangesSignature: string;
       identityReview?: IdentityReview;
+      referenceReview?: ReferenceReview;
     },
   ) => {
     if (!workingDir || !vaultDir || branchId !== activeBranchId)
@@ -1499,6 +1503,31 @@ export default function App() {
   const handleSimulateClearMetadataAndReopenVault = async () => {
     await perform("connect", clearConnections);
   };
+  const writeReferences = async (action: (context: Context) => Promise<VaultState>) => {
+    if (!vaultDir) throw new Error('Open a project first.');
+    await perform('references', async context => {
+      if (await vaultDir.requestPermission('readwrite') !== 'granted') throw new Error('Allow read/write access to the project folder, then retry the reference operation.');
+      try { const next = await action(context); if (context.current()) applyVaultState(next); }
+      finally {
+        if (context.current()) {
+          try { applyVaultState(await openExistingVault(vaultDir)); }
+          catch { /* Preserve the original permission/publication error. Reconnect to inspect disk evidence. */ }
+        }
+      }
+    }, true);
+  };
+  const handleRetrieveReference = async (referenceId: string, versionId: string) => {
+    if (!vaultDir || !vaultState) throw new Error('Open a project first.');
+    await perform('references', async context => {
+      if (await vaultDir.requestPermission('read') !== 'granted') throw new Error('Allow read access to the project folder, then retrieve the attachment again.');
+      const { version, bytes } = await retrieveReferenceAttachment(vaultDir, vaultState.project.projectId, referenceId, versionId);
+      if (!context.current() || context.signal.aborted) throw new Error('Attachment retrieval cancelled.');
+      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }));
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = version.originalFilename;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, true);
+  };
   const handleCancelOperation = () => operationRef.current?.abort();
   const busy = operation !== null;
   const isScanning = operation === "scan";
@@ -1670,6 +1699,7 @@ export default function App() {
                           <i className="nav-change-dot" />
                         ) : null}
                       </button>
+                      <button aria-label="References" disabled={busy || !vaultState} aria-current={activeTab === 'references' ? 'page' : undefined} onClick={() => navigate('references')}><BookOpen size={18} /><span>References</span></button>
                       <button
                         aria-label="Settings"
                         disabled={!vaultState || busy}
@@ -1888,6 +1918,7 @@ export default function App() {
                       onReattachWorkingFolder={handleReattachWorkingFolder}
                       operationBlockReason={
                         componentWriteBlock(vaultState) ??
+                        referenceWriteBlock(vaultState) ??
                         caseWriteBlock(vaultState, branch.branchId) ??
                         applicationCaptureBlock(vaultState, branch.branchId) ??
                         managedBlockReason ??
@@ -1901,8 +1932,15 @@ export default function App() {
                     />
                   </div>
                 ))}
+                <div hidden={activeTab !== 'references'}>
+                  <ReferencesView state={vaultState} busy={busy} progress={progress} onCancel={handleCancelOperation}
+                    onImport={(file, metadata, referenceId) => writeReferences(context => importReferenceAttachment(vaultDir, vaultState.project.projectId, file, metadata, referenceId, { signal: context.signal, onProgress: context.progress }))}
+                    onUpdate={(referenceId, changes) => writeReferences(context => updateProjectReference(vaultDir, vaultState.project.projectId, referenceId, changes, { signal: context.signal }))}
+                    onRetrieve={handleRetrieveReference} />
+                </div>
                 <div hidden={activeTab !== "history"}>
                   <HistoryRecoveryView
+                    onRetrieveReference={handleRetrieveReference}
                     application={{
                       prepare: handlePrepareApplication,
                       apply: handleApplyApplication,
