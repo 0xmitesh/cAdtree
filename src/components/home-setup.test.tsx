@@ -221,7 +221,7 @@ test("configured homes provide one-click descendant copies and one canonical add
   fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
   await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Open project" })),
+    assert.equal((ui.getByRole("button", { name: "Open project" }) as HTMLButtonElement).disabled, false),
   );
   assert.equal(ui.queryByText("Workspace options"), null);
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));

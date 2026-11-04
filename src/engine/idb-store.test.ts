@@ -1,6 +1,8 @@
 import "fake-indexeddb/auto";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { nativeDirectory } from '../../tests/native-fs';
+import { InMemoryFileSystemAdapter } from './fs-adapter';
 import {
   clearAllConvenienceMetadata,
   getRememberedProjectBinding,
@@ -52,16 +54,11 @@ test("remembering and selecting a branch retains every other binding; clearing I
 
 test("retained workspace path preferences follow their original handle and cannot be reused by relocated copies", async () => {
   await clearAllConvenienceMetadata();
-  const original = {
-    kind: "directory",
-    name: "Original workspace",
-  } as FileSystemDirectoryHandle;
-  const match = (name: string) =>
-    ({
-      isSameEntry: async (handle: FileSystemDirectoryHandle) =>
-        handle.name === name,
-    }) as FileSystemDirectoryHandle;
+  const original = nativeDirectory(new InMemoryFileSystemAdapter('Original workspace'));
+  const relocated = nativeDirectory(new InMemoryFileSystemAdapter('Managed copy'));
+  const match = (name: string) => name === 'Original workspace' ? original : relocated;
   await saveWorkspaceWindowsPath("workspace-copied", "D:\\Original workspace");
+  await rememberWorkspace({ workspaceId: 'workspace-copied', rootHandle: original, name: original.name });
   await bindWorkspaceWindowsPathToRoot("workspace-copied", original);
   assert.equal(
     await getWorkspaceWindowsPath(
@@ -74,10 +71,7 @@ test("retained workspace path preferences follow their original handle and canno
     await getWorkspaceWindowsPath("workspace-copied", match("Managed copy")),
     "",
   );
-  await saveWorkspaceWindowsPath("workspace-copied", "E:\\Managed copy", {
-    kind: "directory",
-    name: "Managed copy",
-  } as FileSystemDirectoryHandle);
+  await saveWorkspaceWindowsPath("workspace-copied", "E:\\Managed copy", relocated);
   assert.equal(
     await getWorkspaceWindowsPath("workspace-copied", match("Managed copy")),
     "E:\\Managed copy",

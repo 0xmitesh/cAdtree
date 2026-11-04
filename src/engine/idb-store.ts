@@ -15,7 +15,7 @@ export interface RememberedProjectBinding {
   activeBranchId?: string;
 }
 
-import { normalizeWindowsWorkspacePath } from '../utils/windows-path';
+import { normalizeFolderPath } from '../utils/folder-path';
 
 const DB_NAME = 'cadtree_convenience_v1';
 const DB_VERSION = 1;
@@ -23,21 +23,33 @@ const STORE_BINDINGS = 'project_bindings';
 const STORE_PREFS = 'ui_preferences';
 
 /** Per workspace, machine-local convenience text; not a portable filesystem binding. */
-export async function saveWorkspaceWindowsPath(workspaceId: string, input: string, rootHandle?: FileSystemDirectoryHandle): Promise<void> {
-  const path = normalizeWindowsWorkspacePath(input);
+export async function saveWorkspacePath(workspaceId: string, input: string, rootHandle?: FileSystemDirectoryHandle): Promise<void> {
+  const path = normalizeFolderPath(input);
   if (!isIndexedDbAvailable()) throw new Error('Browser convenience storage is unavailable. This location can only be used for this session.');
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PREFS, 'readwrite');
-    tx.objectStore(STORE_PREFS).put(path, `windows-root:${workspaceId}`);
-    if (rootHandle) tx.objectStore(STORE_PREFS).put(rootHandle, `windows-handle:${workspaceId}`);
+    try {
+      tx.objectStore(STORE_PREFS).put(path, `windows-root:${workspaceId}`);
+      // Retain the original preference keys for compatibility, including Windows paths.
+      if (rootHandle) tx.objectStore(STORE_PREFS).put(rootHandle, `windows-handle:${workspaceId}`);
+      else tx.objectStore(STORE_PREFS).delete(`windows-handle:${workspaceId}`);
+    } catch (error) {
+      tx.abort();
+      db.close();
+      reject(error);
+      return;
+    }
     tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the Windows workspace location.')); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the local folder address.')); };
   });
 }
 /** Associates a retained pre-home path setting with its actual original location. */
-export async function bindWorkspaceWindowsPathToRoot(workspaceId: string, rootHandle: FileSystemDirectoryHandle): Promise<void> {
+export async function bindWorkspacePathToRoot(workspaceId: string, rootHandle: FileSystemDirectoryHandle): Promise<void> {
   if (!isIndexedDbAvailable()) return;
+  // Never attach an unbound old address to whichever copy happens to be selected.
+  // A saved matching handle (or the original remembered access binding) is required.
+  if (!await getWorkspacePath(workspaceId, rootHandle)) return;
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PREFS, 'readwrite');
@@ -46,21 +58,33 @@ export async function bindWorkspaceWindowsPathToRoot(workspaceId: string, rootHa
     tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember the original path location.')); };
   });
 }
-export async function getWorkspaceWindowsPath(workspaceId: string, rootHandle?: FileSystemDirectoryHandle): Promise<string> {
+export async function getWorkspacePath(workspaceId: string, rootHandle?: FileSystemDirectoryHandle): Promise<string> {
   if (!isIndexedDbAvailable()) return '';
   const db = await openDatabase();
   const saved = await new Promise<{ path: unknown; handle?: FileSystemDirectoryHandle }>((resolve, reject) => {
     const tx = db.transaction(STORE_PREFS, 'readonly');
     const request = tx.objectStore(STORE_PREFS).get(`windows-root:${workspaceId}`);
     const handle = tx.objectStore(STORE_PREFS).get(`windows-handle:${workspaceId}`);
-    tx.oncomplete = () => { db.close(); resolve({ path: request.result, handle: handle.result }); };
+    const workspace = tx.objectStore(STORE_PREFS).get(`workspace:${workspaceId}`);
+    const home = tx.objectStore(STORE_PREFS).get('home');
+    tx.oncomplete = () => {
+      db.close();
+      const remembered = workspace.result?.workspaceId === workspaceId ? workspace.result.rootHandle : home.result?.homeId === workspaceId ? home.result.rootHandle : undefined;
+      resolve({ path: request.result, handle: handle.result ?? remembered });
+    };
     tx.onabort = tx.onerror = () => { db.close(); reject(tx.error); };
   });
-  if (rootHandle && saved.handle) {
+  if (rootHandle) {
+    if (!saved.handle) return '';
     try { if (!(await rootHandle.isSameEntry(saved.handle))) return ''; } catch { return ''; }
   }
-  try { return typeof saved.path === 'string' ? normalizeWindowsWorkspacePath(saved.path) : ''; } catch { return ''; }
+  try { return typeof saved.path === 'string' ? normalizeFolderPath(saved.path) : ''; } catch { return ''; }
 }
+
+/** Deprecated names keep existing local Windows preference callers compatible. */
+export const saveWorkspaceWindowsPath = saveWorkspacePath;
+export const getWorkspaceWindowsPath = getWorkspacePath;
+export const bindWorkspaceWindowsPathToRoot = bindWorkspacePathToRoot;
 
 export interface RememberedWorkspace {
   workspaceId: string;

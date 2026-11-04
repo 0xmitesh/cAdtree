@@ -348,6 +348,7 @@ test("guided whole-workspace migration identifies managed location and never reu
   const ui = render(<App />);
   fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui);
+  await ready(ui, 'Create workspace');
   fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(
     ui.getByRole("button", { name: "Import existing workspace" }),

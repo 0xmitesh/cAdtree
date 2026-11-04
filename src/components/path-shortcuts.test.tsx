@@ -112,7 +112,7 @@ test("a first path click offers setup, saves locally, rechecks the file, then co
     assert.ok(ui.getByRole("dialog", { name: "Set up folder-path copying" })),
   );
   assert.equal(copied.length, 0);
-  assert.ok(ui.getByText(/Explorer’s address bar/));
+  assert.ok(ui.getByText(/How to copy and use a folder address/));
   fireEvent.change(ui.getByRole("textbox", { name: "Workspace folder path" }), {
     target: { value: '"D:\\CAD Workspace\\"' },
   });
@@ -485,7 +485,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   await idle(ui);
   assert.ok(
     ui.getByText(
-      /full Windows path is not known for this external destination/,
+      /full local path is not known for this external destination/,
     ),
   );
   assert.ok(

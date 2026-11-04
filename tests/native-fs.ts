@@ -1,5 +1,21 @@
 import type { FileSystemDirectoryAdapter } from "../src/engine/fs-adapter";
 
+// Browsers structured-clone native directory handles. Node cannot clone this
+// facade's methods, so retain known test handles while cloning ordinary data.
+const nativeClone = globalThis.structuredClone;
+const testHandles = new WeakSet<object>();
+function cloneWithHandles<T>(value: T, seen = new Map<object, unknown>()): T {
+  if (!value || typeof value !== 'object') return nativeClone(value);
+  if (testHandles.has(value)) return value;
+  if (seen.has(value)) return seen.get(value) as T;
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) return nativeClone(value);
+  const copy: Record<string, unknown> | unknown[] = Array.isArray(value) ? [] : {};
+  seen.set(value, copy);
+  for (const [key, item] of Object.entries(value)) (copy as Record<string, unknown>)[key] = cloneWithHandles(item, seen);
+  return copy as T;
+}
+globalThis.structuredClone = <T>(value: T, options?: StructuredSerializeOptions): T => options?.transfer?.length ? nativeClone(value, options) : cloneWithHandles(value);
+
 /** Test-only native-handle facade: production adapters/services still perform all I/O. */
 export function nativeDirectory(
   dir: FileSystemDirectoryAdapter,
@@ -73,5 +89,6 @@ export function nativeDirectory(
       }
     },
   };
+  testHandles.add(handle);
   return handle as unknown as FileSystemDirectoryHandle;
 }

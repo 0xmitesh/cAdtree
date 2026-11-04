@@ -11,19 +11,19 @@ import {
   type RememberedWorkspace,
   rememberHome,
   getRememberedHome,
-  getWorkspaceWindowsPath,
+  getWorkspacePath,
   type RememberedHome,
-  bindWorkspaceWindowsPathToRoot,
+  bindWorkspacePathToRoot,
 } from "./engine/idb-store";
 import {
   resolveWorkingFilePath,
   resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
 import {
-  WindowsFolderAddressDialog,
-  rememberWindowsAddress,
+  FolderAddressDialog,
+  rememberFolderAddress,
   type HomeAddress,
-} from "./components/WindowsFolderAddressDialog";
+} from "./components/FolderAddressDialog";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import {
   restoreRevisionToFolder,
@@ -89,7 +89,7 @@ import {
   OperationProgress,
   Modal,
 } from "./components/ui";
-import { supportsFileSystemAccessApi } from "./utils/format";
+import { assertFolderAccess, pickDirectory, folderPermissionError } from "./utils/folder-access";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
 import {
@@ -258,6 +258,7 @@ export default function App() {
     try {
       return await action(context);
     } catch (error) {
+      error = folderPermissionError(error);
       if (current())
         setStatusBanner({
           type:
@@ -275,20 +276,7 @@ export default function App() {
       }
     }
   };
-  const pickFolder = async (mode: "read" | "readwrite") => {
-    if (!supportsFileSystemAccessApi())
-      throw new Error(
-        "Folder selection is unavailable here. Open cAdtree in Edge or Chrome.",
-      );
-    const picker = (
-      window as unknown as {
-        showDirectoryPicker: (options: {
-          mode: string;
-        }) => Promise<FileSystemDirectoryHandle>;
-      }
-    ).showDirectoryPicker;
-    return new RealFileSystemAdapter(await picker({ mode }));
-  };
+  const pickFolder = async (mode: "read" | "readwrite") => new RealFileSystemAdapter(await pickDirectory(mode));
   const applyVaultState = (next: VaultState) => {
     setVaultState((previous) => {
       if (previous?.project.projectId !== next.project.projectId) return next;
@@ -416,6 +404,7 @@ export default function App() {
     await perform(
       "connect",
       async (context) => {
+        assertFolderAccess();
         // Start the picker in the user action; perform owns connection errors.
         const root = saved
           ? new RealFileSystemAdapter(saved.rootHandle)
@@ -429,7 +418,7 @@ export default function App() {
               throw error;
             });
         if ((await root.requestPermission("readwrite")) !== "granted")
-          throw new Error("Grant access to reconnect your Cadtree home.");
+          throw new Error("Read/write folder access was denied. Allow local folder access in your browser site settings, then reconnect your Cadtree home.");
         if (create) {
           if ((await root.listEntries()).length)
             throw new Error(
@@ -461,7 +450,7 @@ export default function App() {
         }
         if (!path) {
           try {
-            path = await getWorkspaceWindowsPath(
+            path = await getWorkspacePath(
               next.identity.homeId,
               root.handle,
             );
@@ -502,7 +491,7 @@ export default function App() {
           );
         // Retain the published identity for retries; no user files are removed on cancellation.
         if (context.current()) setPendingHome({ ...selected, next });
-        const warning = await rememberWindowsAddress(
+        const warning = await rememberFolderAddress(
           next.identity.homeId,
           path,
           selected.root.handle,
@@ -587,7 +576,7 @@ export default function App() {
             // Keep the retained original's optional absolute path tied to that root,
             // including if its copied descendant is later opened through compatibility mode.
             try {
-              await bindWorkspaceWindowsPathToRoot(
+              await bindWorkspacePathToRoot(
                 result.workspace.identity.workspaceId,
                 source.handle,
               );
@@ -1526,7 +1515,7 @@ export default function App() {
   const workingFileResolver = (branchId: string, path: string) => async () => {
     if (!workspace || !managedProject)
       throw new Error(
-        "Full Windows file paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
+        "Full local file paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
       );
     const location = await resolveWorkingFilePath(
       workspace.root,
@@ -2038,7 +2027,7 @@ export default function App() {
             ) : null}
           </main>
           {pendingHome ? (
-            <WindowsFolderAddressDialog
+            <FolderAddressDialog
               key={pendingHome.requestId}
               home
               folderName={pendingHome.root.name}

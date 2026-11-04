@@ -36,7 +36,7 @@ import {
 } from "./CreateBranchDialog";
 import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
-import type { FilePathLocation } from "../utils/windows-path";
+import type { FilePathLocation } from "../utils/folder-path";
 
 export interface HistoryRecoveryViewProps {
   application?: ApplicationController;
@@ -401,7 +401,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
             </details>
           ) : (
             <p className="small">
-              A full Windows path is not known for this external destination.
+              A full local path is not known for this external destination.
               Find the chosen folder in Explorer; cAdtree cannot fabricate its
               absolute location.
             </p>

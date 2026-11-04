@@ -6,7 +6,7 @@ import {
 import type { ProgressUpdate, RevisionManifest } from "../engine/types";
 import { branchNameKey } from "../engine/branch-state";
 import { formatRevisionNumber } from "../engine/vault-service";
-import { supportsFileSystemAccessApi } from "../utils/format";
+import { pickDirectory } from "../utils/folder-access";
 import { Modal, Notice, OperationProgress } from "./ui";
 
 export interface CreateBranchParams {
@@ -132,20 +132,9 @@ export function CreateBranchDialog({
                 onClick={async () => {
                   setError("");
                   try {
-                    if (!supportsFileSystemAccessApi())
-                      throw new Error(
-                        "Folder selection is unavailable here. Open cAdtree in Edge or Chrome.",
-                      );
-                    const picker = (
-                      window as unknown as {
-                        showDirectoryPicker: (options: {
-                          mode: string;
-                        }) => Promise<FileSystemDirectoryHandle>;
-                      }
-                    ).showDirectoryPicker;
                     setParent(
                       new RealFileSystemAdapter(
-                        await picker({ mode: "readwrite" }),
+                        await pickDirectory("readwrite"),
                       ),
                     );
                   } catch (error) {
@@ -158,6 +147,7 @@ export function CreateBranchDialog({
                       setError(
                         error instanceof Error ? error.message : String(error),
                       );
+                    else setError('Folder selection was cancelled. Choose a parent folder when you are ready.');
                   }
                 }}
               >
