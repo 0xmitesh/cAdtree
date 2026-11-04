@@ -20,6 +20,8 @@ export function TutorialViewerModal({
   const [stepIndex, setStepIndex] = useState(() =>
     clampTutorialStep(initialStep, total),
   );
+  const [visualIndex, setVisualIndex] = useState(0);
+  const [viewedThrough, setViewedThrough] = useState<Record<string, number>>({});
   useEffect(() => {
     if (typeof Image === "undefined") return;
     for (const s of tutorial.steps) {
@@ -30,6 +32,24 @@ export function TutorialViewerModal({
     }
   }, [tutorial]);
   const step = tutorial.steps[clampTutorialStep(stepIndex, total)];
+  const visuals = step.visuals ?? [];
+  const visual = visuals[visualIndex];
+  const stepKey = `${tutorial.id}:${step.id}`;
+  const canAdvance =
+    visuals.length < 2 || (viewedThrough[stepKey] ?? 0) >= visuals.length - 1;
+  const changeStep = (direction: number) => {
+    if (direction > 0 && !canAdvance) return;
+    setStepIndex((current) => clampTutorialStep(current + direction, total));
+    setVisualIndex(0);
+  };
+  const nextVisual = () => {
+    const nextIndex = Math.min(visuals.length - 1, visualIndex + 1);
+    setVisualIndex(nextIndex);
+    setViewedThrough((current) => ({
+      ...current,
+      [stepKey]: Math.max(current[stepKey] ?? 0, nextIndex),
+    }));
+  };
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === total - 1;
 
@@ -75,22 +95,17 @@ export function TutorialViewerModal({
           </div>
         ) : null}
 
-        <ul className="tutorial-points">
+        {step.points.length ? <ul className="tutorial-points">
           {step.points.map((point) => (
             <li key={point}>{point}</li>
           ))}
-        </ul>
+        </ul> : null}
 
-        {step.visuals?.length ? (
-          <div
-            className={`tutorial-visual-list${step.visuals.length === 3 ? " three-up" : ""}`}
-            data-visual-count={step.visuals.length}
-          >
-            {step.visuals.map((visual) => (
+        {visual ? (
+          <div className="tutorial-visual-carousel" role="group" aria-label="Step visuals">
               <figure
                 className="panel tutorial-visual-card"
                 data-visual-kind={visual.kind}
-                key={visual.src}
               >
                 <figcaption className="tutorial-visual-caption">
                   <span>{visual.caption}</span>
@@ -100,13 +115,30 @@ export function TutorialViewerModal({
                 </figcaption>
                 <div className="tutorial-visual-frame">
                   <img
+                    key={visual.src}
                     src={visual.src}
                     alt={visual.alt}
                     loading="eager"
                   />
                 </div>
               </figure>
-            ))}
+            {visuals.length > 1 ? (
+              <div className="tutorial-visual-nav" role="group" aria-label="Visual navigation">
+                <button type="button" className="button secondary" aria-label="Previous visual" disabled={visualIndex === 0}
+                  onClick={() => setVisualIndex((current) => Math.max(0, current - 1))}>
+                  <ArrowLeft size={17} aria-hidden="true" />
+                </button>
+                <span className="tutorial-visual-position" aria-live="polite" aria-atomic="true" aria-label={`Visual ${visualIndex + 1} of ${visuals.length}`}>
+                  {visualIndex + 1} / {visuals.length}
+                </span>
+                <button type="button" className="button primary" aria-label="Next visual" disabled={visualIndex === visuals.length - 1}
+                  onClick={nextVisual}>
+                  Next visual
+                  <ArrowRight size={17} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
+            {!canAdvance ? <p className="tutorial-visual-hint">View every image in this step to enable Next.</p> : null}
           </div>
         ) : null}
 
@@ -131,9 +163,7 @@ export function TutorialViewerModal({
               type="button"
               className="button secondary"
               disabled={isFirst}
-              onClick={() =>
-                setStepIndex((current) => clampTutorialStep(current - 1, total))
-              }
+              onClick={() => changeStep(-1)}
             >
               <ArrowLeft size={15} aria-hidden="true" />
               Back
@@ -142,6 +172,7 @@ export function TutorialViewerModal({
               <button
                 type="button"
                 className="button primary"
+                disabled={!canAdvance}
                 onClick={onClose}
               >
                 <Check size={15} aria-hidden="true" />
@@ -151,11 +182,8 @@ export function TutorialViewerModal({
               <button
                 type="button"
                 className="button primary"
-                onClick={() =>
-                  setStepIndex((current) =>
-                    clampTutorialStep(current + 1, total),
-                  )
-                }
+                disabled={!canAdvance}
+                onClick={() => changeStep(1)}
               >
                 Next
                 <ArrowRight size={15} aria-hidden="true" />

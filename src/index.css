@@ -3104,15 +3104,27 @@ input::placeholder {
 .tutorial-hierarchy-copy span {
   color: var(--muted);
 }
-.tutorial-visual-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+.tutorial-visual-carousel {
+  min-width: 0;
   margin: 12px 0;
-  align-items: stretch;
 }
-.tutorial-visual-list.three-up {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.tutorial-visual-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 10px;
+}
+.tutorial-visual-position {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tutorial-visual-hint {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
 }
 .tutorial-visual-card {
   margin: 0;
@@ -3136,6 +3148,7 @@ input::placeholder {
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .tutorial-visual-card[data-visual-kind="os"] .tutorial-visual-caption {
   background: #eef1f5;
@@ -3165,8 +3178,8 @@ input::placeholder {
 .tutorial-visual-frame img {
   display: block;
   max-width: 100%;
-  width: auto;
-  max-height: 310px;
+  width: 100%;
+  max-height: min(50vh, 500px);
   height: auto;
   border-radius: 6px;
   border: 1px solid var(--border);
@@ -3175,25 +3188,10 @@ input::placeholder {
 .tutorial-visual-card[data-visual-kind="os"] .tutorial-visual-frame img {
   border-color: #c5cdd8;
 }
-@media (max-width: 980px) {
-  .tutorial-visual-list.three-up {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .tutorial-visual-list.three-up > .tutorial-visual-card:last-child {
-    grid-column: 1 / -1;
-  }
-}
 @media (max-width: 720px) {
   .modal:has(.tutorial-viewer) {
     width: calc(100vw - 24px);
     max-height: calc(100vh - 24px);
-  }
-  .tutorial-visual-list,
-  .tutorial-visual-list.three-up {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .tutorial-visual-list.three-up > .tutorial-visual-card:last-child {
-    grid-column: auto;
   }
 }
 .tutorial-next-hint {

@@ -3,109 +3,144 @@ import { indexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { render, cleanup, fireEvent, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import App from "../App";
+import { TutorialViewerModal } from "./TutorialViewerModal";
+import { clearAllConvenienceMetadata } from "../engine/idb-store";
 
 Object.assign(globalThis, { indexedDB });
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  await clearAllConvenienceMetadata();
+  Reflect.deleteProperty(window, "showDirectoryPicker");
+});
 
-test("Tutorial 1 opens from Welcome screen, renders real screenshot assets without placeholders, steps forward/back, and causes no filesystem side effects", () => {
+test("Tutorial 1 keeps visual navigation separate across all six steps, resets each carousel and never opens a filesystem picker", () => {
   let pickerCalls = 0;
-  Object.assign(window, {
-    showDirectoryPicker: async () => {
-      pickerCalls++;
-      throw new Error("Tutorial must not invoke directory picker");
-    },
-  });
-
+  Object.assign(window, { showDirectoryPicker: async () => { pickerCalls++; throw new Error("Tutorial must not invoke directory picker"); } });
   const ui = render(<App />);
-  const trigger = ui.getByRole("button", {
-    name: "Tutorial: Start with cAdtree",
-  });
+  const trigger = ui.getByRole("button", { name: "Tutorial: Start with cAdtree" });
   fireEvent.click(trigger);
+  const dialog = within(ui.getByRole("dialog", { name: "Start with cAdtree" }));
+  const nextStep = () => fireEvent.click(dialog.getByRole("button", { name: "Next" }));
+  const backStep = () => fireEvent.click(dialog.getByRole("button", { name: "Back" }));
+  const nextVisual = () => fireEvent.click(dialog.getByRole("button", { name: "Next visual" }));
+  const checkVisual = (caption: string, position: number) => {
+    assert.equal(dialog.getAllByRole("img").length, 1, "only the current visual is rendered");
+    assert.ok(dialog.getByText(caption));
+    assert.ok(dialog.getByLabelText(`Visual ${position} of 2`));
+    assert.equal((dialog.getByRole("button", { name: "Previous visual" }) as HTMLButtonElement).disabled, position === 1);
+    assert.equal((dialog.getByRole("button", { name: "Next visual" }) as HTMLButtonElement).disabled, position === 2);
+  };
 
-  const dialog = within(
-    ui.getByRole("dialog", { name: "Start with cAdtree" }),
-  );
-  assert.ok(dialog.getByText("Step 1 of 5"));
+  assert.ok(dialog.getByText("Step 1 of 6"));
   assert.ok(dialog.getByRole("heading", { name: "Cadtree Home" }));
-  assert.equal(
-    (dialog.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled,
-    true,
-  );
+  assert.equal(dialog.queryByRole("img"), null);
+  assert.equal((dialog.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled, true);
+  nextStep();
+  assert.ok(dialog.getByText("Step 2 of 6"));
+  assert.ok(dialog.getByRole("heading", { name: "Create Cadtree Home" }));
+  checkVisual("1. Click Start my Cadtree home.", 1);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
+  nextStep();
+  assert.ok(dialog.getByText("Step 2 of 6"), "footer Next cannot skip an unseen image");
+  assert.ok(dialog.getByRole("button", { name: "Next visual" }).classList.contains("primary"));
+  assert.ok(dialog.getByText("Next visual"));
+  assert.ok(dialog.getByText("View every image in this step to enable Next."));
+  assert.equal(dialog.queryByText(/Complete home setup/), null);
+  assert.ok(dialog.getByText("cAdtree", { exact: true }));
+  nextVisual();
+  checkVisual("2. Select a dedicated empty folder for Cadtree Home.", 2);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, false);
+  assert.equal(dialog.queryByText("View every image in this step to enable Next."), null);
+  assert.ok(dialog.getByText("Windows", { exact: true }));
+  assert.match(dialog.getByRole("img").getAttribute("src")!, /step-2-windows-select-folder\.svg$/);
+  nextVisual();
+  assert.ok(dialog.getByText("Step 2 of 6"), "the final visual never advances the tutorial");
+  fireEvent.click(dialog.getByRole("button", { name: "Previous visual" }));
+  checkVisual("1. Click Start my Cadtree home.", 1);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, false, "reviewing a previous image retains completion for this open tutorial");
+  nextVisual();
 
-  // Step 1 -> Step 2 (3-action sequence: cAdtree -> Windows -> cAdtree)
-  fireEvent.click(dialog.getByRole("button", { name: "Next" }));
-  assert.ok(dialog.getByText("Step 2 of 5"));
-  assert.ok(
-    dialog.getByRole("heading", { name: "Create or connect Cadtree Home" }),
-  );
-  assert.ok(
-    dialog.getByText(
-      /cannot provide or verify its full local filesystem address/,
-    ),
-  );
-  assert.ok(dialog.getByText("1. Click Start my Cadtree home."));
-  assert.ok(
-    dialog.getByText("2. Select a dedicated empty folder for Cadtree Home."),
-  );
-  assert.ok(
-    dialog.getByText("3. Paste the folder's full address and complete setup."),
-  );
-  const step2Images = dialog.getAllByRole("img") as HTMLImageElement[];
-  assert.equal(step2Images.length, 3);
-  assert.match(step2Images[1].getAttribute("src") ?? "", /step-2-windows-select-folder\.svg$/);
-  assert.equal(dialog.queryByText(/Screenshot slot/i), null);
-  assert.equal(dialog.queryByText(/Interface preview/i), null);
-  assert.equal(
-    (dialog.getByRole("button", { name: "Back" }) as HTMLButtonElement).disabled,
-    false,
-  );
+  nextStep();
+  assert.ok(dialog.getByText("Step 3 of 6"));
+  assert.ok(dialog.getByRole("heading", { name: "Copy the Cadtree Home address" }));
+  checkVisual("1. In File Explorer, right-click Cadtree Home and choose Copy as path.", 1);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
+  nextStep();
+  assert.ok(dialog.getByText("Step 3 of 6"));
+  assert.match(dialog.getByRole("img").getAttribute("src")!, /step-3-windows-copy-as-path\.png$/);
+  assert.ok(dialog.getByText(/Paste it directly; cAdtree removes matching surrounding quotes automatically/));
+  assert.ok(dialog.getByText(/cannot provide or verify its full local filesystem address/));
+  nextVisual();
+  checkVisual("2. Paste the folder address into cAdtree and click Complete setup.", 2);
+  assert.match(dialog.getByRole("img").getAttribute("src")!, /step-2-complete-home-setup\.png$/);
+  assert.ok(dialog.getByText("Step 3 of 6"));
+  backStep();
+  checkVisual("1. Click Start my Cadtree home.", 1);
+  nextStep();
+  checkVisual("1. In File Explorer, right-click Cadtree Home and choose Copy as path.", 1);
 
-  // Step 2 -> Step 3 (real screenshots of My workspaces & Create workspace)
-  fireEvent.click(dialog.getByRole("button", { name: "Next" }));
-  assert.ok(dialog.getByText("Step 3 of 5"));
+  nextStep();
+  assert.ok(dialog.getByText("Step 4 of 6"));
   assert.ok(dialog.getByRole("heading", { name: "Workspace" }));
-  assert.equal(dialog.getAllByRole("img").length, 2);
-
-  // Step 3 -> Step 4 (real screenshots of My Workspace & Create project)
-  fireEvent.click(dialog.getByRole("button", { name: "Next" }));
-  assert.ok(dialog.getByText("Step 4 of 5"));
+  checkVisual("1. Click Create workspace.", 1);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
+  nextStep();
+  assert.ok(dialog.getByText("Step 4 of 6"));
+  nextVisual();
+  checkVisual("2. Name the workspace and create it.", 2);
+  nextStep();
+  assert.ok(dialog.getByText("Step 5 of 6"));
   assert.ok(dialog.getByRole("heading", { name: "Project" }));
-  assert.equal(dialog.getAllByRole("img").length, 2);
-  assert.ok(
-    dialog.getByText(
-      /cAdtree creates the project and its Main working folder \(working\/main\) inside the workspace automatically/,
-    ),
-  );
-
-  // Back from Step 4 -> Step 3
-  fireEvent.click(dialog.getByRole("button", { name: "Back" }));
-  assert.ok(dialog.getByText("Step 3 of 5"));
-
-  // Forward to Step 5 (final step)
-  fireEvent.click(dialog.getByRole("button", { name: "Next" }));
-  fireEvent.click(dialog.getByRole("button", { name: "Next" }));
-  assert.ok(dialog.getByText("Step 5 of 5"));
+  checkVisual("1. Click Create project.", 1);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
+  nextStep();
+  assert.ok(dialog.getByText("Step 5 of 6"));
+  nextVisual();
+  checkVisual("2. Name the project and create it.", 2);
+  backStep();
+  checkVisual("1. Click Create workspace.", 1);
+  nextStep();
+  checkVisual("1. Click Create project.", 1);
+  nextStep();
+  assert.ok(dialog.getByText("Step 6 of 6"));
   assert.ok(dialog.getByRole("heading", { name: "Ready to work" }));
-  assert.ok(
-    dialog.getByText(/paste it into your system file manager/),
-  );
   assert.ok(dialog.getByText("Next: save your first revision."));
+  assert.ok(dialog.getByText(/paste it into your system file manager/));
+  assert.ok(dialog.getByText(/working\/main/, { selector: "code" }));
+  assert.equal(dialog.queryByRole("img"), null);
   assert.equal(dialog.queryByRole("button", { name: "Next" }), null);
-
-  // Finish closes the modal
   fireEvent.click(dialog.getByRole("button", { name: "Finish" }));
-  assert.equal(ui.queryByRole("dialog", { name: "Start with cAdtree" }), null);
+  assert.equal(ui.queryByRole("dialog"), null);
 
-  // Reopen and test Close button on an earlier step
   fireEvent.click(trigger);
-  const reopened = within(
-    ui.getByRole("dialog", { name: "Start with cAdtree" }),
-  );
-  assert.ok(reopened.getByText("Step 1 of 5"));
+  const reopened = within(ui.getByRole("dialog", { name: "Start with cAdtree" }));
+  assert.ok(reopened.getByText("Step 1 of 6"));
+  fireEvent.click(reopened.getByRole("button", { name: "Next" }));
+  assert.ok(reopened.getByLabelText("Visual 1 of 2"), "carousel state is not persisted on reopen");
+  assert.equal((reopened.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true, "viewing completion resets on reopen");
   fireEvent.click(reopened.getByRole("button", { name: "Close" }));
-  assert.equal(ui.queryByRole("dialog", { name: "Start with cAdtree" }), null);
-
-  // Verify no filesystem picker was invoked
+  assert.equal(ui.queryByRole("dialog"), null);
   assert.equal(pickerCalls, 0);
+});
+
+test("visual arrows are native keyboard-accessible buttons with bounded navigation", async () => {
+  const user = userEvent.setup({ document: window.document });
+  const ui = render(<TutorialViewerModal initialStep={1} onClose={() => {}} />);
+  const dialog = within(ui.getByRole("dialog"));
+  const next = dialog.getByRole("button", { name: "Next visual" });
+  const previous = dialog.getByRole("button", { name: "Previous visual" });
+  assert.equal((previous as HTMLButtonElement).disabled, true);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, true);
+  next.focus();
+  await user.keyboard("{Enter}");
+  assert.ok(dialog.getByLabelText("Visual 2 of 2"));
+  assert.equal((next as HTMLButtonElement).disabled, true);
+  assert.equal((dialog.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled, false);
+  assert.ok(dialog.getByText("Step 2 of 6"));
+  previous.focus();
+  await user.keyboard("{Enter}");
+  assert.ok(dialog.getByLabelText("Visual 1 of 2"));
+  assert.equal((previous as HTMLButtonElement).disabled, true);
 });
