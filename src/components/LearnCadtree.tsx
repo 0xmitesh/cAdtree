@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowRight, File, Folder, FolderOpen, House } from "lucide-react";
 import { START_TUTORIAL, type TutorialDefinition } from "../tutorials/start-tutorial";
 import { SAVE_FIRST_REVISION_TUTORIAL } from "../tutorials/save-first-revision";
+import { BRING_EXISTING_WORK_TUTORIAL } from "../tutorials/bring-existing-work";
 import { TutorialViewerModal } from "./TutorialViewerModal";
 
 type Preview = "home" | "revision" | "existing" | "alternatives" | "compare";
@@ -41,7 +42,8 @@ const TUTORIAL_CARDS: TutorialCard[] = [
     description: "Connect an existing workspace or CAD project.",
     preview: "existing",
     category: "secondary",
-    status: "coming-soon",
+    status: "available",
+    tutorial: BRING_EXISTING_WORK_TUTORIAL,
   },
   {
     id: "design-alternatives",

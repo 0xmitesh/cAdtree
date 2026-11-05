@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+<title id="title">A verified workspace copy</title><desc id="desc">The original Client A workspace remains unchanged. A separate managed copy is created and registered in Cadtree Home, including projects, history and working edits.</desc>
+<rect width="1200" height="430" fill="#f6f7f3"/>
+<g font-family="Arial, sans-serif" fill="#253c35">
+<rect x="30" y="60" width="445" height="278" rx="12" fill="#fff" stroke="#c6d2ca"/>
+<rect x="725" y="60" width="445" height="278" rx="12" fill="#e8f0e8" stroke="#8fa99a"/>
+<text x="60" y="107" font-size="19" letter-spacing="1">ORIGINAL WORKSPACE</text><text x="755" y="107" font-size="19" letter-spacing="1">MANAGED COPY</text>
+<text x="60" y="160" font-size="30" font-weight="700">Client A</text><text x="755" y="160" font-size="30" font-weight="700">Cadtree Home / Client A</text>
+<text x="60" y="208" font-size="22">Documents / Engineering / Client A</text><text x="60" y="268" font-size="24" font-weight="700">Stays unchanged</text>
+<text x="755" y="207" font-size="22">Projects + saved history</text><text x="755" y="244" font-size="22">Working edits + workspace records</text><text x="755" y="296" font-size="23" font-weight="700">Independent after import</text>
+<text x="600" y="164" font-size="20" text-anchor="middle">Copy and verify</text><path d="M500 199H699L685 186M699 199L685 212" fill="none" stroke="#456b57" stroke-width="3"/>
+<text x="600" y="387" font-size="22" text-anchor="middle">No move. No synchronization. Source no longer required after success.</text>
+</g></svg>
