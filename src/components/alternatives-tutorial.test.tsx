@@ -83,11 +83,7 @@ test("Tutorial 4's full gated walkthrough leaves an active case, uncaptured edit
   assert.equal(after.vaultState.branches.length, 2);
   assert.equal(after.vaultState.revisions.length, 3);
   assert.equal(after.vaultState.caseLifecycles?.[branchId]?.status ?? "active", "active");
-  const future = ui.getByRole("article", { name: "Compare & recover" });
-  assert.ok(within(future).getByText("Coming soon"));
-  assert.equal(future.querySelector("button,a,[tabindex]"), null);
-  fireEvent.click(future);
-  assert.equal(ui.queryByRole("dialog"), null);
+  assert.ok(within(ui.getByRole("article", { name: "Compare, apply & recover" })).getByRole("button", { name: "Start tutorial" }));
   fireEvent.click(ui.getByRole("button", { name: "My workspaces" }));
   fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
   await waitFor(() => assert.equal(appBusy(ui), false));

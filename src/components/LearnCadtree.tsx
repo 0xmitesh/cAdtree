@@ -4,6 +4,7 @@ import { START_TUTORIAL, type TutorialDefinition } from "../tutorials/start-tuto
 import { SAVE_FIRST_REVISION_TUTORIAL } from "../tutorials/save-first-revision";
 import { BRING_EXISTING_WORK_TUTORIAL } from "../tutorials/bring-existing-work";
 import { EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL } from "../tutorials/explore-design-alternatives";
+import { COMPARE_APPLY_RECOVER_TUTORIAL } from "../tutorials/compare-apply-recover";
 import { TutorialViewerModal } from "./TutorialViewerModal";
 
 type Preview = "home" | "revision" | "existing" | "alternatives" | "compare";
@@ -57,11 +58,12 @@ const TUTORIAL_CARDS: TutorialCard[] = [
   },
   {
     id: "compare-recover",
-    title: "Compare & recover",
+    title: COMPARE_APPLY_RECOVER_TUTORIAL.title,
     description: "Compare saved designs, review changes and return to earlier work.",
     preview: "compare",
     category: "secondary",
-    status: "coming-soon",
+    status: "available",
+    tutorial: COMPARE_APPLY_RECOVER_TUTORIAL,
   },
 ];
 

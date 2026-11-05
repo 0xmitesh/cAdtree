@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
+<title id="title">File-level evidence</title><desc id="desc">Bracket.SLDPRT at Main Rev 006 and case Rev 005 has different saved content hashes. Compare reports Modified. It does not identify geometry, feature or compatibility changes.</desc>
+<rect width="1200" height="470" fill="#f6f7f3"/>
+<g font-family="Arial, sans-serif" fill="#253c35">
+<text x="48" y="58" font-size="30" font-weight="700">Bracket.SLDPRT · same saved path</text>
+<rect x="48" y="99" width="486" height="192" rx="12" fill="#fff" stroke="#087f80" stroke-width="2"/>
+<rect x="666" y="99" width="486" height="192" rx="12" fill="#fff" stroke="#7060b8" stroke-width="2"/>
+<text x="76" y="144" font-size="24" font-weight="700">From · Main Rev 006</text><text x="694" y="144" font-size="24" font-weight="700">To · case Rev 005</text>
+<text x="76" y="201" font-size="27">Saved content A</text><text x="694" y="201" font-size="27">Saved content B</text>
+<text x="76" y="254" font-size="22">Recorded content hash A</text><text x="694" y="254" font-size="22">Recorded content hash B</text>
+<text x="600" y="210" font-size="50" text-anchor="middle">≠</text>
+<text x="600" y="351" font-size="30" font-weight="700" text-anchor="middle">Different content hashes → Modified</text>
+<text x="600" y="401" font-size="23" text-anchor="middle">This is file evidence, not geometry analysis.</text>
+<text x="600" y="438" font-size="21" text-anchor="middle">CAD features, stress and assembly compatibility still need engineering review.</text>
+</g></svg>
