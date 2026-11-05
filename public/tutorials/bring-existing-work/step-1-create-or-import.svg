@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+<title id="title">Create or import?</title><desc id="desc">Create starts new managed work. Import copies an existing cAdtree workspace or a CAD project folder.</desc>
+<rect width="1200" height="430" fill="#f6f7f3"/>
+<g font-family="Arial, sans-serif" fill="#253c35">
+<rect x="32" y="32" width="552" height="366" rx="12" fill="#fff" stroke="#c6d2ca"/>
+<rect x="616" y="32" width="552" height="366" rx="12" fill="#fff" stroke="#c6d2ca"/>
+<text x="64" y="85" font-size="19" letter-spacing="2">NEW WORK</text><text x="648" y="85" font-size="19" letter-spacing="2">EXISTING WORK</text>
+<text x="64" y="132" font-size="32" font-weight="700">Create</text><text x="648" y="132" font-size="32" font-weight="700">Import</text>
+<path d="M64 160H552M648 160H1136" stroke="#d7ded8"/>
+<text x="64" y="207" font-size="24" font-weight="700">Create workspace</text><text x="64" y="242" font-size="22">A new workspace in Cadtree Home</text>
+<text x="64" y="302" font-size="24" font-weight="700">Create project</text><text x="64" y="337" font-size="22">A new, empty managed project</text>
+<text x="648" y="207" font-size="24" font-weight="700">Import existing workspace</text><text x="648" y="242" font-size="22">Copy a cAdtree workspace</text>
+<text x="648" y="302" font-size="24" font-weight="700">Import existing project</text><text x="648" y="337" font-size="22">Copy an existing CAD project folder</text>
+</g></svg>

@@ -78,7 +78,7 @@ test("Tutorial 2 uses the shared gated carousel without changing the connected p
   assert.equal(pickerCalls, 0);
   assert.equal(inventorySignature(await readVerifiedInventory(root)), before, "all project and working bytes remain unchanged");
   assert.equal((await openExistingVault(project.vaultDir)).revisions.length, 0, "the tutorial creates no revision");
-  assert.equal(ui.getAllByText("Coming soon").length, 3);
+  assert.equal(ui.getAllByText("Coming soon").length, 2);
 });
 
 test("Tutorial 2 closes and reopens at its first step using keyboard controls", async () => {

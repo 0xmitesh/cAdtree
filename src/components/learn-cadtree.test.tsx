@@ -18,8 +18,8 @@ test("homepage Learn cards replace the footer link and only the available tutori
     "Start with cAdtree", "Save your first revision", "Bring existing work into cAdtree",
     "Explore design alternatives", "Compare & recover",
   ]);
-  assert.equal(within(learn).getAllByText("Coming soon").length, 3);
-  assert.equal(within(learn).getAllByRole("button").length, 2);
+  assert.equal(within(learn).getAllByText("Coming soon").length, 2);
+  assert.equal(within(learn).getAllByRole("button").length, 3);
   assert.ok(within(cards[0]).getByText("6 steps"));
   assert.equal(ui.queryByText("Tutorial: Start with cAdtree"), null);
   const benefits = ui.getByRole("region", { name: "Make space for better work" });
@@ -27,7 +27,7 @@ test("homepage Learn cards replace the footer link and only the available tutori
   const footer = ui.container.querySelector(".welcome-footer")!;
   assert.ok(footer.contains(benefits));
   assert.equal(ui.queryByText("Your files. Your storage."), null, "the homepage does not repeat the sidebar footer");
-  for (const card of cards.slice(2)) {
+  for (const card of cards.slice(3)) {
     assert.equal(card.querySelector("button, a, [tabindex]"), null);
     fireEvent.click(card);
     assert.equal(ui.queryByRole("dialog"), null);
