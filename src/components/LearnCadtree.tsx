@@ -3,6 +3,7 @@ import { ArrowRight, File, Folder, FolderOpen, House } from "lucide-react";
 import { START_TUTORIAL, type TutorialDefinition } from "../tutorials/start-tutorial";
 import { SAVE_FIRST_REVISION_TUTORIAL } from "../tutorials/save-first-revision";
 import { BRING_EXISTING_WORK_TUTORIAL } from "../tutorials/bring-existing-work";
+import { EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL } from "../tutorials/explore-design-alternatives";
 import { TutorialViewerModal } from "./TutorialViewerModal";
 
 type Preview = "home" | "revision" | "existing" | "alternatives" | "compare";
@@ -51,7 +52,8 @@ const TUTORIAL_CARDS: TutorialCard[] = [
     description: "Create a separate design direction from a saved revision.",
     preview: "alternatives",
     category: "secondary",
-    status: "coming-soon",
+    status: "available",
+    tutorial: EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL,
   },
   {
     id: "compare-recover",

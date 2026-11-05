@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="740" viewBox="0 0 1200 740" role="img" aria-labelledby="title desc">
+<title id="title">Independent histories, project-wide numbers</title><desc id="desc">Main Rev 001 leads to Rev 002 then Rev 003. From Rev 003, Lightweight bracket saves Rev 004 then Rev 005. Main's next save is Rev 006, whose parent is Rev 003. Alternatives remain connected to their origin.</desc>
+<rect width="1200" height="740" fill="#f6f7f3"/>
+<g font-family="Arial, sans-serif" fill="#253c35">
+<text x="48" y="58" font-size="30" font-weight="700">Keep both design histories</text>
+<text x="90" y="112" font-size="23" font-weight="700">Main</text><text x="625" y="112" font-size="23" font-weight="700" fill="#7060b8">Design Case · Lightweight bracket</text>
+<path d="M135 165V615" fill="none" stroke="#087f80" stroke-width="5"/>
+<path d="M135 345C135 390 540 390 540 435V525" fill="none" stroke="#7060b8" stroke-width="5"/>
+<g fill="#fff" stroke="#087f80" stroke-width="4"><circle cx="135" cy="165" r="34"/><circle cx="135" cy="255" r="34"/><circle cx="135" cy="345" r="34"/><circle cx="135" cy="615" r="34"/></g>
+<g fill="#fff" stroke="#7060b8" stroke-width="4"><circle cx="540" cy="435" r="34"/><circle cx="540" cy="525" r="34"/></g>
+<g font-size="17" font-weight="700" text-anchor="middle"><text x="135" y="171">001</text><text x="135" y="261">002</text><text x="135" y="351">003</text><text x="540" y="441">004</text><text x="540" y="531">005</text><text x="135" y="621">006</text></g>
+<g font-size="22"><text x="196" y="173">Initial layout</text><text x="196" y="263">Mounting geometry updated</text><text x="196" y="353">Reviewed design baseline</text><text x="601" y="443">Reduced bracket thickness</text><text x="601" y="533">Reinforced mounting rib</text><text x="196" y="623">Main mounting detail refined</text></g>
+<text x="48" y="700" font-size="22">Rev numbers run across the project. Main Rev 006 continues from Rev 003.</text>
+</g></svg>
