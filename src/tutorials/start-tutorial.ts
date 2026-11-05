@@ -5,7 +5,7 @@ export interface TutorialHierarchyNode {
   highlight?: boolean;
 }
 
-export type TutorialVisualKind = "cadtree" | "os";
+export type TutorialVisualKind = "cadtree" | "os" | "concept";
 
 export interface TutorialVisualAsset {
   src: string;

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="260" viewBox="0 0 1080 260" role="img" aria-labelledby="title desc">
+  <title id="title">Normal CAD work before a cAdtree scan</title>
+  <desc id="desc">Edit and save Bracket.SLDPRT in your CAD application, close the documents, then scan for changes in cAdtree.</desc>
+  <rect width="1080" height="260" rx="12" fill="#fafcf9"/>
+  <g font-family="Segoe UI, sans-serif" fill="#253338">
+    <text x="44" y="50" font-size="24" font-weight="600">Bracket Assembly · Main working folder</text>
+    <g fill="#fff" stroke="#b3cac0" stroke-width="2"><rect x="44" y="94" width="284" height="108" rx="8"/><rect x="398" y="94" width="284" height="108" rx="8"/><rect x="752" y="94" width="284" height="108" rx="8"/></g>
+    <g stroke="#087f80" stroke-width="2" fill="none"><path d="M342 148H382l-8-8m8 8-8 8M696 148H736l-8-8m8 8-8 8"/></g>
+    <g font-size="22" font-weight="600" text-anchor="middle"><text x="186" y="137">Edit + Save in CAD</text><text x="540" y="137">Close CAD documents</text><text x="894" y="137" fill="#087f80">Scan for changes</text></g>
+    <g font-size="18" fill="#68777b" text-anchor="middle"><text x="186" y="173">Bracket.SLDPRT</text><text x="540" y="173">Finish writing the saved files</text><text x="894" y="173">Return to cAdtree</text></g>
+  </g>
+</svg>
