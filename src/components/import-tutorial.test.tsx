@@ -85,12 +85,7 @@ test("Tutorial 3 opens from Learn and its gated carousel cannot import or modify
   assert.equal(pickerCalls, 0);
   assert.deepEqual(await inventories(), before, "managed records, CAD bytes and both source folders stay unchanged");
   assert.equal((await openExistingVault(project.vaultDir)).revisions.length, 0);
-  for (const title of ["Compare & recover"]) {
-    const future = ui.getByRole("article", { name: title });
-    assert.equal(future.querySelector("button, a, [tabindex]"), null);
-    fireEvent.click(future);
-    assert.equal(ui.queryByRole("dialog"), null);
-  }
+  assert.ok(within(ui.getByRole("article", { name: "Compare, apply & recover" })).getByRole("button", { name: "Start tutorial" }));
 });
 
 test("Tutorial 3 supports keyboard visual controls, Close and a fresh replay", async () => {

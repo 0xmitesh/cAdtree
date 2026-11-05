@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+<title id="title">Compare before deciding</title><desc id="desc">Main Rev 006 and Lightweight bracket Rev 005 share Rev 003. The case has its own Rev 004 and Rev 005. Compare these two saved directions before deciding what to reuse.</desc>
+<rect width="1200" height="520" fill="#f6f7f3"/>
+<g font-family="Arial, sans-serif" fill="#253c35">
+<text x="48" y="55" font-size="30" font-weight="700">Bracket Assembly · compare saved directions</text>
+<rect x="380" y="82" width="440" height="74" rx="12" fill="#fff" stroke="#c6d2ca"/>
+<text x="600" y="113" font-size="22" text-anchor="middle" font-weight="700">Rev 003 · Main</text><text x="600" y="141" font-size="20" text-anchor="middle">Reviewed baseline</text>
+<path d="M600 156V179H298V211" fill="none" stroke="#087f80" stroke-width="4"/><path d="M600 179H902V211" fill="none" stroke="#7060b8" stroke-width="4"/>
+<rect x="48" y="211" width="500" height="194" rx="12" fill="#edf5f0" stroke="#087f80" stroke-width="2"/>
+<rect x="652" y="211" width="500" height="194" rx="12" fill="#f2f0fa" stroke="#7060b8" stroke-width="2"/>
+<text x="76" y="253" font-size="26" font-weight="700">Main</text><text x="680" y="253" font-size="26" font-weight="700">Lightweight bracket</text>
+<text x="76" y="296" font-size="27" font-weight="700">Rev 006</text><text x="680" y="296" font-size="27" font-weight="700">Rev 004 → Rev 005</text>
+<text x="76" y="336" font-size="22">Mounting detail refined</text><text x="680" y="336" font-size="22">Reduced thickness; reinforced rib</text>
+<text x="76" y="376" font-size="20">Primary design direction</text><text x="680" y="376" font-size="20">Design Case from Rev 003</text>
+<path d="M548 312H652M559 303L548 312L559 321M641 303L652 312L641 321" fill="none" stroke="#64786e" stroke-width="3"/>
+<text x="600" y="457" font-size="26" text-anchor="middle" font-weight="700">Compare: Main Rev 006 ↔ case Rev 005</text>
+<text x="600" y="494" font-size="21" text-anchor="middle">Revision numbers run across the project. Working edits are not included.</text>
+</g></svg>
