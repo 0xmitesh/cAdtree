@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" role="img" aria-labelledby="title desc">
+<title id="title">Main and a Design Case</title><desc id="desc">Main is the primary direction. Lightweight bracket starts from saved Rev 003 as a separate working copy. Creating the case adds no revision.</desc>
+<rect width="1200" height="470" fill="#f6f7f3"/>
+<g font-family="Arial, sans-serif" fill="#253c35">
+<text x="48" y="60" font-size="30" font-weight="700">One saved baseline. Two design directions.</text>
+<text x="48" y="113" font-size="23" font-weight="700">Main</text><text x="648" y="113" font-size="20">Reviewed baseline</text><text x="940" y="113" font-size="21">Primary direction</text>
+<path d="M105 170H755M755 170H1080" fill="none" stroke="#087f80" stroke-width="5"/>
+<path d="M755 170C755 250 830 310 950 310H1080" fill="none" stroke="#7060b8" stroke-width="5"/>
+<g fill="#fff" stroke="#087f80" stroke-width="4"><circle cx="105" cy="170" r="42"/><circle cx="430" cy="170" r="42"/><circle cx="755" cy="170" r="42"/></g>
+<g font-size="18" font-weight="700" text-anchor="middle"><text x="105" y="177">Rev 001</text><text x="430" y="177">Rev 002</text><text x="755" y="177">Rev 003</text></g>
+<text x="48" y="244" font-size="20">Initial layout</text><text x="325" y="244" font-size="20">Mounting updated</text>
+<rect x="48" y="288" width="636" height="106" rx="12" fill="#fff" stroke="#c6d2ca"/>
+<text x="74" y="328" font-size="20" fill="#7060b8">DESIGN CASE</text><text x="74" y="365" font-size="28" font-weight="700">Lightweight bracket</text>
+<text x="745" y="365" font-size="21">Separate working copy of Rev 003</text>
+<text x="48" y="436" font-size="21">Creating the case adds no revision. Main's working files stay in place.</text>
+</g></svg>
