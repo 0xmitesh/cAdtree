@@ -18,8 +18,8 @@ test("homepage Learn cards replace the footer link and only the available tutori
     "Start with cAdtree", "Save your first revision", "Bring existing work into cAdtree",
     "Explore design alternatives", "Compare & recover",
   ]);
-  assert.equal(within(learn).getAllByText("Coming soon").length, 4);
-  assert.equal(within(learn).getAllByRole("button").length, 1);
+  assert.equal(within(learn).getAllByText("Coming soon").length, 3);
+  assert.equal(within(learn).getAllByRole("button").length, 2);
   assert.ok(within(cards[0]).getByText("6 steps"));
   assert.equal(ui.queryByText("Tutorial: Start with cAdtree"), null);
   const benefits = ui.getByRole("region", { name: "Make space for better work" });
@@ -27,12 +27,12 @@ test("homepage Learn cards replace the footer link and only the available tutori
   const footer = ui.container.querySelector(".welcome-footer")!;
   assert.ok(footer.contains(benefits));
   assert.equal(ui.queryByText("Your files. Your storage."), null, "the homepage does not repeat the sidebar footer");
-  for (const card of cards.slice(1)) {
+  for (const card of cards.slice(2)) {
     assert.equal(card.querySelector("button, a, [tabindex]"), null);
     fireEvent.click(card);
     assert.equal(ui.queryByRole("dialog"), null);
   }
-  fireEvent.click(within(learn).getByRole("button", { name: "Start tutorial" }));
+  fireEvent.click(within(cards[0]).getByRole("button", { name: "Start tutorial" }));
   const dialog = within(ui.getByRole("dialog", { name: "Start with cAdtree" }));
   assert.ok(dialog.getByText("Step 1 of 6"));
   assert.ok(dialog.getByRole("heading", { name: "Cadtree Home" }));
@@ -49,8 +49,10 @@ test("Learn respects the homepage busy state while remembered-home actions still
   const remembered = { name: "Cadtree", homeId: "home-test", rootHandle: nativeDirectory(new InMemoryFileSystemAdapter("Cadtree")) };
   const props = { remembered, busy: true, onStart: () => {}, onOpen: () => {}, onReturn: () => returns++ };
   const ui = render(<HomeWelcome {...props} />);
-  assert.equal((ui.getByRole("button", { name: "Start tutorial" }) as HTMLButtonElement).disabled, true);
-  fireEvent.click(ui.getByRole("button", { name: "Start tutorial" }));
+  for (const button of ui.getAllByRole("button", { name: "Start tutorial" })) {
+    assert.equal((button as HTMLButtonElement).disabled, true);
+    fireEvent.click(button);
+  }
   assert.equal(ui.queryByRole("dialog"), null);
   ui.rerender(<HomeWelcome {...props} busy={false} />);
   fireEvent.click(ui.getByRole("button", { name: "Return to Cadtree" }));

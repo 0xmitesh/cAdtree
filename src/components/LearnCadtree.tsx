@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowRight, File, Folder, FolderOpen, House } from "lucide-react";
 import { START_TUTORIAL, type TutorialDefinition } from "../tutorials/start-tutorial";
+import { SAVE_FIRST_REVISION_TUTORIAL } from "../tutorials/save-first-revision";
 import { TutorialViewerModal } from "./TutorialViewerModal";
 
 type Preview = "home" | "revision" | "existing" | "alternatives" | "compare";
@@ -31,7 +32,8 @@ const TUTORIAL_CARDS: TutorialCard[] = [
     description: "Capture a meaningful design state and find your CAD files again.",
     preview: "revision",
     category: "primary",
-    status: "coming-soon",
+    status: "available",
+    tutorial: SAVE_FIRST_REVISION_TUTORIAL,
   },
   {
     id: "existing-work",

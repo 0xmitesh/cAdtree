@@ -110,7 +110,7 @@ export function TutorialViewerModal({
                 <figcaption className="tutorial-visual-caption">
                   <span>{visual.caption}</span>
                   <span className="tutorial-visual-source">
-                    {visual.kind === "os" ? "Windows" : "cAdtree"}
+                    {visual.kind === "os" ? "Windows" : visual.kind === "concept" ? "Concept" : "cAdtree"}
                   </span>
                 </figcaption>
                 <div className="tutorial-visual-frame">
