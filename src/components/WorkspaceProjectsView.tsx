@@ -67,7 +67,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
   return (
     <div className="page projects-page">
       <button
-        className="text-button"
+        className="text-button workspace-return"
         disabled={busy}
         onClick={props.onAllWorkspaces}
       >

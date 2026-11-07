@@ -88,6 +88,7 @@ import { importReferenceAttachment, updateProjectReference, retrieveReferenceAtt
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ActiveBranchPicker } from "./components/ActiveBranchPicker";
 import { ProjectLearningModal } from "./components/ProjectLearningModal";
+import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
 import {
   SidebarResizeHandle,
   useSidebarWidth,
@@ -555,11 +556,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       requestSignIn({ kind: "my-workspaces" });
       return;
     }
-    leaveProject();
-    setWorkspace(null);
     setHomeView(true);
     setIntroView(false);
-    setManagedWorkspaceKey(null);
+    setLearningOpen(false);
+    setExplorerOpen(false);
   };
   const installHome = async (
     next: HomeState,
@@ -1973,6 +1973,60 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       : undefined;
   const projectView =
     !homeView && activeTab !== "connect" && Boolean(vaultState && vaultDir);
+  const view: AppView = homeView
+    ? introView || !home ? { view: "intro" } : { view: "workspaces", homeId: home.identity.homeId }
+    : workspace ? {
+        homeId: home?.identity.homeId,
+        workspaceId: workspace.identity.workspaceId,
+        workspaceKey: managedWorkspaceKey,
+        ...(projectView && managedProject && vaultState
+          ? { view: "project", projectId: vaultState.project.projectId, projectPath: managedProject.record.containerPath, tab: activeTab as ProjectView }
+          : { view: "workspace" }),
+      } : { view: "intro" };
+  useViewHistory({
+    view,
+    scope: authState.user?.uid ?? "signed-out",
+    ready: authState.ready,
+    busy,
+    onVisit: async (target) => {
+      if (operationRef.current || pendingSignOutRef.current) return false;
+      const uid = authStateRef.current.user?.uid;
+      setLearningOpen(false);
+      setExplorerOpen(false);
+      if (target.view === "intro") {
+        setHomeView(true);
+        setIntroView(true);
+        return true;
+      }
+      if (!uid || target.homeId !== home?.identity.homeId) return false;
+      if (target.view === "workspaces") { allWorkspaces(); return true; }
+      const sameWorkspace = target.workspaceId === workspace?.identity.workspaceId && target.workspaceKey === managedWorkspaceKey;
+      if (target.view === "workspace" && sameWorkspace) {
+        setHomeView(false);
+        setActiveTab("connect");
+        return true;
+      }
+      if (target.view === "project" && sameWorkspace && target.projectId === managedProject?.record.projectId && target.projectPath === managedProject?.record.containerPath && vaultState) {
+        setHomeView(false);
+        setActiveTab(target.tab);
+        return true;
+      }
+      const entry = home?.workspaces.find(e => e.key === target.workspaceKey && e.workspaceId === target.workspaceId);
+      if (target.view === "workspace") {
+        if (!entry?.workspace) return false;
+        await openHomeEntry(entry);
+      } else {
+        const available = entry?.workspace ?? (sameWorkspace ? workspace : null);
+        const project = available?.projects.find(p => p.projectId === target.projectId && p.containerPath === target.projectPath);
+        if (!project?.project || project.status === "duplicate") return false;
+        // Reopen other project locations through existing permission and identity validation.
+        await openTreeProject(entry, project);
+        if (authStateRef.current.user?.uid !== uid) return false;
+        setActiveTab(target.tab);
+      }
+      return authStateRef.current.user?.uid === uid;
+    },
+  });
   const homeEntry = home?.workspaces.find(
     (e) =>
       e.key === managedWorkspaceKey &&
@@ -1998,21 +2052,17 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const treeProps: WorkspaceTreeProps = {
     home,
-    workspace,
-    managedWorkspaceKey,
+    workspace: homeView ? null : workspace,
+    managedWorkspaceKey: homeView ? null : managedWorkspaceKey,
     projectPath: managedProject?.record.containerPath,
     activeVault: vaultState,
     activeBranchId,
     projectView,
     busy,
-    onHome: () => {
-      allWorkspaces();
-      setExplorerOpen(false);
-    },
     onWorkspace: async (entry) => {
       if (entry && entry.key !== managedWorkspaceKey)
         await openHomeEntry(entry);
-      else navigate("connect");
+      else { setHomeView(false); navigate("connect"); }
       setExplorerOpen(false);
     },
     onProject: async (entry, project, branch) => {
@@ -2032,21 +2082,22 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     >
       <div className="app-shell" style={sidebar.style}>
         <aside className="navigation-rail">
-          <a
+          <button
+            type="button"
             className="wordmark"
             aria-label="cAdtree introduction"
             aria-current={homeView && (introView || !home) ? "page" : undefined}
-            href="#intro"
-            onClick={(e) => {
-              e.preventDefault();
+            disabled={busy}
+            onClick={() => {
               if (operationRef.current) return;
               if (!authStateRef.current.user) {
                 setHomeView(true);
                 setIntroView(true);
                 return;
               }
-              allWorkspaces();
+              setHomeView(true);
               setIntroView(true);
+              setLearningOpen(false);
             }}
           >
             <svg
@@ -2068,7 +2119,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             <span>
               cAdtree<span className="wordmark-dot">.</span>
             </span>
-          </a>
+          </button>
           <p className="rail-caption">CREATE. ADAPT. DEFINE.</p>
           <nav aria-label="Primary navigation" className="rail-navigation">
             <button
@@ -2305,7 +2356,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               />
             ) : null}
             {vaultState && vaultDir ? (
-              <div key={`${vaultState.project.projectId}:${projectSession}`}>
+              <div hidden={!projectView} key={`${vaultState.project.projectId}:${projectSession}`}>
                 <ApplicationStatus
                   key={`${vaultState.project.projectId}:${activeBranchId}`}
                   state={vaultState}
