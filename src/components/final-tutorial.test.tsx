@@ -40,7 +40,7 @@ test("The final tutorial never compares, applies, recovers, switches or archives
   await waitFor(() => assert.equal(appBusy(ui), false));
   await selectBranch(ui, s.caseId);
   assert.equal(currentBranchId(ui), s.caseId);
-  fireEvent.click(ui.getByRole("link", { name: "cAdtree introduction" }));
+  fireEvent.click(ui.getByRole("button", { name: "cAdtree introduction" }));
   const before = inventorySignature(await readVerifiedInventory(s.home));
   const beforeState = (await resolveManagedProject(s.workspace.root, s.project.record.containerPath)).vaultState;
   const trigger = within(ui.getByRole("article", { name: tutorial.title })).getByRole("button", { name: "Start tutorial" });

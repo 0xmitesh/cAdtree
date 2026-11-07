@@ -73,7 +73,39 @@ async function start(){const s=await compareApplyRecoverSample();await s.caseFol
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
       assert.equal(await page.getByRole('textbox',{name:'Revision summary'}).inputValue(),'Keep pending notes');
       assert.equal(await page.getByRole('textbox',{name:'Overall: problem',exact:true}).inputValue(),'Keep intent');
+      // Main-view history is separate from dialogs and retains the loaded project.
+      const logo=page.getByRole('button',{name:'cAdtree introduction',exact:true});
+      assert.equal(await logo.getAttribute('href'),null);
+      const changes=page.getByRole('heading',{name:'Changes.',exact:true});
+      await logo.focus();await page.keyboard.press('Enter');
+      await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();
+      await page.goBack();await changes.waitFor();
+      assert.equal(await page.getByRole('textbox',{name:'Revision summary'}).inputValue(),'Keep pending notes');
+      assert.equal(await page.getByRole('textbox',{name:'Overall: problem',exact:true}).inputValue(),'Keep intent');
+      await page.goForward();await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();
+      await nav.getByRole('button',{name:'My workspaces',exact:true}).click();
+      await page.getByRole('button',{name:'Open workspace',exact:true}).click();
+      await page.getByRole('heading',{name:'Tutorial Workspace.',exact:true}).waitFor();
+      assert.equal(await page.getByRole('button',{name:'Back to My workspaces',exact:true}).isVisible(),viewport.width<=960);
+      if(viewport.width<=960)await nav.getByRole('button',{name:'Browse folders',exact:true}).click();
+      const tree=viewport.width<=960?page.getByRole('dialog',{name:'Browse folders'}):page.locator('.desktop-workspace-tree');
+      const rootNode=tree.getByRole('treeitem',{name:'Cadtree home',exact:true});
+      const expanded=await rootNode.getAttribute('aria-expanded');await rootNode.click();
+      assert.notEqual(await rootNode.getAttribute('aria-expanded'),expanded);
+      await rootNode.press('Enter');assert.equal(await rootNode.getAttribute('aria-expanded'),expanded);
+      if(viewport.width<=960)await tree.getByRole('button',{name:'Close dialog',exact:true}).click();
+      assert.equal(await page.getByRole('heading',{name:'Tutorial Workspace.',exact:true}).isVisible(),true);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+      await page.screenshot({path:path.join(artifacts,`workspace-navigation-${viewport.width}.png`)});
+      if(viewport.width<=960)await page.getByRole('button',{name:'Back to My workspaces',exact:true}).click();
+      else await nav.getByRole('button',{name:'My workspaces',exact:true}).click();
+      await page.getByRole('heading',{name:'My workspaces.',exact:true}).waitFor();
+      await page.goBack();await page.getByRole('heading',{name:'Tutorial Workspace.',exact:true}).waitFor();
       assert.equal(await page.evaluate(()=>window.sample.signature()),before);assert.equal(await page.evaluate(()=>window.sample.picks()),1);assert.deepEqual(errors,[]);
+      // Reload cannot restore the old page's in-memory handles through Back.
+      await page.reload();await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();
+      await page.goBack();await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();
+      assert.equal(await page.evaluate(()=>window.sample.picks()),0);
       results.push({...viewport,offlineAuthGuard:offline,projectPreserved:true,errors});await page.close();
     }
     fs.writeFileSync(path.join(artifacts,'verification.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results));

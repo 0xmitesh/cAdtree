@@ -34,7 +34,7 @@ test("Tutorial 2 uses the shared gated carousel without changing the connected p
   await openHomeWorkspace(ui, root);
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await waitFor(() => assert.equal(appBusy(ui), false));
-  fireEvent.click(ui.getByRole("link", { name: "cAdtree introduction" }));
+  fireEvent.click(ui.getByRole("button", { name: "cAdtree introduction" }));
   const before = inventorySignature(await readVerifiedInventory(root));
   const card = within(ui.getByRole("article", { name: "Save your first revision" }));
   fireEvent.click(card.getByRole("button", { name: "Start tutorial" }));

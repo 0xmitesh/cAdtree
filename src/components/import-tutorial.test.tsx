@@ -36,7 +36,7 @@ test("Tutorial 3 opens from Learn and its gated carousel cannot import or modify
   await openHomeWorkspace(ui, root);
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await waitFor(() => assert.equal(appBusy(ui), false));
-  fireEvent.click(ui.getByRole("link", { name: "cAdtree introduction" }));
+  fireEvent.click(ui.getByRole("button", { name: "cAdtree introduction" }));
   const inventories = () => Promise.all([root, sourceWorkspace, sourceProject].map(async dir => inventorySignature(await readVerifiedInventory(dir))));
   const before = await inventories();
   const card = within(ui.getByRole("article", { name: tutorial.title }));

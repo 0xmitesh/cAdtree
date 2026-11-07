@@ -164,7 +164,7 @@ for (const width of [1366, 390]) {
     ).toBeEnabled();
     await expect(page.getByText("Home options", { exact: true })).toBeVisible();
     await expect(title).toHaveCount(0);
-    const logo = page.getByRole("link", {
+    const logo = page.getByRole("button", {
       name: "cAdtree introduction",
       exact: true,
     });

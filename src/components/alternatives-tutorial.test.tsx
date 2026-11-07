@@ -35,7 +35,7 @@ test("Tutorial 4's full gated walkthrough leaves an active case, uncaptured edit
   await waitFor(() => assert.equal(appBusy(ui), false));
   await selectBranch(ui, branchId);
   assert.equal(currentBranchId(ui), branchId);
-  fireEvent.click(ui.getByRole("link", { name: "cAdtree introduction" }));
+  fireEvent.click(ui.getByRole("button", { name: "cAdtree introduction" }));
   const before = inventorySignature(await readVerifiedInventory(sample.home));
   const trigger = within(ui.getByRole("article", { name: tutorial.title })).getByRole("button", { name: "Start tutorial" });
   trigger.focus();

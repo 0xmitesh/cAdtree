@@ -35,7 +35,6 @@ export interface WorkspaceTreeProps {
   activeBranchId: string;
   projectView: boolean;
   busy: boolean;
-  onHome: () => void;
   onWorkspace: (entry?: HomeWorkspaceEntry) => Promise<void> | void;
   onProject: (
     workspace: HomeWorkspaceEntry | undefined,
@@ -49,7 +48,7 @@ interface TreeNode {
   accessibleLabel?: string;
   kind: "home" | "workspace" | "project" | "branch";
   children: TreeNode[];
-  open: () => Promise<void> | void;
+  open?: () => Promise<void> | void;
   unavailable?: boolean;
   issue?: string;
   count?: number;
@@ -163,7 +162,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       label: "Cadtree home",
       kind: "home",
       children: workspaces,
-      open: props.onHome,
     },
   ];
   if (props.workspace && !props.managedWorkspaceKey)
@@ -218,7 +216,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   const open = (node: TreeNode) => {
     if (props.busy || node.unavailable || node.readOnly) return;
     focus(node.key);
-    void Promise.resolve(node.open()).catch(() => {
+    if (node.kind === "home") { toggle(node); return; }
+    void Promise.resolve(node.open?.()).catch(() => {
       /* App surfaces connection errors. */
     });
   };
