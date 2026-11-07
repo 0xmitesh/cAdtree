@@ -166,7 +166,7 @@ for (const width of [1366, 390])
     await expect(dialog).toHaveCount(0);
     await expect(compare).toBeFocused();
     await expect(
-      page.getByRole("status", { name: "Current branch", exact: true }),
+      page.getByRole("region", { name: "Project context", exact: true }),
     ).toHaveAttribute("data-branch-id", "branch-main");
     const calls = await page.evaluate(async () => {
       const url = "/tests/case-activity-fixture.ts";
@@ -181,7 +181,7 @@ for (const width of [1366, 390])
       "Redesign only Part-X",
     );
     await expect(
-      page.getByRole("status", { name: "Current branch" }),
+      page.getByRole("region", { name: "Project context" }),
     ).toHaveAttribute("data-branch-id", "branch-main");
     await nav.getByRole("button", { name: "Changes", exact: true }).click();
     await expect(summary).toHaveValue(

@@ -134,7 +134,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   picker.queue.push(nativeDirectory(root));
   let ui = render(<App />);
   assert.equal(ui.queryByRole("button", { name: "History" }), null);
-  assert.equal(ui.queryByRole("combobox", { name: "Active branch" }), null);
+  assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
   fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
   await completeHomeAddress(ui);
   await ready(ui, "Create workspace");
@@ -162,7 +162,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   assert.equal(picker.calls(), 1);
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 3);
   assert.equal(ui.queryByRole("button", { name: "History" }), null);
-  assert.equal(ui.queryByRole("combobox", { name: "Active branch" }), null);
+  assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
   cleanup();
   await clearAllConvenienceMetadata();
   picker.queue.push(nativeDirectory(root));
@@ -462,7 +462,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   const camFolder = tree.getByRole("treeitem", { name: "cam 2" });
   fireEvent.click(tree.getByRole("button", { name: "Expand cam 2" }));
   assert.equal(camFolder.getAttribute("aria-expanded"), "true");
-  assert.equal(ui.queryByRole("combobox", { name: "Active branch" }), null);
+  assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
   fireEvent.click(tree.getByRole("treeitem", { name: "Actuator, cam 2" }));
   await idle(ui);
   assert.ok(

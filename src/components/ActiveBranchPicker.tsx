@@ -14,9 +14,9 @@ export function ActiveBranchPicker({
 }) {
   return (
     <label className="branch-picker project-branch-picker">
-      <span>Active branch</span>
+      <span>Working case</span>
       <select
-        aria-label="Active branch"
+        aria-label="Working case"
         value={activeBranchId}
         disabled={busy}
         onChange={(event) => {

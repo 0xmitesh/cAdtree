@@ -252,12 +252,6 @@ test("unavailable shared ancestry stays explicit while ordinary Compare keeps it
     ui.getByRole("button", { name: /Rev 008:/ }).getAttribute("aria-pressed"),
     "true",
   );
-  assert.equal(
-    ui
-      .getByRole("status", { name: "Current branch" })
-      .getAttribute("data-branch-id"),
-    "branch-main",
-  );
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   fireEvent.change(ui.getByRole("combobox", { name: "From revision" }), {
     target: { value: "r6" },

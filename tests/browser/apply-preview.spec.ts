@@ -32,7 +32,7 @@ test("actual App: read-only application preview retains Main's 20 files and requ
     })
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-  const current = page.getByRole("status", { name: "Current branch" });
+  const current = page.getByRole("region", { name: "Project context" });
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
   await page
     .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })

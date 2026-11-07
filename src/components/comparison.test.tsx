@@ -94,12 +94,6 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
     ).checked,
     true,
   );
-  assert.equal(
-    ui
-      .getByRole("status", { name: "Current branch" })
-      .getAttribute("data-branch-id"),
-    "branch-main",
-  );
   assert.equal(JSON.stringify(state), before);
 });
 test("file-scoped comparison expands to all files, labels endpoint notes and branch names, and explains absence in both endpoints", () => {
@@ -158,12 +152,6 @@ test("file-scoped comparison expands to all files, labels endpoint notes and bra
     dialog
       .getByRole("combobox", { name: "To revision" })
       .textContent?.includes("Prototype"),
-  );
-  assert.equal(
-    ui
-      .getByRole("status", { name: "Current branch" })
-      .getAttribute("data-branch-id"),
-    "branch-main",
   );
 });
 test("initial or unavailable parent asks for a baseline; corrupt, missing and ambiguous endpoint evidence never shows zero counts", () => {

@@ -75,7 +75,7 @@ export const SAVE_FIRST_REVISION_TUTORIAL: TutorialDefinition = {
       visuals: [
         {
           src: "/tutorials/save-first-revision/step-4-scan.png",
-          alt: "Real Bracket Assembly Changes heading with Active branch Main and the Scan for changes button highlighted.",
+          alt: "Real Bracket Assembly project header with Working case Main above Changes and the Scan for changes button highlighted.",
           caption: "1. Click Scan for changes to refresh the list from your saved files.",
           kind: "cadtree",
         },

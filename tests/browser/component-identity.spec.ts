@@ -48,7 +48,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('Confirmed rename: parts/caliper.SLDPRT → parts/cliper.SLDPRT')).toBeVisible();
   await page.getByRole('button', { name: /^Rev 001: Original component/ }).click();
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('parts/caliper.SLDPRT', { exact: true })).toBeVisible();
-  await expect(page.getByRole('status', { name: 'Current branch' })).toHaveAttribute('data-branch-id', 'branch-main');
+  await expect(page.getByRole("region", { name: "Project context" })).toHaveAttribute('data-branch-id', 'branch-main');
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('Initial design', { exact: true })).toBeVisible();
   await page.screenshot({ path: `artifacts/screenshots/component-history-${width}.png`, fullPage: true });
   await page.getByRole('navigation').getByRole('button', { name: 'Changes', exact: true }).click();

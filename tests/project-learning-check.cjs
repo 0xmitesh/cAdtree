@@ -28,7 +28,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
   const browser=await chromium.launch({channel:'chrome',headless:true});
   const results=[];
   try {
-    for(const viewport of [{width:1366,height:900},{width:390,height:844}]){
+    for(const viewport of [{width:1366,height:900},{width:1100,height:1244},{width:390,height:844}]){
       const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(e.message));
       await page.goto(pathToFileURL(html).href);
       await page.getByRole('button',{name:'Open my Cadtree home',exact:true}).click();
@@ -38,7 +38,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:'Open project',exact:true}).click();
       const nav=page.getByRole('navigation',{name:'Primary navigation'});
       await nav.getByRole('button',{name:'Settings',exact:true}).click();
-      await page.getByRole('combobox',{name:'Active branch',exact:true}).selectOption(await page.evaluate(()=>window.sample.caseId));
+      await page.getByRole('combobox',{name:'Working case',exact:true}).selectOption(await page.evaluate(()=>window.sample.caseId));
       await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
       await page.getByRole('button',{name:'Scan for changes',exact:true}).click();
@@ -49,6 +49,19 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:/Rev 004: Reduced bracket thickness/}).click();
       const before=await page.evaluate(()=>window.sample.signature());
       const selected=await page.locator('.revision-detail').innerText();
+      // R5: one stable working destination across project views, distinct from inspection.
+      const working=page.getByRole('combobox',{name:'Working case',exact:true});
+      const workingNode=await working.elementHandle();
+      for(const view of ['Changes','References','Settings','History']) {
+        await nav.getByRole('button',{name:view,exact:true}).click();
+        assert.equal(await working.evaluate((el,node)=>el===node,workingNode),true);
+        assert.equal(await page.locator('select[aria-label="Working case"]').count(),1);
+        assert.equal(await working.inputValue(),await page.evaluate(()=>window.sample.caseId));
+        assert.equal(await page.getByRole('region',{name:'Project context',exact:true}).isVisible(),true);
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+        await page.screenshot({path:path.join(artifacts,`working-case-${view.toLowerCase()}-${viewport.width}.png`)});
+      }
+      assert.equal(await page.locator('.revision-detail').innerText(),selected);
       const learn=nav.getByRole('button',{name:'Learn cAdtree',exact:true});await learn.focus();await learn.press('Enter');
       const chooser=page.getByRole('dialog',{name:'Learn cAdtree',exact:true});assert.equal(await chooser.getByRole('article').count(),5);
       await page.screenshot({path:path.join(artifacts,`chooser-${viewport.width}.png`)});
@@ -69,7 +82,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await viewer.waitFor({state:'hidden'});assert.equal(await start.evaluate(e=>document.activeElement===e),true);
       await page.keyboard.press('Escape');await chooser.waitFor({state:'hidden'});assert.equal(await learn.evaluate(e=>document.activeElement===e),true);
       assert.equal(await page.locator('.revision-detail').innerText(),selected);
-      assert.equal(await page.locator('.current-branch-indicator').getAttribute('data-branch-id'),await page.evaluate(()=>window.sample.caseId));
+      assert.equal(await page.locator('.project-context-header').getAttribute('data-branch-id'),await page.evaluate(()=>window.sample.caseId));
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
       assert.equal(await page.getByRole('textbox',{name:'Revision summary'}).inputValue(),'Keep pending notes');
       assert.equal(await page.getByRole('textbox',{name:'Overall: problem',exact:true}).inputValue(),'Keep intent');
@@ -106,7 +119,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:'Open project',exact:true}).click();
       await page.evaluate(()=>window.sample.cleanCase());
       await nav.getByRole('button',{name:'Settings',exact:true}).click();
-      await page.getByRole('combobox',{name:'Active branch',exact:true}).selectOption('branch-main');
+      await page.getByRole('combobox',{name:'Working case',exact:true}).selectOption('branch-main');
       await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
       await nav.getByRole('button',{name:'History',exact:true}).click();
       await page.getByRole('heading',{name:'History.',exact:true}).waitFor();
@@ -138,7 +151,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await confirmation.getByRole('button',{name:'Reopen case',exact:true}).click();await confirmation.waitFor({state:'hidden'});
       assert.deepEqual(await page.evaluate(()=>window.sample.state()),{revisions:6,lifecycle:'active'});
       assert.deepEqual(await page.evaluate(()=>window.sample.working()),workingBefore);
-      assert.equal(await page.getByRole('status',{name:'Current branch',exact:true}).getAttribute('data-branch-id'),'branch-main');
+      assert.equal(await page.getByRole("region", { name: "Project context",exact:true}).getAttribute('data-branch-id'),'branch-main');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);
       // Reload cannot restore the old page's in-memory handles through Back.
       await page.reload();await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();

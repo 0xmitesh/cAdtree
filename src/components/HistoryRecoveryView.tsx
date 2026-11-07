@@ -265,23 +265,11 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     <div className="page history-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{vaultState.project.name}</p>
           <h1>
             History<span className="heading-dot">.</span>
           </h1>
           <div className="history-description">
             <span>A clear view of how your design evolved.</span>
-            <span
-              className="current-branch-indicator"
-              role="status"
-              aria-label="Current branch"
-              data-branch-id={activeBranchId}
-              title={caseLabel(vaultState, activeBranchId)}
-            >
-              <GitBranch size={13} aria-hidden="true" />
-              <span>Current branch</span>
-              <strong>{caseLabel(vaultState, activeBranchId)}</strong>
-            </span>
             <label className="history-file-picker">
               <span>File history</span>
               <select

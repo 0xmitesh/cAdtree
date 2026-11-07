@@ -2593,11 +2593,34 @@ input::placeholder {
   gap: 12px;
   min-width: 0;
 }
+.project-context-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 0;
+}
+.project-context-header ~ div > .page {
+  padding-top: 18px;
+}
+.project-context-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 13px;
+}
+.project-context-header .project-branch-picker {
+  min-width: 0;
+  max-width: 100%;
+}
+.project-context-header select {
+  min-height: 40px;
+}
 .changes-page .project-heading-controls {
   align-items: flex-end;
 }
-.changes-page .project-heading-controls > .button,
-.changes-page .project-branch-picker select {
+.changes-page .project-heading-controls > .button {
   min-height: 40px;
 }
 .page-heading {
@@ -2672,7 +2695,7 @@ input::placeholder {
 }
 .history-page .project-heading-controls {
   align-self: start;
-  margin-top: 28px;
+  margin-top: 0;
 }
 .history-description {
   display: flex;
@@ -2745,34 +2768,6 @@ input::placeholder {
 }
 .history-canvas [data-file-history-kind="context"] .revision-eyebrow {
   font-style: italic;
-}
-.current-branch-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 8px;
-  border: 1px solid #d5e5df;
-  border-radius: 5px;
-  background: #eef5f1;
-  color: #54736c;
-  font-size: 12px;
-}
-.current-branch-indicator > svg,
-.current-branch-indicator > span {
-  flex-shrink: 0;
-}
-.history-page .current-branch-indicator {
-  max-width: min(260px, 100%);
-  min-height: 32px;
-}
-.current-branch-indicator strong {
-  color: #226a64;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
 }
 @media (max-width: 700px) {
   .history-page > .page-heading {

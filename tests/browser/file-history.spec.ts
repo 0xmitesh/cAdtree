@@ -32,7 +32,7 @@ test("actual App: file history follows parents across branches, retains deleted 
     })
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-  const current = page.getByRole("status", { name: "Current branch" });
+  const current = page.getByRole("region", { name: "Project context" });
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
   const file = page.getByRole("combobox", {
     name: "File history",

@@ -75,7 +75,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
         },
         {
           src: "/tutorials/explore-design-alternatives/step-4-case-location.png",
-          alt: "Real Settings shows Active branch Lightweight bracket and Working folder ending in working slash the uniquely generated cAdtree-Lightweight-bracket folder.",
+          alt: "Real shared project header shows Working case Lightweight bracket; Settings shows Working folder ending in working slash the uniquely generated cAdtree-Lightweight-bracket folder.",
           caption: "1. In Settings, check Working folder for the active case's exact location.",
           kind: "cadtree",
         },
@@ -90,28 +90,28 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
     {
       id: "switch-directions",
       title: "Switch between design directions",
-      summary: "In Settings or Changes, use Active branch to choose Main or Lightweight bracket. Check the selected name before working.",
+      summary: "Use Working case above History, Changes, References or Settings to choose Main or Lightweight bracket. Check the selected name before working.",
       points: [
-        "cAdtree scans and saves from the selected direction's working folder. In History, Current branch identifies that direction; selecting an old revision does not change it.",
+        "cAdtree scans and saves from the selected case's working folder. The shared selector stays visible across project views; inspecting an old revision does not change the working case.",
         "Switch back to Main with the same selector. Each direction keeps its own files; switching does not replace the other folder's contents.",
       ],
       note: "Save and close CAD documents before moving to the other working location, then open its files manually. cAdtree does not launch CAD or change which documents CAD has open.",
       visuals: [
         {
           src: "/tutorials/explore-design-alternatives/step-5-main-active.png",
-          alt: "Real Bracket Assembly Settings shows Main selected in Active branch and its Working folder ending in working/main.",
+          alt: "Real Bracket Assembly shared project header shows Main selected in Working case; Settings shows its Working folder ending in working/main.",
           caption: "1. Main is active; Working folder identifies Main's files.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/explore-design-alternatives/step-5-case-active.png",
-          alt: "Real Settings after selecting Lightweight bracket in Active branch shows the case selected and its separate generated Working folder.",
-          caption: "2. Choose Lightweight bracket in Active branch to work on the alternative.",
+          alt: "Real shared Working case selector has Lightweight bracket selected; Settings shows its separate generated Working folder.",
+          caption: "2. Choose Lightweight bracket in Working case to work on the alternative.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/explore-design-alternatives/step-5-case-origin.png",
-          alt: "Real History shows Current branch Lightweight bracket, Started from Rev 003 on Main and the case's engineering reason.",
+          alt: "Real shared header shows Working case Lightweight bracket above History, Started from Rev 003 on Main and the case's engineering reason.",
           caption: "3. History confirms the current case and the saved revision it started from.",
           kind: "cadtree",
         },

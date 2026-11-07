@@ -61,7 +61,7 @@ for (const width of [1366, 390])
         await page.locator('.history-design-cases > summary').click();
     };
     const select = page.getByRole("combobox", {
-      name: "Active branch",
+      name: "Working case",
       exact: true,
     });
     const archiveButton = page.getByRole("button", {
@@ -164,10 +164,10 @@ for (const width of [1366, 390])
         .getByRole("button", { name: "Reopen case", exact: true })
         .click();
       await expect(modal).toHaveCount(0);
-      await expect(page.getByRole('status', {name: 'Current branch'})).toHaveAttribute('data-branch-id', 'branch-main');
+      await expect(page.getByRole("region", { name: "Project context"})).toHaveAttribute('data-branch-id', 'branch-main');
     };
     await archive();
-    await expect(page.getByRole('status', {name: 'Current branch'})).toHaveAttribute('data-branch-id', 'branch-main');
+    await expect(page.getByRole("region", { name: "Project context"})).toHaveAttribute('data-branch-id', 'branch-main');
     await expect(
       page.locator(`.settings-page option[value="${fixture.safeCaseId}"]`),
     ).toHaveCount(0);
@@ -274,7 +274,7 @@ for (const width of [1366, 390])
     ).toContainText("Part-X redesign · Archived");
     await page.keyboard.press("Escape");
     await expect(
-      page.getByRole("status", { name: "Current branch" }),
+      page.getByRole("region", { name: "Project context" }),
     ).toHaveAttribute("data-branch-id", "branch-main");
     await page.reload();
     await page

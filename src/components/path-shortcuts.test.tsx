@@ -400,7 +400,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   });
   assert.ok(ui.getByRole("heading", { name: "Engineering workspace." }));
   assert.ok(ui.getByRole("heading", { name: "Cam assembly" }));
-  assert.ok(ui.queryByRole("combobox", { name: "Active branch" }) === null);
+  assert.ok(ui.queryByRole("combobox", { name: "Working case" }) === null);
   assert.ok(ui.container.querySelector(".workspace-folder-bar") === null);
   assert.equal(
     ui.container
@@ -414,7 +414,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   await idle(ui);
   assert.equal(ui.container.querySelector(".workspace-header"), null);
   assert.match(
-    ui.container.querySelector(".history-page .eyebrow")!.textContent!,
+    ui.container.querySelector(".project-context-name")!.textContent!,
     /Cam assembly/,
   );
   nav(ui, "Settings");
@@ -500,7 +500,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   fireEvent.click(
     ui.getByRole("treeitem", { name: "Engineering workspace" }),
   );
-  assert.ok(ui.queryByRole("combobox", { name: "Active branch" }) === null);
+  assert.ok(ui.queryByRole("combobox", { name: "Working case" }) === null);
   assert.ok(ui.container.querySelector(".workspace-folder-bar") === null);
   assert.ok(ui.queryByText(/Opened managed location/) === null);
   assert.ok(ui.getByRole("heading", { name: "Engineering workspace." }));

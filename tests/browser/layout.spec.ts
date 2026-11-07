@@ -35,11 +35,11 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     })
     .click();
-  const active = page.getByRole("combobox", { name: "Active branch" });
-  const current = page.getByRole("status", { name: "Current branch" });
+  const active = page.getByRole("combobox", { name: "Working case" });
+  const current = page.getByRole("region", { name: "Project context" });
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-  await expect(active).toHaveCount(0);
-  await expect(current).toHaveText(/Current branchMain/);
+  await expect(active).toHaveCount(1);
+  await expect(active).toHaveValue("branch-main");
   const historyModes = page.locator(".history-page .project-heading-controls");
   const modesBeforeBranchSwitch = (await historyModes.boundingBox())!;
   const filePicker = page.getByRole("combobox", {
@@ -49,7 +49,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   expect((await filePicker.boundingBox())!.width).toBeLessThanOrEqual(180);
   await expect(filePicker).toHaveCSS("border-top-style", "solid");
   await expect(filePicker).toHaveCSS("border-top-width", "1px");
-  await expect(page.locator(".history-page .eyebrow")).toHaveText(
+  await expect(page.locator(".project-context-name")).toHaveText(
     "Camera Mount",
   );
   await expect(
@@ -63,7 +63,8 @@ test("current App: compact headings, branch context, bounded resizing and mobile
     name: "Revision graph",
     exact: true,
   });
-  expect((await graph.boundingBox())!.y).toBeLessThan(220);
+  const contextBox = (await current.boundingBox())!;
+  expect((await graph.boundingBox())!.y - contextBox.y - contextBox.height).toBeLessThan(220);
   const paneAfter = await page.locator(".desktop-workspace-tree").boundingBox();
   expect(paneAfter!.y).toEqual(paneBefore!.y);
   expect(paneAfter!.height).toEqual(paneBefore!.height);
@@ -135,7 +136,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   const modesAfterBranchSwitch = (await historyModes.boundingBox())!;
   expect(modesAfterBranchSwitch.y).toBe(modesBeforeBranchSwitch.y);
   expect(modesAfterBranchSwitch.x).toBe(modesBeforeBranchSwitch.x);
-  await expect(current).toHaveAttribute("title", "Lightweight concept");
+  await expect(active.locator("option:checked")).toHaveText("Lightweight concept");
   await tree
     .getByRole("treeitem", {
       name: "Main, Camera Mount, Personal SolidWorks",

@@ -140,7 +140,7 @@ start().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);
     assert.deepEqual(recovered[0].inventory.directories, initial.revisions.find(r => r.number === 3).directories);
     assert.equal(await page.evaluate(() => window.tutorialSample.signature(window.tutorialSample.main)), beforeRecovery);
     await nav.getByRole('button', { name: 'History', exact: true }).click();
-    assert.equal(await page.getByRole('status', { name: 'Current branch', exact: true }).getAttribute('data-branch-id'), 'branch-main');
+    assert.equal(await page.getByRole("region", { name: "Project context", exact: true }).getAttribute('data-branch-id'), 'branch-main');
     await page.locator('.history-design-cases > summary').click();
     const archive = page.getByRole('button', { name: 'Archive case Lightweight bracket', exact: true });
     await focus(archive); await capture(page.locator('.design-cases'), 'step-7-archive-action');
