@@ -1527,7 +1527,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             applyVaultState(result.state);
             setStatusBanner({
               type: "success",
-              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in Settings → Design cases or Show archived cases in Explorer." : "The working branch has not been switched."} ${result.warning ?? ""}`,
+              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in History → Design cases or Show archived cases in Explorer." : "The working branch has not been switched."} ${result.warning ?? ""}`,
             });
           }
         } finally {
@@ -2448,6 +2448,16 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 </div>
                 <div hidden={activeTab !== "history"}>
                   <HistoryRecoveryView
+                    caseControls={
+                      <DesignCases
+                        state={vaultState}
+                        activeBranchId={activeBranchId}
+                        busy={busy}
+                        progress={progress}
+                        onCancel={handleCancelOperation}
+                        onChange={handleCaseLifecycle}
+                      />
+                    }
                     onRetrieveReference={handleRetrieveReference}
                     application={{
                       prepare: handlePrepareApplication,
@@ -2553,16 +2563,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 </div>
                 <div hidden={activeTab !== "diagnostics"}>
                   <DiagnosticsView
-                    caseControls={
-                      <DesignCases
-                        state={vaultState}
-                        activeBranchId={activeBranchId}
-                        busy={busy}
-                        progress={progress}
-                        onCancel={handleCancelOperation}
-                        onChange={handleCaseLifecycle}
-                      />
-                    }
                     branchControl={
                       <ActiveBranchPicker
                         state={vaultState}

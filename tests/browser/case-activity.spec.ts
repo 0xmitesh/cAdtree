@@ -88,7 +88,7 @@ for (const width of [1366, 390])
       const url = "/tests/case-activity-fixture.ts";
       (await import(/* @vite-ignore */ url)).observeCaseActivityStorage();
     });
-    await nav.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator('.history-design-cases > summary').click();
     const cases = page.getByRole("region", {
       name: "Design cases",
       exact: true,
@@ -166,8 +166,8 @@ for (const width of [1366, 390])
     await expect(dialog).toHaveCount(0);
     await expect(compare).toBeFocused();
     await expect(
-      page.getByRole("combobox", { name: "Active branch", exact: true }),
-    ).toHaveValue("branch-main");
+      page.getByRole("status", { name: "Current branch", exact: true }),
+    ).toHaveAttribute("data-branch-id", "branch-main");
     const calls = await page.evaluate(async () => {
       const url = "/tests/case-activity-fixture.ts";
       return (

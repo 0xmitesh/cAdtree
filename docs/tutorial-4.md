@@ -1,5 +1,7 @@
 # Tutorial 4 — Explore design alternatives
 
+R4 update: Design cases now lives in History; affected archive guidance and screenshots were refreshed. Original implementation/validation history below is retained.
+
 Implemented against merged main a4f1fc91e1230af026cd54cbcfd0c3d2f6269f76 (PR #25). Only Tutorial 4 is enabled. No Tutorial 5 implementation.
 
 ## 1. Final step structure
@@ -101,7 +103,7 @@ Continue saving meaningful revisions in whichever design direction you are worki
 
 - The case's first changed save follows Rev 003. In this example, Lightweight bracket gets Rev 004 and Rev 005; Main later gets Rev 006 with Rev 003 as its parent. Numbers run across the whole project, not from one on each case.
 - Both histories keep their connection to the starting revision. Do not delete a useful alternative just because it did not become Main.
-- Finished alternatives can be archived in Settings → Design cases while preserving their working folder and saved history. Main cannot be archived.
+- Finished alternatives can be archived in History → Design cases while preserving their working folder and saved history. Main cannot be archived.
 
 Visual 1 (Concept): **Separate histories share an origin; revision numbers belong to the whole project.**
 

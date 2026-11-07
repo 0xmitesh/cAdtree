@@ -2593,6 +2593,13 @@ input::placeholder {
   gap: 12px;
   min-width: 0;
 }
+.changes-page .project-heading-controls {
+  align-items: flex-end;
+}
+.changes-page .project-heading-controls > .button,
+.changes-page .project-branch-picker select {
+  min-height: 40px;
+}
 .page-heading {
   flex-wrap: wrap;
 }
@@ -2995,6 +3002,9 @@ input::placeholder {
 .case-archive-disclosure {
   padding: 12px 22px;
 }
+.history-design-cases { margin: 0 0 20px; padding: 12px 0 0; }
+.history-design-cases > summary { color: var(--teal); font-size: 14px; font-weight: 600; cursor: pointer; }
+.history-design-cases > .design-cases { margin-top: 12px; }
 .case-archive-disclosure summary {
   cursor: pointer;
   font-size: 13px;
