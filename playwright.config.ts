@@ -12,6 +12,10 @@ export default defineConfig({
     command: `npm run dev -- --port=${port}`,
     url: `http://127.0.0.1:${port}`,
     reuseExistingServer: true,
+    env: {
+      ...process.env,
+      CADTREE_TEST_AUTH: "1",
+    },
   },
   reporter: "list",
 });

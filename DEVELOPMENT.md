@@ -2,6 +2,18 @@
 
 Run `npm install` once, then `npm run dev` for the normal unseeded application (port 2500). Production `npm run build` builds only `index.html`; it does not include development preview entries or seed data.
 
+## Accounts and local work
+
+Firebase Authentication provides Google sign-in, email account creation/sign-in and password reset through `src/auth/firebase-auth.ts`. The homepage and all five Learn tutorials remain public. Opening, creating or importing local homes, workspaces and projects requires an account. Authentication does not upload CAD files or provide local filesystem ownership or Google Drive collaboration permissions.
+
+`firebase-applet-config.json` retains the existing AI Studio Firebase project so this integration does not switch account backends. Its web client configuration is not an Admin SDK credential. In that project's Firebase Console, verify Google and Email/Password providers and the authorized domains for each intended development/deployment address. This code change does not modify remote Firebase settings or create real accounts during verification.
+
+Remembered local handles and folder addresses use account-scoped browser convenience records. Existing unclaimed home/workspace/path preferences are retained for the first signed-in account that reads them. These records are not authoritative CAD history, and sign-out does not delete local project files. An in-progress operation finishes before sign-out or a deferred account change clears the active UI. A directory picker blocked by lost browser user activation resumes through a fresh Continue click.
+
+DOM tests inject `tests/test-auth.ts`. Playwright starts its development server with `CADTREE_TEST_AUTH=1` and injects `tests/browser-test-auth.ts`; the synthetic development mode also uses this disposable adapter. A normal `npm run dev` uses real Firebase. Production builds ignore the test adapter and do not inject the test harness. Do not reuse a normal development server for authenticated browser tests: stop it or choose a separate `CADTREE_TEST_PORT`.
+
+Integration provenance, checks and remaining manual verification: `docs/signup-integration.md`.
+
 ## Local project reference evidence (Stage 1)
 
 `engine/references.ts` adds version-1 checksummed sidecars while preserving CAD manifests and existing completion records. New revision completion markers add an optional `referenceContext` binding containing the exact context-file hash and enrollment-boundary hash; removing the entire reference extension after capture therefore cannot masquerade as legacy history. Enrollment binds the project and exact pre-feature revision manifest hashes. Those legacy revisions have no reference context. Surviving committed reference storage with a missing/invalid boundary is unavailable and is never regenerated.

@@ -22,3 +22,5 @@ dom.window.HTMLDialogElement.prototype.showModal = function () {
 dom.window.HTMLDialogElement.prototype.close = function () {
   this.removeAttribute("open");
 };
+import { installGlobalTestAuth } from "./test-auth";
+installGlobalTestAuth();

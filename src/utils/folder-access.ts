@@ -17,7 +17,7 @@ export function assertFolderAccess() {
 }
 
 export function folderPermissionError(error: unknown): unknown {
-  if (error && typeof error === 'object' && 'name' in error && ['NotAllowedError', 'SecurityError'].includes(String(error.name))) return new Error('Folder access was denied or revoked. Allow local folder access in your browser site settings, then reconnect the Cadtree home or choose the folder again.');
+  if (error && typeof error === 'object' && 'name' in error && ['NotAllowedError', 'SecurityError'].includes(String(error.name))) return new Error('Folder access was denied or revoked. Allow local folder access in your browser site settings, then reconnect the Cadtree home or choose the folder again.', { cause: error });
   return error;
 }
 
