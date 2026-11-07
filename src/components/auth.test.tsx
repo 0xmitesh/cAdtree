@@ -23,11 +23,14 @@ import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import {
   createHome,
   createHomeWorkspace,
+  openHome,
 } from "../engine/home-service";
-import { importProject, resolveManagedProject } from "../engine/workspace-service";
+import { createWorkspace, importProject, resolveManagedProject } from "../engine/workspace-service";
+import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 import {
   clearAllConvenienceMetadata,
   rememberHome,
+  getRememberedHome,
   saveWorkspacePath,
   setConvenienceAccountScope,
 } from "../engine/idb-store";
@@ -44,6 +47,37 @@ afterEach(() => {
   cleanup();
   Reflect.deleteProperty(navigator, "onLine");
   resetGlobalTestAuth({ ready: true, user: DEFAULT_TEST_USER });
+});
+
+test("account changes during the workspace import picker cannot transfer remembered homes between accounts", async () => {
+  const home = new InMemoryFileSystemAdapter("Account A home");
+  const created = await createHome(home);
+  const source = new InMemoryFileSystemAdapter("Imported workspace");
+  await createWorkspace(source);
+  const sourceBefore = inventorySignature(await readVerifiedInventory(source));
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(home) });
+  const auth = createTestAuthController({ ready: true, user: DEFAULT_TEST_USER });
+  const ui = render(<App auth={auth.adapter} />);
+  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
+  await completeHomeAddress(ui, "D:\\Account A home");
+  await waitFor(() => assert.equal(ui.container.querySelector("main")?.getAttribute("aria-busy"), "false"));
+
+  let release!: (handle: FileSystemDirectoryHandle) => void;
+  Object.assign(window, { showDirectoryPicker: () => new Promise<FileSystemDirectoryHandle>((resolve) => { release = resolve; }) });
+  fireEvent.click(ui.getByText("Home options"));
+  fireEvent.click(ui.getByRole("button", { name: "Import existing workspace" }));
+  fireEvent.click(ui.getByRole("button", { name: "Choose workspace folder" }));
+  assert.ok(release, "the import picker is pending");
+  act(() => { auth.setUser(SECOND_TEST_USER); });
+  await act(async () => { release(nativeDirectory(source)); });
+  await waitFor(async () => assert.equal((await openHome(home)).workspaces.length, 1));
+  await waitFor(() => assert.equal(ui.container.querySelector("main")?.getAttribute("aria-busy"), "false"));
+  assert.equal((await getRememberedHome())?.homeId ?? null, null, "Account B must not inherit Account A's home");
+  assert.equal(ui.queryAllByRole("heading", { name: "Imported workspace" }).length, 0);
+  assert.ok(ui.getByText(SECOND_TEST_USER.displayName!));
+  assert.equal(inventorySignature(await readVerifiedInventory(source)), sourceBefore);
+  setConvenienceAccountScope(DEFAULT_TEST_USER.uid);
+  assert.equal((await getRememberedHome())?.homeId, created.identity.homeId);
 });
 
 test("all five current tutorials stay available to signed-out visitors without opening local folders", async () => {

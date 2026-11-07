@@ -950,11 +950,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     }
     if (!home) throw new Error("Choose a Cadtree home first.");
-    const source = name === undefined ? await pickFolder("read") : undefined;
     await perform(
       "connect",
       async (context) => {
         try {
+          // The picker is part of this operation: keep account changes deferred
+          // until the import has finished using the initiating account's scope.
+          const source = name === undefined ? await pickFolder("read") : undefined;
           if (source && (await source.requestPermission("read")) !== "granted")
             throw new Error(
               "Grant access to inspect and copy the existing workspace.",

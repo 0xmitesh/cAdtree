@@ -12,16 +12,17 @@ The integration includes Google sign-in, email signup/sign-in, password reset, s
 
 - Preserve the native folder error as a cause so the post-sign-in Continue flow can detect lost user activation through the existing permission helper.
 - Use the latest account event after an operation; a superseded account switch must not be replayed after the user has returned to the original account.
+- Include the workspace import picker in the guarded operation so an account change while it is open cannot save the previous account's home and handles under the next account. The actual-App regression fails before this fix and passes after it; it also verifies the source inventory remains unchanged.
 - Keep new operations disabled during pending sign-out and guard rapid repeated sign-out requests.
 - Report unavailable email/reset adapter methods honestly rather than silently using Google or reporting a reset email as sent.
 - Update imported tests for the five-card homepage and actual tutorial/address-dialog controls. Cancellation assertions avoid formatting live DOM/React objects while waiting for asynchronous dismissal. The sign-out test reopens the real test vault and checks the saved revision and retained CAD bytes.
 
 ## Validation
 
-- TypeScript (`npm run lint`) and production build passed.
+- TypeScript (`npm run lint`) and production build passed, including after the workspace-picker account-isolation fix.
 - 309 engine/history/actual-App component tests passed using `node --import tsx --test src/engine/*.test.ts src/history/*.test.ts src/components/*.test.tsx`. The equivalent tsx CLI script cannot open its IPC socket in this execution environment; the Node loader runs the same test files without that socket.
 - Signup regressions cover cancellation/error/retry, email creation and reset, unresolved sessions, fresh-click picker continuation, account isolation, superseded account events, public access to all five tutorials and local capture/sign-out while the browser reports offline. Authentication is simulated for these tests.
-- Account-preference regressions preserve separate handles/paths for two accounts, including a shared project identity, returning to the first account, signed-out reads and pre-signup home/path continuity.
+- Account-preference regressions preserve separate handles/paths for two accounts, including a shared project identity, returning to the first account, signed-out reads and pre-signup home/path continuity. After the review fix, all 20 focused auth/home/account-preference tests passed; the new account-switch-during-import test fails on the original integration commit.
 - All 6 tutorial asset/definition tests passed with `node --import tsx --test src/tutorials/*.test.ts`, run separately because the existing npm test script does not include that directory.
 - Live Chrome preview verified the five-card homepage and sign-in/create-account controls. A signed-out walkthrough traversed all seven final-tutorial steps and loaded all 20 visuals successfully.
 - Production output is checked for absence of test-user and test-auth harness strings. Existing build advisories remain; Firebase increases the main JavaScript bundle to approximately 749 kB before gzip.
@@ -30,4 +31,4 @@ The integration includes Google sign-in, email signup/sign-in, password reset, s
 
 No real Google/email account was created or authenticated, and no reset email was sent. Verify those flows against the retained Firebase project on the intended authorized domain. Remote provider/domain configuration was not changed or independently qualified. Real session persistence across reload/offline restart, OS directory permission prompts, native CAD rebuild/reference behavior and physical-device layouts remain manual checks. The Playwright browser workflow is included but was not executed in this environment; live browser checks used the supported preview instead.
 
-Review this branch and test real authentication before merging or deploying. No merge or deployment is part of this integration.
+Deployment and Firebase provider/domain changes remain separate from this integration.
