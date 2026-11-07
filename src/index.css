@@ -3151,6 +3151,10 @@ input::placeholder {
 .reference-selector fieldset { min-width: 0; }
 .detail-tabs { flex-wrap: wrap; }
 
+.modal:has(.project-learning) {
+  width: min(1060px, calc(100vw - 32px));
+}
+.project-learning .welcome-learn { margin: 0; padding: 0; border: 0; }
 .modal:has(.tutorial-viewer) {
   width: min(1060px, 84vw, calc(100vw - 32px));
   max-height: min(85vh, calc(100vh - 32px));

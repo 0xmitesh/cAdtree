@@ -1,0 +1,81 @@
+// Current-App browser regression using disposable file handles and injected test auth.
+// Run: node tests/project-learning-check.cjs
+// For an offline checkout only, CADTREE_OFFLINE_AUTH_CHECK=1 guards unavailable SDK imports.
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const {pathToFileURL} = require('node:url');
+const {build} = require('esbuild');
+const {chromium} = require('@playwright/test');
+const root = path.resolve(__dirname,'..');
+const artifacts = path.join(root,'artifacts/r1-learning');
+(async()=>{
+  fs.mkdirSync(artifacts,{recursive:true});
+  const offline = process.env.CADTREE_OFFLINE_AUTH_CHECK === '1';
+  const names = ['getApp','getApps','initializeApp','GoogleAuthProvider','createUserWithEmailAndPassword','getAuth','onAuthStateChanged','sendPasswordResetEmail','signInWithEmailAndPassword','signInWithPopup','signOut'];
+  const sdkGuard = {name:'offline-sdk-guard',setup(b){b.onResolve({filter:/^firebase\/(app|auth)$/},a=>({path:a.path,namespace:'sdk-guard'}));b.onLoad({filter:/.*/,namespace:'sdk-guard'},()=>({contents:names.map(n=>`export const ${n}=()=>{throw Error('Unexpected Firebase SDK call in injected-auth check')};`).join('\n')}));}};
+  const bundle = await build({stdin:{contents:`import {createRoot} from 'react-dom/client';import App from './src/App';import {compareApplyRecoverSample} from './tests/compare-apply-recover-sample';import {nativeDirectory} from './tests/native-fs';import {createTestAuthController} from './tests/test-auth';import {inventorySignature,readVerifiedInventory} from './src/engine/copy-service';
+async function start(){const s=await compareApplyRecoverSample();await s.caseFolder.writeFileText(['Bracket.SLDPRT'],'Uncaptured study');let picks=0;window.showDirectoryPicker=async()=>{if(++picks>1)throw Error('Unexpected folder picker');return nativeDirectory(s.home)};window.sample={caseId:s.caseId,signature:async()=>inventorySignature(await readVerifiedInventory(s.home)),picks:()=>picks};createRoot(document.getElementById('root')).render(<App auth={createTestAuthController().adapter}/>);}start();`,loader:'tsx',resolveDir:root},bundle:true,write:false,format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},plugins:offline?[sdkGuard]:[]});
+  // Build the current stylesheet without needing a live server or any account/network access.
+  const {build:buildStyles} = await import('vite');
+  await buildStyles({root,logLevel:'error',build:{outDir:path.join(artifacts,'style-build'),rollupOptions:{external:['firebase/app','firebase/auth']}}});
+  const cssDir=path.join(artifacts,'style-build/assets');
+  const css=fs.readFileSync(path.join(cssDir,fs.readdirSync(cssDir).find(n=>n.endsWith('.css'))),'utf8');
+  const assetRoot=pathToFileURL(path.join(root,'public/tutorials')+path.sep).href;
+  const js=bundle.outputFiles[0].text.replaceAll('"/tutorials/','"'+assetRoot).replaceAll('</script','<\\/script');
+  const html=path.join(artifacts,'check.html');
+  fs.writeFileSync(html,'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style></head><body><div id="root"></div><script>'+js+'</script></body></html>');
+  const browser=await chromium.launch({channel:'chrome',headless:true});
+  const results=[];
+  try {
+    for(const viewport of [{width:1366,height:900},{width:390,height:844}]){
+      const page=await browser.newPage({viewport});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+      await page.goto(pathToFileURL(html).href);
+      await page.getByRole('button',{name:'Open my Cadtree home',exact:true}).click();
+      await page.getByRole('textbox',{name:'Cadtree home folder address'}).fill('D:\\Cadtree');
+      await page.getByRole('button',{name:'Complete setup',exact:true}).click();
+      await page.getByRole('button',{name:'Open workspace',exact:true}).click();
+      await page.getByRole('button',{name:'Open project',exact:true}).click();
+      const nav=page.getByRole('navigation',{name:'Primary navigation'});
+      await nav.getByRole('button',{name:'Settings',exact:true}).click();
+      await page.getByRole('combobox',{name:'Active branch',exact:true}).selectOption(await page.evaluate(()=>window.sample.caseId));
+      await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
+      await nav.getByRole('button',{name:'Changes',exact:true}).click();
+      await page.getByRole('button',{name:'Scan for changes',exact:true}).click();
+      await page.getByRole('textbox',{name:'Revision summary'}).fill('Keep pending notes');
+      await page.getByRole('button',{name:/Add overall engineering notes/}).click();
+      await page.getByRole('textbox',{name:'Overall: problem',exact:true}).fill('Keep intent');
+      await nav.getByRole('button',{name:'History',exact:true}).click();
+      await page.getByRole('button',{name:/Rev 004: Reduced bracket thickness/}).click();
+      const before=await page.evaluate(()=>window.sample.signature());
+      const selected=await page.locator('.revision-detail').innerText();
+      const learn=nav.getByRole('button',{name:'Learn cAdtree',exact:true});await learn.focus();await learn.press('Enter');
+      const chooser=page.getByRole('dialog',{name:'Learn cAdtree',exact:true});assert.equal(await chooser.getByRole('article').count(),5);
+      await page.screenshot({path:path.join(artifacts,`chooser-${viewport.width}.png`)});
+      assert.equal(await chooser.evaluate(e=>e.scrollWidth>e.clientWidth),false);
+      const start=chooser.getByRole('article',{name:'Explore design alternatives',exact:true}).getByRole('button',{name:'Start tutorial',exact:true});
+      await start.click();
+      const viewer=page.getByRole('dialog',{name:'Explore design alternatives',exact:true});await viewer.getByRole('button',{name:'Next',exact:true}).click();
+      await viewer.getByRole('button',{name:'Next visual',exact:true}).click();
+      await page.screenshot({path:path.join(artifacts,`viewer-${viewport.width}.png`)});
+      await page.keyboard.press('Escape');await viewer.waitFor({state:'hidden'});
+      assert.equal(await chooser.isVisible(),true,'Escape only closes the top tutorial');assert.equal(await start.evaluate(e=>document.activeElement===e),true);
+      await start.click();
+      for(let step=1;step<=6;step++){
+        const nextVisual=viewer.getByRole('button',{name:'Next visual',exact:true});
+        while(await nextVisual.count()&&await nextVisual.isEnabled())await nextVisual.click();
+        await viewer.getByRole('button',{name:step===6?'Finish':'Next',exact:true}).click();
+      }
+      await viewer.waitFor({state:'hidden'});assert.equal(await start.evaluate(e=>document.activeElement===e),true);
+      await page.keyboard.press('Escape');await chooser.waitFor({state:'hidden'});assert.equal(await learn.evaluate(e=>document.activeElement===e),true);
+      assert.equal(await page.locator('.revision-detail').innerText(),selected);
+      assert.equal(await page.locator('.current-branch-indicator').getAttribute('data-branch-id'),await page.evaluate(()=>window.sample.caseId));
+      await nav.getByRole('button',{name:'Changes',exact:true}).click();
+      assert.equal(await page.getByRole('textbox',{name:'Revision summary'}).inputValue(),'Keep pending notes');
+      assert.equal(await page.getByRole('textbox',{name:'Overall: problem',exact:true}).inputValue(),'Keep intent');
+      assert.equal(await page.evaluate(()=>window.sample.signature()),before);assert.equal(await page.evaluate(()=>window.sample.picks()),1);assert.deepEqual(errors,[]);
+      results.push({...viewport,offlineAuthGuard:offline,projectPreserved:true,errors});await page.close();
+    }
+    fs.writeFileSync(path.join(artifacts,'verification.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results));
+  } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1});
