@@ -111,12 +111,16 @@ function TutorialPreview({ kind }: { kind: Preview }) {
   );
 }
 
-export function LearnCadtree({ busy }: { busy: boolean }) {
+export function LearnCadtree({ busy, onStartTutorial, showHeading = true }: {
+  busy: boolean;
+  onStartTutorial?: (tutorial: TutorialDefinition) => void;
+  showHeading?: boolean;
+}) {
   const [activeTutorial, setActiveTutorial] = useState<TutorialDefinition | null>(null);
   return (
-    <section className="welcome-learn" aria-labelledby="learn-cadtree-title">
+    <section className="welcome-learn" aria-labelledby={showHeading ? "learn-cadtree-title" : undefined} aria-label={showHeading ? undefined : "Learn cAdtree"}>
       <header className="learn-heading">
-        <h2 id="learn-cadtree-title">Learn cAdtree</h2>
+        {showHeading ? <h2 id="learn-cadtree-title">Learn cAdtree</h2> : null}
         <p>Short guides for learning the cAdtree workflow.</p>
       </header>
       {(["primary", "secondary"] as const).map((category) => (
@@ -133,7 +137,7 @@ export function LearnCadtree({ busy }: { busy: boolean }) {
                       <span className="learn-card-meta">{card.tutorial.steps.length} steps</span>
                       <button type="button" className="text-button learn-start" disabled={busy}
                         aria-describedby={`learn-${card.id} learn-${card.id}-description`}
-                        onClick={() => setActiveTutorial(card.tutorial)}>
+                        onClick={() => (onStartTutorial ?? setActiveTutorial)(card.tutorial)}>
                         Start tutorial <ArrowRight size={16} aria-hidden="true" />
                       </button>
                     </>

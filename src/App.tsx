@@ -87,6 +87,7 @@ import { ReferencesView } from './components/ReferencesView';
 import { importReferenceAttachment, updateProjectReference, retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ActiveBranchPicker } from "./components/ActiveBranchPicker";
+import { ProjectLearningModal } from "./components/ProjectLearningModal";
 import {
   SidebarResizeHandle,
   useSidebarWidth,
@@ -100,6 +101,7 @@ import {
   Settings,
   ScanLine,
   HardDrive,
+  GraduationCap,
 } from "lucide-react";
 import {
   IntegrityNotice,
@@ -204,6 +206,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setHomeAddress(address);
   };
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const [learningOpen, setLearningOpen] = useState(false);
   const [managedWorkspaceKey, setManagedWorkspaceKey] = useState<string | null>(
     null,
   );
@@ -263,6 +266,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
 
   const resetActiveSessionUi = () => {
     contextVersion.current++;
+    setLearningOpen(false);
     setManagedProject(null);
     setVaultState(null);
     setVaultDir(null);
@@ -533,6 +537,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const leaveProject = () => {
     contextVersion.current++;
+    setLearningOpen(false);
     setManagedProject(null);
     setVaultState(null);
     setVaultDir(null);
@@ -2134,6 +2139,15 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                         <Settings size={18} />
                         <span>Settings</span>
                       </button>
+                      <button
+                        aria-label="Learn cAdtree"
+                        aria-haspopup="dialog"
+                        disabled={busy}
+                        onClick={() => setLearningOpen(true)}
+                      >
+                        <GraduationCap size={18} />
+                        <span>Learn cAdtree</span>
+                      </button>
                     </>
                   ) : null}
                 </>
@@ -2541,6 +2555,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 });
               }}
             />
+          ) : null}
+          {learningOpen && !homeView && vaultState ? (
+            <ProjectLearningModal busy={busy} onClose={() => setLearningOpen(false)} />
           ) : null}
           {explorerOpen ? (
             <Modal
