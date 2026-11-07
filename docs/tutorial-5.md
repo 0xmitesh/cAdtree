@@ -1,5 +1,7 @@
 # Tutorial 5 — Compare, apply & recover
 
+R4 update: Design cases now lives in History; affected archive guidance and screenshots were refreshed. Original implementation/validation history below is retained.
+
 Implemented on branch `codex/tutorial-5-compare-apply-recover` from merged main `9797d7f290d58303ab6badda3dc277eac020021f` (Tutorial 4 / PR #26). Only the final tutorial and its Learn-card availability were added. No engine, working-screen, viewer, carousel or product-style changes.
 
 ## 1. Final step structure
@@ -176,12 +178,12 @@ Asset: [step-6-restored-copy.png](../public/tutorials/compare-apply-recover/step
 
 Finished Design Cases do not need to be deleted. Archive the experiment while preserving its working folder and saved history.
 
-- Keep Main active. In Settings → Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.
+- Keep Main active. In History, expand Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.
 - Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your active branch.
 
-Visual 1 (cAdtree): **1. With Main active, find the finished case in Settings → Design cases.**
+Visual 1 (cAdtree): **1. With Main active, expand Design cases in History and find the finished case.**
 
-Alt text: Real Settings Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.
+Alt text: Real History Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.
 
 Asset: [step-7-archive-action.png](../public/tutorials/compare-apply-recover/step-7-archive-action.png)
 
@@ -235,7 +237,7 @@ Sources inspected: `src/components/HistoryRecoveryView.tsx`, `src/engine/recover
 
 ## 6. Actual Archive behavior
 
-Settings → Design cases provides Archive case and the Archive design case confirmation. Only a non-Main case that is not the active working direction can be archived. Main stays active in the sample. Archiving checks the case’s clean saved baseline including directories; uncaptured changes, pending applications or unavailable evidence block it.
+History → Design cases provides Archive case and the Archive design case confirmation. Only a non-Main case that is not the active working direction can be archived. Main stays active in the sample. Archiving checks the case’s clean saved baseline including directories; uncaptured changes, pending applications or unavailable evidence block it.
 
 Archive changes lifecycle metadata only. Working files, saved revisions and history remain available, independently of whether any work was applied. Archived cases exposes Reopen case. Reopening changes lifecycle state without switching the active direction or restoring files. No case-deletion action was found. The tutorial briefly mentions reopen without adding an archive-management walkthrough.
 
@@ -290,9 +292,9 @@ All paths below are under `public/tutorials/compare-apply-recover/`.
 | step-6-restore-action.png | Real cAdtree | `0999cccc9e00f0ac7d34241c9e6986f5ad03a6ca6f262e949c855849306ba87d` |
 | step-6-restore-confirmation.png | Real cAdtree | `4b13b8d3227aa7cee5819aec6c2693e872e7185131439b762e1a35277c7483d0` |
 | step-6-restored-copy.png | Real cAdtree | `f1346916a2cf241e3ce90d690cf15621643390341f7ef063ec933767d0161eab` |
-| step-7-archive-action.png | Real cAdtree | `dd0f55c7d35ae267f856b3d96d2cb295f09866b8630f471e21cd774f6195934a` |
+| step-7-archive-action.png | Real cAdtree | `0622daba6096575418e6b0899b767fd6411bc40527bffa9a75f4aa6eed7442b0` |
 | step-7-archive-confirmation.png | Real cAdtree | `6429023f4287af052a24ea743511a19c10d1a787899c062b4cacaece222ce572` |
-| step-7-archived-case.png | Real cAdtree | `8e96ca88f99b3ead8fa543a45438e9dda60a267b9671c209994f108f13eef08d` |
+| step-7-archived-case.png | Real cAdtree | `728115309712f28595495567a9c0762eb40b1607362e24a693082fbf0f160c23` |
 
 ## 9. Files/components changed
 

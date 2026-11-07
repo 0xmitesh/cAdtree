@@ -131,7 +131,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             ),
             issue:
               vault && caseLifecycle(vault, branch.branchId).status !== "active"
-                ? "Reopen archived cases in Settings → Design cases. Unavailable lifecycle records require inspection."
+                ? "Reopen archived cases in History → Design cases. Unavailable lifecycle records require inspection."
                 : undefined,
             open: () => props.onProject(homeEntry, entry, branch.branchId),
           })),
@@ -268,7 +268,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       </label>
       {showArchived ? (
         <p className="tree-archive-help">
-          Reopen cases in Settings → Design cases.
+          Reopen cases in History → Design cases.
         </p>
       ) : null}
       <div

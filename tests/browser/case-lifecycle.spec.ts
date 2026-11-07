@@ -55,6 +55,11 @@ for (const width of [1366, 390])
     const nav = page.getByRole("navigation");
     const settings = () =>
       nav.getByRole("button", { name: "Settings", exact: true }).click();
+    const showCases = async () => {
+      await nav.getByRole('button', { name: 'History', exact: true }).click();
+      if (await page.locator('.history-design-cases').getAttribute('open') === null)
+        await page.locator('.history-design-cases > summary').click();
+    };
     const select = page.getByRole("combobox", {
       name: "Active branch",
       exact: true,
@@ -67,6 +72,7 @@ for (const width of [1366, 390])
       await settings();
       await select.selectOption(fixture.safeCaseId);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
+      await showCases();
       await expect(archiveButton).toBeDisabled();
       await expect(
         page.getByText("Switch to another active branch before archiving.", {
@@ -118,7 +124,7 @@ for (const width of [1366, 390])
       await select.selectOption("branch-main");
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     }
-    await settings();
+    await showCases();
     const archive = async () => {
       await archiveButton.click();
       const modal = page.getByRole("dialog", {
@@ -134,7 +140,7 @@ for (const width of [1366, 390])
         page.getByText("Archived cases (1)", { exact: true }),
       ).toBeFocused();
     };
-    const showArchivedSettings = async () => {
+    const showArchivedCases = async () => {
       if (
         (await page
           .locator(".case-archive-disclosure")
@@ -143,7 +149,7 @@ for (const width of [1366, 390])
         await page.getByText("Archived cases (1)", { exact: true }).click();
     };
     const reopen = async () => {
-      await showArchivedSettings();
+      await showArchivedCases();
       await page
         .getByRole("button", {
           name: "Reopen case Part-X redesign",
@@ -158,15 +164,16 @@ for (const width of [1366, 390])
         .getByRole("button", { name: "Reopen case", exact: true })
         .click();
       await expect(modal).toHaveCount(0);
-      await expect(select).toHaveValue("branch-main");
+      await expect(page.getByRole('status', {name: 'Current branch'})).toHaveAttribute('data-branch-id', 'branch-main');
     };
     await archive();
-    await expect(select).toHaveValue("branch-main");
+    await expect(page.getByRole('status', {name: 'Current branch'})).toHaveAttribute('data-branch-id', 'branch-main');
     await expect(
-      select.locator(`option[value="${fixture.safeCaseId}"]`),
+      page.locator(`.settings-page option[value="${fixture.safeCaseId}"]`),
     ).toHaveCount(0);
     if (width === 1366) {
       await reopen();
+      await settings();
       await select.selectOption(fixture.safeCaseId);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await nav.getByRole("button", { name: "Changes", exact: true }).click();
@@ -187,7 +194,7 @@ for (const width of [1366, 390])
       ).toHaveValue("Retain this per-file draft too");
       await select.selectOption("branch-main");
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-      await settings();
+      await showCases();
       await archive();
     }
     const archived = await read();
@@ -211,7 +218,7 @@ for (const width of [1366, 390])
         .getByRole("dialog", { name: "Browse folders" })
         .getByRole("button", { name: "Close dialog", exact: true })
         .click();
-    await showArchivedSettings();
+    await showArchivedCases();
     await expect(
       page.getByRole("button", {
         name: "Reopen case Part-X redesign",
@@ -299,7 +306,7 @@ for (const width of [1366, 390])
         })
         .click();
     }
-    await settings();
+    await showCases();
     await reopen();
     const after = await read();
     expect(after.unchangedFingerprint).toBe(before.unchangedFingerprint);

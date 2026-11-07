@@ -179,14 +179,14 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
       title: "Preserve the Design Case",
       summary: "Finished Design Cases do not need to be deleted. Archive the experiment while preserving its working folder and saved history.",
       points: [
-        "Keep Main active. In Settings → Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.",
+        "Keep Main active. In History, expand Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.",
         "Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your active branch.",
       ],
       visuals: [
         {
           src: "/tutorials/compare-apply-recover/step-7-archive-action.png",
-          alt: "Real Settings Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.",
-          caption: "1. With Main active, find the finished case in Settings → Design cases.",
+          alt: "Real History Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.",
+          caption: "1. With Main active, expand Design cases in History and find the finished case.",
           kind: "cadtree",
         },
         {

@@ -9,18 +9,20 @@ const { chromium } = require('@playwright/test');
 const root = path.resolve(__dirname, '..');
 const artifacts = path.join(root, 'artifacts', 'tutorial-5');
 const assets = path.join(root, 'public', 'tutorials', 'compare-apply-recover');
+const archiveOnly = process.argv.includes('--archive-only');
 
 (async () => {
   fs.mkdirSync(artifacts, { recursive: true }); fs.mkdirSync(assets, { recursive: true });
   const entry = `import {createRoot} from 'react-dom/client';import App from './src/App';
 import {compareApplyRecoverSample} from './tests/compare-apply-recover-sample';
 import {nativeDirectory} from './tests/native-fs';
+import {createTestAuthController} from './tests/test-auth';
 import {resolveManagedProject} from './src/engine/workspace-service';
 import {inventorySignature,readVerifiedInventory} from './src/engine/copy-service';
 async function start(){const s=await compareApplyRecoverSample();let picks=0;
 const current=()=>resolveManagedProject(s.workspace.root,s.project.record.containerPath);
 const signature=async dir=>inventorySignature(await readVerifiedInventory(dir));
-Object.assign(window,{showDirectoryPicker:async()=>{if(++picks>1)throw Error('Unexpected folder picker');return nativeDirectory(s.home);},tutorialSample:{...s,current,signature,inspect:async()=>{const p=await current();return {revisions:p.vaultState.revisions.map(r=>({id:r.manifest.revisionId,number:r.manifest.displayNumber,parent:r.manifest.parentRevisionId,branch:r.manifest.branchId,files:r.manifest.files,directories:r.manifest.directories})),applications:p.vaultState.applicationOperations?.map(o=>({status:o.status,source:o.record?.plan.sourceRevisionId,actions:o.record?.plan.actions.map(a=>({path:a.path,operation:a.operation}))})),main:await readVerifiedInventory(s.main),source:await signature(s.caseFolder),lifecycle:p.vaultState.caseLifecycles?.[s.caseId],picks};},recoveries:async()=>{const p=await current(),parent=await s.workspace.root.getDirectory([...p.record.containerPath.split('/'),'recoveries']);const results=[];for(const e of await parent.listEntries())if(e.kind==='directory')results.push({name:e.name,inventory:await readVerifiedInventory(await parent.getDirectory([e.name]))});return results;}}});createRoot(document.getElementById('root')).render(<App/>);}
+Object.assign(window,{showDirectoryPicker:async()=>{if(++picks>1)throw Error('Unexpected folder picker');return nativeDirectory(s.home);},tutorialSample:{...s,current,signature,inspect:async()=>{const p=await current();return {revisions:p.vaultState.revisions.map(r=>({id:r.manifest.revisionId,number:r.manifest.displayNumber,parent:r.manifest.parentRevisionId,branch:r.manifest.branchId,files:r.manifest.files,directories:r.manifest.directories})),applications:p.vaultState.applicationOperations?.map(o=>({status:o.status,source:o.record?.plan.sourceRevisionId,actions:o.record?.plan.actions.map(a=>({path:a.path,operation:a.operation}))})),main:await readVerifiedInventory(s.main),source:await signature(s.caseFolder),lifecycle:p.vaultState.caseLifecycles?.[s.caseId],picks};},recoveries:async()=>{const p=await current(),parent=await s.workspace.root.getDirectory([...p.record.containerPath.split('/'),'recoveries']);const results=[];for(const e of await parent.listEntries())if(e.kind==='directory')results.push({name:e.name,inventory:await readVerifiedInventory(await parent.getDirectory([e.name]))});return results;}}});createRoot(document.getElementById('root')).render(<App auth={createTestAuthController().adapter}/>);}
 start().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);});`;
   const bundle = await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: root }, bundle: true, write: false, format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
   const cssDir = path.join(root, 'dist', 'assets');
@@ -35,6 +37,7 @@ start().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);
   const idle = async () => { await page.waitForFunction(() => document.querySelector('main')?.getAttribute('aria-busy') === 'false'); await dismiss(); };
   const focus = async b => { await page.keyboard.press('Tab'); await b.focus(); };
   const capture = async (locator, name) => {
+    if (archiveOnly && !name.startsWith('step-7-')) return;
     await dismiss(); await locator.scrollIntoViewIfNeeded();
     const b = await locator.boundingBox();
     const inset = await locator.evaluate(e => e.tagName === 'DIALOG') ? 8 : -8;
@@ -42,6 +45,7 @@ start().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);
     await page.screenshot({ path: path.join(assets, name + '.png'), clip: { x: Math.max(0, b.x + inset), y: Math.max(0, b.y + inset), width: b.width - inset * 2, height: b.height - inset * 2 } });
   };
   const between = async (first, last, name) => {
+    if (archiveOnly && !name.startsWith('step-7-')) return;
     await dismiss(); await first.scrollIntoViewIfNeeded();
     const a = await first.boundingBox(), b = await last.boundingBox();
     const x = Math.min(a.x, b.x), right = Math.max(a.x + a.width, b.x + b.width);
@@ -135,8 +139,9 @@ start().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);
     assert.deepEqual(fileStates(recovered[0].inventory.files), fileStates(initial.revisions.find(r => r.number === 3).files));
     assert.deepEqual(recovered[0].inventory.directories, initial.revisions.find(r => r.number === 3).directories);
     assert.equal(await page.evaluate(() => window.tutorialSample.signature(window.tutorialSample.main)), beforeRecovery);
-    await nav.getByRole('button', { name: 'Settings', exact: true }).click();
-    assert.equal(await page.getByRole('combobox', { name: 'Active branch', exact: true }).inputValue(), 'branch-main');
+    await nav.getByRole('button', { name: 'History', exact: true }).click();
+    assert.equal(await page.getByRole('status', { name: 'Current branch', exact: true }).getAttribute('data-branch-id'), 'branch-main');
+    await page.locator('.history-design-cases > summary').click();
     const archive = page.getByRole('button', { name: 'Archive case Lightweight bracket', exact: true });
     await focus(archive); await capture(page.locator('.design-cases'), 'step-7-archive-action');
     await archive.click();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ArrowDownToLine,
   ArrowLeftRight,
@@ -41,6 +41,7 @@ import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialo
 import { RevisionReferenceContext } from './RevisionReferenceContext';
 
 export interface HistoryRecoveryViewProps {
+  caseControls?: ReactNode;
   onRetrieveReference?: (referenceId: string, versionId: string) => Promise<void>;
   onExportForReview?: ExportReviewAction;
   isExporting?: boolean;
@@ -321,6 +322,12 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           </div>
         </div>
       </div>
+      {props.caseControls ? (
+        <details className="disclosure history-design-cases">
+          <summary>Design cases</summary>
+          {props.caseControls}
+        </details>
+      ) : null}
       {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Path history and snapshot comparison remain available.</Notice> : null}
       {filePath && !componentId ? <p className="muted small">Path history: renames and reused filenames are not linked in this view.</p> : null}
       {componentId ? <p className="muted small">Component {componentId}. Older history before its registration boundary is available separately by path.</p> : null}

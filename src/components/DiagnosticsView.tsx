@@ -7,7 +7,6 @@ import { Modal, Notice } from "./ui";
 import { WorkspaceLocationSetting } from "./FilePathShortcuts";
 
 export interface DiagnosticsViewProps {
-  caseControls?: ReactNode;
   branchControl?: ReactNode;
   vaultState: VaultState;
   isVerifyingAll: boolean;
@@ -28,7 +27,6 @@ export function DiagnosticsView({
   onReattachWorkingFolder,
   managed,
   branchControl,
-  caseControls,
 }: DiagnosticsViewProps) {
   const [error, setError] = useState("");
   const [clear, setClear] = useState(false);
@@ -91,7 +89,6 @@ export function DiagnosticsView({
         </div>
         {managed ? <WorkspaceLocationSetting /> : null}
       </section>
-      {caseControls}
       <section className="panel">
         <div className="panel-heading">
           <h2>Storage and verification</h2>
