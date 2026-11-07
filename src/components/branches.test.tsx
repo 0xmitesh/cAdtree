@@ -77,19 +77,19 @@ async function createFromUI(
     ctx.ui.getByRole("button", { name: /Rev 001: Original housing/ }),
   );
   fireEvent.click(
-    ctx.ui.getByRole("button", { name: "Create branch from here" }),
+    ctx.ui.getByRole("button", { name: "Create design case from this revision" }),
   );
   await waitFor(() => assert.ok(ctx.ui.queryByRole("dialog")));
   const dialog = within(ctx.ui.getByRole("dialog"));
   assert.ok(dialog.getByText(/Rev 001 on Main/));
-  fireEvent.change(dialog.getByRole("textbox", { name: "Branch name" }), {
+  fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), {
     target: { value: name },
   });
   fireEvent.change(
     dialog.getByRole("textbox", { name: "Engineering reason" }),
     { target: { value: `Explore ${name}` } },
   );
-  fireEvent.click(dialog.getByRole("button", { name: "Create branch" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
   await waitFor(() => assert.ok(!ctx.ui.queryByRole("dialog")));
   const state = await openExistingVault(ctx.vault);
   const branch = state.branches.find((b) => b.name === name)!;
@@ -133,7 +133,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     assert.equal(
       (
         ui.getByRole("button", {
-          name: "Create branch from here",
+          name: "Create design case from this revision",
         }) as HTMLButtonElement
       ).disabled,
       true,
@@ -396,18 +396,18 @@ test("branch creation shows cancellable progress and reports the incomplete fold
     },
   });
   fireEvent.click(
-    ctx.ui.getByRole("button", { name: "Create branch from here" }),
+    ctx.ui.getByRole("button", { name: "Create design case from this revision" }),
   );
   await waitFor(() => assert.ok(ctx.ui.queryByRole("dialog")));
   const dialog = within(ctx.ui.getByRole("dialog"));
-  fireEvent.change(dialog.getByRole("textbox", { name: "Branch name" }), {
+  fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), {
     target: { value: "Cancelled Case" },
   });
   fireEvent.change(
     dialog.getByRole("textbox", { name: "Engineering reason" }),
     { target: { value: "Test interrupted copy" } },
   );
-  fireEvent.click(dialog.getByRole("button", { name: "Create branch" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
   try {
     await waitFor(() => assert.equal(paused, true));
     assert.equal(appBusy(ctx.ui), true);

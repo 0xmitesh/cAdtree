@@ -75,7 +75,7 @@ for (const width of [1366, 390])
       await showCases();
       await expect(archiveButton).toBeDisabled();
       await expect(
-        page.getByText("Switch to another active branch before archiving.", {
+        page.getByText("Switch to another working case before archiving.", {
           exact: true,
         }),
       ).toBeVisible();

@@ -438,8 +438,8 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     {selected.latest ? (
                       <span className="latest-label">
                         {filePath
-                          ? "Current branch file state"
-                          : "Latest on current branch"}
+                          ? "Working case file state"
+                          : "Latest on working case"}
                       </span>
                     ) : null}
                   </div>
@@ -541,7 +541,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       ? "Technical details"
                       : t === "notes"
                         ? "Notes"
-                        : t === "references" ? "References" : "Changes"}
+                        : t === "references" ? "Saved references" : "Changed files"}
                   </button>
                 ))}
               </div>
@@ -858,7 +858,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       )
                     }
                   >
-                    <GitBranch size={16} /> Create branch from here
+                    <GitBranch size={16} /> Create design case from this revision
                   </button>
                 ) : null}
                 <button

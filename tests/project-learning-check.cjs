@@ -58,10 +58,30 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
         assert.equal(await page.locator('select[aria-label="Working case"]').count(),1);
         assert.equal(await working.inputValue(),await page.evaluate(()=>window.sample.caseId));
         assert.equal(await page.getByRole('region',{name:'Project context',exact:true}).isVisible(),true);
+        if(view==='References') {
+          assert.equal(await page.getByRole('textbox',{name:'Search references',exact:true}).count(),0);
+          assert.equal(await page.getByRole('checkbox',{name:'Show removed references',exact:true}).count(),0);
+        }
+        if(view==='Settings') {
+          await page.getByText('Browser troubleshooting',{exact:true}).click();
+          await page.getByRole('button',{name:'Reset all remembered folder connections in this browser',exact:true}).click();
+          const reset=page.getByRole('dialog',{name:'Reset all remembered folder connections?',exact:true});
+          assert.match(await reset.innerText(),/across all accounts and workspaces/);
+          assert.equal(await reset.evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+          await page.screenshot({path:path.join(artifacts,`browser-reset-${viewport.width}.png`)});
+          await reset.getByRole('button',{name:'Cancel',exact:true}).click();
+        }
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
         await page.screenshot({path:path.join(artifacts,`working-case-${view.toLowerCase()}-${viewport.width}.png`)});
       }
       assert.equal(await page.locator('.revision-detail').innerText(),selected);
+      assert.equal(await page.getByRole('checkbox',{name:'Show archived cases',exact:true}).count(),0);
+      assert.equal(await page.locator('.detail-tabs').getByRole('button',{name:'Changed files',exact:true}).count(),1);
+      assert.equal(await page.locator('.detail-tabs').getByRole('button',{name:'Saved references',exact:true}).count(),1);
+      await page.getByRole('button',{name:'Create design case from this revision',exact:true}).click();
+      const createCase=page.getByRole('dialog',{name:'Create design case',exact:true});
+      assert.equal(await createCase.getByRole('textbox',{name:'Case name',exact:true}).count(),1);
+      await createCase.getByRole('button',{name:'Cancel',exact:true}).click();
       const learn=nav.getByRole('button',{name:'Learn cAdtree',exact:true});await learn.focus();await learn.press('Enter');
       const chooser=page.getByRole('dialog',{name:'Learn cAdtree',exact:true});assert.equal(await chooser.getByRole('article').count(),5);
       await page.screenshot({path:path.join(artifacts,`chooser-${viewport.width}.png`)});

@@ -37,7 +37,7 @@ test("current-case archive is disabled; Archive/Reopen require explicit confirma
     ).disabled,
     true,
   );
-  assert.match(ui.container.textContent!, /Switch to another active branch/);
+  assert.match(ui.container.textContent!, /Switch to another working case/);
   assert.equal(ui.queryByRole("button", { name: "Archive case Main" }), null);
   ui.rerender(<DesignCases {...props} activeBranchId="branch-main" />);
   fireEvent.click(

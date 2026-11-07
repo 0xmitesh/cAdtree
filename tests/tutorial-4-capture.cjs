@@ -74,14 +74,14 @@ async function main(){
     await canvas.scrollIntoViewIfNeeded();
     const canvasBox = await canvas.boundingBox(), revisionBox = await revision.boundingBox();
     await page.screenshot({ path: path.join(assets, 'step-2-choose-revision.png'), clip: { x: canvasBox.x, y: canvasBox.y, width: canvasBox.width, height: revisionBox.y + revisionBox.height + 12 - canvasBox.y } });
-    const create = page.getByRole('button', { name: 'Create branch from here', exact: true });
+    const create = page.getByRole('button', { name: 'Create design case from this revision', exact: true });
     await focus(create); await capture(page.locator('.recovery-bar'), 'step-2-create-action');
     await create.click();
-    const dialog = page.getByRole('dialog', { name: 'Create design branch', exact: true });
-    await dialog.getByRole('textbox', { name: 'Branch name', exact: true }).fill('Lightweight bracket');
+    const dialog = page.getByRole('dialog', { name: 'Create design case', exact: true });
+    await dialog.getByRole('textbox', { name: 'Case name', exact: true }).fill('Lightweight bracket');
     await dialog.getByRole('textbox', { name: 'Engineering reason', exact: true }).fill('Explore a lighter mounting solution without changing Main.');
     assert.equal(await dialog.getByRole('button', { name: 'Choose parent folder', exact: true }).count(), 0);
-    const submit = dialog.getByRole('button', { name: 'Create branch', exact: true });
+    const submit = dialog.getByRole('button', { name: 'Create design case', exact: true });
     await focus(submit);
     const formBox = await dialog.locator('form').boundingBox();
     // Keep the native focus ring inside a small white margin; exclude modal edges.

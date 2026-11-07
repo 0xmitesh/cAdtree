@@ -101,7 +101,7 @@ test('actual App imports, pins project context, saves a reference-only revision,
   assert.equal(ui.queryByRole('button', { name: 'Save revision' }), null, 'identical context cannot create repeated empty revisions');
   fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'History' }));
   fireEvent.click(ui.getByRole('button', { name: /Rev 002:/ }));
-  fireEvent.click(ui.getByRole('button', { name: 'References', pressed: false }));
+  fireEvent.click(ui.getByRole('button', { name: "Saved references", pressed: false }));
   assert.ok(ui.getByText('Inherited project reference'));
   let retrieved: Blob | undefined, downloaded = '';
   const create = URL.createObjectURL, revoke = URL.revokeObjectURL, click = window.HTMLAnchorElement.prototype.click;

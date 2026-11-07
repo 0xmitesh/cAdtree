@@ -145,7 +145,7 @@ Closing hint: Your first meaningful design state is saved.
 | step-5-summary.png | cadtree | 1293 × 1101 PNG | f854602005178ac70dcaafcfaafb5a2d691aba36aa7aefe6041d2ab2e14fe2d5 |
 | step-5-file-note.png | cadtree | 1167 × 1278 PNG | c5a2d9ef0887ec5f502b4116e829e6a15461db7cd6969e9192af77103ed197d3 |
 | step-6-save.png | cadtree | 1293 × 1332 PNG | da7e0beed26176010cbae642346adcb8d86301d387d20582e5ca7180d6addce5 |
-| step-6-history.png | cadtree | 3540 × 1260 PNG | 035cb7e01cbb3bd9cab1e8c0e7ae98b04d1dd4612c2a47cc77a7bce46bf778f3 |
+| step-6-history.png | cadtree | 3540 × 1260 PNG | 9e0b5b75af5bd641b0c57b7d819cd7e75083b16b441124307bb4c9ddff8ab099 |
 
 ## Validation limits
 

@@ -83,6 +83,9 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       ? `${projectKey}/branch:${props.activeBranchId}`
       : (workspaceKey ?? "home");
 
+  let hasArchived = Boolean(props.activeVault?.branches.some(
+    branch => caseLifecycle(props.activeVault!, branch.branchId).status === "archived",
+  ));
   const projects = (
     workspace: WorkspaceState,
     key: string,
@@ -96,6 +99,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         ? (props.activeVault ?? entry.project?.vaultState)
         : entry.project?.vaultState;
       const unavailable = !entry.project || entry.status === "duplicate";
+      if (vault?.branches.some(branch => caseLifecycle(vault, branch.branchId).status === "archived"))
+        hasArchived = true;
       return {
         key: keyForProject,
         label: entry.name,
@@ -258,15 +263,15 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
           <ChevronsDownUp size={14} />
         </button>
       </div>
-      <label className="tree-archive-toggle">
+      {hasArchived ? <label className="tree-archive-toggle">
         <input
           type="checkbox"
           checked={showArchived}
           onChange={(event) => setShowArchived(event.target.checked)}
         />
         Show archived cases
-      </label>
-      {showArchived ? (
+      </label> : null}
+      {hasArchived && showArchived ? (
         <p className="tree-archive-help">
           Reopen cases in History → Design cases.
         </p>

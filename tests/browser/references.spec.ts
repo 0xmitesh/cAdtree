@@ -33,8 +33,14 @@ for (const width of [1366, 390]) test(`project references: exact import, compone
   await dialog.getByLabel('Tags (comma separated)').fill('clearance, customer');
   await dialog.getByRole('button', { name: 'Copy and verify attachment' }).click();
   await expect(dialog).toHaveCount(0);
+  const technical = page.locator('.reference-technical-details');
+  await expect(technical.locator('p')).toBeHidden();
+  await technical.locator('summary').click();
+  await expect(technical.locator('p')).toBeVisible();
+  await expect(technical).toContainText('SHA-256:');
+  await technical.locator('summary').click();
   await page.getByRole('button', { name: 'Use this version in project context' }).click();
-  await expect(page.getByRole('button', { name: 'Project context: this version' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Project context: this version' })).toBeDisabled();
   await nav.getByRole('button', { name: 'Changes', exact: true }).click();
   await page.getByRole('button', { name: 'Add revision reference' }).click();
   await page.getByRole('textbox', { name: 'Locator (optional)' }).fill('page 4');
@@ -60,7 +66,7 @@ for (const width of [1366, 390]) test(`project references: exact import, compone
   await expect(page.getByRole('button', { name: 'Save revision', exact: true })).toHaveCount(0);
   await nav.getByRole('button', { name: 'History', exact: true }).click();
   await page.getByRole('button', { name: /^Rev 002:/ }).click();
-  await page.locator('.detail-tabs').getByRole('button', { name: 'References', exact: true }).click();
+  await page.locator('.detail-tabs').getByRole('button', { name: "Saved references", exact: true }).click();
   await expect(page.getByText('Filename at capture: New.SLDPRT', { exact: false })).toBeVisible();
   await expect(page.getByText('Requirement-v2.pdf', { exact: true })).toHaveCount(0);
   const downloadEvent = page.waitForEvent('download');
