@@ -14,7 +14,20 @@ import {
   getWorkspacePath,
   type RememberedHome,
   bindWorkspacePathToRoot,
+  setConvenienceAccountScope,
 } from "./engine/idb-store";
+import {
+  type AccountUser,
+  type AuthAdapter,
+  type AuthSnapshot,
+  isSignInCancelled,
+  isUserActivationError,
+  resolveAuthAdapter,
+} from "./auth/firebase-auth";
+import {
+  AccountSignInModal,
+  AccountStatusControl,
+} from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
   resolveRecoveredFilePath,
@@ -133,8 +146,41 @@ type Context = {
   progress: (p: ProgressUpdate) => void;
 };
 
-export default function App() {
+type PendingAuthAction =
+  | { kind: "connect-home"; create: boolean; saved?: RememberedHome }
+  | { kind: "my-workspaces" }
+  | { kind: "callback"; run: () => Promise<void> | void };
+
+export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const sidebar = useSidebarWidth();
+  const authAdapterRef = useRef<AuthAdapter | null>(null);
+  if (!authAdapterRef.current || auth) {
+    authAdapterRef.current = resolveAuthAdapter(auth);
+  }
+  const authAdapter = authAdapterRef.current;
+  const [authState, setAuthState] = useState<AuthSnapshot>(() => {
+    const initial = authAdapter.getCurrentState?.() ?? {
+      ready: false,
+      user: null,
+    };
+    setConvenienceAccountScope(
+      initial.ready && initial.user ? initial.user.uid : null,
+    );
+    return initial;
+  });
+  const authStateRef = useRef<AuthSnapshot>(authState);
+  authStateRef.current = authState;
+  const [signInPrompt, setSignInPrompt] = useState<{
+    step: "sign-in" | "continue-picker";
+    action: PendingAuthAction;
+    signingIn: boolean;
+    error: string | null;
+    info?: string | null;
+  } | null>(null);
+  const [signOutPending, setSignOutPending] = useState(false);
+  const pendingSignOutRef = useRef(false);
+  const pendingAccountSnapshotRef = useRef<AuthSnapshot | null>(null);
+
   const [home, setHome] = useState<HomeState | null>(null);
   const [rememberedHome, setRememberedHome] = useState<RememberedHome | null>(
     null,
@@ -214,12 +260,94 @@ export default function App() {
   // Synchronous guards also cover rapid double clicks before React renders disabled controls.
   const operationRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
+
+  const resetActiveSessionUi = () => {
+    contextVersion.current++;
+    setManagedProject(null);
+    setVaultState(null);
+    setVaultDir(null);
+    setWorkingFolders({});
+    setWorkingDir(null);
+    setScanResult(null);
+    setLastRestoreReport(null);
+    setActiveBranchId(MAIN_BRANCH_ID);
+    setActiveTab("connect");
+    setStatusBanner(null);
+    setWorkspace(null);
+    setHome(null);
+    setHomeView(true);
+    setIntroView(false);
+    setManagedWorkspaceKey(null);
+    setPendingHome(null);
+    setExplorerOpen(false);
+    homeAddressCache.current = [];
+    setHomeAddress(null);
+    draftCache.current.clear();
+    branchContexts.current.clear();
+    setRememberedWorkspace(null);
+    setRememberedHome(null);
+    setConvenienceEpoch((value) => value + 1);
+  };
+
+  const applyAuthSnapshot = (next: AuthSnapshot) => {
+    const prevUid = authStateRef.current.user?.uid ?? null;
+    const nextUid = next.ready && next.user ? next.user.uid : null;
+    setConvenienceAccountScope(nextUid);
+    authStateRef.current = next;
+    setAuthState(next);
+    if (prevUid !== null && prevUid !== nextUid) {
+      resetActiveSessionUi();
+    } else if (nextUid === null) {
+      setRememberedWorkspace(null);
+      setRememberedHome(null);
+    }
+  };
+
   useEffect(() => {
-    void getRememberedWorkspace().then(setRememberedWorkspace);
+    return authAdapter.subscribe((next) => {
+      const prevUid = authStateRef.current.user?.uid ?? null;
+      const nextUid = next.ready && next.user ? next.user.uid : null;
+      if (operationRef.current && prevUid !== null && prevUid !== nextUid) {
+        pendingAccountSnapshotRef.current = next;
+        setSignOutPending(true);
+        return;
+      }
+      // A later auth event can return to the account whose write is still running.
+      // Discard any superseded switch rather than applying it after completion.
+      if (operationRef.current && pendingAccountSnapshotRef.current) {
+        pendingAccountSnapshotRef.current = null;
+        setSignOutPending(pendingSignOutRef.current);
+      }
+      applyAuthSnapshot(next);
+    });
+  }, [authAdapter]);
+
+  useEffect(() => {
+    const uid = authState.ready && authState.user ? authState.user.uid : null;
+    setConvenienceAccountScope(uid);
+    if (!uid) {
+      setRememberedWorkspace(null);
+      setRememberedHome(null);
+      return;
+    }
+    let cancelled = false;
+    void getRememberedWorkspace().then((value) => {
+      if (!cancelled && authStateRef.current.user?.uid === uid) {
+        setRememberedWorkspace(value);
+      }
+    });
     void getRememberedHome()
-      .then(setRememberedHome)
+      .then((value) => {
+        if (!cancelled && authStateRef.current.user?.uid === uid) {
+          setRememberedHome(value);
+        }
+      })
       .catch(() => {});
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [authState.ready, authState.user?.uid]);
+
   useEffect(
     () => () => {
       contextVersion.current++;
@@ -239,7 +367,7 @@ export default function App() {
     action: (context: Context) => Promise<T>,
     rethrow = false,
   ): Promise<T | undefined> => {
-    if (operationRef.current) {
+    if (operationRef.current || pendingSignOutRef.current || pendingAccountSnapshotRef.current) {
       if (rethrow)
         throw new Error("Finish or cancel the current operation first.");
       return;
@@ -278,8 +406,60 @@ export default function App() {
         operationRef.current = null;
         setOperation(null);
         setProgress(null);
+        if (pendingSignOutRef.current) {
+          pendingSignOutRef.current = false;
+          void executeSignOut();
+        } else if (pendingAccountSnapshotRef.current) {
+          const pending = pendingAccountSnapshotRef.current;
+          pendingAccountSnapshotRef.current = null;
+          setSignOutPending(false);
+          applyAuthSnapshot(pending);
+        }
       }
     }
+  };
+
+  const executeSignOut = async () => {
+    setSignOutPending(true);
+    try {
+      await authAdapter.signOut();
+    } catch (error) {
+      pendingSignOutRef.current = false;
+      setBannerScope("workspace");
+      setStatusBanner({
+        type: "error",
+        message:
+          error instanceof Error ? error.message : "Could not sign out.",
+      });
+      setSignOutPending(false);
+      return;
+    }
+    pendingSignOutRef.current = false;
+    pendingAccountSnapshotRef.current = null;
+    setSignOutPending(false);
+    setSignInPrompt(null);
+    applyAuthSnapshot({ ready: true, user: null });
+    resetActiveSessionUi();
+  };
+
+  const handleRequestSignOut = () => {
+    if (signOutPending || pendingSignOutRef.current) return;
+    pendingSignOutRef.current = true;
+    if (operationRef.current) {
+      setSignOutPending(true);
+      return;
+    }
+    void executeSignOut();
+  };
+
+  const requestSignIn = (action: PendingAuthAction) => {
+    setSignInPrompt({
+      step: "sign-in",
+      action,
+      signingIn: false,
+      error: null,
+      info: null,
+    });
   };
   const pickFolder = async (mode: "read" | "readwrite") => new RealFileSystemAdapter(await pickDirectory(mode));
   const applyVaultState = (next: VaultState) => {
@@ -366,6 +546,10 @@ export default function App() {
   };
   const allWorkspaces = () => {
     if (operationRef.current) return;
+    if (!authStateRef.current.user) {
+      requestSignIn({ kind: "my-workspaces" });
+      return;
+    }
     leaveProject();
     setWorkspace(null);
     setHomeView(true);
@@ -405,23 +589,37 @@ export default function App() {
     setBannerScope("workspace");
     setStatusBanner(warning ? { type: "info", message: warning } : null);
   };
-  const connectHome = async (create: boolean, saved?: RememberedHome) => {
+  const connectHomeInternal = async (
+    create: boolean,
+    saved?: RememberedHome,
+    options?: { pauseOnGestureError?: boolean },
+  ) => {
+    let gestureBlocked = false;
     await perform(
       "connect",
       async (context) => {
         assertFolderAccess();
         // Start the picker in the user action; perform owns connection errors.
-        const root = saved
-          ? new RealFileSystemAdapter(saved.rootHandle)
-          : await pickFolder("readwrite").catch((error: unknown) => {
-              if (error instanceof DOMException && error.name === "AbortError")
-                throw new Error(
-                  create
-                    ? "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home."
-                    : "Folder selection was cancelled. Choose your existing Cadtree home folder to continue.",
-                );
-              throw error;
-            });
+        let root: RealFileSystemAdapter;
+        if (saved) {
+          root = new RealFileSystemAdapter(saved.rootHandle);
+        } else {
+          try {
+            root = await pickFolder("readwrite");
+          } catch (error: unknown) {
+            if (options?.pauseOnGestureError && isUserActivationError(error)) {
+              gestureBlocked = true;
+              return;
+            }
+            if (error instanceof DOMException && error.name === "AbortError")
+              throw new Error(
+                create
+                  ? "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home."
+                  : "Folder selection was cancelled. Choose your existing Cadtree home folder to continue.",
+              );
+            throw error;
+          }
+        }
         if ((await root.requestPermission("readwrite")) !== "granted")
           throw new Error("Read/write folder access was denied. Allow local folder access in your browser site settings, then reconnect your Cadtree home.");
         if (create) {
@@ -475,8 +673,191 @@ export default function App() {
           });
       },
     );
+    if (gestureBlocked) {
+      setSignInPrompt({
+        step: "continue-picker",
+        action: { kind: "connect-home", create, saved },
+        signingIn: false,
+        error: null,
+      });
+    }
+  };
+  const connectHome = async (create: boolean, saved?: RememberedHome) => {
+    if (!authStateRef.current.user) {
+      requestSignIn({ kind: "connect-home", create, saved });
+      return;
+    }
+    await connectHomeInternal(create, saved);
+  };
+  const completeAuthenticatedSignIn = async (
+    account: AccountUser,
+    intendedAction: PendingAuthAction,
+  ) => {
+    applyAuthSnapshot({ ready: true, user: account });
+    const [remWorkspace, remHome] = await Promise.all([
+      getRememberedWorkspace(),
+      getRememberedHome().catch(() => null),
+    ]);
+    if (authStateRef.current.user?.uid === account.uid) {
+      setRememberedWorkspace(remWorkspace);
+      setRememberedHome(remHome);
+    }
+    setSignInPrompt(null);
+    if (intendedAction.kind === "connect-home") {
+      await connectHomeInternal(
+        intendedAction.create,
+        intendedAction.saved,
+        { pauseOnGestureError: true },
+      );
+    } else if (intendedAction.kind === "my-workspaces") {
+      leaveProject();
+      setWorkspace(null);
+      setHomeView(true);
+      setIntroView(false);
+      setManagedWorkspaceKey(null);
+    } else if (intendedAction.kind === "callback") {
+      await intendedAction.run();
+    }
+  };
+  const handleContinueWithGoogle = async () => {
+    if (!signInPrompt || signInPrompt.signingIn) return;
+    const intendedAction = signInPrompt.action;
+    setSignInPrompt({
+      ...signInPrompt,
+      signingIn: true,
+      error: null,
+      info: null,
+    });
+    try {
+      const account = await authAdapter.signInWithGoogle();
+      await completeAuthenticatedSignIn(account, intendedAction);
+    } catch (error) {
+      if (isSignInCancelled(error)) {
+        setSignInPrompt(null);
+        return;
+      }
+      setSignInPrompt({
+        step: "sign-in",
+        action: intendedAction,
+        signingIn: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Google sign-in failed. Try again.",
+        info: null,
+      });
+    }
+  };
+  const handleSubmitEmailAuth = async (
+    mode: "sign-in" | "create-account",
+    email: string,
+    password: string,
+  ) => {
+    if (!signInPrompt || signInPrompt.signingIn) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setSignInPrompt({
+        ...signInPrompt,
+        error: "Enter your email address.",
+        info: null,
+      });
+      return;
+    }
+    if (!password || password.length < 6) {
+      setSignInPrompt({
+        ...signInPrompt,
+        error: "Password must be at least 6 characters.",
+        info: null,
+      });
+      return;
+    }
+    const intendedAction = signInPrompt.action;
+    setSignInPrompt({
+      ...signInPrompt,
+      signingIn: true,
+      error: null,
+      info: null,
+    });
+    try {
+      const emailAction = mode === "create-account"
+        ? authAdapter.signUpWithEmail
+        : authAdapter.signInWithEmail;
+      if (!emailAction) throw new Error("Email authentication is unavailable. Use Continue with Google.");
+      const account = await emailAction.call(authAdapter, trimmedEmail, password);
+      await completeAuthenticatedSignIn(account, intendedAction);
+    } catch (error) {
+      setSignInPrompt({
+        step: "sign-in",
+        action: intendedAction,
+        signingIn: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : mode === "create-account"
+              ? "Account creation failed. Try again."
+              : "Sign-in failed. Try again.",
+        info: null,
+      });
+    }
+  };
+  const handleForgotPassword = async (email: string) => {
+    if (!signInPrompt || signInPrompt.signingIn) return;
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setSignInPrompt({
+        ...signInPrompt,
+        error: "Enter your email address first to receive a password reset link.",
+        info: null,
+      });
+      return;
+    }
+    const intendedAction = signInPrompt.action;
+    setSignInPrompt({
+      ...signInPrompt,
+      signingIn: true,
+      error: null,
+      info: null,
+    });
+    try {
+      if (!authAdapter.sendPasswordReset) throw new Error("Password reset is unavailable. Try again later.");
+      await authAdapter.sendPasswordReset(trimmedEmail);
+      setSignInPrompt({
+        step: "sign-in",
+        action: intendedAction,
+        signingIn: false,
+        error: null,
+        info: `Password reset email sent to ${trimmedEmail}. Check your inbox.`,
+      });
+    } catch (error) {
+      setSignInPrompt({
+        step: "sign-in",
+        action: intendedAction,
+        signingIn: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not send password reset email. Try again.",
+        info: null,
+      });
+    }
+  };
+  const handleContinuePickerAfterSignIn = () => {
+    if (!signInPrompt || signInPrompt.action.kind !== "connect-home") {
+      setSignInPrompt(null);
+      return;
+    }
+    const { create, saved } = signInPrompt.action;
+    setSignInPrompt(null);
+    void connectHomeInternal(create, saved);
   };
   const completeHomeSetup = async (path: string) => {
+    if (!authStateRef.current.ready || !authStateRef.current.user) {
+      requestSignIn({
+        kind: "callback",
+        run: () => completeHomeSetup(path),
+      });
+      return;
+    }
     if (!pendingHome) return;
     const selected = pendingHome;
     await perform(
@@ -525,6 +906,13 @@ export default function App() {
     );
   };
   const openHomeEntry = async (entry: HomeWorkspaceEntry) => {
+    if (!authStateRef.current.ready || !authStateRef.current.user) {
+      requestSignIn({
+        kind: "callback",
+        run: () => openHomeEntry(entry),
+      });
+      return;
+    }
     if (!home) return;
     await perform(
       "connect",
@@ -554,12 +942,21 @@ export default function App() {
     );
   };
   const addHomeWorkspace = async (name?: string) => {
+    if (!authStateRef.current.ready || !authStateRef.current.user) {
+      requestSignIn({
+        kind: "callback",
+        run: () => addHomeWorkspace(name),
+      });
+      return;
+    }
     if (!home) throw new Error("Choose a Cadtree home first.");
-    const source = name === undefined ? await pickFolder("read") : undefined;
     await perform(
       "connect",
       async (context) => {
         try {
+          // The picker is part of this operation: keep account changes deferred
+          // until the import has finished using the initiating account's scope.
+          const source = name === undefined ? await pickFolder("read") : undefined;
           if (source && (await source.requestPermission("read")) !== "granted")
             throw new Error(
               "Grant access to inspect and copy the existing workspace.",
@@ -708,6 +1105,13 @@ export default function App() {
       );
   };
   const openManaged = async (entry: WorkspaceProjectEntry) => {
+    if (!authStateRef.current.ready || !authStateRef.current.user) {
+      requestSignIn({
+        kind: "callback",
+        run: () => openManaged(entry),
+      });
+      return;
+    }
     if (!workspace) return;
     await perform(
       "connect",
@@ -728,6 +1132,13 @@ export default function App() {
     entry,
     branchId,
   ) => {
+    if (!authStateRef.current.ready || !authStateRef.current.user) {
+      requestSignIn({
+        kind: "callback",
+        run: () => openTreeProject(homeWorkspace, entry, branchId),
+      });
+      return;
+    }
     await perform(
       "connect",
       async (context) => {
@@ -801,6 +1212,13 @@ export default function App() {
     name: string,
     source?: FileSystemDirectoryAdapter,
   ) => {
+    if (!authStateRef.current.ready || !authStateRef.current.user) {
+      requestSignIn({
+        kind: "callback",
+        run: () => addManagedProject(name, source),
+      });
+      return;
+    }
     if (!workspace) throw new Error("Choose a workspace first.");
     await perform(
       "connect",
@@ -1529,7 +1947,7 @@ export default function App() {
     }, true);
   };
   const handleCancelOperation = () => operationRef.current?.abort();
-  const busy = operation !== null;
+  const busy = operation !== null || signOutPending;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
   const isRestoring = operation === "restore";
@@ -1617,6 +2035,11 @@ export default function App() {
             onClick={(e) => {
               e.preventDefault();
               if (operationRef.current) return;
+              if (!authStateRef.current.user) {
+                setHomeView(true);
+                setIntroView(true);
+                return;
+              }
               allWorkspaces();
               setIntroView(true);
             }}
@@ -1731,10 +2154,20 @@ export default function App() {
           />
         </aside>
         <div className="workspace-shell">
-          <span className="local-indicator compact-local-indicator">
-            <i />
-            Local workspace
-          </span>
+          <div className="shell-top-bar">
+            <AccountStatusControl
+              ready={authState.ready}
+              user={authState.user}
+              busy={busy}
+              signOutPending={signOutPending}
+              onSignIn={() => requestSignIn({ kind: "my-workspaces" })}
+              onSignOut={handleRequestSignOut}
+            />
+            <span className="local-indicator compact-local-indicator">
+              <i />
+              Local workspace
+            </span>
+          </div>
           <main id="main-content" aria-busy={busy}>
             {progress &&
             (isVerifyingAll || (isScanning && activeTab !== "changes")) ? (
@@ -1815,13 +2248,23 @@ export default function App() {
             ) : null}
             {homeView ? (
               <HomeWorkspacesView
-                home={home}
+                home={authState.ready && authState.user ? home : null}
                 intro={introView}
-                remembered={rememberedHome}
+                remembered={
+                  authState.ready && authState.user ? rememberedHome : null
+                }
                 busy={busy}
                 progress={progress}
                 onConnect={connectHome}
                 onReconnect={async () => {
+                  if (!authStateRef.current.user) {
+                    requestSignIn({
+                      kind: "connect-home",
+                      create: false,
+                      saved: rememberedHome ?? undefined,
+                    });
+                    return;
+                  }
                   if (home) {
                     allWorkspaces();
                     return;
@@ -2109,6 +2552,37 @@ export default function App() {
                 <WorkspaceTree {...treeProps} />
               </div>
             </Modal>
+          ) : null}
+          {signInPrompt ? (
+            <AccountSignInModal
+              step={signInPrompt.step}
+              createHomePicker={
+                signInPrompt.action.kind === "connect-home"
+                  ? signInPrompt.action.create
+                  : undefined
+              }
+              signingIn={signInPrompt.signingIn}
+              error={signInPrompt.error}
+              info={signInPrompt.info}
+              onContinueWithGoogle={() => {
+                void handleContinueWithGoogle();
+              }}
+              onSubmitEmail={(mode, email, password) => {
+                void handleSubmitEmailAuth(mode, email, password);
+              }}
+              onForgotPassword={(email) => {
+                void handleForgotPassword(email);
+              }}
+              onClearFeedback={() => {
+                setSignInPrompt((prev) =>
+                  prev ? { ...prev, error: null, info: null } : null,
+                );
+              }}
+              onContinuePicker={handleContinuePickerAfterSignIn}
+              onCancel={() => {
+                if (!signInPrompt.signingIn) setSignInPrompt(null);
+              }}
+            />
           ) : null}
         </div>
       </div>

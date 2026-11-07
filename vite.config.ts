@@ -8,6 +8,23 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      ...(command === "serve" &&
+      (process.env.CADTREE_TEST_AUTH === "1" || mode === "synthetic")
+        ? [
+            {
+              name: "cadtree-browser-test-auth",
+              transformIndexHtml() {
+                return [
+                  {
+                    tag: "script",
+                    attrs: { type: "module", src: "/tests/browser-test-auth.ts" },
+                    injectTo: "head-prepend" as const,
+                  },
+                ];
+              },
+            },
+          ]
+        : []),
       ...(command === "serve" && mode === "synthetic"
         ? [
             {
