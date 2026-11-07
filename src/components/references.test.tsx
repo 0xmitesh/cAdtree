@@ -2,7 +2,7 @@ import '../../tests/dom';
 import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB } from 'fake-indexeddb';
-import { cleanup, render, fireEvent, within, waitFor } from '@testing-library/react';
+import { act, cleanup, render, fireEvent, within, waitFor } from '@testing-library/react';
 import App from '../App';
 import { ChangesCaptureView } from './ChangesCaptureView';
 import { RevisionReferenceContext } from './RevisionReferenceContext';
@@ -13,6 +13,7 @@ import { captureRevision } from '../engine/revision-service';
 import { openExistingVault } from '../engine/vault-service';
 import { scanBranchChanges } from '../engine/scanner';
 import { clearAllConvenienceMetadata } from '../engine/idb-store';
+import { inventorySignature, readVerifiedInventory } from '../engine/copy-service';
 import { importReferenceAttachment, updateProjectReference, createReferenceReview } from '../engine/references';
 import { openHomeWorkspace, appBusy } from '../../tests/app-controls';
 
@@ -28,6 +29,47 @@ async function fixture() {
   return { home, project, working, first };
 }
 const source = () => new File([new Uint8Array([0, 255, 13, 10, 128])], 'Requirement.pdf', { type: 'application/pdf' });
+
+test('already-pinned reference versions are disabled; another version still updates project context', async () => {
+  const f = await fixture();
+  const metadata = { title: 'Requirements', description: '', tags: ['demo'] };
+  let state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), metadata);
+  const ref = state.references!.library[0], v1 = ref.versions[0].versionId;
+  state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, new File(['Updated requirement'], 'Updated.pdf'), metadata, ref.referenceId);
+  const v2 = state.references!.library[0].versions[1].versionId;
+  await updateProjectReference(f.project.vaultDir, f.project.record.projectId, ref.referenceId, { projectVersionId: v1 });
+  const ui = render(<App />);
+  await openHomeWorkspace(ui, f.home);
+  fireEvent.click(ui.getByRole('button', { name: 'Open project' }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'References' }));
+  const versions = ui.getByRole('combobox', { name: /Attachment version/ });
+  assert.equal((versions as HTMLSelectElement).value, v2);
+  fireEvent.change(versions, { target: { value: v1 } });
+  const selected = ui.getByRole('button', { name: 'Project context: this version' }) as HTMLButtonElement;
+  assert.equal(selected.disabled, true);
+  const beforeState = await openExistingVault(f.project.vaultDir);
+  const beforeFiles = inventorySignature(await readVerifiedInventory(f.home));
+  const calls = { reads: 0, writes: 0 };
+  f.home.setHooks({ onBeforeRead: () => { calls.reads++; }, onBeforeWrite: () => { calls.writes++; } });
+  await act(async () => { selected.click(); });
+  assert.deepEqual(calls, { reads: 0, writes: 0 }, 'The disabled status does not invoke a reference operation');
+  assert.equal(inventorySignature(await readVerifiedInventory(f.home)), beforeFiles);
+  f.home.setHooks({ onBeforeRead: undefined, onBeforeWrite: undefined });
+  fireEvent.change(versions, { target: { value: v2 } });
+  const choose = ui.getByRole('button', { name: 'Use this version in project context' }) as HTMLButtonElement;
+  assert.equal(choose.disabled, false);
+  fireEvent.click(choose);
+  await waitFor(() => assert.equal((ui.getByRole('button', { name: 'Project context: this version' }) as HTMLButtonElement).disabled, true));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  const updated = await openExistingVault(f.project.vaultDir);
+  assert.equal(updated.references!.library[0].projectVersionId, v2);
+  assert.equal(updated.references!.library[0].versions.length, 2);
+  assert.equal(Object.keys(updated.references!.catalogs).length, Object.keys(beforeState.references!.catalogs).length + 1);
+  assert.equal(updated.revisions.length, 1);
+  fireEvent.change(versions, { target: { value: v1 } });
+  assert.equal((ui.getByRole('button', { name: 'Use this version in project context' }) as HTMLButtonElement).disabled, false);
+});
 
 test('actual App imports, pins project context, saves a reference-only revision, retrieves and reopens entirely from disk', async () => {
   const f = await fixture(); let ui = render(<App />); 

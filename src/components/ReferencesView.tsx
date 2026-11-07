@@ -66,7 +66,7 @@ function ReferenceCard({ reference: r, disabled, onEdit, onVersion, onRetrieve, 
     <p className="file-path">{v.originalFilename}</p><p className="muted small">{v.fileType} · {formatBytes(v.size)} · Imported {formatTimestamp(v.importedAt)} (import time, not document creation date)</p>
     <p className="file-path small">Reference: {r.referenceId}<br />Version: {v.versionId}<br />SHA-256: {v.sha256}</p>
     <div className="button-row"><button className="button" disabled={disabled} onClick={() => void onRetrieve(v.versionId)}>Retrieve exact attachment</button>
-      <button className="button" disabled={disabled} onClick={() => void onUpdate({ removed: false, projectVersionId: v.versionId })}>{r.projectVersionId === v.versionId ? 'Project context: this version' : 'Use this version in project context'}</button>
+      <button className="button" disabled={disabled || r.projectVersionId === v.versionId} onClick={() => void onUpdate({ removed: false, projectVersionId: v.versionId })}>{r.projectVersionId === v.versionId ? 'Project context: this version' : 'Use this version in project context'}</button>
       {r.projectVersionId ? <button className="button" disabled={disabled} onClick={() => void onUpdate({ projectVersionId: null })}>Stop inheriting in future revisions</button> : null}
       <button className="button" disabled={disabled} onClick={() => void onUpdate({ removed: !r.removed })}>{r.removed ? 'Restore to library' : 'Remove from current context'}</button></div>
   </section>;
