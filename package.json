@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/engine/*.test.ts src/history/*.test.ts src/components/*.test.tsx",
+    "test": "tsx --test src/engine/*.test.ts src/history/*.test.ts src/knowledge/*.test.ts src/components/*.test.tsx",
     "test:ui": "playwright test"
   },
   "dependencies": {
