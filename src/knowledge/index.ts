@@ -86,10 +86,12 @@ export function buildKnowledgeIndex(state: VaultState): KnowledgeIndex {
     const notes: KnowledgeAvailability = manifest.schemaVersion !== 1
       ? { status: 'unsupported', reason: 'Unsupported revision manifest schema.' }
       : invalid ? unavailable([...revision.integrityErrors, ...node.warnings, 'Revision metadata is not trustworthy.'].join(' ')) : available();
+    const references = invalid ? { availability: { ...notes }, attachments: [] } : referencesFor(state, revision);
     revisions.push({
       revisionId: node.id, branchId: manifest.branchId, notes,
       fileNotes: invalid ? { ...notes } : manifest.fileNotes === undefined
         ? { status: 'not_recorded', reason: 'The optional fileNotes field was not recorded.' } : available(),
+      referenceContext: { availability: { ...references.availability }, attachments: structuredClone(references.attachments) },
       history: {
         recordedParentRevisionId: manifest.parentRevisionId,
         validatedParentRevisionId: parent.get(node.id) ?? null,
@@ -98,7 +100,6 @@ export function buildKnowledgeIndex(state: VaultState): KnowledgeIndex {
     });
     if (invalid) continue;
     usable.add(node.id);
-    const references = referencesFor(state, revision);
     const add = (kind: KnowledgeRecord['kind'], text: string, jsonPointer: string, filePath?: string) => {
       const component = filePath === undefined ? undefined : componentFor(state, node.id, filePath);
       records.push({

@@ -12,7 +12,7 @@ import { getObjectPathSegments } from '../engine/object-store';
 import { inventorySignature, readVerifiedInventory } from '../engine/copy-service';
 import { ancestryOf, layoutRevisions } from '../history/layout';
 import type { CaptureRevisionInput, VaultState } from '../engine/types';
-import { buildKnowledgeIndex } from './index';
+import { buildKnowledgeIndex, type KnowledgeIndex } from './index';
 
 const main = 'branch-main';
 const notes = { problem: ' Collar too thin\nunder load. ', modification: 'Increase thickness to 8 mm.', observations: '' };
@@ -25,7 +25,7 @@ function freeze(value: object) {
   Object.freeze(value);
   for (const child of Object.values(value)) if (child && typeof child === 'object') freeze(child);
 }
-async function fixture() {
+async function fixture(notePath: string | null = 'collar.SLDPRT') {
   const working = new InMemoryFileSystemAdapter('Main'), vault = new InMemoryFileSystemAdapter('Vault');
   await initializeProjectVault(working, vault, 'Knowledge');
   const folders: Record<string, FileSystemDirectoryAdapter> = { [main]: working };
@@ -34,6 +34,7 @@ async function fixture() {
   const ref = imported.references!.library[0], version = ref.versions[0];
   await updateProjectReference(vault, imported.project.projectId, ref.referenceId, { projectVersionId: version.versionId });
   await working.writeFileText(['collar.SLDPRT'], 'geometry one');
+  if (notePath && notePath !== 'collar.SLDPRT') await working.writeFileText(notePath.split('/'), 'other component geometry');
   const scan = async () => {
     const state = await openExistingVault(vault);
     return { state, scan: await scanBranchChanges(working, main, getBranchBaseline(state, main)) };
@@ -41,12 +42,107 @@ async function fixture() {
   const save = (extra: Partial<CaptureRevisionInput> = {}, dir: FileSystemDirectoryAdapter = working, branchId = main) =>
     captureRevision(dir, vault, { branchId, summary: 'Collar clearance', notes, workingFolders: folders, ...extra });
   const reviewed = await scan();
-  const first = await save({ fileNotes: fileNotes('collar.SLDPRT'), referenceReview: createReferenceReview(reviewed.state, reviewed.scan, [{
+  const first = await save({ ...(notePath ? { fileNotes: fileNotes(notePath) } : {}), referenceReview: createReferenceReview(reviewed.state, reviewed.scan, [{
     referenceId: ref.referenceId, versionId: version.versionId, locator: 'page 4, table 2', explanation: 'Required fit',
     component: { kind: 'pending', path: 'collar.SLDPRT' },
   }]) });
   return { working, vault, folders, imported, ref, version, scan, save, first };
 }
+
+function assertCompleteReferenceContext(index: KnowledgeIndex, state: VaultState, revisionId: string) {
+  const projected = index.revisions.find(r => r.revisionId === revisionId)!.referenceContext;
+  const revision = state.revisions.find(r => r.manifest.revisionId === revisionId)!;
+  const context = state.references!.contexts[revisionId].record!;
+  const catalog = state.references!.catalogs[context.catalogId!];
+  assert.equal(projected.availability.status, 'available');
+  assert.equal(projected.attachments.length, context.links.length, 'Every committed association survives without requiring a note');
+  for (const [i, link] of context.links.entries()) {
+    const association = projected.attachments[i];
+    const version = catalog.record.references.find(r => r.referenceId === link.referenceId)!.versions.find(v => v.versionId === link.versionId)!;
+    assert.deepEqual({
+      referenceId: association.referenceId, versionId: association.versionId, origin: association.origin,
+      componentId: association.componentId, componentPath: association.componentPath,
+      locator: association.locator, explanation: association.explanation,
+    }, link);
+    assert.equal(association.sha256, version.sha256); assert.equal(association.size, version.size);
+    assert.equal(association.originalFilename, version.originalFilename); assert.equal(association.fileType, version.fileType);
+    assert.deepEqual(association.source, {
+      recordPath: `references/contexts/${revisionId}.json`, jsonPointer: `/links/${i}`,
+      contextSha256: revision.completion.referenceContext!.contextSha256,
+      contextPayloadSha256: context.payloadSha256, boundarySha256: context.boundarySha256,
+      catalogId: context.catalogId, catalogSha256: catalog.sha256,
+    });
+    assert.equal(association.metadata.status, 'available'); assert.equal(association.content.status, 'unavailable');
+  }
+}
+
+for (const notePath of [null, 'spacer.SLDPRT']) test(`F1: component associations survive independently of file notes (${notePath ?? 'no file notes'})`, async () => {
+  const f = await fixture(notePath), state = f.first.vaultState, revisionId = f.first.revision.manifest.revisionId;
+  const before = JSON.stringify(state), vaultBefore = await inventory(f.vault), workingBefore = await inventory(f.working);
+  let writes = 0;
+  f.vault.setHooks({ onBeforeWrite: () => { writes++; } });
+  f.working.setHooks({ onBeforeWrite: () => { writes++; } });
+  freeze(state);
+  const index = buildKnowledgeIndex(state);
+  assertCompleteReferenceContext(index, state, revisionId);
+  assert.deepEqual(buildKnowledgeIndex(state), index);
+  const componentLink = index.revisions[0].referenceContext.attachments.find(a => a.scope === 'component')!;
+  assert.equal(componentLink.componentPath, 'collar.SLDPRT');
+  assert.equal(componentLink.componentId, state.components!.revisions[revisionId].files.find(f => f.path === 'collar.SLDPRT')!.componentId);
+  assert.equal(componentLink.locator, 'page 4, table 2'); assert.equal(componentLink.explanation, 'Required fit');
+  const fileRecords = index.records.filter(r => r.scope === 'file');
+  assert.equal(fileRecords.length, notePath ? 3 : 0, 'No fabricated file-note records');
+  assert.ok(fileRecords.every(r => r.filePath === notePath && r.componentId !== componentLink.componentId));
+  assert.ok(index.records.every(r => r.attachments.every(a => a.scope !== 'component')), 'Unrelated project/file notes do not inherit this association');
+  for (const association of index.revisions[0].referenceContext.attachments) {
+    const rawContext = JSON.parse(await f.vault.readFileText(association.source.recordPath.split('/')));
+    const link = rawContext.links[Number(association.source.jsonPointer.split('/')[2])];
+    assert.equal(link.referenceId, association.referenceId); assert.equal(link.locator, association.locator);
+  }
+  index.revisions[0].referenceContext.attachments[0].source.jsonPointer = '/consumer-edit';
+  assert.notEqual(index.records[0].attachments[0].source.jsonPointer, '/consumer-edit', 'Revision and note views have detached attachment data');
+  assert.equal(JSON.stringify(state), before); assert.equal(writes, 0);
+  assert.equal(await inventory(f.vault), vaultBefore); assert.equal(await inventory(f.working), workingBefore);
+});
+
+test('F1: a reference-context-only revision preserves component associations and pinned historical provenance without notes or CAD changes', async () => {
+  const f = await fixture(null), firstId = f.first.revision.manifest.revisionId;
+  const earlier = buildKnowledgeIndex(f.first.vaultState).revisions[0];
+  const reviewed = await f.scan();
+  assert.equal(reviewed.scan.hasChanges, false);
+  const componentId = reviewed.state.components!.revisions[firstId].files[0].componentId;
+  const saved = await f.save({ referenceReview: createReferenceReview(reviewed.state, reviewed.scan, [{
+    referenceId: f.ref.referenceId, versionId: f.version.versionId, locator: 'section 6.2', explanation: 'Updated context only',
+    component: { kind: 'existing', componentId },
+  }, { referenceId: f.ref.referenceId, versionId: f.version.versionId, locator: '', explanation: 'General revision context' }]) });
+  const revisionId = saved.revision.manifest.revisionId;
+  assert.equal(saved.vaultState.references!.contexts[revisionId].record!.contextOnly, true);
+  assert.deepEqual(saved.revision.manifest.files, f.first.revision.manifest.files);
+  assert.equal(saved.revision.manifest.fileNotes, undefined);
+  // Moving the current library ahead must not alter either revision's captured provenance.
+  await importReferenceAttachment(f.vault, saved.vaultState.project.projectId, attachment(new Uint8Array([8, 9])),
+    { title: 'Later reference version', description: '', tags: [] }, f.ref.referenceId);
+  const state = await openExistingVault(f.vault), before = JSON.stringify(state);
+  const vaultBefore = await inventory(f.vault), workingBefore = await inventory(f.working);
+  let writes = 0;
+  f.vault.setHooks({ onBeforeWrite: () => { writes++; } });
+  f.working.setHooks({ onBeforeWrite: () => { writes++; } });
+  freeze(state);
+  const index = buildKnowledgeIndex(state);
+  assertCompleteReferenceContext(index, state, firstId); assertCompleteReferenceContext(index, state, revisionId);
+  assert.deepEqual(index.revisions.find(r => r.revisionId === firstId), earlier);
+  const association = index.revisions.find(r => r.revisionId === revisionId)!.referenceContext.attachments.find(a => a.scope === 'component')!;
+  assert.equal(association.versionId, f.version.versionId); assert.equal(association.componentId, componentId);
+  assert.equal(association.locator, 'section 6.2'); assert.equal(association.explanation, 'Updated context only');
+  assert.deepEqual(index.revisions.find(r => r.revisionId === revisionId)!.referenceContext.attachments.map(a => a.scope), ['project', 'component', 'revision']);
+  assert.equal(index.records.filter(r => r.scope === 'file').length, 0);
+  assert.ok(index.records.every(r => r.attachments.every(a => a.scope !== 'component')));
+  const reordered = structuredClone(state); reordered.revisions.reverse();
+  assert.deepEqual(buildKnowledgeIndex(reordered), index);
+  index.revisions.find(r => r.revisionId === revisionId)!.referenceContext.attachments[0].locator = 'consumer edit';
+  assert.equal(JSON.stringify(state), before); assert.equal(writes, 0);
+  assert.equal(await inventory(f.vault), vaultBefore); assert.equal(await inventory(f.working), workingBefore);
+});
 
 test('exact notes, distinct source identities and resolvable immutable manifest pointers; zero writes or mutation', async () => {
   const f = await fixture(), state = f.first.vaultState;
@@ -147,16 +243,22 @@ test('legacy, verified empty context and missing context have different meanings
   legacy.references = { status: 'legacy', library: [], catalogs: {}, contexts: { [id]: { status: 'legacy' } }, catalogId: null, catalogSha256: null };
   const old = buildKnowledgeIndex(legacy);
   assert.equal(old.revisions[0].fileNotes.status, 'not_recorded');
+  assert.equal(old.revisions[0].referenceContext.availability.status, 'not_recorded');
+  assert.deepEqual(old.revisions[0].referenceContext.attachments, []);
   assert.ok(old.records.every(r => r.references.status === 'not_recorded'));
   const missing = structuredClone(f.first.vaultState); delete missing.references;
   assert.ok(buildKnowledgeIndex(missing).records.every(r => r.references.status === 'unavailable'));
+  assert.equal(buildKnowledgeIndex(missing).revisions[0].referenceContext.availability.status, 'unavailable');
   const brokenCatalog = structuredClone(f.first.vaultState); brokenCatalog.references!.catalogs = {};
   assert.ok(buildKnowledgeIndex(brokenCatalog).records.every(r => r.references.status === 'unavailable' && !r.attachments.length));
+  assert.equal(buildKnowledgeIndex(brokenCatalog).revisions[0].referenceContext.availability.status, 'unavailable');
   await updateProjectReference(f.vault, f.imported.project.projectId, f.ref.referenceId, { projectVersionId: null });
   const reviewed = await f.scan();
   const saved = await f.save({ referenceReview: createReferenceReview(reviewed.state, reviewed.scan, []) });
   const empty = buildKnowledgeIndex(saved.vaultState).records.filter(r => r.revisionId === saved.revision.manifest.revisionId);
   assert.ok(empty.every(r => r.references.status === 'available' && r.attachments.length === 0));
+  assert.deepEqual(buildKnowledgeIndex(saved.vaultState).revisions.find(r => r.revisionId === saved.revision.manifest.revisionId)!.referenceContext,
+    { availability: { status: 'available' }, attachments: [] });
 });
 
 test('actual missing and corrupted attachment bytes cannot become trusted content', async () => {
@@ -169,6 +271,8 @@ test('actual missing and corrupted attachment bytes cannot become trusted conten
   const missing = await openExistingVault(f.vault);
   assert.equal(missing.references!.status, 'unavailable');
   assert.ok(buildKnowledgeIndex(missing).records.every(r => r.references.status === 'unavailable' && r.attachments.length === 0));
+  assert.equal(buildKnowledgeIndex(missing).revisions[0].referenceContext.availability.status, 'unavailable');
+  assert.deepEqual(buildKnowledgeIndex(missing).revisions[0].referenceContext.attachments, []);
 });
 
 test('corrupted manifests and partial/unsupported reference contexts expose no trusted facts', async () => {
@@ -178,6 +282,8 @@ test('corrupted manifests and partial/unsupported reference contexts expose no t
     partial.references!.status = status;
     assert.equal(partial.references!.contexts[id].status, 'available');
     assert.ok(buildKnowledgeIndex(partial).records.every(r => r.references.status === status && !r.attachments.length));
+    assert.equal(buildKnowledgeIndex(partial).revisions[0].referenceContext.availability.status, status);
+    assert.deepEqual(buildKnowledgeIndex(partial).revisions[0].referenceContext.attachments, []);
   }
   const contextPath = ['references', 'contexts', `${id}.json`];
   await f.vault.writeFileText(contextPath, '{}');
@@ -188,6 +294,8 @@ test('corrupted manifests and partial/unsupported reference contexts expose no t
   await f.vault.writeFileText(manifestPath, JSON.stringify(manifest));
   const damaged = buildKnowledgeIndex(await openExistingVault(f.vault));
   assert.equal(damaged.records.length, 0); assert.equal(damaged.revisions[0].notes.status, 'unavailable');
+  assert.equal(damaged.revisions[0].referenceContext.availability.status, 'unavailable');
+  assert.deepEqual(damaged.revisions[0].referenceContext.attachments, []);
   assert.ok(damaged.diagnostics.length);
 });
 
@@ -209,5 +317,6 @@ test('broken/duplicate/cyclic ancestry uses history utilities and preserves unav
   assert.equal(buildKnowledgeIndex(missing).records.length, 0);
   const unsupported = structuredClone(f.first.vaultState); unsupported.revisions[0].manifest.schemaVersion = 2;
   assert.equal(buildKnowledgeIndex(unsupported).revisions[0].notes.status, 'unsupported');
+  assert.equal(buildKnowledgeIndex(unsupported).revisions[0].referenceContext.availability.status, 'unsupported');
   assert.equal(buildKnowledgeIndex(unsupported).records.length, 0);
 });

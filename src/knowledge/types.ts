@@ -63,6 +63,12 @@ export interface KnowledgeRevision {
   branchId: string;
   notes: KnowledgeAvailability;
   fileNotes: KnowledgeAvailability;
+  /** Complete revision context, independent of note presence or scope.
+   * Associations provide context, never proof of a particular engineering claim. */
+  referenceContext: {
+    availability: KnowledgeAvailability;
+    attachments: KnowledgeAttachment[];
+  };
   history: {
     recordedParentRevisionId: string | null;
     validatedParentRevisionId: string | null;

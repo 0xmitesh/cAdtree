@@ -12,6 +12,11 @@ import { buildKnowledgeIndex } from './src/knowledge';
 
 const index = buildKnowledgeIndex(state);
 const recordedNotes = index.records.filter(record => record.status === 'recorded');
+// Complete contextual associations, even when a component has no file notes:
+const revisionContext = index.revisions[0]?.referenceContext;
+if (revisionContext?.availability.status === 'available') {
+  const associations = revisionContext.attachments;
+}
 ```
 
 ## Records and source resolution
@@ -87,6 +92,23 @@ with that verified component ID. These are context associations, not per-note
 citations or assertions of support. Empty locators stay empty; pages are never
 invented or interpreted.
 
+Every `KnowledgeRevision.referenceContext` exposes the complete validated
+revision-reference collection through `availability` and `attachments`, using the
+same `KnowledgeAttachment` provenance and content-verification semantics. It is
+independent of note records: component links remain visible with no file notes,
+with notes only on another component, and in reference-context-only revisions
+with no CAD changes. Links retain their committed order and exact source pointers.
+An available empty collection means no links were recorded; legacy, missing,
+unsupported or corrupt evidence retains its explicit availability status and
+exposes no trusted associations. Invalid revision metadata likewise exposes no
+trusted reference collection.
+
+Note-level attachments remain a filtered convenience view. A component link is
+never added to unrelated project/file notes, and no synthetic empty file-note
+record is created to hold it. Neither view asserts that a reference supports any
+specific engineering claim. Returned revision and note attachment data is detached
+from the vault state and from each other.
+
 Attachment `metadata.status: 'available'` describes verified reconstructed
 metadata only. `content.status: 'unavailable'` explicitly states that current
 attachment bytes are not verified by `VaultState`. Opening a vault checks object
@@ -118,6 +140,9 @@ rename, pinned attachment versions, exact source resolution, missing/corrupt
 objects and contexts, legacy/empty states, and history damage. A frozen input,
 write hooks and complete vault/working-folder inventories verify zero writes and
 no input mutation; returned attachment data is detached from the source state.
+F1 regression tests additionally cover component references without file notes,
+references to a component other than the only noted component, reference-context-only
+captures, complete historical provenance and pinned versions after a library update.
 
 No permanent format, cache or search index is added. Whole-vault projection and
 repeated ancestry lists favor clarity for M1A; large-history performance has not
