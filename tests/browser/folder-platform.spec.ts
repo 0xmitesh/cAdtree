@@ -61,7 +61,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await page.getByRole('dialog').getByRole('button', { name: 'Create branch', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
-  const branchId = await page.locator('.current-branch-indicator').getAttribute('data-branch-id');
+  const branchId = await page.locator('.project-context-header').getAttribute('data-branch-id');
   const branch = await page.evaluate(async ({ branchId, original, renamed }) => {
     const path = '/src/engine/workspace-service.ts';
     const { resolveManagedProject } = await import(path);

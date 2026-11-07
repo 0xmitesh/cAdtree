@@ -70,7 +70,7 @@ Alt text: Bracket Assembly has two separate children under working: main for Mai
 
 Visual 2 (cAdtree): **1. In Settings, check Working folder for the active case's exact location.**
 
-Alt text: Real Settings shows Active branch Lightweight bracket and Working folder ending in working slash the uniquely generated cAdtree-Lightweight-bracket folder.
+Alt text: Real shared project header shows Working case Lightweight bracket; Settings shows Working folder ending in working slash the uniquely generated cAdtree-Lightweight-bracket folder.
 
 Visual 3 (cAdtree): **2. In Changes, reveal unchanged files if needed and use Copy folder path.**
 
@@ -78,24 +78,24 @@ Alt text: Real Changes view on Lightweight bracket with unchanged files revealed
 
 ### Step 5 of 6 — Switch between design directions
 
-In Settings or Changes, use Active branch to choose Main or Lightweight bracket. Check the selected name before working.
+Use Working case above History, Changes, References or Settings to choose Main or Lightweight bracket. Check the selected name before working.
 
-- cAdtree scans and saves from the selected direction's working folder. In History, Current branch identifies that direction; selecting an old revision does not change it.
+- cAdtree scans and saves from the selected case's working folder. The shared selector stays visible across project views; inspecting an old revision does not change the working case.
 - Switch back to Main with the same selector. Each direction keeps its own files; switching does not replace the other folder's contents.
 
 Notice: Save and close CAD documents before moving to the other working location, then open its files manually. cAdtree does not launch CAD or change which documents CAD has open.
 
 Visual 1 (cAdtree): **1. Main is active; Working folder identifies Main's files.**
 
-Alt text: Real Bracket Assembly Settings shows Main selected in Active branch and its Working folder ending in working/main.
+Alt text: Real Bracket Assembly shared project header shows Main selected in Working case; Settings shows its Working folder ending in working/main.
 
-Visual 2 (cAdtree): **2. Choose Lightweight bracket in Active branch to work on the alternative.**
+Visual 2 (cAdtree): **2. Choose Lightweight bracket in Working case to work on the alternative.**
 
-Alt text: Real Settings after selecting Lightweight bracket in Active branch shows the case selected and its separate generated Working folder.
+Alt text: Real shared Working case selector has Lightweight bracket selected; Settings shows its separate generated Working folder.
 
 Visual 3 (cAdtree): **3. History confirms the current case and the saved revision it started from.**
 
-Alt text: Real History shows Current branch Lightweight bracket, Started from Rev 003 on Main and the case's engineering reason.
+Alt text: Real shared header shows Working case Lightweight bracket above History, Started from Rev 003 on Main and the case's engineering reason.
 
 ### Step 6 of 6 — Keep both histories
 
@@ -119,13 +119,12 @@ Closing hint: **Next: compare, apply and recover designs.**
 
 | Surface | Exact UI text |
 | --- | --- |
-| Settings section | Design cases |
+| History section | Design cases |
 | History creation action | Create branch from here |
 | Creation dialog | Create design branch |
 | Creation fields | Branch name; Engineering reason |
 | Submit action | Create branch |
-| Settings / Changes selector | Active branch |
-| History indicator | Current branch |
+| Shared header on History, Changes, References and Settings | Working case |
 | Case origin | Started from Rev 003 on Main (for this sample) |
 | Settings location | Working folder |
 | File shortcut | Copy folder path |
@@ -144,12 +143,12 @@ The engine verifies saved ancestry and folder isolation, restores the entire sav
 Within a managed project, Main is working/main. A new case lives below the same working parent in cAdtree-<name slug>-<generated UUID>. The example's exact captured workspace-relative path is:
 
 ```text
-projects/Bracket-Assembly-774bece9-3454-4876-8c59-6e5d37bf0216/working/cAdtree-Lightweight-bracket-f1c09659-f383-44bb-90c9-f707003ca99d
+projects/Bracket-Assembly-63c9a5d8-84e7-48f2-968a-39866c01f9fe/working/cAdtree-Lightweight-bracket-abcdf77c-3f5f-449d-94ba-7fe5233d7b4e
 ```
 
 The concept diagram deliberately labels this a unique case folder; Settings screenshots show the exact generated location. No user-facing instruction asks the user to type an ID or move managed folders. The shared vault sits outside these editable working folders.
 
-Active branch appears in Settings and Changes, not as a selector in History. Choosing it resolves the recorded folder and scans that direction. History displays Current branch and, for a case, the origin and engineering reason. Revision selection and graph ancestry highlighting do not switch working context. Explorer also supports explicit branch switching; the tutorial teaches only the selector.
+Working case is the single shared selector above History, Changes, References and Settings. Choosing it resolves the recorded folder and scans that direction. History separately displays the case origin, engineering reason and inspected revision's case label. Revision selection and graph ancestry highlighting do not switch working context. Explorer also supports explicit branch switching; the tutorial teaches only the selector.
 
 Settings → Working folder shows the active location relative to the workspace. Changes → Show N unchanged files reveals paths when the working copy matches its baseline; Copy folder path beside a file addresses its immediate containing folder. The example file is at the working root, so its shortcut reaches that direction's root. Users paste the copied path in their file manager, then open the CAD documents manually. cAdtree does not launch CAD, close documents, switch open CAD files, or rewrite native assembly references. Save/close before moving locations is practical advice consistent with the existing CAD-save/capture guidance, not a new enforced condition.
 
@@ -181,17 +180,17 @@ Capture assertions: Main unchanged after creation; case bytes exactly match the 
 | Asset | Source | SHA-256 |
 | --- | --- | --- |
 | step-1-design-directions.svg | Concept SVG | 1b372c3837eb6adfbedbfb26ead2a2dbc8d7d5a7c0ce7a21229f4d82c47d5d1e |
-| step-2-choose-revision.png | Real running cAdtree | e3ad0915c0c40f52f4ee2aae192cb37d7e2eb4e70b0ca02d74d492b643963bf0 |
+| step-2-choose-revision.png | Real running cAdtree | 99d5145a3f8dc1730cab6191b9bd261a1a1369a0de2c7e06afe1658012596ad8 |
 | step-2-create-action.png | Real running cAdtree | a8eeb9c8161bf55b2aa121a0fced47491b563713617a23c96094f76e64b8db0b |
-| step-3-create-dialog.png | Real running cAdtree | ad35bf27938188a19eb03231408440ad64efeb813a5237ba02a7d25055ba321c |
+| step-3-create-dialog.png | Real running cAdtree | 131eb4ba68b23f2e3bbd516dd6b5a5074d8caf8d3291899e59cbefbc65616ca0 |
 | step-4-working-locations.svg | Concept SVG | b72bf10bb006241d6e1941b440a114256e7120b4e6ddc011bca0a50b4f9beda2 |
-| step-4-case-location.png | Real running cAdtree | 6b658423964d923ad3dc866e68840ed342d2c0e19c54c2cb23471c30914c2936 |
-| step-4-copy-folder-path.png | Real running cAdtree | 865c0c3251f40d8cce5bef608cad94a477e0271d3aea08a1296b24cd30e22f06 |
-| step-5-main-active.png | Real running cAdtree | eb8fcfb811d4205f312759eda453f4624b4fb63483efc285f8c3e511a1a070eb |
-| step-5-case-active.png | Real running cAdtree | e577c12552a6d00bccdf0334848ccad9c53a623750dc1d1960d1b43392d09924 |
-| step-5-case-origin.png | Real running cAdtree | 59be15c90b5b48046fd13f0a291c73c25f5382576fb5dc8eafca1a46ce56814c |
+| step-4-case-location.png | Real running cAdtree | 3e82de0f4c0f344a22a9a4765668d6515c4537a0ecfe27f866181e665c2a9fbd |
+| step-4-copy-folder-path.png | Real running cAdtree | 96c5b40b331d7f338782bdccdddf02947f044caeda5de996fdd73798571eadf9 |
+| step-5-main-active.png | Real running cAdtree | e8483ab138659bc1005ed400f213c11f40522b90f64e85c9ba9fa97c5bab5177 |
+| step-5-case-active.png | Real running cAdtree | 74c943844fa92da8c07f113b8ec3862e5499bd17cd7ec3f1d9d561e751805338 |
+| step-5-case-origin.png | Real running cAdtree | 45ccb07c71ba2f4dc99fe8864106b147803873d52fb37c09f462f70efe0e989a |
 | step-6-independent-history.svg | Concept SVG | 2208fb08767599b753e964ef341b025a7349854a8bc82caf01b52eb137d8ebb1 |
-| step-6-saved-histories.png | Real running cAdtree | ae033195268e544dd3b9545275937b7d0cc8c12d974d0114386f49be431ef097 |
+| step-6-saved-histories.png | Real running cAdtree | e647c80a29939f6cf98a3ec5aa39d9311ebd850c86134bd8363d295b5f9328f3 |
 
 Reproduce captures with npm run build, then node tests/tutorial-4-capture.cjs. This writes controlled real-App screenshots into public/tutorials/explore-design-alternatives and capture evidence into ignored artifacts/tutorial-4. Native OS pickers are replaced in the sample; filesystem operations still run through the production adapter/services.
 

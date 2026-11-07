@@ -86,7 +86,7 @@ import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { ReferencesView } from './components/ReferencesView';
 import { importReferenceAttachment, updateProjectReference, retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
-import { ActiveBranchPicker } from "./components/ActiveBranchPicker";
+import { ProjectContextHeader } from "./components/ProjectContextHeader";
 import { ProjectLearningModal } from "./components/ProjectLearningModal";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
 import {
@@ -2357,6 +2357,12 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             ) : null}
             {vaultState && vaultDir ? (
               <div hidden={!projectView} key={`${vaultState.project.projectId}:${projectSession}`}>
+                <ProjectContextHeader
+                  state={vaultState}
+                  activeBranchId={activeBranchId}
+                  busy={busy}
+                  onSelect={handleSelectBranch}
+                />
                 <ApplicationStatus
                   key={`${vaultState.project.projectId}:${activeBranchId}`}
                   state={vaultState}
@@ -2378,14 +2384,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                     }
                   >
                     <ChangesCaptureView
-                      branchControl={
-                        <ActiveBranchPicker
-                          state={vaultState}
-                          activeBranchId={activeBranchId}
-                          busy={busy}
-                          onSelect={handleSelectBranch}
-                        />
-                      }
                       vaultState={vaultState}
                       draftCache={draftCache.current}
                       draftKey={`${managedWorkspaceKey ?? workspace?.root.name ?? "external"}:${workspace?.identity.workspaceId ?? "external"}:${managedProject?.record.containerPath ?? vaultDir.name}:${vaultState.project.projectId}:${branch.branchId}`}
@@ -2563,14 +2561,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 </div>
                 <div hidden={activeTab !== "diagnostics"}>
                   <DiagnosticsView
-                    branchControl={
-                      <ActiveBranchPicker
-                        state={vaultState}
-                        activeBranchId={activeBranchId}
-                        busy={busy}
-                        onSelect={handleSelectBranch}
-                      />
-                    }
                     managed={Boolean(managedProject)}
                     vaultState={vaultState}
                     isVerifyingAll={isVerifyingAll}

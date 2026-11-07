@@ -47,12 +47,6 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
     ).length,
     0,
   );
-  assert.equal(
-    ui
-      .getByRole("status", { name: "Current branch" })
-      .getAttribute("data-branch-id"),
-    "branch-main",
-  );
   assert.ok(
     ui
       .getByRole("region", { name: "Selected file history" })

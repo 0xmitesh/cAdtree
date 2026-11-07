@@ -267,7 +267,7 @@ for (const width of [1366, 390])
       ),
     ).toBeVisible();
     await expect(
-      page.getByRole("status", { name: "Current branch" }),
+      page.getByRole("region", { name: "Project context" }),
     ).toHaveAttribute("data-branch-id", "branch-main");
     await page.locator(".applied-from").scrollIntoViewIfNeeded();
     await page.screenshot({

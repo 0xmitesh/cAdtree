@@ -33,7 +33,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     })
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-  const current = page.getByRole("status", { name: "Current branch" });
+  const current = page.getByRole("region", { name: "Project context" });
   const file = page.getByRole("combobox", {
     name: "File history",
     exact: true,

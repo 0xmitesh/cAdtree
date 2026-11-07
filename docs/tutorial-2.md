@@ -81,7 +81,7 @@ Notice: A revision saves the complete project state. File selections apply only 
 
 Visual 1 — cAdtree: 1. Click Scan for changes to refresh the list from your saved files.
 
-Alt text: Real Bracket Assembly Changes heading with Active branch Main and the Scan for changes button highlighted.
+Alt text: Real Bracket Assembly project header with Working case Main above Changes and the Scan for changes button highlighted.
 
 Asset: `/tutorials/save-first-revision/step-4-scan.png`
 
@@ -140,12 +140,12 @@ Closing hint: Your first meaningful design state is saved.
 | step-2-copy-folder-path.png | cadtree | 1986 × 891 PNG | cc7686553a1f891b577fbf3c5a29a50e80be7df9356cfe69fcde7d6e0079c2da |
 | step-2-windows-address.png | os | 1586 × 992 PNG | bad63c105ed818de100c2841ee183494d20a0cd41b67a0279a1336f72e269394 |
 | step-3-normal-cad-work.svg | concept | SVG | 78d497509aaa0904aeafddbeaa66716809f4535c37d9efb6e28dc0dded30d2d2 |
-| step-4-scan.png | cadtree | 3336 × 276 PNG | 55c098910e9436acd871fcb26f9fa66e79d259d6bc455ac7ad96d3d641d85a4b |
+| step-4-scan.png | cadtree | 3336 × 276 PNG | a98bc2fb901919d95a16ae18ed7dc5ef2dc546c18668b17f2a79266cbe3ba9c2 |
 | step-4-added-files.png | cadtree | 1986 × 891 PNG | a4f9f38d76baf1385bb4939ed50a86f8f1691f44fe6cd0e420786116990c08da |
 | step-5-summary.png | cadtree | 1293 × 1101 PNG | f854602005178ac70dcaafcfaafb5a2d691aba36aa7aefe6041d2ab2e14fe2d5 |
 | step-5-file-note.png | cadtree | 1167 × 1278 PNG | c5a2d9ef0887ec5f502b4116e829e6a15461db7cd6969e9192af77103ed197d3 |
 | step-6-save.png | cadtree | 1293 × 1332 PNG | da7e0beed26176010cbae642346adcb8d86301d387d20582e5ca7180d6addce5 |
-| step-6-history.png | cadtree | 3540 × 1260 PNG | 907cda68340e01c48c60111f93cb1a499fac20be9cd5a0bec8aeacf249fd6986 |
+| step-6-history.png | cadtree | 3540 × 1260 PNG | 035cb7e01cbb3bd9cab1e8c0e7ae98b04d1dd4612c2a47cc77a7bce46bf778f3 |
 
 ## Validation limits
 

@@ -55,7 +55,7 @@ async function setup() {
   await openHomeWorkspace(ui, home);
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await waitFor(() =>
-    assert.ok(ui.getByRole("status", { name: "Current branch" })),
+    assert.ok(ui.getByRole("region", { name: "Project context" })),
   );
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   await waitFor(() => assert.equal(appBusy(ui), false));
@@ -120,7 +120,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     await waitFor(() => assert.equal(appBusy(ui), false));
     assert.ok(
       within(
-        ui.container.querySelector<HTMLElement>(".settings-page")!,
+        ui.getByRole("region", {name: "Project context"}),
       ).getByRole("option", { name: "Case A", hidden: true }),
     );
     assert.ok(ui.getByText("History needs attention."));
@@ -303,20 +303,20 @@ test("App rejects branch switching during an asynchronous scan", async () => {
       await gate;
     },
   });
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
+  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Working case" }), {
     target: { value: "branch-main" },
   });
   await waitFor(() => assert.equal(scanning, true));
   assert.equal(
     (
       ctx.ui.getByRole("combobox", {
-        name: "Active branch",
+        name: "Working case",
       }) as HTMLSelectElement
     ).disabled,
     true,
   );
   // Programmatic event also tests the synchronous operation guard.
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Active branch" }), {
+  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Working case" }), {
     target: { value: branch.branchId },
   });
   await act(async () => {
@@ -326,7 +326,7 @@ test("App rejects branch switching during an asynchronous scan", async () => {
     assert.equal(
       (
         ctx.ui.getByRole("combobox", {
-          name: "Active branch",
+          name: "Working case",
         }) as HTMLSelectElement
       ).disabled,
       false,
@@ -335,7 +335,7 @@ test("App rejects branch switching during an asynchronous scan", async () => {
   assert.equal(
     (
       ctx.ui.getByRole("combobox", {
-        name: "Active branch",
+        name: "Working case",
       }) as HTMLSelectElement
     ).value,
     "branch-main",

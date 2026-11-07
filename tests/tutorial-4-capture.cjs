@@ -14,6 +14,7 @@ const assets = path.join(root, 'public', 'tutorials', 'explore-design-alternativ
   fs.mkdirSync(artifacts, { recursive: true });
   const entry = `import {createRoot} from 'react-dom/client';
 import App from './src/App';
+import {createTestAuthController} from './tests/test-auth';
 import {designAlternativesSample} from './tests/design-alternatives-sample';
 import {nativeDirectory} from './tests/native-fs';
 import {resolveManagedProject} from './src/engine/workspace-service';
@@ -23,7 +24,7 @@ async function main(){
  const mainBefore=inventorySignature(await readVerifiedInventory(sample.main));
  let picks=0;
  Object.assign(window, {showDirectoryPicker:async()=>{picks++;if(picks>1)throw Error('Managed case must not request a folder');return nativeDirectory(sample.home);},tutorialSample:{...sample,current:()=>resolveManagedProject(sample.workspace.root,sample.project.record.containerPath),mainBefore,signature:async()=>inventorySignature(await readVerifiedInventory(sample.main)),caseSignature:async id=>{const p=await resolveManagedProject(sample.workspace.root,sample.project.record.containerPath);return inventorySignature(await readVerifiedInventory(p.workingFolders[id]));},picks:()=>picks}});
- createRoot(document.getElementById('root')).render(<App/>);
+ createRoot(document.getElementById('root')).render(<App auth={createTestAuthController().adapter}/>);
 }main().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);});`;
   const bundle = await build({ stdin: { contents: entry, loader: 'tsx', resolveDir: root }, bundle: true, write: false, format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
   const cssDir = path.join(root, 'dist', 'assets');
@@ -40,7 +41,7 @@ async function main(){
   const capture = async (locator, name) => { await dismiss(); await locator.screenshot({ path: path.join(assets, name + '.png') }); };
   const settingsClip = async name => {
     await page.setViewportSize({ width: 1024, height: 1200 });
-    const heading = page.locator('.settings-page .page-heading');
+    const heading = page.getByRole('region', { name: 'Project context', exact: true });
     const location = page.locator('.settings-page > .panel').first().locator('.settings-row').first();
     await heading.scrollIntoViewIfNeeded();
     const top = await heading.boundingBox(), bottom = await location.boundingBox();
@@ -57,6 +58,16 @@ async function main(){
     await page.getByRole('button', { name: 'Open workspace', exact: true }).click(); await idle();
     await page.getByRole('button', { name: 'Open project', exact: true }).click(); await idle();
     const nav = page.getByRole('navigation', { name: 'Primary navigation' });
+    // Refresh Tutorial 2's scan action, which also displayed the old per-page picker.
+    await page.setViewportSize({ width: 1024, height: 1200 });
+    await nav.getByRole('button', { name: 'Changes', exact: true }).click();
+    const scan = page.getByRole('button', { name: 'Scan for changes', exact: true });
+    await focus(scan);
+    const contextBox = await page.getByRole('region', { name: 'Project context', exact: true }).boundingBox();
+    const changesBox = await page.locator('.changes-page .page-heading').boundingBox();
+    await page.screenshot({ path: path.join(root, 'public/tutorials/save-first-revision/step-4-scan.png'), clip: { x: changesBox.x - 8, y: contextBox.y, width: changesBox.width + 16, height: changesBox.y + changesBox.height - contextBox.y + 8 } });
+    await nav.getByRole('button', { name: 'History', exact: true }).click();
+    await page.setViewportSize({ width: 1440, height: 1200 });
     const revision = page.getByRole('button', { name: /Rev 003: Reviewed design baseline/ });
     await revision.click(); await focus(revision);
     const canvas = page.locator('.history-canvas');
@@ -79,7 +90,7 @@ async function main(){
     const afterCreate = await page.evaluate(async () => {
       const s = window.tutorialSample, p = await s.current();
       const branch = p.vaultState.branches.find(b => b.name === 'Lightweight bracket');
-      return { branchId: branch.branchId, origin: branch.startingRevisionId, baseline: s.baseline.manifest.revisionId, mainUnchanged: await s.signature() === s.mainBefore, caseMatchesBaseline: await s.caseSignature(branch.branchId) === s.mainBefore, revisions: p.vaultState.revisions.length, path: p.workingPaths[branch.branchId], active: document.querySelector('.current-branch-indicator')?.getAttribute('data-branch-id'), picks: s.picks() };
+      return { branchId: branch.branchId, origin: branch.startingRevisionId, baseline: s.baseline.manifest.revisionId, mainUnchanged: await s.signature() === s.mainBefore, caseMatchesBaseline: await s.caseSignature(branch.branchId) === s.mainBefore, revisions: p.vaultState.revisions.length, path: p.workingPaths[branch.branchId], active: document.querySelector('.project-context-header')?.getAttribute('data-branch-id'), picks: s.picks() };
     });
     assert.equal(afterCreate.mainUnchanged, true); assert.equal(afterCreate.caseMatchesBaseline, true); assert.equal(afterCreate.revisions, 3); assert.equal(afterCreate.origin, afterCreate.baseline); assert.equal(afterCreate.active, afterCreate.branchId); assert.equal(afterCreate.picks, 1);
     await nav.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -89,11 +100,11 @@ async function main(){
     const copy = page.getByRole('button', { name: /Copy folder path.*Bracket\.SLDPRT/ });
     await focus(copy); await copy.hover(); await capture(page.locator('.changes-files:visible'), 'step-4-copy-folder-path');
     await nav.getByRole('button', { name: 'Settings', exact: true }).click();
-    const selector = page.getByRole('combobox', { name: 'Active branch', exact: true });
+    const selector = page.getByRole('combobox', { name: 'Working case', exact: true });
     await selector.selectOption('branch-main'); await idle(); await focus(selector); await settingsClip('step-5-main-active');
     await selector.selectOption(afterCreate.branchId); await idle(); await focus(selector); await settingsClip('step-5-case-active');
     await nav.getByRole('button', { name: 'History', exact: true }).click();
-    const header = page.locator('.history-page .page-heading'), origin = page.locator('.branch-origin');
+    const header = page.getByRole('region', { name: 'Project context', exact: true }), origin = page.locator('.branch-origin');
     await header.scrollIntoViewIfNeeded();
     const h = await header.boundingBox(), o = await origin.boundingBox();
     await page.screenshot({ path: path.join(assets, 'step-5-case-origin.png'), clip: { x: h.x, y: h.y, width: h.width, height: o.y + o.height - h.y } });

@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useState } from "react";
 import { HardDrive, ShieldCheck } from "lucide-react";
 import type { VaultState } from "../engine/types";
@@ -7,7 +6,6 @@ import { Modal, Notice } from "./ui";
 import { WorkspaceLocationSetting } from "./FilePathShortcuts";
 
 export interface DiagnosticsViewProps {
-  branchControl?: ReactNode;
   vaultState: VaultState;
   isVerifyingAll: boolean;
   onVerifyAllObjects: () => Promise<void>;
@@ -26,7 +24,6 @@ export function DiagnosticsView({
   vaultFolderName,
   onReattachWorkingFolder,
   managed,
-  branchControl,
 }: DiagnosticsViewProps) {
   const [error, setError] = useState("");
   const [clear, setClear] = useState(false);
@@ -45,13 +42,11 @@ export function DiagnosticsView({
     <div className="page settings-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{state.project.name}</p>
           <h1>
             Settings<span className="heading-dot">.</span>
           </h1>
           <p>Connections and confidence in your saved work.</p>
         </div>
-        <div className="project-heading-controls">{branchControl}</div>
       </div>
       {error ? <Notice type="error">{error}</Notice> : null}
       <section className="panel">

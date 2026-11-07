@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { File, RefreshCw, Save, StickyNote } from "lucide-react";
 import type {
@@ -20,7 +19,6 @@ import { ReferenceSelector } from './ReferenceSelector';
 
 export interface ChangesCaptureViewProps {
   onEnableComponentTracking?: () => Promise<void>;
-  branchControl?: ReactNode;
   draftCache?: Map<string, CaptureDraft>;
   draftKey?: string;
   vaultState: VaultState;
@@ -78,7 +76,6 @@ export function ChangesCaptureView({
   resolveFilePath,
   draftCache,
   draftKey,
-  branchControl,
   onEnableComponentTracking,
 }: ChangesCaptureViewProps) {
   const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
@@ -223,14 +220,12 @@ export function ChangesCaptureView({
     <div className="page changes-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">{vaultState.project.name}</p>
           <h1>
             Changes<span className="heading-dot">.</span>
           </h1>
           <p>What changed, and why it matters.</p>
         </div>
         <div className="project-heading-controls">
-          {branchControl}
           <button
             className="button secondary"
             disabled={busy || !workingFolderName}

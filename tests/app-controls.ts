@@ -12,19 +12,15 @@ export const appBusy = (ui: RenderResult) =>
   ui.container.querySelector("main")?.getAttribute("aria-busy") === "true";
 export const currentBranchId = (ui: RenderResult) =>
   ui.container
-    .querySelector(".current-branch-indicator")
+    .querySelector(".project-context-header")
     ?.getAttribute("data-branch-id");
 
-/** Switch from Settings when History has no picker. */
+/** The shared working-case control is available on every project view. */
 export async function selectBranch(ui: RenderResult, branchId: string) {
-  const history = Boolean(ui.queryByRole("heading", { name: "History." }));
-  const nav = within(ui.getByRole("navigation"));
-  if (history) fireEvent.click(nav.getByRole("button", { name: "Settings" }));
-  fireEvent.change(ui.getByRole("combobox", { name: "Active branch" }), {
+  fireEvent.change(ui.getByRole("combobox", { name: "Working case" }), {
     target: { value: branchId },
   });
   await waitFor(() => assert.equal(appBusy(ui), false));
-  if (history) fireEvent.click(nav.getByRole("button", { name: "History" }));
 }
 
 /** Completes the required second step after a native test picker selection. */
