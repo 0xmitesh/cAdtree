@@ -93,7 +93,7 @@ export function DesignCases({
               : lifecycle.status === "unavailable"
                 ? "Lifecycle unavailable"
                 : "Active"}
-            {isCurrent ? " · Current working branch" : ""}
+            {isCurrent ? " · Current working case" : ""}
           </p>
           {lifecycle.status === "unavailable" ? (
             <p className="case-lifecycle-error">
@@ -102,7 +102,7 @@ export function DesignCases({
             </p>
           ) : isCurrent && lifecycle.status === "active" ? (
             <p className="small">
-              Switch to another active branch before archiving.
+              Switch to another working case before archiving.
             </p>
           ) : null}
           <details className="case-activity">
@@ -242,7 +242,7 @@ export function DesignCases({
         </span>
       </div>
       <p className="case-lifecycle-help small">
-        Main stays active. Archiving preserves the working folder and all saved
+        Main cannot be archived. Archiving preserves the working folder and all saved
         history. Archived revisions remain available in History, Compare and
         recovery.
       </p>
@@ -255,12 +255,12 @@ export function DesignCases({
       {!cases.length ? (
         <p className="case-lifecycle-help">No design cases yet.</p>
       ) : null}
-      <details className="case-archive-disclosure">
+      {archived.length ? <details className="case-archive-disclosure">
         <summary ref={archivedSummary}>
           Archived cases ({archived.length})
         </summary>
         {archived.map(row)}
-      </details>
+      </details> : cases.length ? <p className="case-lifecycle-help">No archived cases.</p> : null}
       {comparison ? (
         <CompareRevisionsDialog
           state={state}
@@ -296,8 +296,8 @@ export function DesignCases({
           </p>
           <p>
             {action.status === "archived"
-              ? "Only lifecycle metadata changes. Working files and saved revisions stay in place; this does not label the case merged."
-              : "No files are restored and the working branch is not switched automatically."}
+              ? "Only lifecycle metadata changes. Working files and saved revisions stay in place."
+              : "No files are restored and the working case is not switched automatically."}
           </p>
           {error ? (
             <div ref={errorFocus} tabIndex={-1}>

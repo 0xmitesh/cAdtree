@@ -135,7 +135,7 @@ export function RevisionGraph({
           onClick={jump}
         >
           <CornerUpLeft size={14} />{" "}
-          {fileRecords ? "Current branch file state" : "Latest"}
+          {fileRecords ? "Working case file state" : "Latest"}
         </button>
       </div>
       <div className="graph-toolbar">

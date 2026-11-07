@@ -206,32 +206,41 @@ export function DiagnosticsView({
                 <dd>{b.payloadSha256}</dd>
               </dl>
             ))}
-            <button
-              className="button secondary"
-              disabled={isVerifyingAll}
-              onClick={() => setClear(true)}
-            >
-              {managed
-                ? "Clear remembered access and reread workspace"
-                : "Clear remembered connections and reopen vault"}
-            </button>
-            <p className="muted small">
-              {managed
-                ? "This clears browser convenience preferences. Project and branch locations remain in the workspace records."
-                : "This clears browser convenience data and detaches the working folder. Your vault history stays in its folder."}
-            </p>
           </details>
         </div>
       </section>
+      <section className="panel">
+        <details className="disclosure">
+          <summary>Browser troubleshooting</summary>
+          <p>
+            Reset remembered folder connections and saved folder addresses for
+            all accounts and workspaces in this browser. CAD files, saved
+            revisions, reference attachments and accounts are not deleted.
+          </p>
+          <button
+            className="button secondary"
+            disabled={isVerifyingAll}
+            onClick={() => setClear(true)}
+          >
+            Reset all remembered folder connections in this browser
+          </button>
+        </details>
+      </section>
       {clear ? (
         <Modal
-          title="Clear remembered connections?"
+          title="Reset all remembered folder connections?"
           onClose={() => setClear(false)}
         >
           <p>
+            This affects saved folder connections and addresses across all
+            accounts and workspaces in this browser, not just this project.
+            It does not delete CAD files, saved revisions, reference attachments
+            or accounts.
+          </p>
+          <p>
             {managed
-              ? "This removes remembered browser access and rereads portable workspace records. The current authorized root can still resolve your branches during this session. After a browser restart, select the workspace once."
-              : "This removes this browser’s saved project connections and reopens the current vault from its files. Your working folder will need to be connected again."}
+              ? "The current authorized workspace can still resolve its working folders during this session. Reconnect folders and re-enter their addresses when needed."
+              : "The current vault is reread from its files. Reconnect working folders and re-enter their addresses when needed."}
           </p>
           <div className="modal-actions">
             <button
@@ -247,7 +256,7 @@ export function DiagnosticsView({
                 run(onSimulateClearMetadataAndReopenVault);
               }}
             >
-              Clear connections and reopen
+              Reset all remembered folder connections
             </button>
           </div>
         </Modal>

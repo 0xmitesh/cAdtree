@@ -132,11 +132,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
               <div className="project-row">
                 <div className="project-copy">
                   <h3>{locations[0].name}</h3>
-                  <p>
-                    {locations.length > 1
-                      ? `${locations.length} locations for the same project identity`
-                      : "Managed project"}
-                  </p>
+                  {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
                   <p className="small">
                     {locations.length > 1
                       ? "Choose one location explicitly. Histories are never combined."

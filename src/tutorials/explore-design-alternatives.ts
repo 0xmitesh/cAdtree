@@ -10,7 +10,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
       summary: "Main is your primary design direction. A Design Case lets you explore an alternative without changing Main.",
       points: [
         "Create a case to test a lighter bracket or a different mounting arrangement.",
-        "This example starts Lightweight bracket from the reviewed Main baseline, Rev 003. The UI also calls a case a branch.",
+        "This example starts Lightweight bracket from the reviewed Main baseline, Rev 003. Working case identifies the direction you are editing.",
       ],
       visuals: [{
         src: "/tutorials/explore-design-alternatives/step-1-design-directions.svg",
@@ -22,10 +22,10 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
     {
       id: "saved-revision",
       title: "Start from a saved revision",
-      summary: "In History, select the saved revision where the alternative should begin, then choose Create branch from here.",
+      summary: "In History, select the saved revision where the alternative should begin, then choose Create design case from this revision.",
       points: [
         "Choose Rev 003 — Reviewed design baseline in Bracket Assembly.",
-        "A saved revision gives the case a recorded starting point and a complete project copy. Newer unsaved working edits are not included. Inspecting a revision does not switch your active branch.",
+        "A saved revision gives the case a recorded starting point and a complete project copy. Newer unsaved working edits are not included. Inspecting a revision does not switch your working case.",
       ],
       visuals: [
         {
@@ -36,8 +36,8 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
         },
         {
           src: "/tutorials/explore-design-alternatives/step-2-create-action.png",
-          alt: "Close view of the real History actions for the selected revision, with Create branch from here focused.",
-          caption: "2. Click Create branch from here for the selected saved revision.",
+          alt: "Close view of the real History actions for the selected revision, with Create design case from this revision focused.",
+          caption: "2. Click Create design case from this revision for the selected saved revision.",
           kind: "cadtree",
         },
       ],
@@ -45,15 +45,15 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
     {
       id: "name-case",
       title: "Name the Design Case",
-      summary: "In Create design branch, enter a Branch name and Engineering reason, then click Create branch.",
+      summary: "In Create design case, enter a Case name and Engineering reason, then click Create design case.",
       points: [
-        "Branch name: Lightweight bracket. Engineering reason: Explore a lighter mounting solution without changing Main.",
+        "Case name: Lightweight bracket. Engineering reason: Explore a lighter mounting solution without changing Main.",
         "For this managed project, cAdtree creates and verifies a fresh working folder automatically. No folder picker is needed. The new case becomes active; creation adds no revision.",
       ],
       visuals: [{
         src: "/tutorials/explore-design-alternatives/step-3-create-dialog.png",
-        alt: "Close view of the real Create design branch form: Lightweight bracket in Branch name, the engineering reason filled, automatic destination guidance and Create branch focused.",
-        caption: "Name the alternative, explain why, then click Create branch.",
+        alt: "Close view of the real Create design case form: Lightweight bracket in Case name, the engineering reason filled, automatic destination guidance and Create design case focused.",
+        caption: "Name the alternative, explain why, then click Create design case.",
         kind: "cadtree",
       }],
     },

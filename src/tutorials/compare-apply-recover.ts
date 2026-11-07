@@ -24,7 +24,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
       title: "Compare saved revisions",
       summary: "In History, select Rev 005 — Reinforced mounting rib, then click Compare.",
       points: [
-        "Choose From revision: Rev 006 on Main, and To revision: Rev 005 on Lightweight bracket. You can compare any two available saved revisions, including across branches.",
+        "Choose From revision: Rev 006 on Main, and To revision: Rev 005 on Lightweight bracket. You can compare any two available saved revisions, including across design cases.",
         "Added and deleted are relative to From → To. Swap reverses that direction. Review the file counts and recorded overall and per-file engineering notes.",
       ],
       visuals: [
@@ -89,7 +89,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
         },
         {
           src: "/tutorials/compare-apply-recover/step-4-source-destination.png",
-          alt: "Real review planner shows Base Rev 003 on Main, Source Rev 005 on Lightweight bracket and Destination Rev 006 on the active Main branch.",
+          alt: "Real review planner shows Base Rev 003 on Main, Source Rev 005 on Lightweight bracket and Destination Rev 006 on the Main working case.",
           caption: "2. Check Base, Source and Destination — including Main's saved baseline.",
           kind: "cadtree",
         },
@@ -145,7 +145,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
       points: [
         "Select Rev 003 in History and choose Restore project copy. Check the revision and file count, keep the managed destination and click Restore copy.",
         "cAdtree creates a verified fresh copy under this project's recoveries folder. Recovery report shows its location; Restored files — copy paths provides Copy folder path so you can reach and open it manually.",
-        "Main and the case stay unchanged. This does not switch the active branch or create a revision. Viewing an old revision alone restores nothing; this recovery is a separate copy, not a destructive rollback.",
+        "Main and the case stay unchanged. This does not switch the working case or create a revision. Viewing an old revision alone restores nothing; this recovery is a separate copy, not a destructive rollback.",
       ],
       visuals: [
         {
@@ -180,7 +180,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
       summary: "Finished Design Cases do not need to be deleted. Archive the experiment while preserving its working folder and saved history.",
       points: [
         "Keep Main active. In History, expand Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.",
-        "Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your active branch.",
+        "Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your working case.",
       ],
       visuals: [
         {

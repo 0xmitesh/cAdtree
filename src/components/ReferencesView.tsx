@@ -33,9 +33,9 @@ export function ReferencesView(props: ReferencesViewProps) {
     {block ? <Notice type="error">{block} CAD history and recovery remain available where their evidence is valid.</Notice> : null}
     {error ? <Notice type="error">{error}</Notice> : null}
     {props.busy ? <OperationProgress progress={props.progress} onCancel={props.onCancel} /> : null}
-    <label className="field"><span>Search references</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, filename or tag" /></label>
-    <label className="recovery-external-choice"><input type="checkbox" checked={showRemoved} onChange={e => setShowRemoved(e.target.checked)} /> Show removed references</label>
-    {!references.length ? <p className="muted">No matching references. Import a requirement, image or transcript to keep its original bytes with this project.</p> : null}
+    {props.state.references?.library.length ? <label className="field"><span>Search references</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Title, filename or tag" /></label> : null}
+    {props.state.references?.library.some(r => r.removed) ? <label className="recovery-external-choice"><input type="checkbox" checked={showRemoved} onChange={e => setShowRemoved(e.target.checked)} /> Show removed references</label> : null}
+    {!references.length && !block ? <p className="muted">{props.state.references?.library.length ? 'No matching references. Adjust the search or removed-reference filter.' : 'No references yet. Import a requirement, image or transcript to keep its original bytes with this project.'}</p> : null}
     {references.map(reference => <ReferenceCard key={reference.referenceId} reference={reference} disabled={props.busy || Boolean(block)}
       onEdit={() => setEditor({ kind: 'edit', reference })} onVersion={() => setEditor({ kind: 'version', reference })}
       onRetrieve={versionId => run(() => props.onRetrieve(reference.referenceId, versionId))}
@@ -64,7 +64,9 @@ function ReferenceCard({ reference: r, disabled, onEdit, onVersion, onRetrieve, 
       {r.versions.map((v, index) => <option key={v.versionId} value={v.versionId}>Version {index + 1}: {v.originalFilename}</option>)}
     </select></label>
     <p className="file-path">{v.originalFilename}</p><p className="muted small">{v.fileType} · {formatBytes(v.size)} · Imported {formatTimestamp(v.importedAt)} (import time, not document creation date)</p>
-    <p className="file-path small">Reference: {r.referenceId}<br />Version: {v.versionId}<br />SHA-256: {v.sha256}</p>
+    <details className="disclosure reference-technical-details"><summary>Technical details</summary>
+      <p className="file-path small">Reference: {r.referenceId}<br />Version: {v.versionId}<br />SHA-256: {v.sha256}</p>
+    </details>
     <div className="button-row"><button className="button" disabled={disabled} onClick={() => void onRetrieve(v.versionId)}>Retrieve exact attachment</button>
       <button className="button" disabled={disabled || r.projectVersionId === v.versionId} onClick={() => void onUpdate({ removed: false, projectVersionId: v.versionId })}>{r.projectVersionId === v.versionId ? 'Project context: this version' : 'Use this version in project context'}</button>
       {r.projectVersionId ? <button className="button" disabled={disabled} onClick={() => void onUpdate({ projectVersionId: null })}>Stop inheriting in future revisions</button> : null}

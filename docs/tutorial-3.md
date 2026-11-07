@@ -130,8 +130,8 @@ The two Windows images are synthetic instructional illustrations, with generic E
 | step-4-windows-project.png | Synthetic Windows 11 | e1cc48ee85d940cd2dc97c91fe1b6eac36bd534b1307b13b5b89bea07baf2c4b |
 | step-5-managed-files.svg | Concept SVG | 1d40ebf7e761d87138f4b416063a39f94301db6ca05711f4fdc30e92b38d3fd2 |
 | step-6-workspaces.png | Real running cAdtree | b053a3277848b9a31f8d98ac6d66b80d9457904848cb899a9a1a81cb052aab87 |
-| step-6-projects.png | Real running cAdtree | 8eea0602ec5059ab15bf24c84e02ea3f144dfddf202bd02f4fba44d9e26de1b1 |
-| step-6-managed-main.png | Real running cAdtree | c006c3220daa5c9ae0398abeebd3870cababbf1b0879307c8b01ac982f6a2295 |
+| step-6-projects.png | Real running cAdtree | 9b0882ca7044384cc7947fb42fa1f9310708b74409c57b1d3c13ccea80ed1ef3 |
+| step-6-managed-main.png | Real running cAdtree | 8f7b0e30cbcc61e0b91935d5cfca935572005726b80a8c29091c929eb19e8f3d |
 
 ## Integration and files changed
 

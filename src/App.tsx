@@ -1467,7 +1467,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this branch. ${result.cacheWarning ?? ""} ${scanWarning}`,
+              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this working case. ${result.cacheWarning ?? ""} ${scanWarning}`,
             });
         } catch (error) {
           if (error instanceof ReviewStaleError && context.current())
@@ -1527,7 +1527,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             applyVaultState(result.state);
             setStatusBanner({
               type: "success",
-              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in History → Design cases or Show archived cases in Explorer." : "The working branch has not been switched."} ${result.warning ?? ""}`,
+              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in History → Design cases or Show archived cases in Explorer." : "The working case has not been switched."} ${result.warning ?? ""}`,
             });
           }
         } finally {
@@ -1905,7 +1905,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setStatusBanner({
         type: "info",
         message:
-          "Cleared browser convenience data. All managed project and branch locations were resolved again from the workspace records. After a browser restart, select the workspace root once.",
+          "Reset remembered folder connections and addresses across all accounts and workspaces in this browser. The current workspace was reread; reconnect folders and re-enter their addresses when needed.",
       });
       return;
     }
@@ -1920,7 +1920,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setStatusBanner({
       type: "info",
       message:
-        "Cleared browser convenience bindings. All branches and saved revisions were reconstructed from the vault. Reconnect each branch folder explicitly before saving or creating a branch.",
+        "Reset remembered folder connections and addresses across all accounts and workspaces in this browser. Saved history was reread from the vault. Reconnect working folders and re-enter their addresses when needed.",
     });
   };
   const handleSimulateClearMetadataAndReopenVault = async () => {

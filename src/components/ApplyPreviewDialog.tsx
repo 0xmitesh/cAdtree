@@ -234,7 +234,7 @@ function ApplyPreviewBody({
           any necessary adjustments. Use the normal Changes → Save revision flow
           to preserve the final complete snapshot and application provenance.
         </p>
-        <p>No source branch was merged or closed.</p>
+        <p>The source Design Case and its saved history remain available.</p>
         <div className="modal-actions">
           <button
             ref={completionFocus}
@@ -361,7 +361,7 @@ function ApplyPreviewBody({
               <h3>
                 {side}
                 {side === "Destination"
-                  ? ` · active branch ${state.branches.find((branch) => branch.branchId === context.destinationBranchId)?.name}`
+                  ? ` · working case ${state.branches.find((branch) => branch.branchId === context.destinationBranchId)?.name}`
                   : ""}
               </h3>
               <strong>

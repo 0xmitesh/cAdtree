@@ -147,19 +147,19 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   const pickerCount = picker.calls();
   for (const name of ["Case A", "Case B", "Case C"]) {
     fireEvent.click(
-      ui.getByRole("button", { name: "Create branch from here" }),
+      ui.getByRole("button", { name: "Create design case from this revision" }),
     );
     await waitFor(() => assert.ok(ui.queryByRole("dialog")));
     dialog = within(ui.getByRole("dialog"));
     assert.ok(!dialog.queryByRole("button", { name: "Choose parent folder" }));
-    fireEvent.change(dialog.getByRole("textbox", { name: "Branch name" }), {
+    fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), {
       target: { value: name },
     });
     fireEvent.change(
       dialog.getByRole("textbox", { name: "Engineering reason" }),
       { target: { value: `Explore ${name}` } },
     );
-    fireEvent.click(dialog.getByRole("button", { name: "Create branch" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
     await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
     await idle(ui);
   }
@@ -257,7 +257,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Create branch from here",
+        name: "Create design case from this revision",
       }) as HTMLButtonElement
     ).disabled,
     true,
@@ -299,7 +299,7 @@ test("managed action preflight notices a folder lost after opening, before it di
   await root.removeEntry(project.workingPaths["branch-main"].split("/"), {
     recursive: true,
   });
-  fireEvent.click(ui.getByRole("button", { name: "Create branch from here" }));
+  fireEvent.click(ui.getByRole("button", { name: "Create design case from this revision" }));
   await waitFor(() =>
     assert.match(
       ui.container.querySelector(".global-integrity")!.textContent!,

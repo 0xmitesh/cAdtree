@@ -24,7 +24,7 @@ Title: **Explore design alternatives**
 Main is your primary design direction. A Design Case lets you explore an alternative without changing Main.
 
 - Create a case to test a lighter bracket or a different mounting arrangement.
-- This example starts Lightweight bracket from the reviewed Main baseline, Rev 003. The UI also calls a case a branch.
+- This example starts Lightweight bracket from the reviewed Main baseline, Rev 003. Working case identifies the direction you are editing.
 
 Visual 1 (Concept): **Start an alternative from a saved baseline while keeping Main separate.**
 
@@ -32,29 +32,29 @@ Alt text: Main saves Rev 001, Rev 002 and Rev 003. Lightweight bracket is a Desi
 
 ### Step 2 of 6 — Start from a saved revision
 
-In History, select the saved revision where the alternative should begin, then choose Create branch from here.
+In History, select the saved revision where the alternative should begin, then choose Create design case from this revision.
 
 - Choose Rev 003 — Reviewed design baseline in Bracket Assembly.
-- A saved revision gives the case a recorded starting point and a complete project copy. Newer unsaved working edits are not included. Inspecting a revision does not switch your active branch.
+- A saved revision gives the case a recorded starting point and a complete project copy. Newer unsaved working edits are not included. Inspecting a revision does not switch your working case.
 
 Visual 1 (cAdtree): **1. Choose the revision where the alternative should begin.**
 
 Alt text: Close view of the real Bracket Assembly History graph with Main's Rev 001 through Rev 003 and Reviewed design baseline selected.
 
-Visual 2 (cAdtree): **2. Click Create branch from here for the selected saved revision.**
+Visual 2 (cAdtree): **2. Click Create design case from this revision for the selected saved revision.**
 
-Alt text: Close view of the real History actions for the selected revision, with Create branch from here focused.
+Alt text: Close view of the real History actions for the selected revision, with Create design case from this revision focused.
 
 ### Step 3 of 6 — Name the Design Case
 
-In Create design branch, enter a Branch name and Engineering reason, then click Create branch.
+In Create design case, enter a Case name and Engineering reason, then click Create design case.
 
-- Branch name: Lightweight bracket. Engineering reason: Explore a lighter mounting solution without changing Main.
+- Case name: Lightweight bracket. Engineering reason: Explore a lighter mounting solution without changing Main.
 - For this managed project, cAdtree creates and verifies a fresh working folder automatically. No folder picker is needed. The new case becomes active; creation adds no revision.
 
-Visual 1 (cAdtree): **Name the alternative, explain why, then click Create branch.**
+Visual 1 (cAdtree): **Name the alternative, explain why, then click Create design case.**
 
-Alt text: Close view of the real Create design branch form: Lightweight bracket in Branch name, the engineering reason filled, automatic destination guidance and Create branch focused.
+Alt text: Close view of the real Create design case form: Lightweight bracket in Case name, the engineering reason filled, automatic destination guidance and Create design case focused.
 
 ### Step 4 of 6 — A separate working location
 
@@ -120,21 +120,21 @@ Closing hint: **Next: compare, apply and recover designs.**
 | Surface | Exact UI text |
 | --- | --- |
 | History section | Design cases |
-| History creation action | Create branch from here |
-| Creation dialog | Create design branch |
-| Creation fields | Branch name; Engineering reason |
-| Submit action | Create branch |
+| History creation action | Create design case from this revision |
+| Creation dialog | Create design case |
+| Creation fields | Case name; Engineering reason |
+| Submit action | Create design case |
 | Shared header on History, Changes, References and Settings | Working case |
 | Case origin | Started from Rev 003 on Main (for this sample) |
 | Settings location | Working folder |
 | File shortcut | Copy folder path |
 | Lifecycle actions | Archive case; Reopen case |
 
-Tutorial copy uses Design Case for the engineering concept and explicitly identifies the branch labels. No global UI renaming.
+Tutorial copy and creation controls use Design Case. Working case selects the current direction; persisted branch identities and internal APIs are unchanged.
 
 ## 4. Actual creation workflow discovered
 
-History → select a saved revision → Create branch from here → Create design branch → Branch name and Engineering reason → Create branch. The managed App supplies the destination automatically and does not show the external destination-parent picker supported by the generic dialog. The dialog displays a managed working destination followed by <new case>.
+History → select a saved revision → Create design case from this revision → Create design case → Case name and Engineering reason → Create design case. The managed App supplies the destination automatically and does not show the external destination-parent picker supported by the generic dialog. The dialog displays a managed working destination followed by <new case>.
 
 The engine verifies saved ancestry and folder isolation, restores the entire saved snapshot (including unchanged files and empty directories), verifies the resulting inventory and registers the branch and portable working-folder binding. Creation does not create a revision or consume a revision number. The App activates and scans the new case. Main's bytes and saved history stay intact. The source is the chosen saved revision, not uncaptured working edits.
 
@@ -143,7 +143,7 @@ The engine verifies saved ancestry and folder isolation, restores the entire sav
 Within a managed project, Main is working/main. A new case lives below the same working parent in cAdtree-<name slug>-<generated UUID>. The example's exact captured workspace-relative path is:
 
 ```text
-projects/Bracket-Assembly-63c9a5d8-84e7-48f2-968a-39866c01f9fe/working/cAdtree-Lightweight-bracket-abcdf77c-3f5f-449d-94ba-7fe5233d7b4e
+projects/Bracket-Assembly-b286ae06-f0e5-445b-b98d-dfd3b623c966/working/cAdtree-Lightweight-bracket-5c242b02-0bc9-4601-9f9f-bd6ab38df4c6
 ```
 
 The concept diagram deliberately labels this a unique case folder; Settings screenshots show the exact generated location. No user-facing instruction asks the user to type an ID or move managed folders. The shared vault sits outside these editable working folders.
@@ -180,17 +180,17 @@ Capture assertions: Main unchanged after creation; case bytes exactly match the 
 | Asset | Source | SHA-256 |
 | --- | --- | --- |
 | step-1-design-directions.svg | Concept SVG | 1b372c3837eb6adfbedbfb26ead2a2dbc8d7d5a7c0ce7a21229f4d82c47d5d1e |
-| step-2-choose-revision.png | Real running cAdtree | 99d5145a3f8dc1730cab6191b9bd261a1a1369a0de2c7e06afe1658012596ad8 |
-| step-2-create-action.png | Real running cAdtree | a8eeb9c8161bf55b2aa121a0fced47491b563713617a23c96094f76e64b8db0b |
-| step-3-create-dialog.png | Real running cAdtree | 131eb4ba68b23f2e3bbd516dd6b5a5074d8caf8d3291899e59cbefbc65616ca0 |
+| step-2-choose-revision.png | Real running cAdtree | 4d65e1d834d4a33e91f46cfa5baad5d89a1b62be4ba592f8a0f8c731c969c662 |
+| step-2-create-action.png | Real running cAdtree | 28bb7d90de32e508aa62f2bad5a0a300d7a139c4482755e4fd6bc8e0fa6ba78b |
+| step-3-create-dialog.png | Real running cAdtree | 073f35a690b0df7fb1ea32cdf1d3087f176bf77b80315bcf200741ab986de12c |
 | step-4-working-locations.svg | Concept SVG | b72bf10bb006241d6e1941b440a114256e7120b4e6ddc011bca0a50b4f9beda2 |
-| step-4-case-location.png | Real running cAdtree | 3e82de0f4c0f344a22a9a4765668d6515c4537a0ecfe27f866181e665c2a9fbd |
-| step-4-copy-folder-path.png | Real running cAdtree | 96c5b40b331d7f338782bdccdddf02947f044caeda5de996fdd73798571eadf9 |
-| step-5-main-active.png | Real running cAdtree | e8483ab138659bc1005ed400f213c11f40522b90f64e85c9ba9fa97c5bab5177 |
-| step-5-case-active.png | Real running cAdtree | 74c943844fa92da8c07f113b8ec3862e5499bd17cd7ec3f1d9d561e751805338 |
+| step-4-case-location.png | Real running cAdtree | b6feecb708ede86809df17afe2744480340e17219c39b588a116d38c498b9a72 |
+| step-4-copy-folder-path.png | Real running cAdtree | 113ccc656bcf7da8ec8a1371a9a9a997dff719ff0cd8cb3c65405c4e5fac2052 |
+| step-5-main-active.png | Real running cAdtree | b1ad8078a3f35b287ab374ed0f2029f692e1603430f7ff6550870e5060707505 |
+| step-5-case-active.png | Real running cAdtree | c2d6a1dd18596fe586d2a0ee2ec935048e5f9ad6f954bd3a75fcec44da453839 |
 | step-5-case-origin.png | Real running cAdtree | 45ccb07c71ba2f4dc99fe8864106b147803873d52fb37c09f462f70efe0e989a |
 | step-6-independent-history.svg | Concept SVG | 2208fb08767599b753e964ef341b025a7349854a8bc82caf01b52eb137d8ebb1 |
-| step-6-saved-histories.png | Real running cAdtree | e647c80a29939f6cf98a3ec5aa39d9311ebd850c86134bd8363d295b5f9328f3 |
+| step-6-saved-histories.png | Real running cAdtree | 53ca82fc140e8caa3f51f79d3cc64c6fe76040320685954070d7bef5fefb970f |
 
 Reproduce captures with npm run build, then node tests/tutorial-4-capture.cjs. This writes controlled real-App screenshots into public/tutorials/explore-design-alternatives and capture evidence into ignored artifacts/tutorial-4. Native OS pickers are replaced in the sample; filesystem operations still run through the production adapter/services.
 

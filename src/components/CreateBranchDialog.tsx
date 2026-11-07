@@ -41,7 +41,7 @@ export function CreateBranchDialog({
   const [parent, setParent] = useState<FileSystemDirectoryAdapter | null>(null);
   const [error, setError] = useState("");
   return (
-    <Modal title="Create design branch" onClose={onClose} busy={busy}>
+    <Modal title="Create design case" onClose={onClose} busy={busy}>
       <p>
         <strong>
           {formatRevisionNumber(source.displayNumber)} on {sourceBranchName} ·{" "}
@@ -59,7 +59,7 @@ export function CreateBranchDialog({
           event.preventDefault();
           setError("");
           if (!branchNameKey(name)) {
-            setError("Branch name is required.");
+            setError("Case name is required.");
             return;
           }
           if (
@@ -67,7 +67,7 @@ export function CreateBranchDialog({
               (existing) => branchNameKey(existing) === branchNameKey(name),
             )
           ) {
-            setError("A branch with that name already exists.");
+            setError("A design case with that name already exists.");
             return;
           }
           if (!reason.trim()) {
@@ -93,7 +93,7 @@ export function CreateBranchDialog({
       >
         <fieldset disabled={busy}>
           <label className="field">
-            <span>Branch name</span>
+            <span>Case name</span>
             <input
               required
               autoFocus
@@ -156,7 +156,7 @@ export function CreateBranchDialog({
             </div>
           )}
           <p className="muted small">
-            After creation, open the new branch folder manually in SolidWorks.
+            After creation, open the new Design Case folder manually in SolidWorks.
             cAdtree does not change which CAD documents are open.
           </p>
           <div className="modal-actions">
@@ -167,7 +167,7 @@ export function CreateBranchDialog({
             >
               Cancel
             </button>
-            <button className="button primary">Create branch</button>
+            <button className="button primary">Create design case</button>
           </div>
         </fieldset>
       </form>

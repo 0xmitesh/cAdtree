@@ -55,10 +55,10 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await nav('History');
   await page.getByRole('button', { name: /^Copy folder path/ }).click();
   expect(await page.evaluate(() => (window as any).copiedPaths.at(-1))).toBe(folder(initial.prefix + '/Parts/工程'));
-  await page.getByRole('button', { name: 'Create branch from here', exact: true }).click();
-  await page.getByRole('textbox', { name: 'Branch name' }).fill('Alternative');
+  await page.getByRole('button', { name: 'Create design case from this revision', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Case name' }).fill('Alternative');
   await page.getByRole('textbox', { name: 'Engineering reason' }).fill('Explore another fit');
-  await page.getByRole('dialog').getByRole('button', { name: 'Create branch', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create design case', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
   const branchId = await page.locator('.project-context-header').getAttribute('data-branch-id');

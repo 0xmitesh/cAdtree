@@ -39,7 +39,7 @@ Asset: [step-1-compare-directions.svg](../public/tutorials/compare-apply-recover
 
 In History, select Rev 005 — Reinforced mounting rib, then click Compare.
 
-- Choose From revision: Rev 006 on Main, and To revision: Rev 005 on Lightweight bracket. You can compare any two available saved revisions, including across branches.
+- Choose From revision: Rev 006 on Main, and To revision: Rev 005 on Lightweight bracket. You can compare any two available saved revisions, including across design cases.
 - Added and deleted are relative to From → To. Swap reverses that direction. Review the file counts and recorded overall and per-file engineering notes.
 
 Visual 1 (cAdtree): **1. Select the saved revision in History and click Compare.**
@@ -98,7 +98,7 @@ Asset: [step-4-open-review.png](../public/tutorials/compare-apply-recover/step-4
 
 Visual 2 (cAdtree): **2. Check Base, Source and Destination — including Main's saved baseline.**
 
-Alt text: Real review planner shows Base Rev 003 on Main, Source Rev 005 on Lightweight bracket and Destination Rev 006 on the active Main branch.
+Alt text: Real review planner shows Base Rev 003 on Main, Source Rev 005 on Lightweight bracket and Destination Rev 006 on the Main working case.
 
 Asset: [step-4-source-destination.png](../public/tutorials/compare-apply-recover/step-4-source-destination.png)
 
@@ -148,7 +148,7 @@ A saved revision gives you a known design state to return to. Restore project co
 
 - Select Rev 003 in History and choose Restore project copy. Check the revision and file count, keep the managed destination and click Restore copy.
 - cAdtree creates a verified fresh copy under this project's recoveries folder. Recovery report shows its location; Restored files — copy paths provides Copy folder path so you can reach and open it manually.
-- Main and the case stay unchanged. This does not switch the active branch or create a revision. Viewing an old revision alone restores nothing; this recovery is a separate copy, not a destructive rollback.
+- Main and the case stay unchanged. This does not switch the working case or create a revision. Viewing an old revision alone restores nothing; this recovery is a separate copy, not a destructive rollback.
 
 Visual 1 (Concept): **Recover an earlier saved state as a separate copy while keeping current work.**
 
@@ -179,7 +179,7 @@ Asset: [step-6-restored-copy.png](../public/tutorials/compare-apply-recover/step
 Finished Design Cases do not need to be deleted. Archive the experiment while preserving its working folder and saved history.
 
 - Keep Main active. In History, expand Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.
-- Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your active branch.
+- Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your working case.
 
 Visual 1 (cAdtree): **1. With Main active, expand Design cases in History and find the finished case.**
 
@@ -229,7 +229,7 @@ Sources inspected: `src/components/ApplyPreviewDialog.tsx`, `src/components/Appl
 
 The primary historical recovery taught is History → Restore project copy → Restore a complete project copy → Restore copy. The managed default allocates a fresh unique child under `<project>/recoveries/copy-<uuid>`, verifies saved file objects and the complete recovered output, and preserves empty folders. The UI also offers an external destination, but the tutorial keeps the managed default, so no Windows picker visual is necessary.
 
-The result is Complete project copy verified. Recovery report gives its actual relative location. Restored files — copy paths exposes Copy folder path, which the user can paste into their file manager to reach/open the recovered project manually. Recovery does not overwrite the working folders, switch branches or create a revision. Merely inspecting an old revision performs no restoration. Create branch from here is a distinct alternative-workflow action already taught in Tutorial 4.
+The result is Complete project copy verified. Recovery report gives its actual relative location. Restored files — copy paths exposes Copy folder path, which the user can paste into their file manager to reach/open the recovered project manually. Recovery does not overwrite the working folders, switch branches or create a revision. Merely inspecting an old revision performs no restoration. Create design case from this revision is a distinct alternative-workflow action already taught in Tutorial 4.
 
 Copy selected files also exists and can omit assembly dependencies; it is not the primary recovery lesson. The product also uses Recover for an interrupted working-file application’s retained before-state, which is separate from historical Restore project copy. No destructive historical Rollback action was found or invented; these terms are not treated interchangeably.
 
