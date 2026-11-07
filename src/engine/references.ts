@@ -285,10 +285,14 @@ export async function updateProjectReference(vault: FileSystemDirectoryAdapter, 
     const block = referenceWriteBlock(state); if (block) throw new Error(block);
     const library = structuredClone(state.references?.library ?? []), ref = library.find(r => r.referenceId === referenceId);
     if (!ref) throw new Error('Reference is missing or unpublished.');
+    const previous = JSON.stringify(ref);
     Object.assign(ref, cleanMetadata({ ...ref, ...changes }));
     if ('projectVersionId' in changes) ref.projectVersionId = changes.projectVersionId!;
     if ('removed' in changes) { ref.removed = changes.removed!; if (ref.removed) ref.projectVersionId = null; }
     throwIfCancelled(options.signal);
+    // Compare normalized values after rereading under the writer lock. Repeated
+    // selections or unchanged details must not append another catalogue.
+    if (JSON.stringify(ref) === previous) return state;
     await publishCatalog(vault, state, library, options.signal);
     return openExistingVault(vault);
   });

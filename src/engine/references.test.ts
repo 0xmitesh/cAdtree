@@ -34,6 +34,51 @@ async function fixture() {
   return { working, vault, folders, save, scan, imported, ref, version: ref.versions[0], projectId: imported.project.projectId };
 }
 
+test('unchanged reference updates write nothing, while queued version changes publish once and preserve saved context', async () => {
+  const f = await fixture();
+  await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
+  await f.working.writeFileText(['Part.SLDPRT'], 'Saved geometry');
+  const saved = await f.save();
+  const savedId = saved.revision.manifest.revisionId;
+  const historical = structuredClone(context(saved.vaultState, savedId));
+  const state = await importReferenceAttachment(f.vault, f.projectId, attachment('Updated.pdf', new Uint8Array([1, 2, 3])), metadata, f.ref.referenceId);
+  const v2 = state.references!.library[0].versions[1];
+  const before = await inventory(f.vault), workingBefore = await inventory(f.working);
+  let writes = 0;
+  f.vault.setHooks({ onBeforeWrite: () => { writes++; } });
+  for (const changes of [
+    {},
+    { projectVersionId: f.version.versionId, removed: false },
+    { removed: false },
+    metadata,
+    { title: ` ${metadata.title} `, tags: [...metadata.tags.map(t => ` ${t} `), ...metadata.tags, ''] },
+  ]) {
+    const next = await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, changes);
+    assert.equal(next.references!.catalogId, state.references!.catalogId);
+    assert.deepEqual(context(next, savedId), historical);
+  }
+  assert.equal(writes, 0);
+  assert.equal(await inventory(f.vault), before, 'No new files or publication directories for unchanged edits');
+  const switched = await Promise.all([1, 2].map(() => updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: v2.versionId, removed: false })));
+  assert.equal(switched[0].references!.catalogId, switched[1].references!.catalogId, 'Queued duplicate sees the newly selected version');
+  const latest = await openExistingVault(f.vault);
+  assert.equal(Object.keys(latest.references!.catalogs).length, Object.keys(state.references!.catalogs).length + 1);
+  assert.equal(latest.references!.library[0].projectVersionId, v2.versionId);
+  assert.deepEqual(context(latest, savedId), historical);
+  assert.equal(latest.revisions.length, 1);
+  assert.equal(await inventory(f.working), workingBefore);
+});
+
+test('reference no-op detection retains cancellation, project, identity and version validation', async () => {
+  const f = await fixture(), before = await inventory(f.vault);
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(updateProjectReference(f.vault, f.projectId, f.ref.referenceId, {}, { signal: controller.signal }));
+  await assert.rejects(updateProjectReference(f.vault, 'another-project', f.ref.referenceId, {}), /Project changed/);
+  await assert.rejects(updateProjectReference(f.vault, f.projectId, 'missing-reference', {}), /missing or unpublished/);
+  await assert.rejects(updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: 'missing-version' }), /Invalid project reference version/);
+  assert.equal(await inventory(f.vault), before);
+});
+
 test('opaque import/retrieve preserves exact bytes, metadata and separate identities even for identical hashes', async () => {
   const f = await fixture();
   assert.deepEqual((await retrieveReferenceAttachment(f.vault, f.projectId, f.ref.referenceId, f.version.versionId)).bytes, original);
