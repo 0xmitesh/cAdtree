@@ -141,6 +141,8 @@ export interface IncompleteAttemptRecord {
 }
 
 export interface VaultState {
+  /** Independent append-only knowledge store. Failures never enter CAD recovery diagnostics. */
+  knowledge?: import('../knowledge/records/types').PersistedKnowledgeEvidence;
   references?: import('./references').ReferenceEvidence;
   components?: import('./component-identity').ComponentEvidence;
   /** Reconstructed endpoint identities only; absence means the saved head is unavailable.

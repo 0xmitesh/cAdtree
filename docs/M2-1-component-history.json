@@ -1,0 +1,1048 @@
+{
+  "description": "Disposable synthetic vault, published and reopened through existing cAdtree APIs. This is a review artifact, not a storage format.",
+  "query": {
+    "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+    "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455"
+  },
+  "recordOutcome": "matches",
+  "coverage": "readable",
+  "branches": [
+    {
+      "branchId": "branch-d1a2897d-3229-4a38-93dd-4ffeb5c1c210",
+      "name": "Thicker alternative",
+      "startingRevisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e"
+    },
+    {
+      "branchId": "branch-main",
+      "name": "Main",
+      "startingRevisionId": null
+    }
+  ],
+  "events": [
+    {
+      "context": {
+        "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+        "revisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e",
+        "branchId": "branch-main",
+        "source": {
+          "recordPath": "revisions/rev-63e35521-1213-4f18-a259-f9c034cd792e.manifest.json",
+          "jsonPointer": "",
+          "manifestSha256": "887e2c82216f10952bd978a29cae2d58d8158eaad3ef3aeef49edbaa88cee2d2",
+          "manifestPayloadSha256": "941a434299fe66cf45091282a2886f536281841e95f4a29ec363db95aa8dc723"
+        },
+        "recordedAt": "2026-11-08T12:49:58.190Z",
+        "chronologicalTime": 1794142198190,
+        "ancestry": {
+          "recordedParentRevisionId": null,
+          "validatedParentRevisionId": null,
+          "ancestry": [
+            "rev-63e35521-1213-4f18-a259-f9c034cd792e"
+          ],
+          "warnings": [],
+          "availability": {
+            "status": "available"
+          }
+        },
+        "fileNotes": {
+          "status": "available"
+        },
+        "referenceContext": {
+          "status": "available"
+        },
+        "component": {
+          "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+          "historicalPath": "collar.SLDPRT",
+          "mappingPayloadSha256": "db64c2e1cc3b9cb26eb9feae0c2be072b86ba151d03611b8a6b693204e1928c0",
+          "source": {
+            "recordPath": "revisions/rev-63e35521-1213-4f18-a259-f9c034cd792e.manifest.json",
+            "jsonPointer": "/files/0",
+            "manifestSha256": "887e2c82216f10952bd978a29cae2d58d8158eaad3ef3aeef49edbaa88cee2d2",
+            "manifestPayloadSha256": "941a434299fe66cf45091282a2886f536281841e95f4a29ec363db95aa8dc723"
+          }
+        }
+      },
+      "records": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-63e35521-1213-4f18-a259-f9c034cd792e\",\"/fileNotes/0/modification\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.modification",
+          "recordedAt": "2026-11-08T12:49:58.190Z",
+          "source": {
+            "recordPath": "revisions/rev-63e35521-1213-4f18-a259-f9c034cd792e.manifest.json",
+            "jsonPointer": "/fileNotes/0/modification",
+            "manifestSha256": "887e2c82216f10952bd978a29cae2d58d8158eaad3ef3aeef49edbaa88cee2d2",
+            "manifestPayloadSha256": "941a434299fe66cf45091282a2886f536281841e95f4a29ec363db95aa8dc723"
+          },
+          "content": "Increase thickness from 6 to 8 mm.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-63e35521-1213-4f18-a259-f9c034cd792e\",\"/fileNotes/0/observations\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.observations",
+          "recordedAt": "2026-11-08T12:49:58.190Z",
+          "source": {
+            "recordPath": "revisions/rev-63e35521-1213-4f18-a259-f9c034cd792e.manifest.json",
+            "jsonPointer": "/fileNotes/0/observations",
+            "manifestSha256": "887e2c82216f10952bd978a29cae2d58d8158eaad3ef3aeef49edbaa88cee2d2",
+            "manifestPayloadSha256": "941a434299fe66cf45091282a2886f536281841e95f4a29ec363db95aa8dc723"
+          },
+          "content": "Prototype [A].* pending.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-63e35521-1213-4f18-a259-f9c034cd792e\",\"/fileNotes/0/problem\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.problem",
+          "recordedAt": "2026-11-08T12:49:58.190Z",
+          "source": {
+            "recordPath": "revisions/rev-63e35521-1213-4f18-a259-f9c034cd792e.manifest.json",
+            "jsonPointer": "/fileNotes/0/problem",
+            "manifestSha256": "887e2c82216f10952bd978a29cae2d58d8158eaad3ef3aeef49edbaa88cee2d2",
+            "manifestPayloadSha256": "941a434299fe66cf45091282a2886f536281841e95f4a29ec363db95aa8dc723"
+          },
+          "content": "Collar bends under load.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ],
+      "references": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-63e35521-1213-4f18-a259-f9c034cd792e\",\"references/contexts/rev-63e35521-1213-4f18-a259-f9c034cd792e.json\",\"/links/0\"]",
+          "sourceType": "m1a-derived",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e",
+          "branchId": "branch-main",
+          "attachment": {
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "versionId": "reference-version-6c6f86c4-f339-4db6-ab88-1ce6da495680",
+            "origin": "revision",
+            "locator": "Page 4, figure 2",
+            "explanation": "Initial load context.",
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar.SLDPRT",
+            "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+            "size": 1,
+            "originalFilename": "loads.pdf",
+            "fileType": "application/pdf",
+            "scope": "component",
+            "source": {
+              "recordPath": "references/contexts/rev-63e35521-1213-4f18-a259-f9c034cd792e.json",
+              "jsonPointer": "/links/0",
+              "contextSha256": "33382c629d1d3364b5ec3ba4b7387b08c2677069b4354f197ece424f277c2ab0",
+              "contextPayloadSha256": "8b12a7a734eef56e5e6bdf260480df46613e5f8ed13a425e0a9e8142a88dde0e",
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-a095e00a-99c2-4be9-a11e-a049080bdacc",
+              "catalogSha256": "2e6c58f2f96bfae0dfac6efcf36cb8dc185ad4d91376d8308ec1c06959fb76b0"
+            },
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Attachment bytes are not verified by VaultState. Use retrieveReferenceAttachment to verify before use."
+            }
+          },
+          "origin": "revision-context",
+          "relation": "context",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ]
+    },
+    {
+      "context": {
+        "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+        "revisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+        "branchId": "branch-main",
+        "source": {
+          "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json",
+          "jsonPointer": "",
+          "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+          "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f"
+        },
+        "recordedAt": "2026-11-08T12:49:58.196Z",
+        "chronologicalTime": 1794142198196,
+        "ancestry": {
+          "recordedParentRevisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e",
+          "validatedParentRevisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e",
+          "ancestry": [
+            "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+            "rev-63e35521-1213-4f18-a259-f9c034cd792e"
+          ],
+          "warnings": [],
+          "availability": {
+            "status": "available"
+          }
+        },
+        "fileNotes": {
+          "status": "available"
+        },
+        "referenceContext": {
+          "status": "available"
+        },
+        "component": {
+          "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+          "historicalPath": "collar_plate.SLDPRT",
+          "mappingPayloadSha256": "62701609e30241befdf7d69afff2ad4d39130ee25f5c9c5635a56dfaf8b709b1",
+          "source": {
+            "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json",
+            "jsonPointer": "/files/0",
+            "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+            "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f"
+          }
+        }
+      },
+      "records": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd\",\"/fileNotes/0/modification\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.modification",
+          "recordedAt": "2026-11-08T12:49:58.196Z",
+          "source": {
+            "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json",
+            "jsonPointer": "/fileNotes/0/modification",
+            "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+            "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f"
+          },
+          "content": "Increase thickness from 6 to 8 mm.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd\",\"/fileNotes/0/observations\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.observations",
+          "recordedAt": "2026-11-08T12:49:58.196Z",
+          "source": {
+            "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json",
+            "jsonPointer": "/fileNotes/0/observations",
+            "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+            "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f"
+          },
+          "content": "Prototype [A].* pending.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd\",\"/fileNotes/0/problem\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.problem",
+          "recordedAt": "2026-11-08T12:49:58.196Z",
+          "source": {
+            "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json",
+            "jsonPointer": "/fileNotes/0/problem",
+            "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+            "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f"
+          },
+          "content": "Collar bends under load.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1",
+          "sourceType": "m1b-persisted",
+          "recordType": "cad.design-change",
+          "recordedAt": "2026-11-08T12:49:58.224Z",
+          "source": {
+            "recordPath": "knowledge/records/knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1.json",
+            "jsonPointer": "",
+            "recordSha256": "684c270e3776ec1a61922900d13e24880c1d9efbb7676e22e15fd343234bdb1f",
+            "bodySha256": "a04aa5cf158004a7c9534360953e28a5abad1e2cabae294b6cf98b346219213b",
+            "publicationPath": "knowledge/completed/knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1.684c270e3776ec1a61922900d13e24880c1d9efbb7676e22e15fd343234bdb1f.done",
+            "formatVersion": 1,
+            "recordType": "cad.design-change",
+            "schemaVersion": 1
+          },
+          "content": {
+            "payload": {
+              "change": {
+                "description": "Use an 8 mm collar",
+                "status": "proposed"
+              },
+              "problem": "Collar bends",
+              "rationale": "Recorded stiffness rationale; not validation."
+            },
+            "relationships": [
+              {
+                "binding": {
+                  "branchId": "branch-main",
+                  "historicalPath": "collar_plate.SLDPRT",
+                  "kind": "component",
+                  "mappingPayloadSha256": "62701609e30241befdf7d69afff2ad4d39130ee25f5c9c5635a56dfaf8b709b1",
+                  "source": {
+                    "jsonPointer": "/files/0",
+                    "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f",
+                    "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+                    "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json"
+                  }
+                },
+                "relation": "related",
+                "target": {
+                  "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+                  "kind": "component",
+                  "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+                  "revisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd"
+                }
+              },
+              {
+                "binding": {
+                  "association": {
+                    "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+                    "componentPath": "collar_plate.SLDPRT",
+                    "explanation": "Initial load context.",
+                    "fileType": "application/pdf",
+                    "locator": "Page 4, figure 2",
+                    "origin": "revision",
+                    "originalFilename": "loads.pdf",
+                    "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+                    "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+                    "size": 1,
+                    "source": {
+                      "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+                      "catalogId": "reference-catalog-a095e00a-99c2-4be9-a11e-a049080bdacc",
+                      "catalogSha256": "2e6c58f2f96bfae0dfac6efcf36cb8dc185ad4d91376d8308ec1c06959fb76b0",
+                      "contextPayloadSha256": "569e3a9f3d793db938cba09cadb944c636b7d1f38029e6f5dd29bab37c7be5d9",
+                      "contextSha256": "52f2e2862670cb15a6b438a0991f97c0cc48e944c1583833e77a0bd77d8c9dcd",
+                      "jsonPointer": "/links/0",
+                      "recordPath": "references/contexts/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.json"
+                    },
+                    "versionId": "reference-version-6c6f86c4-f339-4db6-ab88-1ce6da495680"
+                  },
+                  "kind": "reference-version"
+                },
+                "relation": "evidence",
+                "target": {
+                  "associationPointer": "/links/0",
+                  "kind": "reference-version",
+                  "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+                  "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+                  "revisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+                  "versionId": "reference-version-6c6f86c4-f339-4db6-ab88-1ce6da495680"
+                }
+              }
+            ],
+            "provenance": {
+              "kind": "user-entered"
+            }
+          },
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "knowledge-8f84580c-13a0-43e1-9219-b97501aecd99",
+          "sourceType": "m1b-persisted",
+          "recordType": "generic.observation",
+          "recordedAt": "2026-11-08T12:49:58.264Z",
+          "source": {
+            "recordPath": "knowledge/records/knowledge-8f84580c-13a0-43e1-9219-b97501aecd99.json",
+            "jsonPointer": "",
+            "recordSha256": "fb5456787ce0759a9c106e5cde6861888e61562e564abb4600b61b37ab06a4b6",
+            "bodySha256": "016045ba8efe10279a0e48f90e20f7e55620d6b90eda930fad8f57c2f12bd91d",
+            "publicationPath": "knowledge/completed/knowledge-8f84580c-13a0-43e1-9219-b97501aecd99.fb5456787ce0759a9c106e5cde6861888e61562e564abb4600b61b37ab06a4b6.done",
+            "formatVersion": 1,
+            "recordType": "generic.observation",
+            "schemaVersion": 1
+          },
+          "content": {
+            "payload": {
+              "attributes": {
+                "sample": 3,
+                "unit": "mm"
+              },
+              "description": "Two separate explicit contexts"
+            },
+            "relationships": [
+              {
+                "binding": {
+                  "branchId": "branch-main",
+                  "historicalPath": "collar_plate.SLDPRT",
+                  "kind": "component",
+                  "mappingPayloadSha256": "62701609e30241befdf7d69afff2ad4d39130ee25f5c9c5635a56dfaf8b709b1",
+                  "source": {
+                    "jsonPointer": "/files/0",
+                    "manifestPayloadSha256": "f4194f4a3b08a80eec024d0d89e116e0061e13245e3ad2de13d9be948bab753f",
+                    "manifestSha256": "06277fba6e22f155ca44b4efec20c4dee0e191659ce07d1a6e44a687ac223587",
+                    "recordPath": "revisions/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.manifest.json"
+                  }
+                },
+                "relation": "related",
+                "target": {
+                  "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+                  "kind": "component",
+                  "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+                  "revisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd"
+                }
+              },
+              {
+                "binding": {
+                  "branchId": "branch-d1a2897d-3229-4a38-93dd-4ffeb5c1c210",
+                  "kind": "revision",
+                  "source": {
+                    "jsonPointer": "",
+                    "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215",
+                    "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+                    "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json"
+                  }
+                },
+                "relation": "context",
+                "target": {
+                  "kind": "revision",
+                  "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+                  "revisionId": "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a"
+                }
+              }
+            ],
+            "provenance": {
+              "kind": "user-entered"
+            }
+          },
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ],
+      "references": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1\",1]",
+          "sourceType": "m1b-persisted",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+          "branchId": "branch-main",
+          "attachment": {
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar_plate.SLDPRT",
+            "explanation": "Initial load context.",
+            "fileType": "application/pdf",
+            "locator": "Page 4, figure 2",
+            "origin": "revision",
+            "originalFilename": "loads.pdf",
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+            "size": 1,
+            "source": {
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-a095e00a-99c2-4be9-a11e-a049080bdacc",
+              "catalogSha256": "2e6c58f2f96bfae0dfac6efcf36cb8dc185ad4d91376d8308ec1c06959fb76b0",
+              "contextPayloadSha256": "569e3a9f3d793db938cba09cadb944c636b7d1f38029e6f5dd29bab37c7be5d9",
+              "contextSha256": "52f2e2862670cb15a6b438a0991f97c0cc48e944c1583833e77a0bd77d8c9dcd",
+              "jsonPointer": "/links/0",
+              "recordPath": "references/contexts/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.json"
+            },
+            "versionId": "reference-version-6c6f86c4-f339-4db6-ab88-1ce6da495680",
+            "scope": "component",
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Retrieval does not verify attachment bytes."
+            }
+          },
+          "origin": "persisted-relationship",
+          "relation": "evidence",
+          "recordId": "knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1",
+          "relationshipSource": {
+            "recordPath": "knowledge/records/knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1.json",
+            "jsonPointer": "",
+            "recordSha256": "684c270e3776ec1a61922900d13e24880c1d9efbb7676e22e15fd343234bdb1f",
+            "bodySha256": "a04aa5cf158004a7c9534360953e28a5abad1e2cabae294b6cf98b346219213b",
+            "publicationPath": "knowledge/completed/knowledge-831699e0-ae23-437f-a13b-faaedddcbfb1.684c270e3776ec1a61922900d13e24880c1d9efbb7676e22e15fd343234bdb1f.done",
+            "formatVersion": 1,
+            "recordType": "cad.design-change",
+            "schemaVersion": 1,
+            "relationshipJsonPointer": "/relationships/1"
+          },
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd\",\"references/contexts/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.json\",\"/links/0\"]",
+          "sourceType": "m1a-derived",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+          "branchId": "branch-main",
+          "attachment": {
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "versionId": "reference-version-6c6f86c4-f339-4db6-ab88-1ce6da495680",
+            "origin": "revision",
+            "locator": "Page 4, figure 2",
+            "explanation": "Initial load context.",
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar_plate.SLDPRT",
+            "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+            "size": 1,
+            "originalFilename": "loads.pdf",
+            "fileType": "application/pdf",
+            "scope": "component",
+            "source": {
+              "recordPath": "references/contexts/rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd.json",
+              "jsonPointer": "/links/0",
+              "contextSha256": "52f2e2862670cb15a6b438a0991f97c0cc48e944c1583833e77a0bd77d8c9dcd",
+              "contextPayloadSha256": "569e3a9f3d793db938cba09cadb944c636b7d1f38029e6f5dd29bab37c7be5d9",
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-a095e00a-99c2-4be9-a11e-a049080bdacc",
+              "catalogSha256": "2e6c58f2f96bfae0dfac6efcf36cb8dc185ad4d91376d8308ec1c06959fb76b0"
+            },
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Attachment bytes are not verified by VaultState. Use retrieveReferenceAttachment to verify before use."
+            }
+          },
+          "origin": "revision-context",
+          "relation": "context",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ]
+    },
+    {
+      "context": {
+        "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+        "revisionId": "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a",
+        "branchId": "branch-d1a2897d-3229-4a38-93dd-4ffeb5c1c210",
+        "source": {
+          "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json",
+          "jsonPointer": "",
+          "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+          "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215"
+        },
+        "recordedAt": "2026-11-08T12:49:58.212Z",
+        "chronologicalTime": 1794142198212,
+        "ancestry": {
+          "recordedParentRevisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e",
+          "validatedParentRevisionId": "rev-63e35521-1213-4f18-a259-f9c034cd792e",
+          "ancestry": [
+            "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a",
+            "rev-63e35521-1213-4f18-a259-f9c034cd792e"
+          ],
+          "warnings": [],
+          "availability": {
+            "status": "available"
+          }
+        },
+        "fileNotes": {
+          "status": "available"
+        },
+        "referenceContext": {
+          "status": "available"
+        },
+        "component": {
+          "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+          "historicalPath": "collar.SLDPRT",
+          "mappingPayloadSha256": "cf589fcf0b2ebbab0d5445b1f8f25167b34df20511ba468138b230ac871c7edf",
+          "source": {
+            "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json",
+            "jsonPointer": "/files/0",
+            "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+            "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215"
+          }
+        }
+      },
+      "records": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-05351a39-0e54-4af5-8a64-1f519dc14e6a\",\"/fileNotes/0/modification\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.modification",
+          "recordedAt": "2026-11-08T12:49:58.212Z",
+          "source": {
+            "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json",
+            "jsonPointer": "/fileNotes/0/modification",
+            "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+            "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215"
+          },
+          "content": "Increase thickness from 6 to 8 mm.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-05351a39-0e54-4af5-8a64-1f519dc14e6a\",\"/fileNotes/0/observations\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.observations",
+          "recordedAt": "2026-11-08T12:49:58.212Z",
+          "source": {
+            "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json",
+            "jsonPointer": "/fileNotes/0/observations",
+            "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+            "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215"
+          },
+          "content": "Prototype [A].* pending.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-05351a39-0e54-4af5-8a64-1f519dc14e6a\",\"/fileNotes/0/problem\"]",
+          "sourceType": "m1a-derived",
+          "recordType": "m1a.problem",
+          "recordedAt": "2026-11-08T12:49:58.212Z",
+          "source": {
+            "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json",
+            "jsonPointer": "/fileNotes/0/problem",
+            "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+            "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215"
+          },
+          "content": "Collar bends under load.",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4",
+          "sourceType": "m1b-persisted",
+          "recordType": "generic.observation",
+          "recordedAt": "2026-11-08T12:49:58.232Z",
+          "source": {
+            "recordPath": "knowledge/records/knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4.json",
+            "jsonPointer": "",
+            "recordSha256": "a228273e117130b06d396654ec95eda95975e4ffc2df3ce4a0ccfa1a5bf01cb0",
+            "bodySha256": "a4e399cfaa0f41aa3c74ca09d3d46522bbff6d81c284865678ddfc1478503e45",
+            "publicationPath": "knowledge/completed/knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4.a228273e117130b06d396654ec95eda95975e4ffc2df3ce4a0ccfa1a5bf01cb0.done",
+            "formatVersion": 1,
+            "recordType": "generic.observation",
+            "schemaVersion": 1
+          },
+          "content": {
+            "payload": {
+              "attributes": {
+                "sample": 3,
+                "unit": "mm"
+              },
+              "description": "Alternative collar observation"
+            },
+            "relationships": [
+              {
+                "binding": {
+                  "branchId": "branch-d1a2897d-3229-4a38-93dd-4ffeb5c1c210",
+                  "historicalPath": "collar.SLDPRT",
+                  "kind": "component",
+                  "mappingPayloadSha256": "cf589fcf0b2ebbab0d5445b1f8f25167b34df20511ba468138b230ac871c7edf",
+                  "source": {
+                    "jsonPointer": "/files/0",
+                    "manifestPayloadSha256": "b5a9981af3011de9ae198b97555c52043b164fbfc778f552c61a616c2d8b6215",
+                    "manifestSha256": "44cc1b6eba878163c69b0102451499abf18d4ad11d1e3ac6435206c1fd1b2a1f",
+                    "recordPath": "revisions/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.manifest.json"
+                  }
+                },
+                "relation": "related",
+                "target": {
+                  "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+                  "kind": "component",
+                  "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+                  "revisionId": "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a"
+                }
+              },
+              {
+                "binding": {
+                  "association": {
+                    "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+                    "componentPath": "collar.SLDPRT",
+                    "explanation": "Alternative load context.",
+                    "fileType": "application/pdf",
+                    "locator": "Page 7, figure 1",
+                    "origin": "revision",
+                    "originalFilename": "loads.pdf",
+                    "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+                    "sha256": "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+                    "size": 1,
+                    "source": {
+                      "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+                      "catalogId": "reference-catalog-18ef3fcf-23e1-4ecb-b12e-677e24b254cb",
+                      "catalogSha256": "3b39e46b59648304913d87a3d18a94eed3693bf01cbfc530e07c71fe1e68b408",
+                      "contextPayloadSha256": "fd82b8069eb2b65c809a0254c7757aed841ed9d7cd75d6dd2484b304824d7de3",
+                      "contextSha256": "2b725f3f8429aa981f50745b882d0bef2277702f81d550a38f6708e0b34f88da",
+                      "jsonPointer": "/links/0",
+                      "recordPath": "references/contexts/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.json"
+                    },
+                    "versionId": "reference-version-52c18104-4b00-4ae7-b7b7-8f53646c5316"
+                  },
+                  "kind": "reference-version"
+                },
+                "relation": "evidence",
+                "target": {
+                  "associationPointer": "/links/0",
+                  "kind": "reference-version",
+                  "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+                  "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+                  "revisionId": "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a",
+                  "versionId": "reference-version-52c18104-4b00-4ae7-b7b7-8f53646c5316"
+                }
+              }
+            ],
+            "provenance": {
+              "kind": "user-entered"
+            }
+          },
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ],
+      "references": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4\",1]",
+          "sourceType": "m1b-persisted",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a",
+          "branchId": "branch-d1a2897d-3229-4a38-93dd-4ffeb5c1c210",
+          "attachment": {
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar.SLDPRT",
+            "explanation": "Alternative load context.",
+            "fileType": "application/pdf",
+            "locator": "Page 7, figure 1",
+            "origin": "revision",
+            "originalFilename": "loads.pdf",
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "sha256": "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+            "size": 1,
+            "source": {
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-18ef3fcf-23e1-4ecb-b12e-677e24b254cb",
+              "catalogSha256": "3b39e46b59648304913d87a3d18a94eed3693bf01cbfc530e07c71fe1e68b408",
+              "contextPayloadSha256": "fd82b8069eb2b65c809a0254c7757aed841ed9d7cd75d6dd2484b304824d7de3",
+              "contextSha256": "2b725f3f8429aa981f50745b882d0bef2277702f81d550a38f6708e0b34f88da",
+              "jsonPointer": "/links/0",
+              "recordPath": "references/contexts/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.json"
+            },
+            "versionId": "reference-version-52c18104-4b00-4ae7-b7b7-8f53646c5316",
+            "scope": "component",
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Retrieval does not verify attachment bytes."
+            }
+          },
+          "origin": "persisted-relationship",
+          "relation": "evidence",
+          "recordId": "knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4",
+          "relationshipSource": {
+            "recordPath": "knowledge/records/knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4.json",
+            "jsonPointer": "",
+            "recordSha256": "a228273e117130b06d396654ec95eda95975e4ffc2df3ce4a0ccfa1a5bf01cb0",
+            "bodySha256": "a4e399cfaa0f41aa3c74ca09d3d46522bbff6d81c284865678ddfc1478503e45",
+            "publicationPath": "knowledge/completed/knowledge-ef4239cb-1d01-444e-8c90-5baded79e9a4.a228273e117130b06d396654ec95eda95975e4ffc2df3ce4a0ccfa1a5bf01cb0.done",
+            "formatVersion": 1,
+            "recordType": "generic.observation",
+            "schemaVersion": 1,
+            "relationshipJsonPointer": "/relationships/1"
+          },
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        },
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-05351a39-0e54-4af5-8a64-1f519dc14e6a\",\"references/contexts/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.json\",\"/links/0\"]",
+          "sourceType": "m1a-derived",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-05351a39-0e54-4af5-8a64-1f519dc14e6a",
+          "branchId": "branch-d1a2897d-3229-4a38-93dd-4ffeb5c1c210",
+          "attachment": {
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "versionId": "reference-version-52c18104-4b00-4ae7-b7b7-8f53646c5316",
+            "origin": "revision",
+            "locator": "Page 7, figure 1",
+            "explanation": "Alternative load context.",
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar.SLDPRT",
+            "sha256": "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+            "size": 1,
+            "originalFilename": "loads.pdf",
+            "fileType": "application/pdf",
+            "scope": "component",
+            "source": {
+              "recordPath": "references/contexts/rev-05351a39-0e54-4af5-8a64-1f519dc14e6a.json",
+              "jsonPointer": "/links/0",
+              "contextSha256": "2b725f3f8429aa981f50745b882d0bef2277702f81d550a38f6708e0b34f88da",
+              "contextPayloadSha256": "fd82b8069eb2b65c809a0254c7757aed841ed9d7cd75d6dd2484b304824d7de3",
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-18ef3fcf-23e1-4ecb-b12e-677e24b254cb",
+              "catalogSha256": "3b39e46b59648304913d87a3d18a94eed3693bf01cbfc530e07c71fe1e68b408"
+            },
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Attachment bytes are not verified by VaultState. Use retrieveReferenceAttachment to verify before use."
+            }
+          },
+          "origin": "revision-context",
+          "relation": "context",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ]
+    },
+    {
+      "context": {
+        "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+        "revisionId": "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+        "branchId": "branch-main",
+        "source": {
+          "recordPath": "revisions/rev-e20ba879-9564-4205-b8e9-a25c408aa932.manifest.json",
+          "jsonPointer": "",
+          "manifestSha256": "081a9d819592ecbcb3c9552b44b75109379b01a457154336b959c58c480625a6",
+          "manifestPayloadSha256": "6d2f2125ad4acf87cf8f54bdfa8e890b86030a7076df87605604c5a3ddd366f4"
+        },
+        "recordedAt": "2026-11-08T12:49:58.215Z",
+        "chronologicalTime": 1794142198215,
+        "ancestry": {
+          "recordedParentRevisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+          "validatedParentRevisionId": "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+          "ancestry": [
+            "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+            "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+            "rev-63e35521-1213-4f18-a259-f9c034cd792e"
+          ],
+          "warnings": [],
+          "availability": {
+            "status": "available"
+          }
+        },
+        "fileNotes": {
+          "status": "not_recorded",
+          "reason": "The optional fileNotes field was not recorded."
+        },
+        "referenceContext": {
+          "status": "available"
+        },
+        "component": {
+          "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+          "historicalPath": "collar_plate.SLDPRT",
+          "mappingPayloadSha256": "77725c1a164e02a66f22956fcdc4597f055d8c8a961be549359b6cf0c192127f",
+          "source": {
+            "recordPath": "revisions/rev-e20ba879-9564-4205-b8e9-a25c408aa932.manifest.json",
+            "jsonPointer": "/files/0",
+            "manifestSha256": "081a9d819592ecbcb3c9552b44b75109379b01a457154336b959c58c480625a6",
+            "manifestPayloadSha256": "6d2f2125ad4acf87cf8f54bdfa8e890b86030a7076df87605604c5a3ddd366f4"
+          }
+        }
+      },
+      "records": [],
+      "references": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-e20ba879-9564-4205-b8e9-a25c408aa932\",\"references/contexts/rev-e20ba879-9564-4205-b8e9-a25c408aa932.json\",\"/links/0\"]",
+          "sourceType": "m1a-derived",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+          "branchId": "branch-main",
+          "attachment": {
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "versionId": "reference-version-52c18104-4b00-4ae7-b7b7-8f53646c5316",
+            "origin": "revision",
+            "locator": "Page 7, figure 1",
+            "explanation": "Alternative load context.",
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar_plate.SLDPRT",
+            "sha256": "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+            "size": 1,
+            "originalFilename": "loads.pdf",
+            "fileType": "application/pdf",
+            "scope": "component",
+            "source": {
+              "recordPath": "references/contexts/rev-e20ba879-9564-4205-b8e9-a25c408aa932.json",
+              "jsonPointer": "/links/0",
+              "contextSha256": "fcc19f78dd3d8a59cd1d1c59430f4b2389e522298d0d560a7ba0217cac8c52fb",
+              "contextPayloadSha256": "8063ee0c333e9cdc7816dd70e9d5090b701d8ae1264aafd4581924aa9b418222",
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-18ef3fcf-23e1-4ecb-b12e-677e24b254cb",
+              "catalogSha256": "3b39e46b59648304913d87a3d18a94eed3693bf01cbfc530e07c71fe1e68b408"
+            },
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Attachment bytes are not verified by VaultState. Use retrieveReferenceAttachment to verify before use."
+            }
+          },
+          "origin": "revision-context",
+          "relation": "context",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ]
+    },
+    {
+      "context": {
+        "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+        "revisionId": "rev-85732a3b-7f0b-4394-933b-4b23392444fb",
+        "branchId": "branch-main",
+        "source": {
+          "recordPath": "revisions/rev-85732a3b-7f0b-4394-933b-4b23392444fb.manifest.json",
+          "jsonPointer": "",
+          "manifestSha256": "b627f99d15d7c6a655783a0610f455ccd8f01e6bf79dedb0fe273261933ee012",
+          "manifestPayloadSha256": "ec0e25558dbbc4b26fa5184fd71b88491368dbbc95d8f5fd8211f2182966020b"
+        },
+        "recordedAt": "2026-11-08T12:49:58.219Z",
+        "chronologicalTime": 1794142198219,
+        "ancestry": {
+          "recordedParentRevisionId": "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+          "validatedParentRevisionId": "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+          "ancestry": [
+            "rev-85732a3b-7f0b-4394-933b-4b23392444fb",
+            "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+            "rev-2fb41e91-f231-49bf-a1a1-0b4cba5c5ebd",
+            "rev-63e35521-1213-4f18-a259-f9c034cd792e"
+          ],
+          "warnings": [],
+          "availability": {
+            "status": "available"
+          }
+        },
+        "fileNotes": {
+          "status": "available"
+        },
+        "referenceContext": {
+          "status": "available"
+        },
+        "component": {
+          "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+          "historicalPath": "collar_plate.SLDPRT",
+          "mappingPayloadSha256": "efa2d6bdcc5d89bf1f89cadb13bbb383bc6554b7da1413abac00c7664abd7b88",
+          "source": {
+            "recordPath": "revisions/rev-85732a3b-7f0b-4394-933b-4b23392444fb.manifest.json",
+            "jsonPointer": "/files/0",
+            "manifestSha256": "b627f99d15d7c6a655783a0610f455ccd8f01e6bf79dedb0fe273261933ee012",
+            "manifestPayloadSha256": "ec0e25558dbbc4b26fa5184fd71b88491368dbbc95d8f5fd8211f2182966020b"
+          }
+        }
+      },
+      "records": [],
+      "references": [
+        {
+          "id": "[\"proj-5a75e330-d9db-488e-9c90-30167ff8c09a\",\"rev-85732a3b-7f0b-4394-933b-4b23392444fb\",\"references/contexts/rev-85732a3b-7f0b-4394-933b-4b23392444fb.json\",\"/links/0\"]",
+          "sourceType": "m1a-derived",
+          "projectId": "proj-5a75e330-d9db-488e-9c90-30167ff8c09a",
+          "revisionId": "rev-85732a3b-7f0b-4394-933b-4b23392444fb",
+          "branchId": "branch-main",
+          "attachment": {
+            "referenceId": "reference-97cb1f1e-ce54-453e-9613-e0e1cfea1ac1",
+            "versionId": "reference-version-52c18104-4b00-4ae7-b7b7-8f53646c5316",
+            "origin": "revision",
+            "locator": "Page 7, figure 1",
+            "explanation": "Alternative load context.",
+            "componentId": "component-1f8aeb60-d076-401f-98a7-6fc571197455",
+            "componentPath": "collar_plate.SLDPRT",
+            "sha256": "dbc1b4c900ffe48d575b5da5c638040125f65db0fe3e24494b76ea986457d986",
+            "size": 1,
+            "originalFilename": "loads.pdf",
+            "fileType": "application/pdf",
+            "scope": "component",
+            "source": {
+              "recordPath": "references/contexts/rev-85732a3b-7f0b-4394-933b-4b23392444fb.json",
+              "jsonPointer": "/links/0",
+              "contextSha256": "629735f3695a9604ad4822291ce712f48677593364a8b195e3a35a2532a7d8e8",
+              "contextPayloadSha256": "050814d1cf2d4182bab6466a933cf9842f20bd9a56ebe0d3f609f70544346ea0",
+              "boundarySha256": "4f39f5778e67fe67354b6f6a7b67fd13423050e9a2ab6b7fa0191d3d896b9d39",
+              "catalogId": "reference-catalog-18ef3fcf-23e1-4ecb-b12e-677e24b254cb",
+              "catalogSha256": "3b39e46b59648304913d87a3d18a94eed3693bf01cbfc530e07c71fe1e68b408"
+            },
+            "metadata": {
+              "status": "available"
+            },
+            "content": {
+              "status": "unavailable",
+              "reason": "Attachment bytes are not verified by VaultState. Use retrieveReferenceAttachment to verify before use."
+            }
+          },
+          "origin": "revision-context",
+          "relation": "context",
+          "verification": {
+            "metadata": "checksum_verified",
+            "attachmentBytes": "not_checked",
+            "claims": "not_verified"
+          }
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "code": "file_notes",
+      "status": "not_recorded",
+      "source": "revisions/rev-e20ba879-9564-4205-b8e9-a25c408aa932.manifest.json",
+      "reason": "The optional fileNotes field was not recorded.",
+      "revisionId": "rev-e20ba879-9564-4205-b8e9-a25c408aa932",
+      "relevance": "scope"
+    },
+    {
+      "code": "vault_diagnostic",
+      "status": "not_recorded",
+      "source": "staging/reference-import-a38f1414-d63d-40e8-bb88-07328d15d581",
+      "reason": "Uncommitted staging data from an interrupted write session (reference-import-a38f1414-d63d-40e8-bb88-07328d15d581). Ignored by committed history.",
+      "relevance": "unresolved-project"
+    },
+    {
+      "code": "vault_diagnostic",
+      "status": "not_recorded",
+      "source": "staging/reference-import-e7e0eb3e-9c09-4510-83bf-540336afabbf",
+      "reason": "Uncommitted staging data from an interrupted write session (reference-import-e7e0eb3e-9c09-4510-83bf-540336afabbf). Ignored by committed history.",
+      "relevance": "unresolved-project"
+    }
+  ],
+  "limitations": [
+    "Recorded assertions and source context do not establish engineering correctness, CAD geometry changes, document contents or a complete design history.",
+    "Ordering uses recorded timestamps, not independently verified event dates. No dates or explanations are inferred.",
+    "Record filters apply to records; the separate reference list preserves revision context within the selected identity scope.",
+    "Availability describes the supplied reconstructed snapshot. Retrieval does not reread current files or verify attachment bytes.",
+    "Some optional historical evidence was not recorded. Readable recorded metadata does not establish complete evidence for a technical claim."
+  ]
+}
