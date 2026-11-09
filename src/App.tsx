@@ -84,7 +84,7 @@ import {
 } from "./engine/vault-service";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { ReferencesView } from './components/ReferencesView';
-import { importReferenceAttachment, updateProjectReference, retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
+import { retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ProjectContextHeader } from "./components/ProjectContextHeader";
 import { ProjectLearningModal } from "./components/ProjectLearningModal";
@@ -1424,6 +1424,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       reviewedChangesSignature: string;
       identityReview?: IdentityReview;
       referenceReview?: ReferenceReview;
+      referenceAttachments?: import('./engine/references').PendingReferenceAttachment[];
+      onReferenceAttachmentsStored?: (review: ReferenceReview) => void;
     },
   ) => {
     if (!workingDir || !vaultDir || branchId !== activeBranchId)
@@ -1436,6 +1438,12 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         try {
           const result = await captureRevision(workingDir, vaultDir, {
             ...params,
+            referenceAuthor: authStateRef.current.user ? { id: authStateRef.current.user.uid, displayName: authStateRef.current.user.displayName || authStateRef.current.user.email || 'User' } : undefined,
+            onReferenceAttachmentsStored: (review, state) => {
+              if (!context.current()) return;
+              setVaultState(state);
+              params.onReferenceAttachmentsStored?.(review);
+            },
             branchId,
             workingFolders,
             resolveWorkingFolders:
@@ -1926,19 +1934,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const handleSimulateClearMetadataAndReopenVault = async () => {
     await perform("connect", clearConnections);
   };
-  const writeReferences = async (action: (context: Context) => Promise<VaultState>) => {
-    if (!vaultDir) throw new Error('Open a project first.');
-    await perform('references', async context => {
-      if (await vaultDir.requestPermission('readwrite') !== 'granted') throw new Error('Allow read/write access to the project folder, then retry the reference operation.');
-      try { const next = await action(context); if (context.current()) applyVaultState(next); }
-      finally {
-        if (context.current()) {
-          try { applyVaultState(await openExistingVault(vaultDir)); }
-          catch { /* Preserve the original permission/publication error. Reconnect to inspect disk evidence. */ }
-        }
-      }
-    }, true);
-  };
   const handleRetrieveReference = async (referenceId: string, versionId: string) => {
     if (!vaultDir || !vaultState) throw new Error('Open a project first.');
     await perform('references', async context => {
@@ -2362,6 +2357,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   activeBranchId={activeBranchId}
                   busy={busy}
                   onSelect={handleSelectBranch}
+                  showWorkingCase={activeTab !== 'references'}
                 />
                 <ApplicationStatus
                   key={`${vaultState.project.projectId}:${activeBranchId}`}
@@ -2440,8 +2436,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 ))}
                 <div hidden={activeTab !== 'references'}>
                   <ReferencesView state={vaultState} busy={busy} progress={progress} onCancel={handleCancelOperation}
-                    onImport={(file, metadata, referenceId) => writeReferences(context => importReferenceAttachment(vaultDir, vaultState.project.projectId, file, metadata, referenceId, { signal: context.signal, onProgress: context.progress }))}
-                    onUpdate={(referenceId, changes) => writeReferences(context => updateProjectReference(vaultDir, vaultState.project.projectId, referenceId, changes, { signal: context.signal }))}
                     onRetrieve={handleRetrieveReference} />
                 </div>
                 <div hidden={activeTab !== "history"}>

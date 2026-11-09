@@ -15,7 +15,12 @@ import {
   resolveManagedProject,
 } from "../src/engine/workspace-service";
 import { captureRevision } from "../src/engine/revision-service";
-import { rememberHome } from "../src/engine/idb-store";
+import { importReferenceAttachment, updateProjectReference, createReferenceReview } from "../src/engine/references";
+import { scanBranchChanges } from "../src/engine/scanner";
+import { getBranchBaseline } from "../src/engine/branch-state";
+import { rememberHome, saveWorkspacePath, setConvenienceAccountScope } from "../src/engine/idb-store";
+import { resolveAuthAdapter } from "../src/auth/firebase-auth";
+import { DEFAULT_TEST_USER } from "./test-auth";
 
 const message = document.getElementById("preparing")!;
 const nativeDate = Date;
@@ -65,7 +70,7 @@ async function seed() {
   let root: RealFileSystemAdapter;
   let attempt = 0;
   while (true) {
-    const name = `cAdtree Synthetic Preview v2${attempt ? ` (retry ${attempt})` : ""}`;
+    const name = `cAdtree Synthetic Preview v4${attempt ? ` (retry ${attempt})` : ""}`;
     root = new RealFileSystemAdapter(
       await storage.getDirectoryHandle(name, { create: true }),
     );
@@ -101,7 +106,7 @@ async function seed() {
           `Populating ${group.name} / ${name} (${projectIndex + 1} of 9)…`,
         );
         const sourceHandle = await storage.getDirectoryHandle(
-          `sample-source-v2-${attempt}-${projectIndex}`,
+          `sample-source-v4-${attempt}-${projectIndex}`,
           { create: true },
         );
         const source = new RealFileSystemAdapter(sourceHandle);
@@ -134,6 +139,24 @@ async function seed() {
           create: true,
         });
         let project = await importProject(workspace.root, source, name);
+        const savedBy = { id: DEFAULT_TEST_USER.uid, displayName: DEFAULT_TEST_USER.displayName! };
+        const briefState = await importReferenceAttachment(
+          project.vaultDir, project.record.projectId,
+          new File([`SYNTHETIC SAMPLE — NOT AN ENGINEERING REQUIREMENT\nProject: ${name}\n\nReview fit, assembly access and manufacturability before release.\n`], 'Design brief.txt', { type: 'text/plain' }),
+          { title: 'Design brief', description: 'Sample project requirements for testing downloads.', tags: ['sample', 'requirements'] },
+          undefined, { savedBy },
+        );
+        const brief = briefState.references!.library[0];
+        await updateProjectReference(project.vaultDir, project.record.projectId, brief.referenceId, { projectVersionId: brief.versions[0].versionId });
+        const componentPath = drawing ? file : 'Parts/Bearing.SLDPRT';
+        const componentState = await importReferenceAttachment(
+          project.vaultDir, project.record.projectId,
+          new File([`sample_only,component,review\ntrue,${componentPath},Check mating dimensions before release\n`], drawing ? 'Drawing review.csv' : 'Bearing specification.csv', { type: 'text/csv' }),
+          { title: drawing ? 'Drawing review' : 'Bearing specification', description: 'Sample component reference for testing saved attachments.', tags: ['sample', 'component'] },
+          undefined, { savedBy },
+        );
+        const componentReference = componentState.references!.library.at(-1)!;
+        project = await resolveManagedProject(workspace.root, project.record.containerPath);
         const saved: string[] = [];
         async function capture(
           branchId: string,
@@ -152,9 +175,18 @@ async function seed() {
               ["Reference", "Tolerance review.csv"],
               "feature,target,measured\nShaft clearance,0.25,0.28\nMounting bore,8.0,8.01\n",
             );
+          const scan = await scanBranchChanges(working, branchId, getBranchBaseline(project.vaultState, branchId));
+          const referenceReview = createReferenceReview(project.vaultState, scan, [{
+            referenceId: componentReference.referenceId,
+            versionId: componentReference.versions[0].versionId,
+            component: { kind: 'pending', path: componentPath },
+            locator: 'Review row',
+            explanation: 'Sample reference attached to this component.',
+          }]);
           const result = await captureRevision(working, project.vaultDir, {
             branchId,
             summary,
+            referenceReview,
             workingFolders: project.workingFolders,
             notes: notes(
               stage % 2
@@ -267,7 +299,7 @@ async function seed() {
       );
     await root.writeFileText(
       [".synthetic-seed-complete.json"],
-      JSON.stringify({ version: 2 }),
+      JSON.stringify({ version: 4 }),
     );
     return complete;
   } finally {
@@ -276,7 +308,7 @@ async function seed() {
 }
 
 async function start() {
-  const home = await navigator.locks.request("cadtree-synthetic-seed-v2", seed);
+  const home = await navigator.locks.request("cadtree-synthetic-seed-v4", seed);
   const projects = home.workspaces.flatMap((e) => e.workspace!.projects);
   const branchCount = projects.reduce(
     (total, p) => total + p.project!.vaultState.branches.length,
@@ -286,6 +318,10 @@ async function start() {
     (total, p) => total + p.project!.vaultState.revisions.length,
     0,
   );
+  const account = resolveAuthAdapter().getCurrentState?.();
+  setConvenienceAccountScope(account?.ready && account.user ? account.user.uid : null);
+  // Display-only address for browser sample storage; no OS folder is accessed.
+  await saveWorkspacePath(home.identity.homeId, 'C:\\cAdtree Samples', (home.root as RealFileSystemAdapter).handle);
   await rememberHome({
     homeId: home.identity.homeId,
     name: home.root.name,

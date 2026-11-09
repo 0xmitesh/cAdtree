@@ -14,7 +14,10 @@ import { openExistingVault } from '../engine/vault-service';
 import { scanBranchChanges } from '../engine/scanner';
 import { clearAllConvenienceMetadata } from '../engine/idb-store';
 import { inventorySignature, readVerifiedInventory } from '../engine/copy-service';
-import { importReferenceAttachment, updateProjectReference, createReferenceReview } from '../engine/references';
+import { importReferenceAttachment, updateProjectReference, createReferenceReview, retrieveReferenceAttachment } from '../engine/references';
+import { getObjectPathSegments } from '../engine/object-store';
+import { ReferencesView } from './ReferencesView';
+import { referenceBrowserFixture } from '../../tests/reference-browser-fixture';
 import { openHomeWorkspace, appBusy } from '../../tests/app-controls';
 
 Object.assign(globalThis, { indexedDB });
@@ -30,120 +33,148 @@ async function fixture() {
 }
 const source = () => new File([new Uint8Array([0, 255, 13, 10, 128])], 'Requirement.pdf', { type: 'application/pdf' });
 
-test('already-pinned reference versions are disabled; another version still updates project context', async () => {
-  const f = await fixture();
-  const metadata = { title: 'Requirements', description: '', tags: ['demo'] };
-  let state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), metadata);
-  const ref = state.references!.library[0], v1 = ref.versions[0].versionId;
-  state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, new File(['Updated requirement'], 'Updated.pdf'), metadata, ref.referenceId);
-  const v2 = state.references!.library[0].versions[1].versionId;
-  await updateProjectReference(f.project.vaultDir, f.project.record.projectId, ref.referenceId, { projectVersionId: v1 });
-  const ui = render(<App />);
-  await openHomeWorkspace(ui, f.home);
-  fireEvent.click(ui.getByRole('button', { name: 'Open project' }));
-  await waitFor(() => assert.equal(appBusy(ui), false));
-  fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'References' }));
-  const versions = ui.getByRole('combobox', { name: /Attachment version/ });
-  assert.equal((versions as HTMLSelectElement).value, v2);
-  fireEvent.change(versions, { target: { value: v1 } });
-  const selected = ui.getByRole('button', { name: 'Project context: this version' }) as HTMLButtonElement;
-  assert.equal(selected.disabled, true);
-  const beforeState = await openExistingVault(f.project.vaultDir);
-  const beforeFiles = inventorySignature(await readVerifiedInventory(f.home));
-  const calls = { reads: 0, writes: 0 };
-  f.home.setHooks({ onBeforeRead: () => { calls.reads++; }, onBeforeWrite: () => { calls.writes++; } });
-  await act(async () => { selected.click(); });
-  assert.deepEqual(calls, { reads: 0, writes: 0 }, 'The disabled status does not invoke a reference operation');
-  assert.equal(inventorySignature(await readVerifiedInventory(f.home)), beforeFiles);
-  f.home.setHooks({ onBeforeRead: undefined, onBeforeWrite: undefined });
-  fireEvent.change(versions, { target: { value: v2 } });
-  const choose = ui.getByRole('button', { name: 'Use this version in project context' }) as HTMLButtonElement;
-  assert.equal(choose.disabled, false);
-  fireEvent.click(choose);
-  await waitFor(() => assert.equal((ui.getByRole('button', { name: 'Project context: this version' }) as HTMLButtonElement).disabled, true));
-  await waitFor(() => assert.equal(appBusy(ui), false));
-  const updated = await openExistingVault(f.project.vaultDir);
-  assert.equal(updated.references!.library[0].projectVersionId, v2);
-  assert.equal(updated.references!.library[0].versions.length, 2);
-  assert.equal(Object.keys(updated.references!.catalogs).length, Object.keys(beforeState.references!.catalogs).length + 1);
-  assert.equal(updated.revisions.length, 1);
-  fireEvent.change(versions, { target: { value: v1 } });
-  assert.equal((ui.getByRole('button', { name: 'Use this version in project context' }) as HTMLButtonElement).disabled, false);
+test('reference browsing combines branch, file and search without mutation controls or project writes', async () => {
+  const f = await referenceBrowserFixture();
+  const before = inventorySignature(await readVerifiedInventory(f.vault));
+  const copies: Uint8Array[] = [];
+  const ui = render(<ReferencesView state={f.state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async (id, version) => {
+    copies.push((await retrieveReferenceAttachment(f.vault, f.state.project.projectId, id, version)).bytes);
+  }} />);
+  assert.equal(ui.getAllByRole('combobox').length, 2);
+  for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future revisions']) assert.equal(ui.queryByRole('button', { name }), null);
+  const branch = ui.getByRole('combobox', { name: 'Branch' });
+  const file = ui.getByRole('combobox', { name: 'Part / file' });
+  const search = ui.getByRole('searchbox', { name: 'Search references' });
+  assert.ok(ui.getByRole('option', { name: 'notes.txt' }));
+  const partB = (within(file).getByRole('option', { name: 'B.SLDPRT' }) as HTMLOptionElement).value;
+  fireEvent.change(branch, { target: { value: 'branch-main' } });
+  fireEvent.change(file, { target: { value: partB } });
+  fireEvent.change(search, { target: { value: 'Alpha' } });
+  assert.ok(ui.getByText(/No matching references/));
+  fireEvent.change(search, { target: { value: '' } });
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 2);
+  assert.ok(ui.getByRole('button', { name: 'Download Beta requirement (Beta.txt)' }));
+  fireEvent.change(branch, { target: { value: f.branchId } });
+  fireEvent.change(search, { target: { value: 'Alpha updated.txt' } });
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 1);
+  assert.ok(ui.getByText('Alternative · Rev 004'));
+  assert.ok(ui.getByText('Part: B.SLDPRT'));
+  fireEvent.click(ui.getByRole('button', { name: 'Download Alpha requirement (Alpha updated.txt)' }));
+  await waitFor(() => assert.equal(copies.length, 1));
+  assert.equal(new TextDecoder().decode(copies[0]), 'Alpha two');
+  assert.equal(inventorySignature(await readVerifiedInventory(f.vault)), before);
 });
 
-test('actual App imports, pins project context, saves a reference-only revision, retrieves and reopens entirely from disk', async () => {
-  const f = await fixture(); let ui = render(<App />); 
+test('actual App browses and downloads saved references and reopens entirely from disk', async () => {
+  const f = await fixture();
+  const imported = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirement.pdf', description: 'Customer discussion', tags: ['clearance', 'customer'] }, undefined, { savedBy: { id: 'test-engineer-1', displayName: 'Test Engineer' } });
+  const ref = imported.references!.library[0];
+  await updateProjectReference(f.project.vaultDir, f.project.record.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
+  await captureRevision(f.working, f.project.vaultDir, { branchId, summary: 'Record customer requirement', notes, workingFolders: f.project.workingFolders });
+  let ui = render(<App />);
   await openHomeWorkspace(ui, f.home); fireEvent.click(ui.getByRole('button', { name: 'Open project' }));
   await waitFor(() => assert.equal(appBusy(ui), false));
   fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'References' }));
-  fireEvent.click(ui.getByRole('button', { name: 'Import reference' }));
-  const dialog = within(ui.getByRole('dialog', { name: 'Import reference' }));
-  fireEvent.change(dialog.getByLabelText('Original attachment'), { target: { files: [source()] } });
-  fireEvent.change(dialog.getByLabelText('Description'), { target: { value: 'Customer discussion' } });
-  fireEvent.change(dialog.getByLabelText('Tags (comma separated)'), { target: { value: 'clearance, customer' } });
-  fireEvent.submit(dialog.getByRole('button', { name: 'Copy and verify attachment' }).closest('form')!);
-  await waitFor(() => assert.ok(!ui.queryByRole('dialog')));
-  assert.ok(ui.getByText(/import time, not document creation date/));
-  fireEvent.change(ui.getByRole('textbox', { name: 'Search references' }), { target: { value: 'clearance' } });
-  assert.ok(ui.getByRole('heading', { name: 'Requirement.pdf' }));
-  fireEvent.change(ui.getByRole('textbox', { name: 'Search references' }), { target: { value: 'unmatched' } });
-  assert.equal(ui.queryByRole('heading', { name: 'Requirement.pdf' }), null);
-  fireEvent.change(ui.getByRole('textbox', { name: 'Search references' }), { target: { value: '' } });
-  fireEvent.click(ui.getByRole('button', { name: 'Use this version in project context' }));
-  await waitFor(() => assert.ok(ui.getByRole('button', { name: 'Project context: this version' })));
-  assert.equal((await openExistingVault(f.project.vaultDir)).revisions.length, 1);
-  fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'Changes' }));
-  await waitFor(() => assert.ok(ui.getByText(/Reference-context-only revision/)));
-  fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Record customer requirement' } });
-  fireEvent.click(ui.getByRole('button', { name: 'Save revision' }));
-  await waitFor(() => assert.equal(appBusy(ui), false));
-  await waitFor(async () => assert.equal((await openExistingVault(f.project.vaultDir)).revisions.length, 2));
-  assert.equal(ui.queryByRole('button', { name: 'Save revision' }), null, 'identical context cannot create repeated empty revisions');
-  fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'History' }));
-  fireEvent.click(ui.getByRole('button', { name: /Rev 002:/ }));
-  fireEvent.click(ui.getByRole('button', { name: "Saved references", pressed: false }));
-  assert.ok(ui.getByText('Inherited project reference'));
+  assert.equal(ui.queryByRole('button', { name: 'Import reference' }), null);
+  const beforeDownload = inventorySignature(await readVerifiedInventory(f.home));
+  const branchBefore = ui.container.querySelector('.project-context-header')!.getAttribute('data-branch-id');
+  fireEvent.change(ui.getByRole('combobox', { name: 'Branch' }), { target: { value: 'branch-main' } });
+  fireEvent.change(ui.getByRole('searchbox', { name: 'Search references' }), { target: { value: 'clearance' } });
+  assert.ok(ui.getByText('Saved by Test Engineer'));
   let retrieved: Blob | undefined, downloaded = '';
   const create = URL.createObjectURL, revoke = URL.revokeObjectURL, click = window.HTMLAnchorElement.prototype.click;
   URL.createObjectURL = blob => { retrieved = blob as Blob; return 'blob:test'; }; URL.revokeObjectURL = () => {};
   window.HTMLAnchorElement.prototype.click = function () { downloaded = this.download; };
   try {
-    fireEvent.click(ui.getByRole('button', { name: 'Retrieve exact attachment' }));
+    fireEvent.click(ui.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' }));
     await waitFor(() => assert.equal(downloaded, 'Requirement.pdf'));
     assert.deepEqual(new Uint8Array(await retrieved!.arrayBuffer()), new Uint8Array(await source().arrayBuffer()));
+    assert.equal(inventorySignature(await readVerifiedInventory(f.home)), beforeDownload);
+    assert.equal(ui.container.querySelector('.project-context-header')!.getAttribute('data-branch-id'), branchBefore);
   } finally { URL.createObjectURL = create; URL.revokeObjectURL = revoke; window.HTMLAnchorElement.prototype.click = click; }
   cleanup(); await clearAllConvenienceMetadata();
   ui = render(<App />); await openHomeWorkspace(ui, f.home); fireEvent.click(ui.getByRole('button', { name: 'Open project' }));
   await waitFor(() => assert.equal(appBusy(ui), false));
   fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'References' }));
-  assert.ok(ui.getByRole('heading', { name: 'Requirement.pdf' }));
-  assert.ok(ui.getByRole('button', { name: 'Project context: this version' }));
+  assert.ok(ui.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' }));
+  assert.equal((ui.getByRole('combobox', { name: 'Branch' }) as HTMLSelectElement).value, '');
 });
 
-test('Changes selects an exact version, locator, explanation and pending component then passes the committed identity review to capture', async () => {
+test('clicking a saved reference downloads its pinned version and reports corrupted content without delivering a copy', async () => {
   const f = await fixture();
-  let state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirements', description: '', tags: [] });
-  const ref = state.references!.library[0];
-  state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, new File(['version two'], 'Updated.pdf'), { title: 'Requirements', description: '', tags: [] }, ref.referenceId);
+  const metadata = { title: 'Customer requirement', description: '', tags: [] };
+  let state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), metadata, undefined, { savedBy: { id: 'engineer-a', displayName: 'Asha' } });
+  const original = state.references!.library[0], version = original.versions[0];
+  state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, new File(['New requirement'], 'Updated.pdf'), metadata, original.referenceId, { savedBy: { id: 'engineer-b', displayName: 'Ben' } });
+  const scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
+  const saved = await captureRevision(f.working, f.project.vaultDir, {
+    branchId, summary: 'Link original requirement', notes, workingFolders: f.project.workingFolders,
+    referenceReview: createReferenceReview(state, scan, [{ referenceId: original.referenceId, versionId: version.versionId, locator: '', explanation: '' }]),
+  });
+  const copies: Uint8Array[] = [];
+  const ui = render(<RevisionReferenceContext state={saved.vaultState} revisionId={saved.revision.manifest.revisionId} onRetrieve={async (referenceId, versionId) => {
+    const result = await retrieveReferenceAttachment(f.project.vaultDir, f.project.record.projectId, referenceId, versionId);
+    copies.push(result.bytes);
+  }} />);
+  assert.ok(ui.getByText('Requirement.pdf'));
+  assert.equal(ui.queryByText('Updated.pdf'), null);
+  assert.ok(ui.getByText('Saved by Asha'));
+  assert.equal(ui.queryByText('Saved by Ben'), null);
+  assert.equal(ui.container.textContent!.includes(version.sha256), false);
+  assert.equal(ui.container.textContent!.includes(original.referenceId), false);
+  assert.equal(ui.container.textContent!.includes(version.versionId), false);
+  fireEvent.click(ui.getByRole('button', { name: 'Download Customer requirement' }));
+  await waitFor(() => assert.equal(copies.length, 1));
+  assert.deepEqual(copies[0], new Uint8Array(await source().arrayBuffer()));
+  await f.project.vaultDir.writeFileText(getObjectPathSegments(version.sha256), 'corrupted attachment');
+  fireEvent.click(ui.getByRole('button', { name: 'Download Customer requirement' }));
+  await waitFor(() => assert.ok(ui.getByText(/Attachment content is corrupt/)));
+  assert.equal(copies.length, 1, 'Corrupted bytes must never be offered as a download');
+});
+
+test('Changes attaches new reference files with notes to the whole revision or a new part, preserving the draft on navigation', async () => {
+  const f = await fixture();
   await f.working.writeFileText(['New.SLDPRT'], 'new component');
   const scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
+  const before = inventorySignature(await readVerifiedInventory(f.project.vaultDir));
   let savedId = '';
-  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} onCapture={async params => {
-    assert.equal(params.referenceReview!.explicit[0].versionId, ref.versions[0].versionId);
-    const saved = await captureRevision(f.working, f.project.vaultDir, { ...params, branchId, workingFolders: f.project.workingFolders });
+  const cache = new Map<string, import('./ChangesCaptureView').CaptureDraft>();
+  const props = { vaultState: f.first.vaultState, activeBranchId: branchId, workingFolderName: 'Main', vaultFolderName: 'Vault', scanResult: scan, draftCache: cache, draftKey: 'draft', isScanStale: false, isScanning: false, isCapturing: false, progress: null, statusBanner: null, onScan: async () => {}, onCancelOperation: () => {}, onReattachWorkingFolder: async () => {}, onCapture: async (params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0]) => {
+    const saved = await captureRevision(f.working, f.project.vaultDir, { ...params, branchId, workingFolders: f.project.workingFolders, referenceAuthor: { id: 'engineer-a', displayName: 'Asha' } });
     savedId = saved.revision.manifest.revisionId;
-  }} />);
-  fireEvent.click(ui.getByRole('button', { name: 'Add revision reference' }));
-  fireEvent.change(ui.getByRole('combobox', { name: 'Exact version' }), { target: { value: ref.versions[0].versionId } });
-  fireEvent.change(ui.getByRole('textbox', { name: 'Locator (optional)' }), { target: { value: 'page 4' } });
-  fireEvent.change(ui.getByRole('textbox', { name: 'Explanation (optional)' }), { target: { value: 'Increase clearance' } });
-  fireEvent.change(ui.getByRole('combobox', { name: 'Component (optional)' }), { target: { value: 'path:New.SLDPRT' } });
+  } };
+  let ui = render(<ChangesCaptureView {...props} />);
+  assert.equal(ui.queryByText('Revision references'), null);
+  fireEvent.click(ui.getByRole('button', { name: '+ Attach reference files' }));
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source(), new File(['Customer brief'], 'Brief.txt')] } });
+  fireEvent.change(ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf' }), { target: { value: 'Increase clearance' } });
+  fireEvent.change(ui.getByRole('combobox', { name: 'Applies to Requirement.pdf' }), { target: { value: 'path:New.SLDPRT' } });
+  fireEvent.change(ui.getByRole('textbox', { name: 'Reference note for Brief.txt' }), { target: { value: 'Overall design intent' } });
   fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Follow source' } });
+  assert.equal(await inventorySignature(await readVerifiedInventory(f.project.vaultDir)), before, 'Choosing files must not write anything before Save');
+  ui.unmount();
+  ui = render(<ChangesCaptureView {...props} />);
+  assert.equal((ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf' }) as HTMLTextAreaElement).value, 'Increase clearance');
   fireEvent.click(ui.getByRole('button', { name: 'Save revision' }));
   await waitFor(() => assert.ok(savedId));
-  const saved = await openExistingVault(f.project.vaultDir), link = saved.references!.contexts[savedId].record!.links[0];
-  assert.equal(link.componentId, saved.components!.revisions[savedId].files.find(f => f.path === 'New.SLDPRT')!.componentId);
-  assert.equal(link.locator, 'page 4'); assert.equal(link.explanation, 'Increase clearance');
+  const saved = await openExistingVault(f.project.vaultDir), links = saved.references!.contexts[savedId].record!.links;
+  assert.equal(links.length, 2);
+  assert.equal(links[0].componentId, saved.components!.revisions[savedId].files.find(file => file.path === 'New.SLDPRT')!.componentId);
+  assert.equal(links[0].explanation, 'Increase clearance');
+  assert.equal(links[1].componentId, null);
+  assert.equal(links[1].explanation, 'Overall design intent');
+  const stored = await retrieveReferenceAttachment(f.project.vaultDir, saved.project.projectId, links[0].referenceId, links[0].versionId);
+  assert.deepEqual(stored.bytes, new Uint8Array(await source().arrayBuffer()));
+  assert.equal(stored.version.savedBy!.displayName, 'Asha');
+  assert.equal(f.first.vaultState.references!.contexts[f.first.revision.manifest.revisionId].record!.links.length, 0);
+  cleanup();
+  const history = render(<RevisionReferenceContext state={saved} revisionId={savedId} />);
+  assert.ok(history.getByText('Increase clearance'));
+  assert.ok(history.getByText('Overall design intent'));
+  cleanup();
+  const browser = render(<ReferencesView state={saved} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} />);
+  assert.ok(browser.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' }));
+  assert.ok(browser.getByText('Part: New.SLDPRT'));
 });
 
 test('stale reference decisions remain visible until explicitly reviewed and legacy History never uses current defaults', async () => {
@@ -155,13 +186,14 @@ test('stale reference decisions remain visible until explicitly reviewed and leg
   const cache = new Map([['draft', { summary: 'Reference update', notes, fileNotes: {}, notePath: null, showOverall: false, referenceReview: review }]]);
   const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
   assert.ok(ui.getByText(/Reference selections are stale/));
-  assert.equal((ui.getByRole('textbox', { name: 'Locator (optional)' }) as HTMLInputElement).value, 'page 2');
+  assert.ok(ui.getByText('Location: page 2'));
+  assert.equal((ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf 1' }) as HTMLTextAreaElement).value, 'Decision');
   fireEvent.click(ui.getByRole('button', { name: 'Review current references' }));
   assert.equal(ui.queryByText(/Reference selections are stale/), null);
   cleanup();
   const legacy = { ...state, references: { ...state.references!, contexts: { [f.first.revision.manifest.revisionId]: { status: 'legacy' as const } } } };
   const history = render(<RevisionReferenceContext state={legacy} revisionId={f.first.revision.manifest.revisionId} />);
-  assert.ok(history.getByText('No reference context recorded.'));
+  assert.ok(history.getByText('No references were saved with this revision.'));
   assert.equal(history.queryByText('Requirement'), null);
 });
 

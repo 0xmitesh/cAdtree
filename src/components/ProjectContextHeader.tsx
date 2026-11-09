@@ -6,11 +6,13 @@ export function ProjectContextHeader({
   activeBranchId,
   busy,
   onSelect,
+  showWorkingCase = true,
 }: {
   state: VaultState;
   activeBranchId: string;
   busy: boolean;
   onSelect: (branchId: string) => Promise<void>;
+  showWorkingCase?: boolean;
 }) {
   return (
     <section
@@ -19,12 +21,12 @@ export function ProjectContextHeader({
       data-branch-id={activeBranchId}
     >
       <strong className="project-context-name">{state.project.name}</strong>
-      <ActiveBranchPicker
+      {showWorkingCase ? <ActiveBranchPicker
         state={state}
         activeBranchId={activeBranchId}
         busy={busy}
         onSelect={onSelect}
-      />
+      /> : null}
     </section>
   );
 }

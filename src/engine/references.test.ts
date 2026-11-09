@@ -13,7 +13,7 @@ import { createWorkspace, createProject, importProject, adoptProject, openWorksp
 import { createHome, bringWorkspaceIntoHome } from './home-service';
 import { copyVerifiedTree, readVerifiedInventory, inventorySignature } from './copy-service';
 import { prepareReviewExport, exportRevisionForReview } from './review-export';
-import { importReferenceAttachment, updateProjectReference, retrieveReferenceAttachment, createReferenceReview, referenceChecksum, referenceContextSignature } from './references';
+import { importReferenceAttachment, updateProjectReference, retrieveReferenceAttachment, createReferenceReview, referenceChecksum, referenceContextSignature, capturedReferenceLibrary } from './references';
 import type { CaptureRevisionInput, VaultState } from './types';
 
 const branchId = 'branch-main';
@@ -23,6 +23,35 @@ const original = new Uint8Array([0, 255, 10, 13, 128, 42]);
 const attachment = (name = '客户 requirement.pdf', bytes = original) => ({ name, type: 'application/pdf', size: bytes.length, stream: () => new Blob([bytes as BlobPart]).stream() });
 const inventory = async (dir: FileSystemDirectoryAdapter) => inventorySignature(await readVerifiedInventory(dir));
 const context = (state: VaultState, revisionId: string) => state.references!.contexts[revisionId].record!;
+
+test('saved reference authors survive reopen and later uploads without rewriting earlier authors or guessing legacy attribution', async () => {
+  const f = await fixture();
+  assert.equal(f.version.savedBy, undefined);
+  const author = { id: 'engineer-a', displayName: 'Asha' };
+  let state = await importReferenceAttachment(f.vault, f.projectId, attachment('Review.pdf'), metadata, f.ref.referenceId, { savedBy: author });
+  const savedVersion = state.references!.library[0].versions[1];
+  author.displayName = 'Changed outside the store';
+  await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: savedVersion.versionId });
+  await f.working.writeFileText(['Part.SLDPRT'], 'geometry');
+  const saved = await f.save();
+  const manifestPath = ['revisions', `${saved.revision.manifest.revisionId}.manifest.json`];
+  const originalManifest = await f.vault.readFileText(manifestPath);
+  state = await importReferenceAttachment(f.vault, f.projectId, attachment('Later.pdf'), metadata, f.ref.referenceId, { savedBy: { id: 'engineer-b', displayName: 'Ben' } });
+  const latestVersion = state.references!.library[0].versions[2];
+  await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: latestVersion.versionId });
+  const reopened = await openExistingVault(f.vault);
+  const pinned = capturedReferenceLibrary(reopened, saved.revision.manifest.revisionId)[0].versions.find(v => v.versionId === savedVersion.versionId)!;
+  assert.deepEqual(pinned.savedBy, { id: 'engineer-a', displayName: 'Asha' });
+  assert.equal(pinned.importedAt, savedVersion.importedAt);
+  assert.deepEqual(reopened.references!.library[0].versions[2].savedBy, { id: 'engineer-b', displayName: 'Ben' });
+  assert.equal(reopened.references!.library[0].versions[0].savedBy, undefined);
+  assert.equal(await f.vault.readFileText(manifestPath), originalManifest);
+  const before = await inventory(f.vault);
+  for (const invalid of [null, { id: '', displayName: 'Asha' }, { id: 'engineer-a', displayName: '' }, { id: 'engineer-a', displayName: 42 }]) {
+    await assert.rejects(importReferenceAttachment(f.vault, f.projectId, attachment(), metadata, undefined, { savedBy: invalid as never }), /Invalid reference/);
+  }
+  assert.equal(await inventory(f.vault), before, 'Invalid authors cannot publish files or change existing reference history');
+});
 async function fixture() {
   const working = new InMemoryFileSystemAdapter('Main'), vault = new InMemoryFileSystemAdapter('Vault');
   await initializeProjectVault(working, vault, 'Actuator');

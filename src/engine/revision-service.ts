@@ -8,9 +8,9 @@ import { withProjectWriterLock } from './locks';
 import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
 import { assertCaseWritable } from './case-lifecycle';
 import { prepareComponentRecord, publishComponentRecord } from './component-identity';
-import { prepareReferenceContext, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext } from './references';
+import { prepareReferenceContext, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext, storeCaptureReferenceAttachments } from './references';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
-import { writeAndVerifyObject } from './object-store';
+import { getStagingSessionPathSegments, writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
 import {
   CADTREE_SCHEMA_VERSION,
@@ -82,7 +82,7 @@ export async function captureRevision(
     }
 
     // Step 1: Reload validated vault and branch state under the writer lock
-    const vaultState = await openExistingVault(vaultDir);
+    let vaultState = await openExistingVault(vaultDir);
     if (vaultState.project.projectId !== projectId) throw new Error('Vault identity changed while waiting for the writer lock.');
     assertCaseWritable(vaultState,input.branchId);
     const applicationBlock = applicationCaptureBlock(vaultState, input.branchId);
@@ -197,9 +197,9 @@ export async function captureRevision(
       throw new ReviewStaleError('Working folder changes differ from the file list you reviewed. The change list has been refreshed - please review your file changes and note associations before saving.', freshScan);
     }
     const componentDraft = prepareComponentRecord(vaultState, freshScan, input.identityReview);
-    const referenceDraft = prepareReferenceContext(vaultState, freshScan, componentDraft?.files ?? [], input.referenceReview);
+    let referenceDraft = prepareReferenceContext(vaultState, freshScan, componentDraft?.files ?? [], input.referenceReview);
     const previousReferences = parentRevisionId ? vaultState.references?.contexts[parentRevisionId]?.record?.links ?? [] : [];
-    const referenceChanged = referenceContextSignature(referenceDraft.links) !== referenceContextSignature(previousReferences);
+    const referenceChanged = Boolean(input.referenceAttachments?.length) || referenceContextSignature(referenceDraft.links) !== referenceContextSignature(previousReferences);
     const referenceContextOnly = !freshScan.hasChanges && referenceChanged && !input.identityReview?.replacements.length;
     if (!freshScan.hasChanges && !input.identityReview?.replacements.length && !referenceChanged) {
       throw new Error(
@@ -231,6 +231,13 @@ export async function captureRevision(
     }
 
     await verifyReferenceContextContent(vaultDir, vaultState, referenceDraft, input.signal);
+    if (input.referenceAttachments?.length) {
+      const stored = await storeCaptureReferenceAttachments(vaultDir, vaultState, freshScan, componentDraft?.files ?? [], input.referenceReview, input.referenceAttachments, { signal: input.signal, onProgress: input.onProgress, savedBy: input.referenceAuthor });
+      vaultState = stored.state;
+      referenceDraft = prepareReferenceContext(vaultState, freshScan, componentDraft?.files ?? [], stored.review);
+      // Preserve published imports in the caller's draft if a later capture step fails.
+      input.onReferenceAttachmentsStored?.(stored.review, vaultState);
+    }
     const referenceBoundary = await ensureReferenceStore(vaultDir, vaultState);
 
     // Step 3: Write new objects, close writes, reopen stored bytes, and verify size/hash.
@@ -420,8 +427,9 @@ export async function captureRevision(
 
     // Clean up temporary staging folder for this session (best-effort)
     try {
-      if (await vaultDir.hasDirectory(['staging', sessionId])) {
-        await vaultDir.removeEntry(['staging', sessionId], { recursive: true });
+      const stagingPath = getStagingSessionPathSegments(sessionId);
+      if (await vaultDir.hasDirectory(stagingPath)) {
+        await vaultDir.removeEntry(stagingPath, { recursive: true });
       }
     } catch {
       // Ignore staging cleanup failure

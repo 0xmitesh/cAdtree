@@ -180,6 +180,9 @@ export interface ProgressUpdate {
 }
 
 export interface CaptureRevisionInput {
+  referenceAttachments?: import('./references').PendingReferenceAttachment[];
+  referenceAuthor?: import('./references').ReferenceAuthor;
+  onReferenceAttachmentsStored?: (review: import('./references').ReferenceReview, state: VaultState) => void;
   referenceReview?: import('./references').ReferenceReview;
   identityReview?: import('./component-identity').IdentityReview;
   workingFolders?: Record<string, FileSystemDirectoryAdapter | undefined>;
