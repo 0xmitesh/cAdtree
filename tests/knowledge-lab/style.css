@@ -1,0 +1,51 @@
+.knowledge-lab { max-width: 1280px; margin: auto; padding: 36px 28px 80px; }
+.kl-header, .kl-actions { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+.kl-header { margin-bottom: 24px; }
+.kl-header h1 { margin-bottom: 8px; }
+.kl-panel { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+.knowledge-lab button { background: var(--teal); color: white; border: 1px solid var(--teal); border-radius: 6px; padding: 9px 15px; font-weight: 600; }
+.knowledge-lab button + button { background: white; color: var(--teal); }
+.kl-actions { justify-content: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+.knowledge-lab p + p, .knowledge-lab details, .knowledge-lab h3 { margin-top: 10px; }
+.knowledge-lab h2 { margin-bottom: 12px; }
+.kl-pill { background: #e6f2ee; color: #096b63; border-radius: 24px; padding: 7px 14px; white-space: nowrap; }
+.kl-branches, .kl-evidence-grid, .kl-records { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.kl-evidence-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kl-branches article, .kl-record, .kl-attachment { border: 1px solid var(--border); border-radius: 8px; padding: 16px; min-width: 0; }
+.kl-records, .kl-attachment { margin-top: 12px; }
+.kl-filters { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; }
+.kl-filters label { display: flex; flex-direction: column; gap: 6px; flex: 1 1 180px; min-width: 0; font-weight: 600; }
+.kl-filters select { border: 1px solid var(--border); border-radius: 6px; background: #f9faf8; padding: 8px; width: 100%; font: inherit; }
+.kl-filters > p { flex-basis: 100%; }
+.kl-evidence { margin: 10px 0; font-size: 12px; }
+.kl-evidence strong { margin-left: 8px; border-radius: 4px; padding: 2px 6px; background: #f1f2f0; }
+.kl-evidence [data-status="available"] { color: #096b63; background: #e6f2ee; }
+.kl-evidence [data-status="unavailable"], .kl-warning { color: #9e332c; background: #fff2f0; }
+.kl-evidence [data-status="unsupported"] { color: #7b4c00; background: #fff2d5; }
+.kl-evidence p { color: var(--muted); margin-top: 5px; }
+.knowledge-lab dl { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 7px 16px; margin: 12px 0; }
+.knowledge-lab dt { color: var(--muted); }
+.knowledge-lab dd { margin: 0; min-width: 0; }
+.knowledge-lab code, .knowledge-lab p, .knowledge-lab li, .knowledge-lab summary { overflow-wrap: anywhere; }
+.knowledge-lab code { font-size: 12px; }
+.knowledge-lab pre { padding: 14px; background: #f5f6f4; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
+.knowledge-lab summary { cursor: pointer; color: var(--teal); }
+.kl-text { white-space: pre-wrap; }
+.kl-author label { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+.kl-author input, .kl-author textarea, .kl-author select { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 9px; font: inherit; background: #f9faf8; }
+.kl-author textarea { min-height: 90px; resize: vertical; }
+.kl-author fieldset { border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-top: 16px; min-width: 0; }
+.kl-author fieldset:disabled { opacity: .65; }
+.kl-author .kl-consent { flex-direction: row; align-items: center; }
+.kl-author .kl-consent input { width: 18px; flex-shrink: 0; }
+.kl-property { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.kl-property button { align-self: end; justify-self: start; }
+.kl-canonical { word-break: break-word; }
+.kl-retrieval fieldset { border: 0; padding: 0; margin: 16px 0; min-width: 0; }
+.kl-retrieval .kl-filters input { border: 1px solid var(--border); border-radius: 6px; background: #f9faf8; padding: 8px; width: 100%; font: inherit; }
+.kl-retrieval fieldset:disabled { opacity: .65; }
+.kl-retrieval .kl-snapshot { margin-top: 20px; background: #fafbf9; border-left: 3px solid var(--teal); }
+.kl-retrieval h4 { margin: 12px 0 8px; }
+.kl-retrieval .kl-record { margin: 12px 0; background: white; }
+.kl-citation > summary { font-weight: 600; }
+@media (max-width: 760px) { .knowledge-lab { padding: 22px 12px; } .kl-panel { padding: 16px; } .kl-branches, .kl-records, .kl-evidence-grid { grid-template-columns: 1fr; } .knowledge-lab dl { grid-template-columns: 1fr; gap: 4px; } .knowledge-lab dd { margin-bottom: 8px; } .kl-header { align-items: flex-start; } .kl-header h1 { font-size: 26px; } }

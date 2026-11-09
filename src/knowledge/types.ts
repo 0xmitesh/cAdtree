@@ -80,6 +80,9 @@ export interface KnowledgeRevision {
 
 export interface KnowledgeIndex {
   projectId: string;
+  /** Persisted universal records are distinct from the original derived M1A notes. */
+  persistedRecords: import('./records/types').PublishedKnowledgeRecord[];
+  persistedDiagnostics: import('./records/types').KnowledgeRecordDiagnostic[];
   records: KnowledgeRecord[];
   revisions: KnowledgeRevision[];
   branches: {

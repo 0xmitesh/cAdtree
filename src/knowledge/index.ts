@@ -123,6 +123,8 @@ export function buildKnowledgeIndex(state: VaultState): KnowledgeIndex {
   }
   return {
     projectId: state.project.projectId, records, revisions,
+    persistedRecords: structuredClone(state.knowledge?.records ?? []),
+    persistedDiagnostics: structuredClone(state.knowledge?.diagnostics ?? []),
     branches: [...state.branches].sort((a, b) => compare(a.branchId, b.branchId)).map(branch => ({
       branchId: branch.branchId, startingRevisionId: branch.startingRevisionId,
       origin: branch.startingRevisionId === null ? available() : usable.has(branch.startingRevisionId)
