@@ -26,10 +26,9 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("One Working case selector survives all project views without changing inspection, drafts or files", async () => {
+test("References uses its branch filter while the other project views retain Working case without changing inspection, drafts or files", async () => {
   const { sample, ui, nav } = await openSample();
   const header = ui.getByRole("region", { name: "Project context" });
-  const selector = ui.getByRole("combobox", { name: "Working case" });
   const before = inventorySignature(await readVerifiedInventory(sample.home));
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
   fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
@@ -42,9 +41,15 @@ test("One Working case selector survives all project views without changing insp
   for (const view of ["Changes", "References", "Settings", "History"]) {
     fireEvent.click(nav.getByRole("button", { name: view }));
     assert.equal(ui.getByRole("region", { name: "Project context" }), header);
-    assert.equal(ui.getByRole("combobox", { name: "Working case" }), selector);
-    assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 1);
-    assert.equal((selector as HTMLSelectElement).value, "branch-main");
+    if (view === "References") {
+      assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
+      assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 0);
+      fireEvent.change(ui.getByRole("combobox", { name: "Branch" }), { target: { value: sample.caseId } });
+      assert.equal(currentBranchId(ui), "branch-main");
+    } else {
+      assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 1);
+      assert.equal((ui.getByRole("combobox", { name: "Working case" }) as HTMLSelectElement).value, "branch-main");
+    }
     assert.equal(ui.container.querySelector('.current-branch-indicator'), null);
   }
   assert.equal(ui.container.querySelector(".revision-detail")!.textContent, inspection);
@@ -53,11 +58,11 @@ test("One Working case selector survives all project views without changing insp
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)), before);
 });
 
-test("Working case switches from every project view through existing guards, and is disabled during a scan", async () => {
+test("Working case switches from History, Changes and Settings through existing guards, and is disabled during a scan", async () => {
   const { sample, ui, nav } = await openSample();
   const selector = ui.getByRole("combobox", { name: "Working case" }) as HTMLSelectElement;
   const before = inventorySignature(await readVerifiedInventory(sample.home));
-  for (const view of ["History", "Changes", "References", "Settings"]) {
+  for (const view of ["History", "Changes", "Settings"]) {
     fireEvent.click(nav.getByRole("button", { name: view }));
     for (const id of [sample.caseId, "branch-main"]) {
       await selectBranch(ui, id);
