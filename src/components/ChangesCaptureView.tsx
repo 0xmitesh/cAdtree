@@ -14,8 +14,8 @@ import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
 import { prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
 import { ComponentIdentityControls } from './ComponentIdentityControls';
-import { createReferenceReview, referenceSelectionChanged, type ReferenceReview } from '../engine/references';
-import { ReferenceSelector } from './ReferenceSelector';
+import { createReferenceReview, prepareReferenceContext, referenceSelectionChanged, type ReferenceReview, type PendingReferenceAttachment } from '../engine/references';
+import { RevisionAttachments, type DraftReferenceAttachment } from './RevisionAttachments';
 
 export interface ChangesCaptureViewProps {
   onEnableComponentTracking?: () => Promise<void>;
@@ -39,6 +39,8 @@ export interface ChangesCaptureViewProps {
     reviewedChangesSignature: string;
     identityReview?: IdentityReview;
     referenceReview?: ReferenceReview;
+    referenceAttachments?: PendingReferenceAttachment[];
+    onReferenceAttachmentsStored?: (review: ReferenceReview) => void;
   }) => Promise<void>;
   onCancelOperation: () => void;
   onReattachWorkingFolder: () => Promise<void>;
@@ -53,6 +55,8 @@ export interface CaptureDraft {
   fileNotes: Record<string, FileSpecificNote>;
   notePath: string | null;
   showOverall: boolean;
+  attachments?: DraftReferenceAttachment[];
+  showAttachments?: boolean;
 }
 const emptyNotes: RevisionNotes = {
   problem: "",
@@ -82,8 +86,10 @@ export function ChangesCaptureView({
   const [summary, setSummary] = useState(savedDraft?.summary ?? "");
   const [identityReview, setIdentityReview] = useState<IdentityReview | undefined>(savedDraft?.identityReview);
   const [referenceReview, setReferenceReview] = useState<ReferenceReview | undefined>(savedDraft?.referenceReview);
+  const [attachments, setAttachments] = useState<DraftReferenceAttachment[]>(savedDraft?.attachments ?? []);
+  const [showAttachments, setShowAttachments] = useState(savedDraft?.showAttachments ?? Boolean(savedDraft?.referenceReview?.explicit.length));
   const effectiveReferences = scan ? referenceReview ?? createReferenceReview(vaultState, scan) : undefined;
-  const referenceChanged = Boolean(scan && referenceSelectionChanged(vaultState, scan, effectiveReferences));
+  const referenceChanged = Boolean(attachments.length || (scan && referenceSelectionChanged(vaultState, scan, effectiveReferences)));
   const [notes, setNotes] = useState<RevisionNotes>(
     savedDraft?.notes ?? emptyNotes,
   );
@@ -106,8 +112,10 @@ export function ChangesCaptureView({
         showOverall,
         identityReview,
         referenceReview,
+        attachments,
+        showAttachments,
       });
-  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview, referenceReview]);
+  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview, referenceReview, attachments, showAttachments]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [error, setError] = useState("");
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
@@ -134,6 +142,11 @@ export function ChangesCaptureView({
       return e instanceof Error ? e.message : String(e);
     }
   }, [vaultState, scan, identityReview]);
+  const referenceConflict = useMemo(() => {
+    if (!scan || identityConflict) return undefined;
+    try { prepareReferenceContext(vaultState, scan, prepareComponentRecord(vaultState, scan, identityReview)?.files ?? [], effectiveReferences); }
+    catch (error) { return error instanceof Error ? error.message : String(error); }
+  }, [vaultState, scan, identityReview, identityConflict, effectiveReferences]);
   const renames = identityReview?.changesSignature === scan?.changesSignature ? identityReview?.renames ?? [] : [];
   const changes = [
     ...(scan?.added ?? []).filter(file => !renames.some(r => r.to === file.path)).map((file) => ({ file, status: "Added", from: '' })),
@@ -156,7 +169,7 @@ export function ChangesCaptureView({
   ];
   const validPaths = new Set([...(scan?.added ?? []).map(f => f.path), ...(scan?.modified ?? []).map(m => m.current.path), ...(scan?.deleted ?? []).map(f => f.path)]);
   const hasDraft =
-    referenceChanged ||
+    referenceChanged || showAttachments ||
     Boolean(identityReview?.replacements.length) ||
     summary ||
     Object.values(notes).some((v) => v) ||
@@ -204,6 +217,11 @@ export function ChangesCaptureView({
         reviewedChangesSignature: scan.changesSignature,
         identityReview,
         referenceReview: effectiveReferences,
+        referenceAttachments: attachments,
+        onReferenceAttachmentsStored: review => {
+          setReferenceReview(review);
+          setAttachments([]);
+        },
       });
       setSummary("");
       setNotes(emptyNotes);
@@ -212,6 +230,8 @@ export function ChangesCaptureView({
       setReviewedSignature(null);
       setIdentityReview(undefined);
       setReferenceReview(undefined);
+      setAttachments([]);
+      setShowAttachments(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -287,8 +307,8 @@ export function ChangesCaptureView({
       {error ? <Notice type="error">{error}</Notice> : null}
       <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} onEnable={onEnableComponentTracking} busy={busy} />
       {identityConflict ? <Notice type="error">{identityConflict}</Notice> : null}
-      {scan && effectiveReferences ? <ReferenceSelector state={vaultState} scan={scan} identityReview={identityReview} value={effectiveReferences} onChange={setReferenceReview} busy={busy} /> : null}
-      {scan && !scan.hasChanges && referenceChanged ? <Notice>Reference-context-only revision — no design-file bytes changed.</Notice> : null}
+      {scan && !scan.hasChanges && referenceChanged ? <Notice>This revision saves updated references with the current project files.</Notice> : null}
+      {referenceConflict ? <Notice type="error">{referenceConflict} <button className="text-button" type="button" disabled={busy} onClick={() => { if (scan && effectiveReferences) setReferenceReview(createReferenceReview(vaultState, scan, effectiveReferences.explicit)); setShowAttachments(true); }}>Review current references</button></Notice> : null}
       {needsReview ? (
         <Notice type="error">
           The latest scan differs from the file set you reviewed. Review the
@@ -322,7 +342,7 @@ export function ChangesCaptureView({
           </div>
         </div>
       ) : null}
-      <div className={scan?.hasChanges || hasDraft ? "changes-layout" : ""}>
+      <div className={scan || hasDraft ? "changes-layout" : ""}>
         <section className="changes-files panel">
           <div className="panel-heading">
             <h2>
@@ -427,7 +447,7 @@ export function ChangesCaptureView({
             </>
           )}
         </section>
-        {scan?.hasChanges || hasDraft ? (
+        {scan || hasDraft ? (
           <form className="capture-form panel" onSubmit={submit}>
             <div className="panel-heading">
               <h2>Save revision</h2>
@@ -435,8 +455,7 @@ export function ChangesCaptureView({
             </div>
             <div className="form-body">
               <p className="muted small">
-                Saves the complete project state. File selections apply only to
-                notes.
+                Saves the complete project state, with your notes and reference files.
               </p>
               <label className="field">
                 <span>
@@ -466,6 +485,10 @@ export function ChangesCaptureView({
                   scope="Overall"
                 />
               ) : null}
+              <button className="text-button" type="button" disabled={busy} aria-expanded={showAttachments} onClick={() => { setShowAttachments(value => !value); if (!referenceReview && effectiveReferences) setReferenceReview(effectiveReferences); }}>
+                {showAttachments ? '− Hide reference files' : '+ Attach reference files'}{attachments.length ? ` (${attachments.length})` : ''}
+              </button>
+              {showAttachments && scan && effectiveReferences ? <RevisionAttachments state={vaultState} scan={scan} identityReview={identityReview} review={effectiveReferences} onReview={setReferenceReview} attachments={attachments} onAttachments={setAttachments} busy={busy} /> : null}
               {Object.keys(fileNotes).length ? (
                 <div className="draft-file-notes">
                   <h3>File notes</h3>
@@ -548,6 +571,7 @@ export function ChangesCaptureView({
                   Boolean(damaged) ||
                   Boolean(operationBlockReason) ||
                   Boolean(identityConflict) ||
+                  Boolean(referenceConflict) ||
                   needsReview ||
                   Boolean(staleNotes.length)
                 }

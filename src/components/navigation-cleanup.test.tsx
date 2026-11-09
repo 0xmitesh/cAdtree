@@ -81,45 +81,33 @@ test("Archive controls appear only when needed and disappear after reopening the
   assert.equal(inventorySignature(await readVerifiedInventory(sample.caseFolder)), beforeCase);
 });
 
-test("Reference filters follow available records and technical details preserve exact selected-version retrieval", async () => {
+test("Reference browsing keeps every stored version downloadable without editing controls", async () => {
   const sample = await compareApplyRecoverSample();
   let state = await openExistingVault(sample.project.vaultDir), retrieved: Uint8Array | undefined;
   const metadata = { title: "Requirements", description: "Customer requirements", tags: [] };
-  const props = () => ({ state, busy: false, progress: null, onCancel() {}, onImport: async () => {},
-    onUpdate: async (id: string, changes: { removed?: boolean; projectVersionId?: string | null }) => {
-      state = await updateProjectReference(sample.project.vaultDir, state.project.projectId, id, changes);
-      ui.rerender(<ReferencesView {...props()} />);
-    },
+  const props = () => ({ state, busy: false, progress: null, onCancel() {},
     onRetrieve: async (id: string, version: string) => { retrieved = (await retrieveReferenceAttachment(sample.project.vaultDir, state.project.projectId, id, version)).bytes; },
   });
   const ui = render(<ReferencesView {...props()} />);
-  assert.ok(ui.getByRole("button", { name: "Import reference" }));
-  assert.equal(ui.queryByRole("textbox", { name: "Search references" }), null);
-  assert.equal(ui.queryByRole("checkbox", { name: "Show removed references" }), null);
+  assert.equal(ui.queryByRole("button", { name: "Import reference" }), null);
+  assert.ok(ui.getByRole("searchbox", { name: "Search references" }));
+  assert.equal(ui.getAllByRole("combobox").length, 2);
   assert.ok(ui.getByText(/No references yet/));
   state = await importReferenceAttachment(sample.project.vaultDir, state.project.projectId, new File(["One"], "Requirements.txt"), metadata);
   const reference = state.references!.library[0];
   state = await importReferenceAttachment(sample.project.vaultDir, state.project.projectId, new File(["Two"], "Updated.txt"), metadata, reference.referenceId);
+  state = await updateProjectReference(sample.project.vaultDir, state.project.projectId, reference.referenceId, { removed: true });
   ui.rerender(<ReferencesView {...props()} />);
-  const search = ui.getByRole("textbox", { name: "Search references" });
-  assert.equal(ui.queryByRole("checkbox", { name: "Show removed references" }), null);
+  const search = ui.getByRole("searchbox", { name: "Search references" });
   fireEvent.change(search, { target: { value: "Unmatched search" } });
   assert.ok(ui.getByText(/No matching references/));
-  assert.equal(ui.getByRole("textbox", { name: "Search references" }), search);
   fireEvent.change(search, { target: { value: "" } });
-  const technical = ui.container.querySelector<HTMLDetailsElement>(".reference-technical-details")!;
-  assert.equal(technical.open, false);
-  fireEvent.click(within(technical).getByText("Technical details"));
-  assert.equal(technical.open, true);
-  assert.ok(technical.textContent!.includes(reference.referenceId));
-  assert.ok(technical.textContent!.includes(state.references!.library[0].versions[1].sha256));
-  fireEvent.click(ui.getByRole("button", { name: "Retrieve exact attachment" }));
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 2);
+  assert.equal(ui.queryByText("Technical details"), null);
+  assert.equal(ui.queryByRole("button", { name: "Remove from current context" }), null);
+  fireEvent.click(ui.getByRole("button", { name: "Download Requirements (Updated.txt)" }));
   await waitFor(() => assert.deepEqual(retrieved, new TextEncoder().encode("Two")));
-  fireEvent.click(ui.getByRole("button", { name: "Remove from current context" }));
-  await waitFor(() => assert.ok(ui.getByRole("checkbox", { name: "Show removed references" })));
-  assert.equal(ui.getByRole("textbox", { name: "Search references" }), search);
-  fireEvent.click(ui.getByRole("checkbox", { name: "Show removed references" }));
-  fireEvent.click(ui.getByRole("button", { name: "Restore to library" }));
-  await waitFor(() => assert.ok(ui.queryByRole("checkbox", { name: "Show removed references" }) === null));
-  assert.equal(state.references!.library[0].versions.length, 2);
+  fireEvent.change(search, { target: { value: "Requirements.txt" } });
+  fireEvent.click(ui.getByRole("button", { name: "Download Requirements (Requirements.txt)" }));
+  await waitFor(() => assert.deepEqual(retrieved, new TextEncoder().encode("One")));
 });

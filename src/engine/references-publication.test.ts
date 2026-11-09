@@ -14,15 +14,19 @@ const source = () => new File([bytes], 'requirement.pdf', { type: 'application/p
 
 /** The real adapter creates the file through getFileHandle before createWritable.
  * Keep that empty native file when opening/writing/closing the stream fails. */
-function faultingNative(handle: FileSystemDirectoryHandle, fault: { match?: (path: string) => boolean; beforeDirectory?: (path: string) => boolean; phase: 'open' | 'write' | 'close'; created?: string }, parent: string[] = []): FileSystemDirectoryHandle {
+function faultingNative(handle: FileSystemDirectoryHandle, fault: { match?: (path: string) => boolean; beforeDirectory?: (path: string) => boolean; phase: 'open' | 'write' | 'close'; created?: string; absoluteRoot?: string }, parent: string[] = []): FileSystemDirectoryHandle {
   return new Proxy(handle, { get(target, key) {
     if (key === 'getDirectoryHandle') return async (name: string, options?: FileSystemGetDirectoryOptions) => {
       const path = [...parent, name];
+      if (options?.create && fault.absoluteRoot && `${fault.absoluteRoot}\\${path.join('\\')}`.length > 248) throw new DOMException('A requested file or directory could not be found at the time an operation was processed.', 'NotFoundError');
       if (options?.create && fault.beforeDirectory?.(path.join('/'))) { fault.beforeDirectory = undefined; throw new Error('Injected interruption before enrollment directory creation'); }
       return faultingNative(await target.getDirectoryHandle(name, options), fault, path);
     };
     if (key === 'getFileHandle') return async (name: string, options?: FileSystemGetFileOptions) => {
-      const file = await target.getFileHandle(name, options), path = [...parent, name].join('/');
+      const path = [...parent, name].join('/');
+      // Chromium's writable stream also needs room for its .crswap sibling.
+      if (options?.create && fault.absoluteRoot && `${fault.absoluteRoot}\\${[...parent, name].join('\\')}`.length + '.crswap'.length > 259) throw new DOMException('A requested file or directory could not be found at the time an operation was processed.', 'NotFoundError');
+      const file = await target.getFileHandle(name, options);
       if (!options?.create || !fault.match?.(path)) return file;
       fault.match = undefined; fault.created = path;
       return new Proxy(file, { get(fileTarget, fileKey) {
@@ -50,6 +54,55 @@ async function fixture() {
   const save = () => captureRevision(working, vault, { branchId: 'branch-main', summary: 'CAD still capturable', notes, workingFolders: folders });
   return { disk, vault, working, fault, save, projectId: state.project.projectId };
 }
+
+test('baseline capture and reference publication fit the Windows directory limit in a managed project and recover interrupted enrollment', async () => {
+  const f = await fixture();
+  f.fault.absoluteRoot = 'C:\\Users\\1\\Documents\\cadtree home 8.11\\solidworks-59ab5028-797d-47b5-b011-d99fcdfd14e6\\projects\\shaft-56c180be-4c6b-4fac-868f-16f05de36aa9\\vault';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await f.disk.writeFileText(['references', 'enrollment', `reference-enrollment-${crypto.randomUUID()}.json`], '{"interrupted":');
+  }
+  await f.working.writeFileText(['bush.SLDPRT'], 'bush geometry');
+  await f.working.writeFileText(['shaft.SLDPRT'], 'shaft geometry');
+  const saved = await f.save();
+  assert.equal(saved.revision.manifest.displayNumber, 1);
+  assert.equal(saved.revision.manifest.parentRevisionId, null);
+  assert.equal(saved.vaultState.references!.status, 'available');
+  assert.equal(saved.vaultState.incompleteAttempts.filter(a => a.kind === 'uncompleted_reference').length, 3);
+  const imported = await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
+  const ref = imported.references!.library[0];
+  assert.deepEqual((await retrieveReferenceAttachment(f.vault, f.projectId, ref.referenceId, ref.versions[0].versionId)).bytes, bytes);
+  await updateProjectReference(f.vault, f.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
+  await f.working.writeFileText(['shaft.SLDPRT'], 'revised shaft geometry');
+  const next = await f.save();
+  assert.equal(next.vaultState.revisions.length, 2);
+  assert.equal(next.revision.manifest.parentRevisionId, saved.revision.manifest.revisionId);
+  assert.equal(next.vaultState.references!.contexts[next.revision.manifest.revisionId].record!.links[0].versionId, ref.versions[0].versionId);
+});
+
+test('original directory publication names remain readable alongside compact names', async () => {
+  const f = await fixture();
+  const original = await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
+  const evidence = original.references!;
+  const enrollment = await f.disk.getDirectory(['references', 'enrollment']);
+  const record = (await enrollment.listEntries()).find(entry => entry.kind === 'file')!;
+  const enrollmentId = record.name.slice(0, -5);
+  const enrollmentHash = hashString(await enrollment.readFileText([record.name]));
+  const compactEnrollment = (await enrollment.listEntries()).find(entry => entry.kind === 'directory')!;
+  await enrollment.removeEntry([compactEnrollment.name], { recursive: true });
+  await enrollment.getDirectory([`${enrollmentId}.${enrollmentHash}.done`], { create: true });
+  const completed = await f.disk.getDirectory(['references', 'completed']);
+  const compactCatalog = (await completed.listEntries())[0];
+  await completed.removeEntry([compactCatalog.name], { recursive: true });
+  await completed.getDirectory([`${evidence.catalogId}.${evidence.catalogSha256}.done`], { create: true });
+  const reopened = await openExistingVault(f.vault);
+  assert.equal(reopened.references!.status, 'available');
+  assert.deepEqual(reopened.references!.library, evidence.library);
+  const mixed = await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
+  assert.equal(mixed.references!.status, 'available');
+  assert.equal(mixed.references!.library.length, 2);
+  const ref = mixed.references!.library[0];
+  assert.deepEqual((await retrieveReferenceAttachment(f.vault, f.projectId, ref.referenceId, ref.versions[0].versionId)).bytes, bytes);
+});
 
 for (const phase of ['open', 'write', 'close'] as const) for (const first of [true, false]) {
   test(`native ${phase} failure after ${first ? 'first enrollment' : 'subsequent catalog'} file creation leaves diagnostics, retrieval, retry and CAD capture usable`, async () => {

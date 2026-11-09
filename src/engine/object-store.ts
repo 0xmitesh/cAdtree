@@ -1,5 +1,6 @@
 import { FileSystemDirectoryAdapter } from './fs-adapter';
-import { hashStream } from './hash';
+import { hashStream, hashString } from './hash';
+import { compactHex } from './path-encoding';
 
 export function getObjectPathSegments(sha256: string): string[] {
   if (!/^[a-f0-9]{64}$/.test(sha256)) {
@@ -9,8 +10,14 @@ export function getObjectPathSegments(sha256: string): string[] {
   return ['objects', prefix, `${sha256}.bin`];
 }
 
+export function getStagingSessionPathSegments(sessionId: string): string[] {
+  return ['staging', compactHex(hashString(sessionId))];
+}
+
 export function getStagingObjectPathSegments(sessionId: string, sha256: string): string[] {
-  return ['staging', sessionId, `${sha256}.tmp`];
+  // Bound temporary path length for both CAD captures and reference imports,
+  // including the extra sibling filename used by browser writable streams.
+  return [...getStagingSessionPathSegments(sessionId), `${compactHex(sha256)}.tmp`];
 }
 
 /**

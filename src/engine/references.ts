@@ -1,16 +1,19 @@
 import type { FileSystemDirectoryAdapter } from './fs-adapter';
 import { hashStream, hashString } from './hash';
+import { compactHex, expandHex } from './path-encoding';
 import { getObjectPathSegments, verifyStoredObject, writeAndVerifyObject } from './object-store';
 import { withProjectWriterLock } from './locks';
 import { throwIfCancelled, type CopyOptions } from './copy-service';
 import type { ComponentFile } from './component-identity';
 import type { RevisionManifest, ScanResult, VaultState } from './types';
 
-export interface ReferenceVersion { referenceId: string; versionId: string; originalFilename: string; fileType: string; size: number; sha256: string; importedAt: string }
+export interface ReferenceAuthor { id: string; displayName: string }
+export interface ReferenceVersion { referenceId: string; versionId: string; originalFilename: string; fileType: string; size: number; sha256: string; importedAt: string; savedBy?: ReferenceAuthor }
 export interface ProjectReference { referenceId: string; title: string; description: string; tags: string[]; versions: ReferenceVersion[]; projectVersionId: string | null; removed: boolean }
 interface Boundary { schemaVersion: number; projectId: string; createdAt: string; legacy: { revisionId: string; manifestSha256: string }[]; payloadSha256: string }
 export interface ReferenceCatalog { schemaVersion: number; projectId: string; catalogId: string; parent: { catalogId: string; sha256: string } | null; references: ProjectReference[]; payloadSha256: string }
 export interface ReferenceLinkInput { referenceId: string; versionId: string; locator: string; explanation: string; component?: { kind: 'existing'; componentId: string } | { kind: 'pending'; path: string } }
+export interface PendingReferenceAttachment { source: AttachmentSource; explanation: string; component?: ReferenceLinkInput['component'] }
 export interface ReferenceLink { referenceId: string; versionId: string; origin: 'project' | 'revision'; locator: string; explanation: string; componentId: string | null; componentPath: string | null }
 export interface ReferenceReview { projectId: string; branchId: string; baselineRevisionId: string | null; baselineManifestSha256: string | null; changesSignature: string; boundarySha256: string | null; catalogId: string | null; catalogSha256: string | null; explicit: ReferenceLinkInput[] }
 export interface RevisionReferenceContext { schemaVersion: number; projectId: string; revisionId: string; branchId: string; parentRevisionId: string | null; manifestSha256: string; boundarySha256: string; catalogId: string | null; catalogSha256: string | null; links: ReferenceLink[]; contextOnly: boolean; payloadSha256: string }
@@ -33,6 +36,11 @@ function validateSeal(value: { schemaVersion: number; projectId: string; payload
   if (value.projectId !== projectId || value.payloadSha256 !== referenceChecksum(value)) throw new Error('Reference checksum or project binding mismatch.');
 }
 function text(value: unknown, limit = 16000): asserts value is string { if (typeof value !== 'string' || value.length > limit || value.includes('\0')) throw new Error('Invalid reference text metadata.'); }
+function validateReferenceAuthor(author: ReferenceAuthor) {
+  if (!author || typeof author !== 'object' || Array.isArray(author)) throw new Error('Invalid reference author.');
+  text(author.id, 1000); text(author.displayName, 1000);
+  if (!author.id.trim() || !author.displayName.trim()) throw new Error('Invalid reference author.');
+}
 function validateLibrary(library: ProjectReference[], previous: ProjectReference[] = []) {
   if (!Array.isArray(library)) throw new Error('Invalid reference library.');
   const refs = new Set<string>(), versions = new Set<string>();
@@ -45,6 +53,7 @@ function validateLibrary(library: ProjectReference[], previous: ProjectReference
     for (const v of ref.versions) {
       if (v.referenceId !== ref.referenceId || !safeId(v.versionId, 'reference-version') || versions.has(v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
       text(v.originalFilename, 1024); text(v.fileType, 256);
+      if (v.savedBy !== undefined) validateReferenceAuthor(v.savedBy);
       if (!v.originalFilename || /[\x00-\x1f\x7f]/.test(v.originalFilename)) throw new Error('Invalid original attachment filename.');
       versions.add(v.versionId);
     }
@@ -67,7 +76,20 @@ async function commitDirectory(vault: FileSystemDirectoryAdapter, path: string[]
   const marker = await vault.getDirectory(path, { create: true, exclusiveCreate: true });
   if ((await marker.listEntries()).length) throw new Error('Reference publication directory is not empty.');
 }
+function publicationDirectoryName(id: string, sha256: string) {
+  // Preserve every UUID/checksum bit, but omit the redundant record prefix and
+  // encode the bytes as base64url. The old enrollment marker made
+  // ordinary managed Windows project paths exceed the directory creation limit.
+  const uuid = id.slice(-36).replace(/-/g, '');
+  return `${compactHex(uuid)}.${compactHex(sha256)}.done`;
+}
 function directoryPublication(name: string, prefix: string) {
+  const compact = /^([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})\.done$/.exec(name);
+  if (compact) {
+    const uuid = expandHex(compact[1]).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+    return { id: `${prefix}-${uuid}`, sha256: expandHex(compact[2]) };
+  }
+  // Retain the original directory format for already-published vaults.
   const match = /^(.+)\.([a-f0-9]{64})\.done$/.exec(name);
   if (!match || !safeId(match[1], prefix)) throw new Error('Unexpected reference publication directory.');
   return { id: match[1], sha256: match[2] };
@@ -236,47 +258,87 @@ export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, st
   const boundary = seal({ schemaVersion: 1, projectId: state.project.projectId, createdAt: new Date().toISOString(), legacy: state.revisions.map(r => ({ revisionId: r.manifest.revisionId, manifestSha256: r.completion.manifestSha256 })) });
   const id = uuid('reference-enrollment');
   const sha256 = await writeVerified(vault, [...DATA, 'enrollment', `${id}.json`], boundary);
-  await commitDirectory(vault, [...DATA, 'enrollment', `${id}.${sha256}.done`]);
+  await commitDirectory(vault, [...DATA, 'enrollment', publicationDirectoryName(id, sha256)]);
   return boundary;
 }
-async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultState, library: ProjectReference[], signal?: AbortSignal, importedVersion?: ReferenceVersion) {
+async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultState, library: ProjectReference[], signal?: AbortSignal, importedVersions: ReferenceVersion[] = []) {
   validateLibrary(library, state.references?.library);
   await ensureReferenceStore(vault, state);
   const record = seal({ schemaVersion: 1, projectId: state.project.projectId, catalogId: uuid('reference-catalog'), parent: state.references?.catalogId ? { catalogId: state.references.catalogId, sha256: state.references.catalogSha256! } : null, references: library });
   const recordSha256 = await writeVerified(vault, [...DATA, 'catalogs', `${record.catalogId}.json`], record);
   throwIfCancelled(signal);
-  if (importedVersion) {
+  for (const importedVersion of importedVersions) {
     const checked = await verifyStoredObject(vault, importedVersion.sha256, importedVersion.size, signal);
     if (!checked.valid) throw new Error('Attachment changed before reference publication.');
   }
   throwIfCancelled(signal);
-  await commitDirectory(vault, [...DATA, 'completed', `${record.catalogId}.${recordSha256}.done`]);
+  await commitDirectory(vault, [...DATA, 'completed', publicationDirectoryName(record.catalogId, recordSha256)]);
 }
 export interface ReferenceMetadata { title: string; description: string; tags: string[] }
 function cleanMetadata(input: ReferenceMetadata): ReferenceMetadata { return { title: input.title.trim(), description: input.description, tags: [...new Set(input.tags.map(t => t.trim()).filter(Boolean))] }; }
 export interface AttachmentSource { name: string; type: string; size: number; stream: () => ReadableStream<Uint8Array> }
-export async function importReferenceAttachment(vault: FileSystemDirectoryAdapter, projectId: string, source: AttachmentSource, metadata: ReferenceMetadata, referenceId?: string, options: CopyOptions = {}): Promise<VaultState> {
+export interface ReferenceImportOptions extends CopyOptions { savedBy?: ReferenceAuthor }
+export async function importReferenceAttachment(vault: FileSystemDirectoryAdapter, projectId: string, source: AttachmentSource, metadata: ReferenceMetadata, referenceId?: string, options: ReferenceImportOptions = {}): Promise<VaultState> {
   return withProjectWriterLock(projectId, async () => {
     const { openExistingVault } = await import('./vault-service'); const state = await openExistingVault(vault);
     if (state.project.projectId !== projectId) throw new Error('Project changed before reference import.');
     const block = referenceWriteBlock(state); if (block) throw new Error(block);
     throwIfCancelled(options.signal);
+    if (options.savedBy !== undefined) validateReferenceAuthor(options.savedBy);
+    const savedBy = options.savedBy ? { id: options.savedBy.id, displayName: options.savedBy.displayName } : undefined;
     const measured = await hashStream(source.stream(), { signal: options.signal });
     if (measured.size !== source.size) throw new Error('Attachment changed while being imported.');
     const library = structuredClone(state.references?.library ?? []);
     const existing = referenceId ? library.find(r => r.referenceId === referenceId) : undefined;
     if (referenceId && !existing) throw new Error('Choose a published reference before adding a version.');
     const id = existing?.referenceId ?? uuid('reference');
-    const version: ReferenceVersion = { referenceId: id, versionId: uuid('reference-version'), originalFilename: source.name, fileType: source.type || 'application/octet-stream', size: measured.size, sha256: measured.sha256, importedAt: new Date().toISOString() };
+    const version: ReferenceVersion = { referenceId: id, versionId: uuid('reference-version'), originalFilename: source.name, fileType: source.type || 'application/octet-stream', size: measured.size, sha256: measured.sha256, importedAt: new Date().toISOString(), ...(savedBy ? { savedBy } : {}) };
     if (existing) { existing.versions.push(version); Object.assign(existing, cleanMetadata(metadata)); }
     else library.push({ referenceId: id, ...cleanMetadata(metadata), versions: [version], projectVersionId: null, removed: false });
     validateLibrary(library, state.references?.library);
     options.onProgress?.({ phase: 'writing_objects', processedFiles: 0, totalFiles: 1, processedBytes: 0, totalBytes: measured.size, message: 'Copying and verifying the original reference attachment.' });
     await writeAndVerifyObject(vault, uuid('reference-import'), measured.sha256, measured.size, async () => source.stream(), options.signal);
     throwIfCancelled(options.signal);
-    await publishCatalog(vault, state, library, options.signal, version);
+    await publishCatalog(vault, state, library, options.signal, [version]);
     return openExistingVault(vault);
   });
+}
+/** Capture already owns the project writer lock. Validate the entire batch before publication. */
+export async function storeCaptureReferenceAttachments(vault: FileSystemDirectoryAdapter, state: VaultState, scan: ScanResult, files: ComponentFile[], review: ReferenceReview | undefined, attachments: PendingReferenceAttachment[], options: ReferenceImportOptions = {}) {
+  prepareReferenceContext(state, scan, files, review);
+  if (options.savedBy !== undefined) validateReferenceAuthor(options.savedBy);
+  const library = structuredClone(state.references?.library ?? []);
+  const explicit = structuredClone(review?.explicit ?? baselineReferenceInputs(state, scan.baselineRevisionId));
+  const versions: ReferenceVersion[] = [];
+  for (const attachment of attachments) {
+    throwIfCancelled(options.signal);
+    const measured = await hashStream(attachment.source.stream(), { signal: options.signal });
+    if (measured.size !== attachment.source.size) throw new Error('Reference file changed while saving. Choose it again.');
+    const referenceId = uuid('reference');
+    const version: ReferenceVersion = { referenceId, versionId: uuid('reference-version'), originalFilename: attachment.source.name, fileType: attachment.source.type || 'application/octet-stream', ...measured, importedAt: new Date().toISOString(), ...(options.savedBy ? { savedBy: { ...options.savedBy } } : {}) };
+    library.push({ referenceId, title: attachment.source.name, description: '', tags: [], versions: [version], projectVersionId: null, removed: false });
+    versions.push(version);
+    explicit.push({ referenceId, versionId: version.versionId, locator: '', explanation: attachment.explanation, ...(attachment.component ? { component: attachment.component } : {}) });
+  }
+  validateLibrary(library, state.references?.library);
+  const proposed = { ...state, references: { ...state.references!, library } };
+  // Missing parts and invalid notes must fail before storing any selected file.
+  prepareReferenceContext(proposed, scan, files, createReferenceReview(proposed, scan, explicit));
+  for (const [index, version] of versions.entries()) {
+    options.onProgress?.({ phase: 'writing_objects', currentFile: version.originalFilename, processedFiles: index, totalFiles: versions.length, processedBytes: 0, totalBytes: version.size, message: `Saving reference file ${version.originalFilename}…` });
+    await writeAndVerifyObject(vault, uuid('reference-import'), version.sha256, version.size, async () => attachments[index].source.stream(), options.signal);
+  }
+  const { openExistingVault } = await import('./vault-service');
+  try { await publishCatalog(vault, state, library, options.signal, versions); }
+  catch (error) {
+    // A completed directory can be durable even if the filesystem loses its
+    // acknowledgement. Reconcile only this exact batch, never a partial import.
+    const recovered = await openExistingVault(vault);
+    if (recovered.references?.status !== 'available' || JSON.stringify(recovered.references.library) !== JSON.stringify(library)) throw error;
+    return { state: recovered, review: createReferenceReview(recovered, scan, explicit) };
+  }
+  const next = await openExistingVault(vault);
+  return { state: next, review: createReferenceReview(next, scan, explicit) };
 }
 export async function updateProjectReference(vault: FileSystemDirectoryAdapter, projectId: string, referenceId: string, changes: Partial<ReferenceMetadata> & { projectVersionId?: string | null; removed?: boolean }, options: CopyOptions = {}): Promise<VaultState> {
   return withProjectWriterLock(projectId, async () => {
