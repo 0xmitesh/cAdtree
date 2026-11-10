@@ -1,4 +1,5 @@
 import {
+  FileConflictError,
   FileSystemDirectoryAdapter,
   splitAndValidatePath,
   validateDirectoryIsolation,
@@ -7,8 +8,9 @@ import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
 import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
 import { assertCaseWritable } from './case-lifecycle';
-import { prepareComponentRecord, publishComponentRecord } from './component-identity';
-import { prepareReferenceContext, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext, storeCaptureReferenceAttachments } from './references';
+import { componentRecordPath, prepareComponentRecord, publishComponentRecord } from './component-identity';
+import { newRecordId } from './ids';
+import { prepareReferenceContext, referenceContextPath, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext, storeCaptureReferenceAttachments } from './references';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { getStagingSessionPathSegments, writeAndVerifyObject } from './object-store';
 import { enumerateWorkingFolder, partitionSystemErrors, partitionSystemFiles, scanBranchChanges } from './scanner';
@@ -39,12 +41,8 @@ export class ReviewStaleError extends Error {
 export const revisionManifestPath = (revisionId: string): string[] => ['revisions', `${revisionId}.manifest.json`];
 export const revisionCompletionPath = (revisionId: string): string[] => ['completed', `${revisionId}.done.json`];
 
-function createUniqueId(prefix: string): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
+/** How many record IDs a capture draws before giving up (nothing is written by then). */
+export const MAX_REVISION_ID_ATTEMPTS = 5;
 
 /**
  * Captures and publishes a complete revision snapshot following the 7-step
@@ -153,8 +151,6 @@ export async function captureRevision(
       0
     );
     const nextDisplayNumber = maxDisplayNumber + 1;
-    const revisionId = createUniqueId('rev');
-    const sessionId = `session-${revisionId}`;
     const captureStartedAt = new Date().toISOString();
 
     // Step 2: Capture fresh source inventory and stream file data with bounded memory
@@ -243,6 +239,34 @@ export async function captureRevision(
     }
     const referenceBoundary = await ensureReferenceStore(vaultDir, vaultState);
 
+    // The first write for a revision (after all review validation, so a rejected capture writes nothing) is the exclusive creation of its staging session folder,
+    // which claims the record ID. A clash (existing revision files, leftover attempt) draws a
+    // new ID before anything else is written; other revisions' files are never touched.
+    let revisionId = '';
+    let sessionId = '';
+    for (let attempt = 1; ; attempt++) {
+      const candidate = (input.newRevisionId ?? newRecordId)();
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(candidate)) throw new Error('Invalid revision ID. Nothing was written.');
+      const known =
+        vaultState.revisions.some((r) => r.manifest.revisionId === candidate) ||
+        (await vaultDir.hasFile(revisionManifestPath(candidate))) ||
+        (await vaultDir.hasFile(revisionCompletionPath(candidate))) ||
+        (await vaultDir.hasFile(componentRecordPath(candidate))) ||
+        (await vaultDir.hasFile(referenceContextPath(candidate)));
+      if (!known) {
+        const candidateSession = `session-${candidate}`;
+        try {
+          await vaultDir.getDirectory(getStagingSessionPathSegments(candidateSession), { create: true, exclusiveCreate: true });
+          revisionId = candidate;
+          sessionId = candidateSession;
+          break;
+        } catch (error) {
+          if (!(error instanceof FileConflictError)) throw error;
+        }
+      }
+      if (attempt >= MAX_REVISION_ID_ATTEMPTS)
+        throw new Error(`No free revision ID after ${MAX_REVISION_ID_ATTEMPTS} attempts. Nothing was written. Try again.`);
+    }
     // Step 3: Write new objects, close writes, reopen stored bytes, and verify size/hash.
     // Reused objects are also verified before the new revision relies on them.
     let processedBytes = 0;
@@ -378,7 +402,7 @@ export async function captureRevision(
     const expectedManifestFileSha256 = hashString(manifestJson);
     const manifestPath = revisionManifestPath(revisionId);
 
-    await vaultDir.writeFileText(manifestPath, manifestJson);
+    await vaultDir.writeFileText(manifestPath, manifestJson, { exclusive: true });
     const readBackManifestText = await vaultDir.readFileText(manifestPath);
     const actualManifestFileSha256 = hashString(readBackManifestText);
 

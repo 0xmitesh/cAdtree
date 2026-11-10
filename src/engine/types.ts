@@ -184,6 +184,8 @@ export interface ProgressUpdate {
 }
 
 export interface CaptureRevisionInput {
+  /** Test seam: supplies each candidate revision record ID. Defaults to newRecordId(). */
+  newRevisionId?: () => string;
   referenceAttachments?: import('./references').PendingReferenceAttachment[];
   referenceAuthor?: import('./references').ReferenceAuthor;
   onReferenceAttachmentsStored?: (review: import('./references').ReferenceReview, state: VaultState) => void;

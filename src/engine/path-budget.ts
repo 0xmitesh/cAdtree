@@ -78,7 +78,9 @@ const APPLY = `apply-${UUID}`;
 const RECOVERY = `recovery-${UUID}`;
 /** Longest event ID: `YYYYMMDD-HHMMSS-999`. */
 const EVENT = '20260101-000000-999';
-const REV = `rev-${UUID}`;
+/** New revisions use the record ID format; `rev-<uuid>` revisions remain legacy. */
+const REV = CASE_ID;
+const LEGACY_REV = `rev-${UUID}`;
 const REFERENCE_CATALOG = `reference-catalog-${UUID}`;
 const REFERENCE_ENROLLMENT = `reference-enrollment-${UUID}`;
 const KNOWLEDGE = `knowledge-${UUID}`;
@@ -93,7 +95,8 @@ export const PATH_TOKENS: Record<string, string> = {
   apply: 'apply-[0-9a-f-]{36}',
   recovery: 'recovery-[0-9a-f-]{36}',
   event: '[0-9]{8}-[0-9]{6}(?:-[0-9]{1,3})?',
-  rev: 'rev-[0-9a-f-]{36}',
+  rev: '[0-9]{8}-[0-9]{6}-[0-9a-z]{6}',
+  legacyRev: 'rev-[0-9a-f-]{36}',
   referenceCatalog: 'reference-catalog-[0-9a-f-]{36}',
   referenceEnrollment: 'reference-enrollment-[0-9a-f-]{36}',
   knowledge: 'knowledge-[0-9a-f-]{36}',
@@ -116,8 +119,8 @@ function template(label: string, kind: 'file' | 'dir', segments: string[], shape
 const stagingSession = getStagingSessionPathSegments('sample-session');
 
 /**
- * Maximum lengths assume the CURRENT ID formats (new cases and events use the ids.ts formats;
- * UUID-based case IDs, apply-<uuid> and recovery-<uuid> remain as legacy shapes). Legacy or non-UUID IDs accepted by lenient `safeId` validators may be longer and are
+ * Maximum lengths assume the CURRENT ID formats (new cases, revisions and events use the ids.ts formats;
+ * UUID-based case IDs, rev-<uuid> revision IDs, apply-<uuid> and recovery-<uuid> remain as legacy shapes). Legacy or non-UUID IDs accepted by lenient `safeId` validators may be longer and are
  * not covered.
  */
 export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
@@ -139,7 +142,9 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('vault branch record (legacy case ID)', 'file', below(V, branchRecordPath(BRANCH)), 'vault/branches/{branch}.branch.json', true),
   template('vault branch ready marker (legacy case ID)', 'file', below(V, branchReadyPath(BRANCH)), 'vault/branches/{branch}.ready.json', true),
   template('vault revision manifest', 'file', below(V, revisionManifestPath(REV)), 'vault/revisions/{rev}.manifest.json'),
+  template('vault revision manifest (legacy revision ID)', 'file', below(V, revisionManifestPath(LEGACY_REV)), 'vault/revisions/{legacyRev}.manifest.json', true),
   template('vault revision completion marker', 'file', below(V, revisionCompletionPath(REV)), 'vault/completed/{rev}.done.json'),
+  template('vault revision completion marker (legacy revision ID)', 'file', below(V, revisionCompletionPath(LEGACY_REV)), 'vault/completed/{legacyRev}.done.json', true),
   template('vault cache index', 'file', [V, 'cache', 'index.json'], 'vault/cache/index.json'),
   template('vault content object', 'file', below(V, getObjectPathSegments(SHA)), 'vault/objects/{sha2}/{sha}.bin'),
   template('vault staged object', 'file', below(V, getStagingObjectPathSegments('sample-session', SHA)), 'vault/staging/{b64}/{b64}.tmp'),
@@ -150,6 +155,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('component boundary', 'file', [V, 'components', 'boundary.json'], 'vault/components/boundary.json'),
   template('component ready marker', 'file', [V, 'components', 'ready.json'], 'vault/components/ready.json'),
   template('component revision record', 'file', below(V, componentRecordPath(REV)), 'vault/components/revisions/{rev}.json'),
+  template('component revision record (legacy revision ID)', 'file', below(V, componentRecordPath(LEGACY_REV)), 'vault/components/revisions/{legacyRev}.json', true),
   // Case lifecycle.
   template('case lifecycle record', 'file', below(V, lifecyclePath(CASE_ID, SEQ)), 'vault/case-lifecycle/{caseId}.{seq}.json'),
   template('case lifecycle record (legacy case ID)', 'file', below(V, lifecyclePath(BRANCH, SEQ)), 'vault/case-lifecycle/{branch}.{seq}.json', true),
@@ -159,6 +165,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('reference catalog', 'file', below(V, referenceCatalogPath(REFERENCE_CATALOG)), 'vault/references/catalogs/{referenceCatalog}.json'),
   template('reference catalog marker', 'dir', below(V, referenceCatalogMarkerPath(REFERENCE_CATALOG, SHA)), 'vault/references/completed/{b64uuid}.{b64}.done'),
   template('reference context', 'file', below(V, referenceContextPath(REV)), 'vault/references/contexts/{rev}.json'),
+  template('reference context (legacy revision ID)', 'file', below(V, referenceContextPath(LEGACY_REV)), 'vault/references/contexts/{legacyRev}.json', true),
   // Application (apply) evidence. New operations use event IDs; apply-<uuid> / recovery-<uuid> remain for old records.
   template('application plan', 'file', below(V, applicationPlanPath(CASE_ID, EVENT)), 'vault/applications/{caseId}/{event}/plan.json'),
   template('application plan (legacy case ID)', 'file', below(V, applicationPlanPath(BRANCH, EVENT)), 'vault/applications/{branch}/{event}/plan.json', true),
