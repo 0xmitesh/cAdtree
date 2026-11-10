@@ -36,6 +36,9 @@ export class ReviewStaleError extends Error {
   }
 }
 
+export const revisionManifestPath = (revisionId: string): string[] => ['revisions', `${revisionId}.manifest.json`];
+export const revisionCompletionPath = (revisionId: string): string[] => ['completed', `${revisionId}.done.json`];
+
 function createUniqueId(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`;
@@ -373,7 +376,7 @@ export async function captureRevision(
 
     const manifestJson = JSON.stringify(manifest, null, 2);
     const expectedManifestFileSha256 = hashString(manifestJson);
-    const manifestPath = ['revisions', `${revisionId}.manifest.json`];
+    const manifestPath = revisionManifestPath(revisionId);
 
     await vaultDir.writeFileText(manifestPath, manifestJson);
     const readBackManifestText = await vaultDir.readFileText(manifestPath);
@@ -423,7 +426,7 @@ export async function captureRevision(
 
     const completionJson = JSON.stringify(completion, null, 2);
     const expectedCompletionSha256 = hashString(completionJson);
-    const completionPath = ['completed', `${revisionId}.done.json`];
+    const completionPath = revisionCompletionPath(revisionId);
 
     await vaultDir.writeFileText(completionPath, completionJson);
     const readBackCompletionText = await vaultDir.readFileText(completionPath);

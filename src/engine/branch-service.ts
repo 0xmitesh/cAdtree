@@ -67,6 +67,9 @@ function validateName(state: VaultState, name: string) {
   }
 }
 
+export const branchAttemptPath = (branchId: string): string[] => ["staging", `${branchId}.branch-attempt.json`];
+export const branchRecordPath = (branchId: string): string[] => ["branches", `${branchId}.branch.json`];
+export const branchReadyPath = (branchId: string): string[] => ["branches", `${branchId}.ready.json`];
 export async function createDesignBranch(
   options: CreateDesignBranchOptions,
 ): Promise<{
@@ -144,7 +147,7 @@ export async function createDesignBranch(
       folderNameFor(name, "Design case"),
       { extraTaken: ["main"] },
     );
-    const stagingPath = ["staging", `${branchId}.branch-attempt.json`];
+    const stagingPath = branchAttemptPath(branchId);
     let workingDir: FileSystemDirectoryAdapter | undefined;
     let publicationAttempted = false;
     try {
@@ -246,7 +249,7 @@ export async function createDesignBranch(
       };
       await options.beforePublish?.(branch, workingDir);
       checkCancelled(signal);
-      const recordPath = ["branches", `${branchId}.branch.json`];
+      const recordPath = branchRecordPath(branchId);
       const text = JSON.stringify(branch, null, 2);
       // The large record is staged and read back before a small ready marker commits it.
       let publicationWarning: string | undefined;
@@ -259,7 +262,7 @@ export async function createDesignBranch(
         throw new Error(
           "Branch record read-back verification failed. No ready marker was published.",
         );
-      const readyPath = ["branches", `${branchId}.ready.json`];
+      const readyPath = branchReadyPath(branchId);
       const readyText = JSON.stringify({
         projectId: state.project.projectId,
         branchId,

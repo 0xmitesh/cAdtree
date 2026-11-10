@@ -22,6 +22,10 @@ export function knowledgeRecordPath(recordId: string): string[] {
   return [ROOT, 'records', `${recordId}.json`];
 }
 
+export function knowledgePublicationPath(recordId: string, sha256: string): string[] {
+  return [ROOT, 'completed', `${recordId}.${sha256}.done`];
+}
+
 function header(value: unknown): Pick<KnowledgeRecordDiagnostic, 'recordType' | 'schemaVersion' | 'formatVersion'> {
   if (!object(value)) return {};
   return {
@@ -176,7 +180,7 @@ export async function createKnowledgeRecord(
     const record: UniversalKnowledgeRecord = { ...body, integrity: { algorithm: 'sha256', bodySha256: bodyChecksum(body), publication: 'directory-marker-v1' } };
     validateEnvelope(record, registry);
     const raw = canonicalJson(record), sha256 = hashString(raw);
-    const publication = [ROOT, 'completed', `${id}.${sha256}.done`];
+    const publication = knowledgePublicationPath(id, sha256);
     let publicationMayExist = false;
     try {
       await vault.writeFileText(path, raw, { exclusive: true });

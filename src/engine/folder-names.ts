@@ -1,7 +1,7 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
 
 /** Maximum UTF-8 byte length of a single folder name. */
-const MAX_NAME_BYTES = 255;
+export const MAX_NAME_BYTES = 255;
 
 const encoder = new TextEncoder();
 const byteLength = (text: string) => encoder.encode(text).length;

@@ -83,6 +83,11 @@ function publicationDirectoryName(id: string, sha256: string) {
   const uuid = id.slice(-36).replace(/-/g, '');
   return `${compactHex(uuid)}.${compactHex(sha256)}.done`;
 }
+export const referenceEnrollmentRecordPath = (id: string): string[] => [...DATA, 'enrollment', `${id}.json`];
+export const referenceEnrollmentMarkerPath = (id: string, sha256: string): string[] => [...DATA, 'enrollment', publicationDirectoryName(id, sha256)];
+export const referenceCatalogPath = (catalogId: string): string[] => [...DATA, 'catalogs', `${catalogId}.json`];
+export const referenceCatalogMarkerPath = (catalogId: string, sha256: string): string[] => [...DATA, 'completed', publicationDirectoryName(catalogId, sha256)];
+export const referenceContextPath = (revisionId: string): string[] => [...DATA, 'contexts', `${revisionId}.json`];
 function directoryPublication(name: string, prefix: string) {
   const compact = /^([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})\.done$/.exec(name);
   if (compact) {
@@ -257,22 +262,22 @@ export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, st
   if (await vault.hasFile(ROOT) || (await vault.hasDirectory(DATA) && !state.references?.enrollmentIncomplete)) throw new Error('Existing reference evidence cannot be regenerated.');
   const boundary = seal({ schemaVersion: 1, projectId: state.project.projectId, createdAt: new Date().toISOString(), legacy: state.revisions.map(r => ({ revisionId: r.manifest.revisionId, manifestSha256: r.completion.manifestSha256 })) });
   const id = uuid('reference-enrollment');
-  const sha256 = await writeVerified(vault, [...DATA, 'enrollment', `${id}.json`], boundary);
-  await commitDirectory(vault, [...DATA, 'enrollment', publicationDirectoryName(id, sha256)]);
+  const sha256 = await writeVerified(vault, referenceEnrollmentRecordPath(id), boundary);
+  await commitDirectory(vault, referenceEnrollmentMarkerPath(id, sha256));
   return boundary;
 }
 async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultState, library: ProjectReference[], signal?: AbortSignal, importedVersions: ReferenceVersion[] = []) {
   validateLibrary(library, state.references?.library);
   await ensureReferenceStore(vault, state);
   const record = seal({ schemaVersion: 1, projectId: state.project.projectId, catalogId: uuid('reference-catalog'), parent: state.references?.catalogId ? { catalogId: state.references.catalogId, sha256: state.references.catalogSha256! } : null, references: library });
-  const recordSha256 = await writeVerified(vault, [...DATA, 'catalogs', `${record.catalogId}.json`], record);
+  const recordSha256 = await writeVerified(vault, referenceCatalogPath(record.catalogId), record);
   throwIfCancelled(signal);
   for (const importedVersion of importedVersions) {
     const checked = await verifyStoredObject(vault, importedVersion.sha256, importedVersion.size, signal);
     if (!checked.valid) throw new Error('Attachment changed before reference publication.');
   }
   throwIfCancelled(signal);
-  await commitDirectory(vault, [...DATA, 'completed', publicationDirectoryName(record.catalogId, recordSha256)]);
+  await commitDirectory(vault, referenceCatalogMarkerPath(record.catalogId, recordSha256));
 }
 export interface ReferenceMetadata { title: string; description: string; tags: string[] }
 function cleanMetadata(input: ReferenceMetadata): ReferenceMetadata { return { title: input.title.trim(), description: input.description, tags: [...new Set(input.tags.map(t => t.trim()).filter(Boolean))] }; }
@@ -423,7 +428,7 @@ export async function verifyReferencePublication(vault: FileSystemDirectoryAdapt
 }
 export async function publishReferenceContext(vault: FileSystemDirectoryAdapter, boundary: Boundary, draft: ReferenceContextDraft, manifest: RevisionManifest, manifestSha256: string, contextOnly: boolean) {
   const record = seal({ schemaVersion: 1, projectId: manifest.projectId, revisionId: manifest.revisionId, branchId: manifest.branchId, parentRevisionId: manifest.parentRevisionId, manifestSha256, boundarySha256: boundary.payloadSha256, ...draft, contextOnly });
-  return writeVerified(vault, [...DATA, 'contexts', `${manifest.revisionId}.json`], record);
+  return writeVerified(vault, referenceContextPath(manifest.revisionId), record);
 }
 export function capturedReferenceLibrary(state: VaultState, revisionId: string): ProjectReference[] {
   const record = state.references?.contexts[revisionId]?.record;
