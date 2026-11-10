@@ -5,6 +5,7 @@ import {
 } from "./fs-adapter";
 import { hashString } from "./hash";
 import { withProjectWriterLock } from "./locks";
+import { folderNameFor, pickFreeName } from "./folder-names";
 import {
   branchNameKey,
   validateWorkingFolderBindings,
@@ -741,7 +742,10 @@ async function allocateProject(
   name: string,
   operation: string,
 ) {
-  const path = `projects/${slug(name)}-${crypto.randomUUID()}`;
+  // Lookup and name choice create nothing, so their failures are plain errors,
+  // not retained destinations.
+  const projectsDir = await root.getDirectory(["projects"], { create: false });
+  const path = `projects/${await pickFreeName(projectsDir, folderNameFor(name, "Project"))}`;
   try {
     const container = await root.getDirectory(managedPath(path), {
       create: true,
