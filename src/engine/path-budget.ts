@@ -41,7 +41,14 @@ export const PROJECT_NAME_ALLOWANCE = 24;
 
 export type PathLengthClass = 'ok' | 'warn' | 'block';
 
+function assertLength(value: number, what: string): void {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
+    throw new Error(`Invalid ${what}: expected a non-negative safe integer length, got ${String(value)}.`);
+}
+
+/** Throws on NaN, negative, fractional or non-safe-integer input; it never guesses 'ok'. */
 export function classifyPathLength(length: number): PathLengthClass {
+  assertLength(length, 'path length');
   if (length > BLOCK_PATH_CHARS) return 'block';
   if (length >= WARN_PATH_CHARS) return 'warn';
   return 'ok';
@@ -99,6 +106,11 @@ function template(label: string, kind: 'file' | 'dir', segments: string[], shape
 
 const stagingSession = getStagingSessionPathSegments('sample-session');
 
+/**
+ * Maximum lengths assume the CURRENT ID formats (UUID-based, plus the new ids.ts formats once
+ * wired). Legacy or non-UUID IDs accepted by lenient `safeId` validators may be longer and are
+ * not covered.
+ */
 export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   // Project folder, outside the vault.
   template('project record', 'file', ['.cadtree', 'project.json'], '.cadtree/project.json'),
@@ -163,6 +175,8 @@ export function shapePattern(shape: string): RegExp {
   return new RegExp(`^${source}$`);
 }
 
+const RECOVERY_COPY_TEMPLATE = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'recovery copy folder')!;
+
 const compiled = INTERNAL_PATH_TEMPLATES.map((t) => ({ template: t, pattern: shapePattern(t.shape) }));
 // Every parent folder of a template is itself a folder cAdtree creates.
 const ancestorPatterns = (() => {
@@ -188,7 +202,13 @@ export function deepestInternalTemplate(): InternalPathTemplate {
   return INTERNAL_PATH_TEMPLATES.reduce((a, b) => (b.reserveLength > a.reserveLength ? b : a));
 }
 
-/** Longest path cAdtree itself writes below a project folder, in characters, including `.crswap` for files. */
+/**
+ * Longest path cAdtree itself writes below a project folder, in characters, including `.crswap` for files.
+ *
+ * The reserve covers the CURRENT ID formats: UUID-based IDs (`branch-<uuid>`, `apply-<uuid>`, ...)
+ * plus the new ids.ts formats once they are wired. Legacy or non-UUID IDs accepted by the lenient
+ * `safeId` validators may be longer and are NOT covered by INTERNAL_PATH_TEMPLATES or this value.
+ */
 export function internalReserve(): number {
   return deepestInternalTemplate().reserveLength;
 }
@@ -197,11 +217,25 @@ export function internalReserveLabel(): string {
   return deepestInternalTemplate().label;
 }
 
+/**
+ * Worst-case full path length for a project. A string `projectPath` must be the full ABSOLUTE
+ * path of the project folder (its UTF-16 length is used); a number is that length already.
+ * Invalid numeric input throws.
+ */
 export function projectWorstCase(input: { projectPath: string | number; longestUserPath?: number; caseAllowance?: number }): number {
   const projectLength = typeof input.projectPath === 'number' ? input.projectPath : input.projectPath.length;
   const longestUserPath = input.longestUserPath ?? 0;
-  const caseAllowance = Math.max(4, input.caseAllowance ?? CASE_ALLOWANCE);
+  const requestedAllowance = input.caseAllowance ?? CASE_ALLOWANCE;
+  assertLength(projectLength, 'project path length');
+  assertLength(longestUserPath, 'longest user path length');
+  assertLength(requestedAllowance, 'case allowance');
+  const caseAllowance = Math.max(4, requestedAllowance);
   const internal = projectLength + 1 + internalReserve();
-  const user = projectLength + '/working/'.length + caseAllowance + 1 + longestUserPath + CRSWAP_CHARS;
+  // "/working/<case>/" before the user's relative path.
+  const workingPrefix = '/working/'.length + caseAllowance + 1;
+  // "/recoveries/copy-<uuid>/" for user files restored into a recovery copy. This term goes away
+  // when Item 4 removes "Restore copy". Built from the same template constants as the reserve.
+  const recoveryPrefix = 1 + RECOVERY_COPY_TEMPLATE.relativeLength + 1;
+  const user = projectLength + Math.max(workingPrefix, recoveryPrefix) + longestUserPath + CRSWAP_CHARS;
   return Math.max(internal, user);
 }

@@ -15,7 +15,9 @@ const RANDOM_CHARS = 6;
 const ACCEPT_BELOW = 252;
 
 const RECORD_ID_PATTERN = /^\d{8}-\d{6}-[0-9a-z]{6}$/;
-const EVENT_ID_PATTERN = /^\d{8}-\d{6}(?:-[2-9]|-[1-9]\d+)?$/;
+/** Clash counter is limited to 2..999 so an event ID can never look like a record ID. */
+const MAX_EVENT_ATTEMPT = 999;
+const EVENT_ID_PATTERN = /^\d{8}-\d{6}(?:-[2-9]|-[1-9][0-9]{1,2})?$/;
 
 export type RandomSource = (count: number) => Uint8Array;
 
@@ -55,7 +57,8 @@ export function eventIdBase(now: Date = new Date()): string {
 
 /** Attempt 1 is the base ID; attempt N (>= 2) is `${base}-N`. */
 export function eventIdCandidate(base: string, attempt: number): string {
-  if (!Number.isSafeInteger(attempt) || attempt < 1) throw new Error('Event ID attempt must be a positive integer.');
+  if (!Number.isSafeInteger(attempt) || attempt < 1 || attempt > MAX_EVENT_ATTEMPT)
+    throw new Error(`Event ID attempt must be a positive integer up to ${MAX_EVENT_ATTEMPT}.`);
   return attempt === 1 ? base : `${base}-${attempt}`;
 }
 

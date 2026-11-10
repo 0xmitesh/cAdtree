@@ -52,16 +52,35 @@ test('projectWorstCase for the example project path', () => {
   // No user files: the internal reserve decides.
   assert.equal(projectWorstCase({ projectPath: EXAMPLE }), 70 + 1 + reserve);
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 0 }), 70 + 1 + reserve);
-  // A very long CAD path in a design case: 70 + "/working/" (9) + 32 + "/" + 200 + 7 = 319.
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 9 + 32 + 1 + 200 + 7);
+  // A very long CAD path: the recovery-copy prefix (54) is larger than working/<32>/ (42): 70 + 54 + 200 + 7 = 331.
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 54 + 200 + 7);
   // A short one is dominated by the internal reserve.
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 100 }), 70 + 1 + reserve);
   // The case allowance is configurable, but never below 4 ("main").
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 10 }), 70 + 9 + 10 + 1 + 250 + 7);
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 0 }), 70 + 9 + 4 + 1 + 250 + 7);
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 10 }), 70 + 54 + 250 + 7);
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 0 }), 70 + 54 + 250 + 7);
   // Classification of the results.
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: 'C:\\Cad\\Rigs\\projects\\Gripper' })), 'warn');
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 })), 'block');
+});
+
+test('invalid numeric input throws instead of classifying as ok', () => {
+  for (const bad of [NaN, -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 2]) {
+    assert.throws(() => classifyPathLength(bad), /Invalid path length/, String(bad));
+    assert.throws(() => projectWorstCase({ projectPath: bad }), /Invalid project path length/, String(bad));
+    assert.throws(() => projectWorstCase({ projectPath: 70, longestUserPath: bad }), /Invalid longest user path/, String(bad));
+    assert.throws(() => projectWorstCase({ projectPath: 70, caseAllowance: bad }), /Invalid case allowance/, String(bad));
+  }
+  assert.equal(classifyPathLength(0), 'ok');
+});
+
+test('projectWorstCase covers user files restored into recoveries/copy-<uuid>', () => {
+  const recoveryPrefix = '/recoveries/copy-'.length + 36 + 1;
+  assert.equal(recoveryPrefix, 54);
+  // Beats the default working/<32>/ prefix (42).
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 54 + 200 + 7);
+  // A larger case allowance can still win.
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200, caseAllowance: 100 }), 70 + 9 + 100 + 1 + 200 + 7);
 });
 
 test('internal templates are self-consistent', () => {

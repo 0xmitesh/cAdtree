@@ -62,6 +62,9 @@ test('event ID candidates follow base, -2, -3 ...', () => {
   for (const n of [1, 2, 3, 10, 99]) assert.ok(isEventId(eventIdCandidate(base, n)));
   assert.throws(() => eventIdCandidate(base, 0), /positive/);
   assert.throws(() => eventIdCandidate(base, 1.5), /positive/);
+  assert.throws(() => eventIdCandidate(base, 1000), /up to 999/);
+  assert.ok(isEventId(eventIdCandidate(base, 999)));
+  assert.equal(isEventId('20261109-235959-1000'), false);
 });
 
 test('validators accept exact formats and reject near misses', () => {
@@ -80,4 +83,14 @@ test('validators accept exact formats and reject near misses', () => {
     '20261109-23595', '20261109-235959\n', '20261109-235959-2-3', 'apply-20261109-235959',
   ]) assert.equal(isEventId(bad), false, JSON.stringify(bad));
   assert.equal(isEventId(null), false);
+});
+
+test('event and record ID namespaces are disjoint', () => {
+  const base = eventIdBase(fixed);
+  for (let n = 1; n <= 999; n++) {
+    assert.equal(isRecordId(eventIdCandidate(base, n)), false, String(n));
+    assert.ok(isEventId(eventIdCandidate(base, n)), String(n));
+  }
+  for (let i = 0; i < 200; i++) assert.equal(isEventId(newRecordId()), false);
+  assert.equal(isEventId(newRecordId(fixed, (n) => new Uint8Array(n).fill(0))), false);
 });
