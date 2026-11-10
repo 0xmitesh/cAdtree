@@ -33,6 +33,7 @@ import {
   resolveWorkingFilePath,
   resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
+import { presentPathBudgetError, pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
   FolderAddressDialog,
   rememberFolderAddress,
@@ -109,6 +110,7 @@ import {
 import {
   IntegrityNotice,
   Notice,
+  MessageLines,
   OperationProgress,
   Modal,
 } from "./components/ui";
@@ -399,6 +401,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return await action(context);
     } catch (error) {
       error = folderPermissionError(error);
+      // Over the path limit: the same wording in the banner and in any dialog that shows the rethrown error.
+      error = presentPathBudgetError(error);
       if (current())
         setStatusBanner({
           type:
@@ -957,6 +961,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     }
     if (!home) throw new Error("Choose a Cadtree home first.");
+    // Only await when the prompt is needed: the folder picker below must still start inside the click.
+    if (!budgetHomeAddress()) await ensureHomeAddress("home");
     await perform(
       "connect",
       async (context) => {
@@ -1003,7 +1009,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           );
           setStatusBanner({
             type: "success",
-            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "Original workspace retained unchanged; continue editing only in this managed copy." : ""}`,
+            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "Original workspace retained unchanged; continue editing only in this managed copy." : ""} ${pathBudgetWarnSentence(result.pathBudget)}`.trim(),
           });
           await persistWorkspace(result.workspace, undefined, undefined, next);
         } catch (error) {
@@ -1218,13 +1224,77 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     );
   };
   // Absolute addresses for the engine's path budget check. Unknown (undefined) means "unchecked".
-  const budgetHomeAddress = (): string | undefined =>
-    home && homeAddress && homeAddress.homeId === home.identity.homeId ? homeAddress.path : undefined;
+  // Read the cache ref (not render state) so an address saved a moment ago by the prompt below is seen.
+  const cachedHomeAddress = (): HomeAddress | undefined =>
+    home
+      ? [...homeAddressCache.current].reverse().find((a) => a.homeId === home.identity.homeId)
+      : undefined;
+  const budgetHomeAddress = (): string | undefined => cachedHomeAddress()?.path || undefined;
   const budgetWorkspaceAddress = async (): Promise<string | undefined> => {
     const base = budgetHomeAddress();
-    if (!base || !home || !workspace || !homeAddress) return undefined;
-    const relative = await homeAddress.root.resolveRelativePath(workspace.root);
+    const address = cachedHomeAddress();
+    if (!base || !home || !workspace || !address) return undefined;
+    const relative = await address.root.resolveRelativePath(workspace.root);
     return relative && relative.length === 1 ? joinAddress(base, relative[0]) : undefined;
+  };
+  // Live addresses for the name hints in the create dialogs (nothing is written; undefined = unknown).
+  const [workspaceBudgetAddress, setWorkspaceBudgetAddress] = useState<string | undefined>();
+  useEffect(() => {
+    let cancelled = false;
+    budgetWorkspaceAddress().then(
+      (address) => { if (!cancelled) setWorkspaceBudgetAddress(address); },
+      () => { if (!cancelled) setWorkspaceBudgetAddress(undefined); },
+    );
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [home, homeAddress, workspace]);
+  // Required prompt: a home with no saved address is asked once before the next create/import.
+  const [addressPrompt, setAddressPrompt] = useState<{ resolve: (saved: boolean) => void } | null>(null);
+  const addressPromptRef = useRef<{ resolve: (saved: boolean) => void } | null>(null);
+  const settleAddressPrompt = (saved: boolean) => {
+    const pending = addressPromptRef.current;
+    addressPromptRef.current = null;
+    setAddressPrompt(null);
+    pending?.resolve(saved);
+  };
+  // Home changed, signed out or unmounted: a pending prompt is cancelled and nothing is written.
+  const settlePromptRef = useRef(settleAddressPrompt);
+  settlePromptRef.current = settleAddressPrompt;
+  useEffect(() => {
+    settlePromptRef.current(false);
+  }, [home?.identity.homeId]);
+  useEffect(() => () => settlePromptRef.current(false), []);
+  const ensureHomeAddress = async (scope: "home" | "workspace") => {
+    if (!home || budgetHomeAddress()) return;
+    // A workspace that is not directly under the home cannot be measured, so it never prompts.
+    if (scope === "workspace") {
+      if (!workspace) return;
+      const relative = await home.root.resolveRelativePath(workspace.root);
+      if (!relative || relative.length !== 1) return;
+    }
+    // A newer prompt replaces an older one: settle the old one as cancelled so nothing hangs.
+    settleAddressPrompt(false);
+    const saved = await new Promise<boolean>((resolve) => {
+      const entry = { resolve };
+      addressPromptRef.current = entry;
+      setAddressPrompt(entry);
+    });
+    if (!saved)
+      throw new Error("Nothing was created. cAdtree needs your Cadtree home address to keep paths within Windows' limit.");
+  };
+  const saveHomeAddressFromPrompt = async (path: string) => {
+    if (!home || !addressPrompt) return;
+    const warning = await rememberFolderAddress(
+      home.identity.homeId,
+      path,
+      home.root instanceof RealFileSystemAdapter ? home.root.handle : undefined,
+    );
+    cacheHomeAddress({ homeId: home.identity.homeId, root: home.root, path });
+    if (warning) {
+      setBannerScope("workspace");
+      setStatusBanner({ type: "info", message: warning });
+    }
+    settleAddressPrompt(true);
   };
   const addManagedProject = async (
     name: string,
@@ -1238,6 +1308,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     }
     if (!workspace) throw new Error("Choose a workspace first.");
+    await ensureHomeAddress("workspace");
     await perform(
       "connect",
       async (context) => {
@@ -1269,9 +1340,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           current,
           project,
           context,
-          source
+          (source
             ? `Continue working in this copy: ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
-            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`,
+            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`) + (pathBudgetWarnSentence(project.pathBudget) ? ` ${pathBudgetWarnSentence(project.pathBudget)}` : ""),
         );
       },
       true,
@@ -1686,6 +1757,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const handleCreateBranch = async (params: CreateBranchParams) => {
     if (!vaultDir || !vaultState || !managedProject || !workspace)
       throw new Error("Open a project in a Cadtree workspace first.");
+    await ensureHomeAddress("workspace");
     await perform(
       "branch",
       async (context) => {
@@ -1728,7 +1800,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: `Created and verified "${params.name}". Open ${workspace.root.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}`,
+              message: `Created and verified "${params.name}". Open ${workspace.root.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}${pathBudgetWarnSentence(current.pathBudget) ? ` ${pathBudgetWarnSentence(current.pathBudget)}` : ""}`,
             });
           return;
         }
@@ -2263,7 +2335,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   type={statusBanner.type}
                   onDismiss={() => setStatusBanner(null)}
                 >
-                  {statusBanner.message}
+                  <MessageLines text={statusBanner.message} />
                   {statusBanner.type === "error" &&
                   /permission|reconnect|access|notallowed/i.test(
                     statusBanner.message,
@@ -2328,6 +2400,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             {homeView ? (
               <HomeWorkspacesView
                 home={authState.ready && authState.user ? home : null}
+                homeAddress={budgetHomeAddress()}
                 intro={introView}
                 remembered={
                   authState.ready && authState.user ? rememberedHome : null
@@ -2360,6 +2433,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               <WorkspaceProjectsView
                 onAllWorkspaces={allWorkspaces}
                 workspace={workspace}
+                workspaceAddress={workspaceBudgetAddress}
                 busy={busy}
                 progress={progress}
                 onRefresh={refreshWorkspace}
@@ -2536,6 +2610,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                         : undefined
                     }
                     managedDestination={managedProject?.record.containerPath}
+                    projectAddress={
+                      managedProject && workspaceBudgetAddress
+                        ? joinAddress(workspaceBudgetAddress, managedProject.record.containerPath)
+                        : undefined
+                    }
                     operationsBlockedReason={
                       managedBlockReason ??
                       (managedProject && missingConnections.length
@@ -2607,6 +2686,18 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   setBannerScope("workspace");
                   setStatusBanner({ type: "error", message: String(error) });
                 });
+              }}
+            />
+          ) : null}
+          {addressPrompt && home ? (
+            <FolderAddressDialog
+              home
+              folderName={home.root.name}
+              title="Add your Cadtree home address"
+              intro="cAdtree needs the full address to keep paths within Windows' limit; the browser can't read it."
+              onSave={saveHomeAddressFromPrompt}
+              onCancel={() => {
+                settleAddressPrompt(false);
               }}
             />
           ) : null}

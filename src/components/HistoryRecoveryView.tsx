@@ -71,6 +71,8 @@ export interface HistoryRecoveryViewProps {
   onCreateBranch?: (params: CreateBranchParams) => Promise<void>;
   isCreatingBranch?: boolean;
   managedDestination?: string;
+  /** Absolute address of the managed project folder, when known (name hint in the create-case dialog). */
+  projectAddress?: string;
   operationsBlockedReason?: string;
   onPrepareWrite?: () => Promise<void>;
   resolveWorkingFilePath?: (
@@ -942,6 +944,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
               ? `${props.managedDestination}/working`
               : undefined
           }
+          projectAddress={props.projectAddress}
         />
       ) : null}
       {restoreKind && rev ? (

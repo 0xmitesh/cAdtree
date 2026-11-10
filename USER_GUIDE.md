@@ -110,6 +110,17 @@ Cancellation, read failures, unstable source files, and failed writes leave iden
 
 An established branch with a broken publication marker remains visible as damaged, keeps its identity/name reserved, and remains part of folder-isolation checks. Its historical records are not repaired or rewritten automatically. Settings explains integrity failures and interrupted attempts.
 
+## Path length limits
+
+Windows, and the browser's folder access on top of it, cannot open very long paths. cAdtree keeps every folder and file it creates under **240 characters** of full path, counted from the drive (for example `C:\Cadtree\Client ABC\projects\Packaging Gripper\...`). It measures the longest path that could appear later in that location: its own deepest internal files, and your longest CAD file path when it is known.
+
+- **Keep your Cadtree home short.** A home such as `C:\Cadtree` leaves the most room. On macOS or Linux something like `/Users/<you>/Cadtree` works the same way; the limit still applies because the same folders may be opened on Windows.
+- **Name hints.** When you create a workspace, project or design case, the name field shows "{n} characters left" once fewer than 30 remain. If the name would go over, the message appears under the field and the create button is disabled. Names that get a counter, such as `Name (2)`, need four more characters; cAdtree checks again when you create.
+- **Warnings.** From 200 characters the action still works, and the confirmation adds a note such as "This location uses 212 of 240 characters." Shorter names leave room for design cases and deeper folders.
+- **If an action is blocked,** nothing is created. The message says how many characters over the limit you are, shows the deepest path it measured, and tells you which name to shorten. Either shorten that name, or move your Cadtree home closer to the drive. If you moved the home folder, update its address in **Home options > Edit home folder address**.
+- **Home address prompt.** The browser cannot tell cAdtree where the home folder is, so cAdtree asks you to paste its full address. If the address is missing, the next time you create or bring in a workspace, create or import a project, or create a design case, cAdtree asks for it once ("Add your Cadtree home address"). Save continues what you were doing; Cancel stops it without creating anything. Workspaces that are not directly inside your Cadtree home cannot be measured, so they are not checked and do not ask.
+- **Long home address during setup.** If the address you enter for a new home is long, setup shows a warning but you can still save it.
+
 ## Copy folder and file paths
 
 Home setup uses the native folder picker followed by a required absolute address entry. Windows drive addresses, Windows UNC addresses and absolute POSIX addresses are supported. The entered root determines separators; platform detection does not rewrite it. Quotes around pasted addresses, spaces, Unicode and drive/filesystem roots are accepted. POSIX case, Unicode spelling and literal backslashes are preserved. Use the expanded absolute address: `~`, `$HOME`, `${HOME}` and `%USERPROFILE%` shorthand are not expanded. Once configured, managed workspaces, projects and branches use that home root automatically. Edit a moved or mistaken root under **My workspaces → Home options → Edit home folder address**. This is the canonical local setting for managed descendants.

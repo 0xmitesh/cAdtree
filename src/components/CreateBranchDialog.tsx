@@ -7,7 +7,8 @@ import type { ProgressUpdate, RevisionManifest } from "../engine/types";
 import { branchNameKey } from "../engine/branch-state";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { pickDirectory } from "../utils/folder-access";
-import { Modal, Notice, OperationProgress } from "./ui";
+import { MessageLines, Modal, Notice, OperationProgress } from "./ui";
+import { caseNameHint, pathBudgetBlockSentence } from "../utils/path-budget-message";
 
 export interface CreateBranchParams {
   sourceRevisionId: string;
@@ -25,6 +26,7 @@ export function CreateBranchDialog({
   onClose,
   onCancel,
   managedDestination,
+  projectAddress,
 }: {
   source: RevisionManifest;
   sourceBranchName: string;
@@ -35,11 +37,14 @@ export function CreateBranchDialog({
   onClose: () => void;
   onCancel: () => void;
   managedDestination?: string;
+  /** Absolute address of the managed project folder, when known (drives the name hint). */
+  projectAddress?: string;
 }) {
   const [name, setName] = useState("");
   const [reason, setReason] = useState("");
   const [parent, setParent] = useState<FileSystemDirectoryAdapter | null>(null);
   const [error, setError] = useState("");
+  const nameHint = managedDestination ? caseNameHint(projectAddress, name, source) : undefined;
   return (
     <Modal title="Create design case" onClose={onClose} busy={busy}>
       <p>
@@ -53,7 +58,7 @@ export function CreateBranchDialog({
         and {source.directories.length} directories, including empty folders.
         The vault and saved revision are shared.
       </p>
-      {error ? <Notice type="error">{error}</Notice> : null}
+      {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -102,6 +107,11 @@ export function CreateBranchDialog({
               placeholder="e.g. Case A — wider housing"
             />
           </label>
+          {nameHint?.block ? (
+            <p className="field-help" role="alert">{pathBudgetBlockSentence(nameHint.block)}</p>
+          ) : nameHint?.text ? (
+            <p className="field-help">{nameHint.text}</p>
+          ) : null}
           <label className="field">
             <span>Engineering reason</span>
             <textarea
@@ -167,7 +177,7 @@ export function CreateBranchDialog({
             >
               Cancel
             </button>
-            <button className="button primary">Create design case</button>
+            <button className="button primary" disabled={Boolean(nameHint?.block)}>Create design case</button>
           </div>
         </fieldset>
       </form>

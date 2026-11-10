@@ -54,6 +54,21 @@ export function Modal({
     </dialog>
   );
 }
+/** Plain text that may contain line breaks (for example a measured path on its own line). */
+export function MessageLines({ text }: { text: string }) {
+  const lines = text.split("\n");
+  if (lines.length === 1) return <>{text}</>;
+  return (
+    <>
+      {lines.map((line, index) => (
+        <span key={index} style={{ display: "block" }}>
+          {line}
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function Notice({
   type = "info",
   children,

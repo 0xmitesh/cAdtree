@@ -210,6 +210,11 @@ export function FilePathShortcutsProvider({
           required={Boolean(home || pending)}
           title={home && !pending ? "Edit home folder address" : undefined}
           submitLabel={pending ? "Save and copy" : "Save"}
+          note={
+            home && !pending && input
+              ? "Is this still where your Cadtree home is? Update it if you moved the folder."
+              : undefined
+          }
           onCancel={() => {
             setEditing(false);
             setPending(null);
