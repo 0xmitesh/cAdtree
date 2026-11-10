@@ -11,7 +11,7 @@ import { folderNameFor, pickFreeName } from "./folder-names";
 import { componentWriteBlock } from './component-identity';
 import { hashString } from "./hash";
 import { restoreRevisionToFolder } from "./recovery-service";
-import { enumerateWorkingFolder } from "./scanner";
+import { enumerateWorkingFolder, partitionSystemFiles } from "./scanner";
 import {
   computeBranchRecordChecksum,
   openExistingVault,
@@ -213,7 +213,10 @@ export async function createDesignBranch(
       const expected = source.files
         .map((f) => [f.path, f.size, f.sha256])
         .sort();
-      const actual = inventory.files
+      const actual = partitionSystemFiles(
+        inventory.files,
+        new Set(source.files.map((f) => f.path)),
+      ).files
         .map((f) => [f.path, f.size, f.sha256])
         .sort();
       if (

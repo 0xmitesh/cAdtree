@@ -95,6 +95,8 @@ export interface ScanResult {
   addedDirectories: string[];
   deletedDirectories: string[];
   errors: ScanErrorEntry[];
+  /** Untracked OS-generated files left out of this scan (e.g. .DS_Store). */
+  skippedSystemFiles?: string[];
   hasChanges: boolean;
   canCapture: boolean;
   totalBytes: number;

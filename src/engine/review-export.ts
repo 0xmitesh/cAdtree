@@ -1,6 +1,7 @@
 import { checkCaseInsensitiveCollisions, splitAndValidatePath, validateDirectoryIsolation, type FileSystemDirectoryAdapter } from './fs-adapter';
 import { validateWorkingFolderBindings, type WorkingFolderBindings } from './branch-state';
 import { computeRequiredParentDirectories } from './recovery-service';
+import { partitionSystemFiles } from './scanner';
 import { readVerifiedInventory, throwIfCancelled, type CopyOptions } from './copy-service';
 import { getObjectPathSegments, verifyStoredObject } from './object-store';
 import { hashString } from './hash';
@@ -194,12 +195,13 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       throwIfCancelled(signal);
       await destination.writeFileText([plan.summaryName], plan.summaryText, { exclusive: true });
       progress('verifying_restored_files', 'Verifying exported bytes, summary and complete directory structure.', plan.files.length, writtenBytes);
-      const inventory = await readVerifiedInventory(destination, { signal });
+      const rawInventory = await readVerifiedInventory(destination, { signal });
       const expected = new Map([
         ...plan.files.map(f => [f.exportedPath, { sha256: f.sha256, size: f.size }] as const),
         [plan.summaryName, { sha256: hashString(plan.summaryText), size: new TextEncoder().encode(plan.summaryText).length }] as const,
         [plan.markerName, { sha256: hashString(markerText), size: new TextEncoder().encode(markerText).length }] as const,
       ]);
+      const inventory = { ...rawInventory, files: partitionSystemFiles(rawInventory.files, new Set(expected.keys())).files };
       if (inventory.files.length !== expected.size || inventory.files.some(f => expected.get(f.path)?.sha256 !== f.sha256 || expected.get(f.path)?.size !== f.size) || JSON.stringify([...inventory.directories].sort()) !== JSON.stringify([...plan.directories].sort())) throw new Error('Export verification failed: output does not match the reviewed files and directories.');
       throwIfCancelled(signal);
       await destination.removeEntry([plan.markerName]);

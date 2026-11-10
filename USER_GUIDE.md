@@ -71,6 +71,8 @@ projects/<project-name-unique-id>/
 
 Scan/capture starts at the active `working/.../` leaf. The enclosing project container, other cases, vault, management records, and recovery folders are not scanned as part of that leaf.
 
+cAdtree skips untracked OS-generated files when scanning a working folder: `.DS_Store`, `Thumbs.db`, `desktop.ini`, and macOS `._name` companion files that sit beside `name`. The Changes view lists them as skipped and never saves them in a revision. A file that is already part of a revision is tracked normally, even with one of these names.
+
 ## Work with cases
 
 Select a saved revision in History and choose **Create branch from here**. For a managed project, enter only a name and engineering reason. cAdtree allocates the working folder automatically, restores and verifies the full baseline, saves its portable binding, and activates the case. Creation adds no revision.

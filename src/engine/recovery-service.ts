@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty, isSystemClutterName } from "./scanner";
 import {
   checkCaseInsensitiveCollisions,
   FileSystemDirectoryAdapter,
@@ -85,7 +86,7 @@ async function executeVerifiedRecovery(params: {
   const lockKey = `recovery-lock:${vaultDir.name}:${destinationDir.name}`;
   return withProjectWriterLock(lockKey, async () => {
     const existingDestEntries = await destinationDir.listEntries();
-    if (existingDestEntries.length > 0) {
+    if (!isEffectivelyEmpty(existingDestEntries)) {
       throw new Error(
         `Recovery destination "${destinationDir.name}" is not empty (contains ${existingDestEntries.length} item(s)). Select a fresh, empty folder for recovery.`
       );
@@ -205,12 +206,20 @@ async function executeVerifiedRecovery(params: {
 
       // Recheck that destination root is still completely empty right before materialization
       const preWriteRootEntries = await destinationDir.listEntries();
-      if (preWriteRootEntries.length > 0) {
+      if (!isEffectivelyEmpty(preWriteRootEntries)) {
         abortedDueToDestinationConflict = true;
         throw new Error(
           `Destination conflict: folder "${destinationDir.name}" was populated (${preWriteRootEntries[0].name}) after initial check. Recovery stopped to avoid overwriting existing content.`
         );
       }
+
+      // Root-level OS clutter seen in the destination may be overwritten by a saved
+      // file of the same name; every other path stays exclusive.
+      const tolerated = new Set(
+        preWriteRootEntries
+          .filter((e) => e.kind === 'file' && isSystemClutterName(e.name))
+          .map((e) => e.name)
+      );
 
       // 2. Create required directories with exclusive conflict checks
       onProgress?.({
@@ -260,9 +269,11 @@ async function executeVerifiedRecovery(params: {
         });
 
         // Recheck immediately before writing that neither a file nor directory occupies target path
+        const isTolerated = fileSegments.length === 1 && tolerated.has(fileSegments[0]);
         if (
-          (await destinationDir.hasFile(fileSegments)) ||
-          (await destinationDir.hasDirectory(fileSegments))
+          !isTolerated &&
+          ((await destinationDir.hasFile(fileSegments)) ||
+            (await destinationDir.hasDirectory(fileSegments)))
         ) {
           abortedDueToDestinationConflict = true;
           throw new Error(
@@ -278,7 +289,7 @@ async function executeVerifiedRecovery(params: {
           const { bytesWritten } = await destinationDir.writeFileStream(
             fileSegments,
             objectStream,
-            { signal, exclusive: true }
+            { signal, exclusive: !isTolerated }
           );
 
           if (bytesWritten !== fileEntry.size) {

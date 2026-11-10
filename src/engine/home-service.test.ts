@@ -770,3 +770,17 @@ test("two ready registrations with the same workspace id are both duplicates and
   assert.ok(read.workspaces.every((e) => !e.workspace));
   assert.equal(await snapshot(home), before);
 });
+
+test("home and workspace creation accept a folder holding only OS clutter but refuse real content", async () => {
+  const clutterOnly = new InMemoryFileSystemAdapter("Cadtree");
+  await clutterOnly.writeFileText([".DS_Store"], "finder");
+  const home = await createHome(clutterOnly);
+  assert.ok(home);
+  const withDir = new InMemoryFileSystemAdapter("Cadtree2");
+  await withDir.getDirectory([".DS_Store"], { create: true });
+  await assert.rejects(createHome(withDir), /empty dedicated folder/);
+  const withFile = new InMemoryFileSystemAdapter("Cadtree3");
+  await withFile.writeFileText([".DS_Store"], "finder");
+  await withFile.writeFileText(["a.txt"], "x");
+  await assert.rejects(createHome(withFile), /empty dedicated folder/);
+});

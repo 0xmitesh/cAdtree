@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty } from "./scanner";
 import {
   type FileSystemDirectoryAdapter,
   validateDirectoryIsolation,
@@ -133,7 +134,7 @@ export async function createHome(
   return withProjectWriterLock("home-initialization", async () => {
     if ((await root.queryPermission("readwrite")) !== "granted")
       throw new Error("Grant write access to the Cadtree home.");
-    if ((await root.listEntries()).length)
+    if (!isEffectivelyEmpty(await root.listEntries()))
       throw new Error(
         "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.",
       );

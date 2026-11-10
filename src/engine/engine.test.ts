@@ -24,7 +24,13 @@ import {
   UnsupportedSchemaVersionError,
   verifyRevisionObjects,
 } from './vault-service';
-import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
+import {
+  enumerateWorkingFolder,
+  isEffectivelyEmpty,
+  isSystemClutterName,
+  partitionSystemFiles,
+  scanBranchChanges,
+} from './scanner';
 import { captureRevision, ReviewStaleError } from './revision-service';
 import {
   restoreRevisionToFolder,
@@ -758,4 +764,118 @@ test('Production UI files do not import fixture generators, InMemoryFileSystemAd
       `${rel} must not expose Launch Fixture Lab button`
     );
   }
+});
+
+test('untracked OS clutter is skipped in scans and never captured, but listed as skipped', async () => {
+  const root = new InMemoryFileSystemAdapter('clutter');
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'Clutter');
+  const b = new Uint8Array([1, 2, 3]);
+  for (const p of [
+    ['bracket.SLDPRT'],
+    ['sub', 'frame.SLDASM'],
+    ['.DS_Store'],
+    ['sub', '.DS_Store'],
+    ['._bracket.SLDPRT'],
+    ['THUMBS.DB'],
+    ['Desktop.ini'],
+    ['._config.json'],
+  ])
+    await working.writeFileBytes(p, b);
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(
+    scan.added.map((f) => f.path).sort(),
+    ['._config.json', 'bracket.SLDPRT', 'sub/frame.SLDASM'],
+    '._config.json has no config.json companion, so it is kept'
+  );
+  assert.deepEqual((scan.skippedSystemFiles ?? []).sort(), [
+    '.DS_Store',
+    '._bracket.SLDPRT',
+    'Desktop.ini',
+    'THUMBS.DB',
+    'sub/.DS_Store',
+  ]);
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'clutter',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(
+    cap.revision.manifest.files.map((f) => f.path).sort(),
+    ['._config.json', 'bracket.SLDPRT', 'sub/frame.SLDASM']
+  );
+});
+
+test('enumerateWorkingFolder still returns every file; partitionSystemFiles never hides expected paths', async () => {
+  const root = new InMemoryFileSystemAdapter('clutter2');
+  const dir = await root.getDirectory(['w'], { create: true });
+  await dir.writeFileBytes(['.DS_Store'], new Uint8Array([9]));
+  await dir.writeFileBytes(['sub', '._x.txt'], new Uint8Array([9]));
+  const res = await enumerateWorkingFolder(dir);
+  assert.deepEqual(res.files.map((f) => f.path), ['.DS_Store', 'sub/._x.txt']);
+  assert.deepEqual(partitionSystemFiles(res.files, new Set(['.DS_Store'])).skipped, []);
+  // ._x.txt without a sibling x.txt is kept; with the sibling expected it is a companion.
+  assert.deepEqual(partitionSystemFiles(res.files, new Set()).skipped, ['.DS_Store']);
+  assert.deepEqual(partitionSystemFiles(res.files, new Set(['sub/x.txt'])).skipped, ['.DS_Store', 'sub/._x.txt']);
+  assert.equal(isSystemClutterName('desktop.INI'), true);
+  assert.equal(isSystemClutterName('._x'), false);
+});
+
+test('a tracked .DS_Store deleted from the working folder is reported as deleted', async () => {
+  const root = new InMemoryFileSystemAdapter('clutter3');
+  const dir = await root.getDirectory(['w'], { create: true });
+  const bytes = new Uint8Array([1, 2, 3]);
+  await dir.writeFileBytes(['.DS_Store'], bytes);
+  const entry = (await enumerateWorkingFolder(dir)).files[0];
+  const manifest = { revisionId: 'r', displayNumber: 1, files: [entry], directories: [] } as unknown as RevisionManifest;
+  const same = await scanBranchChanges(dir, MAIN_BRANCH_ID, manifest);
+  assert.equal(same.unchanged.length, 1);
+  assert.deepEqual(same.skippedSystemFiles, []);
+  await dir.removeEntry(['.DS_Store']);
+  const gone = await scanBranchChanges(dir, MAIN_BRANCH_ID, manifest);
+  assert.deepEqual(gone.deleted.map((f) => f.path), ['.DS_Store']);
+});
+
+test('isEffectivelyEmpty accepts only clutter files', () => {
+  assert.equal(isEffectivelyEmpty([]), true);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'file' }]), true);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'directory' }]), false);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'file' }, { name: 'a.txt', kind: 'file' }]), false);
+  assert.equal(isEffectivelyEmpty([{ name: '._x', kind: 'file' }]), false);
+});
+
+test('read failures on untracked clutter never block capture; the same failure on tracked clutter does', async () => {
+  let failClutter = false;
+  const root = new InMemoryFileSystemAdapter('clutter-err', null, {
+    onBeforeRead: (p) => {
+      if (failClutter && p.endsWith('/.DS_Store')) throw new Error('locked by Finder');
+    },
+  });
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'ClutterErr');
+  await working.writeFileBytes(['bracket.SLDPRT'], new Uint8Array([1]));
+  await working.writeFileBytes(['.DS_Store'], new Uint8Array([2]));
+  failClutter = true;
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(scan.errors, []);
+  assert.equal(scan.canCapture, true);
+  assert.deepEqual(scan.skippedSystemFiles, ['.DS_Store']);
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'despite locked clutter',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(cap.revision.manifest.files.map((f) => f.path), ['bracket.SLDPRT']);
+  // Tracked: the baseline contains .DS_Store, so its read failure must still block.
+  const tracked = {
+    revisionId: 'r', displayNumber: 1, directories: [],
+    files: [{ path: '.DS_Store', size: 1, sha256: 'x', lastModified: 0 }],
+  } as unknown as RevisionManifest;
+  const blocked = await scanBranchChanges(working, MAIN_BRANCH_ID, tracked);
+  assert.equal(blocked.errors.length, 1);
+  assert.equal(blocked.canCapture, false);
 });
