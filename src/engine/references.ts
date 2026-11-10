@@ -1,4 +1,5 @@
-import type { FileSystemDirectoryAdapter } from './fs-adapter';
+import { FileConflictError, type FileSystemDirectoryAdapter } from './fs-adapter';
+import { isRecordId, newRecordId } from './ids';
 import { hashStream, hashString } from './hash';
 import { compactHex, expandHex } from './path-encoding';
 import { getObjectPathSegments, verifyStoredObject, writeAndVerifyObject } from './object-store';
@@ -26,8 +27,24 @@ export interface ReferenceEvidence {
 }
 const ROOT = ['reference-context.json'];
 const DATA = ['references'];
-const uuid = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
-const safeId = (value: unknown, prefix: string) => typeof value === 'string' && new RegExp(`^${prefix}-[0-9a-f-]{36}$`).test(value);
+/** Bounded retries when a freshly drawn record ID is already taken on disk. */
+export const MAX_REFERENCE_ID_ATTEMPTS = 20;
+/**
+ * New reference records (enrollment, catalog, reference, version, import session) use the short record ID.
+ * Existing ones keep `<prefix>-<uuid>`. Which KIND an ID is follows from where it appears (field or folder),
+ * never from its text, because new IDs carry no prefix.
+ */
+const safeId = (value: unknown, prefix: string) => typeof value === 'string' && (isRecordId(value) || new RegExp(`^${prefix}-[0-9a-f-]{36}$`).test(value));
+/** A record ID not already used by a reference or version of this library (or by this batch). */
+function freshLibraryId(taken: Set<string>, draw: () => string = newRecordId) {
+  for (let attempt = 1; attempt <= MAX_REFERENCE_ID_ATTEMPTS; attempt++) {
+    const candidate = draw();
+    if (!isRecordId(candidate)) throw new Error('Invalid reference record ID. Nothing was written.');
+    if (!taken.has(candidate)) { taken.add(candidate); return candidate; }
+  }
+  throw new Error(`No free reference record ID after ${MAX_REFERENCE_ID_ATTEMPTS} attempts. Nothing was written. Try again.`);
+}
+const libraryIds = (library: ProjectReference[]) => new Set(library.flatMap(r => [r.referenceId, ...r.versions.map(v => v.versionId)]));
 const checksum = /^[0-9a-f]{64}$/;
 export function referenceChecksum(value: object) { const { payloadSha256: _, ...body } = value as Record<string, unknown>; return hashString(JSON.stringify(body)); }
 function seal<T extends object>(value: T): T & { payloadSha256: string } { return { ...value, payloadSha256: referenceChecksum(value) }; }
@@ -51,7 +68,10 @@ function validateLibrary(library: ProjectReference[], previous: ProjectReference
     ref.tags.forEach(tag => text(tag, 128));
     if (!Array.isArray(ref.versions) || !ref.versions.length) throw new Error('A reference must preserve its versions.');
     for (const v of ref.versions) {
-      if (v.referenceId !== ref.referenceId || !safeId(v.versionId, 'reference-version') || versions.has(v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
+      // New IDs carry no kind prefix, so the old prefix can no longer reveal a swapped ID. The kind is fixed by
+      // where the ID sits (field/folder) and swaps are caught by the sealed checksum and project binding; this
+      // check additionally rejects a version ID that equals any reference ID.
+      if (v.referenceId !== ref.referenceId || !safeId(v.versionId, 'reference-version') || versions.has(v.versionId) || library.some(r => r.referenceId === v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
       text(v.originalFilename, 1024); text(v.fileType, 256);
       if (v.savedBy !== undefined) validateReferenceAuthor(v.savedBy);
       if (!v.originalFilename || /[\x00-\x1f\x7f]/.test(v.originalFilename)) throw new Error('Invalid original attachment filename.');
@@ -76,7 +96,10 @@ async function commitDirectory(vault: FileSystemDirectoryAdapter, path: string[]
   const marker = await vault.getDirectory(path, { create: true, exclusiveCreate: true });
   if ((await marker.listEntries()).length) throw new Error('Reference publication directory is not empty.');
 }
+const isNewRecordId = (value: string): boolean => isRecordId(value);
 function publicationDirectoryName(id: string, sha256: string) {
+  // New record IDs are 22 characters and already short: `<recordId>.<compact sha>.done`.
+  if (isNewRecordId(id)) return `${id}.${compactHex(sha256)}.done`;
   // Preserve every UUID/checksum bit, but omit the redundant record prefix and
   // encode the bytes as base64url. The old enrollment marker made
   // ordinary managed Windows project paths exceed the directory creation limit.
@@ -89,6 +112,11 @@ export const referenceCatalogPath = (catalogId: string): string[] => [...DATA, '
 export const referenceCatalogMarkerPath = (catalogId: string, sha256: string): string[] => [...DATA, 'completed', publicationDirectoryName(catalogId, sha256)];
 export const referenceContextPath = (revisionId: string): string[] => [...DATA, 'contexts', `${revisionId}.json`];
 function directoryPublication(name: string, prefix: string) {
+  // A new record ID and a legacy compact UUID are both 22 characters. Legacy IDs come from
+  // crypto.randomUUID() (v4): byte 6 is 0x4_, so base64url character 8 (bits 48-53) is one of Q/R/S/T and
+  // can never be '-'. A record ID always has '-' at index 8, so this test cleanly separates the two.
+  const fresh = /^(\d{8}-\d{6}-[0-9a-z]{6})\.([A-Za-z0-9_-]{43})\.done$/.exec(name);
+  if (fresh && isRecordId(fresh[1])) return { id: fresh[1], sha256: expandHex(fresh[2]) };
   const compact = /^([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})\.done$/.exec(name);
   if (compact) {
     const uuid = expandHex(compact[1]).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
@@ -96,7 +124,8 @@ function directoryPublication(name: string, prefix: string) {
   }
   // Retain the original directory format for already-published vaults.
   const match = /^(.+)\.([a-f0-9]{64})\.done$/.exec(name);
-  if (!match || !safeId(match[1], prefix)) throw new Error('Unexpected reference publication directory.');
+  // Legacy-only: a record ID with a full-hex checksum is a shape that never existed and must be rejected.
+  if (!match || !new RegExp(`^${prefix}-[0-9a-f-]{36}$`).test(match[1])) throw new Error('Unexpected reference publication directory.');
   return { id: match[1], sha256: match[2] };
 }
 async function readDirectoryPublication(vault: FileSystemDirectoryAdapter, markerPath: string[], recordPath: string[], sha256: string) {
@@ -256,21 +285,36 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
   return result;
 }
 export function referenceWriteBlock(state: VaultState): string | undefined { return state.references && !['legacy', 'available'].includes(state.references.status) ? state.references.reason ?? 'Reference evidence is unavailable.' : undefined; }
-export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, state: VaultState): Promise<Boundary> {
+export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, state: VaultState, newId: () => string = newRecordId): Promise<Boundary> {
   const block = referenceWriteBlock(state); if (block) throw new Error(block);
   if (state.references?.boundary) return state.references.boundary;
   if (await vault.hasFile(ROOT) || (await vault.hasDirectory(DATA) && !state.references?.enrollmentIncomplete)) throw new Error('Existing reference evidence cannot be regenerated.');
   const boundary = seal({ schemaVersion: 1, projectId: state.project.projectId, createdAt: new Date().toISOString(), legacy: state.revisions.map(r => ({ revisionId: r.manifest.revisionId, manifestSha256: r.completion.manifestSha256 })) });
-  const id = uuid('reference-enrollment');
-  const sha256 = await writeVerified(vault, referenceEnrollmentRecordPath(id), boundary);
+  // The enrollment record file is the first exclusive write; a clash draws a new ID before anything else is written.
+  let id = '', sha256 = '';
+  for (let attempt = 1; ; attempt++) {
+    const candidate = newId();
+    if (!isRecordId(candidate)) throw new Error('Invalid reference record ID. Nothing was written.');
+    try { sha256 = await writeVerified(vault, referenceEnrollmentRecordPath(candidate), boundary); id = candidate; break; }
+    catch (error) { if (!(error instanceof FileConflictError)) throw error; }
+    if (attempt >= MAX_REFERENCE_ID_ATTEMPTS) throw new Error(`No free reference record ID after ${MAX_REFERENCE_ID_ATTEMPTS} attempts. No reference enrollment was written. Try again.`);
+  }
   await commitDirectory(vault, referenceEnrollmentMarkerPath(id, sha256));
   return boundary;
 }
-async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultState, library: ProjectReference[], signal?: AbortSignal, importedVersions: ReferenceVersion[] = []) {
+async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultState, library: ProjectReference[], signal?: AbortSignal, importedVersions: ReferenceVersion[] = [], newId: () => string = newRecordId) {
   validateLibrary(library, state.references?.library);
-  await ensureReferenceStore(vault, state);
-  const record = seal({ schemaVersion: 1, projectId: state.project.projectId, catalogId: uuid('reference-catalog'), parent: state.references?.catalogId ? { catalogId: state.references.catalogId, sha256: state.references.catalogSha256! } : null, references: library });
-  const recordSha256 = await writeVerified(vault, referenceCatalogPath(record.catalogId), record);
+  await ensureReferenceStore(vault, state, newId);
+  // The catalog record file is the first exclusive write for this record; a clash draws a new ID first.
+  let record!: ReferenceCatalog, recordSha256 = '';
+  for (let attempt = 1; ; attempt++) {
+    const candidate = newId();
+    if (!isRecordId(candidate)) throw new Error('Invalid reference record ID. Nothing was written.');
+    record = seal({ schemaVersion: 1, projectId: state.project.projectId, catalogId: candidate, parent: state.references?.catalogId ? { catalogId: state.references.catalogId, sha256: state.references.catalogSha256! } : null, references: library });
+    try { recordSha256 = await writeVerified(vault, referenceCatalogPath(candidate), record); break; }
+    catch (error) { if (!(error instanceof FileConflictError)) throw error; }
+    if (attempt >= MAX_REFERENCE_ID_ATTEMPTS) throw new Error(`No free reference record ID after ${MAX_REFERENCE_ID_ATTEMPTS} attempts. No reference catalog was written. Try again.`);
+  }
   throwIfCancelled(signal);
   for (const importedVersion of importedVersions) {
     const checked = await verifyStoredObject(vault, importedVersion.sha256, importedVersion.size, signal);
@@ -282,7 +326,11 @@ async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultSta
 export interface ReferenceMetadata { title: string; description: string; tags: string[] }
 function cleanMetadata(input: ReferenceMetadata): ReferenceMetadata { return { title: input.title.trim(), description: input.description, tags: [...new Set(input.tags.map(t => t.trim()).filter(Boolean))] }; }
 export interface AttachmentSource { name: string; type: string; size: number; stream: () => ReadableStream<Uint8Array> }
-export interface ReferenceImportOptions extends CopyOptions { savedBy?: ReferenceAuthor }
+export interface ReferenceImportOptions extends CopyOptions {
+  savedBy?: ReferenceAuthor;
+  /** Test seam: supplies each candidate record ID for the enrollment and catalog files (the exclusive claims). Defaults to newRecordId(). */
+  newRecordId?: () => string;
+}
 export async function importReferenceAttachment(vault: FileSystemDirectoryAdapter, projectId: string, source: AttachmentSource, metadata: ReferenceMetadata, referenceId?: string, options: ReferenceImportOptions = {}): Promise<VaultState> {
   return withProjectWriterLock(projectId, async () => {
     const { openExistingVault } = await import('./vault-service'); const state = await openExistingVault(vault);
@@ -296,15 +344,16 @@ export async function importReferenceAttachment(vault: FileSystemDirectoryAdapte
     const library = structuredClone(state.references?.library ?? []);
     const existing = referenceId ? library.find(r => r.referenceId === referenceId) : undefined;
     if (referenceId && !existing) throw new Error('Choose a published reference before adding a version.');
-    const id = existing?.referenceId ?? uuid('reference');
-    const version: ReferenceVersion = { referenceId: id, versionId: uuid('reference-version'), originalFilename: source.name, fileType: source.type || 'application/octet-stream', size: measured.size, sha256: measured.sha256, importedAt: new Date().toISOString(), ...(savedBy ? { savedBy } : {}) };
+    const taken = libraryIds(library);
+    const id = existing?.referenceId ?? freshLibraryId(taken);
+    const version: ReferenceVersion = { referenceId: id, versionId: freshLibraryId(taken), originalFilename: source.name, fileType: source.type || 'application/octet-stream', size: measured.size, sha256: measured.sha256, importedAt: new Date().toISOString(), ...(savedBy ? { savedBy } : {}) };
     if (existing) { existing.versions.push(version); Object.assign(existing, cleanMetadata(metadata)); }
     else library.push({ referenceId: id, ...cleanMetadata(metadata), versions: [version], projectVersionId: null, removed: false });
     validateLibrary(library, state.references?.library);
     options.onProgress?.({ phase: 'writing_objects', processedFiles: 0, totalFiles: 1, processedBytes: 0, totalBytes: measured.size, message: 'Copying and verifying the original reference attachment.' });
-    await writeAndVerifyObject(vault, uuid('reference-import'), measured.sha256, measured.size, async () => source.stream(), options.signal);
+    await writeAndVerifyObject(vault, newRecordId(), measured.sha256, measured.size, async () => source.stream(), options.signal);
     throwIfCancelled(options.signal);
-    await publishCatalog(vault, state, library, options.signal, [version]);
+    await publishCatalog(vault, state, library, options.signal, [version], options.newRecordId);
     return openExistingVault(vault);
   });
 }
@@ -315,12 +364,13 @@ export async function storeCaptureReferenceAttachments(vault: FileSystemDirector
   const library = structuredClone(state.references?.library ?? []);
   const explicit = structuredClone(review?.explicit ?? baselineReferenceInputs(state, scan.baselineRevisionId));
   const versions: ReferenceVersion[] = [];
+  const taken = libraryIds(library);
   for (const attachment of attachments) {
     throwIfCancelled(options.signal);
     const measured = await hashStream(attachment.source.stream(), { signal: options.signal });
     if (measured.size !== attachment.source.size) throw new Error('Reference file changed while saving. Choose it again.');
-    const referenceId = uuid('reference');
-    const version: ReferenceVersion = { referenceId, versionId: uuid('reference-version'), originalFilename: attachment.source.name, fileType: attachment.source.type || 'application/octet-stream', ...measured, importedAt: new Date().toISOString(), ...(options.savedBy ? { savedBy: { ...options.savedBy } } : {}) };
+    const referenceId = freshLibraryId(taken);
+    const version: ReferenceVersion = { referenceId, versionId: freshLibraryId(taken), originalFilename: attachment.source.name, fileType: attachment.source.type || 'application/octet-stream', ...measured, importedAt: new Date().toISOString(), ...(options.savedBy ? { savedBy: { ...options.savedBy } } : {}) };
     library.push({ referenceId, title: attachment.source.name, description: '', tags: [], versions: [version], projectVersionId: null, removed: false });
     versions.push(version);
     explicit.push({ referenceId, versionId: version.versionId, locator: '', explanation: attachment.explanation, ...(attachment.component ? { component: attachment.component } : {}) });
@@ -331,10 +381,10 @@ export async function storeCaptureReferenceAttachments(vault: FileSystemDirector
   prepareReferenceContext(proposed, scan, files, createReferenceReview(proposed, scan, explicit));
   for (const [index, version] of versions.entries()) {
     options.onProgress?.({ phase: 'writing_objects', currentFile: version.originalFilename, processedFiles: index, totalFiles: versions.length, processedBytes: 0, totalBytes: version.size, message: `Saving reference file ${version.originalFilename}…` });
-    await writeAndVerifyObject(vault, uuid('reference-import'), version.sha256, version.size, async () => attachments[index].source.stream(), options.signal);
+    await writeAndVerifyObject(vault, newRecordId(), version.sha256, version.size, async () => attachments[index].source.stream(), options.signal);
   }
   const { openExistingVault } = await import('./vault-service');
-  try { await publishCatalog(vault, state, library, options.signal, versions); }
+  try { await publishCatalog(vault, state, library, options.signal, versions, options.newRecordId); }
   catch (error) {
     // A completed directory can be durable even if the filesystem loses its
     // acknowledgement. Reconcile only this exact batch, never a partial import.
