@@ -95,7 +95,7 @@ test("cancelled home folder selection shows one red warning and leaves the welco
   const alert = ui.getByRole("alert");
   assert.equal(ui.getAllByRole("alert").length, 1);
   assert.ok(alert.classList.contains("error"));
-  assert.equal(alert.textContent, "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.");
+  assert.equal(alert.textContent, "Folder selection was cancelled. Choose an empty dedicated folder, suggested name Cadtree, to create your Cadtree home.");
   assert.ok(alert.closest(".app-status-feedback"));
   assert.equal(ui.queryByRole("dialog"), null);
   assert.equal((ui.getByRole("button", { name: "Start my Cadtree home" }) as HTMLButtonElement).disabled, false);
@@ -117,7 +117,7 @@ test("rejecting a populated new-home folder shows one warning and retry clears i
   await waitFor(() => assert.equal(ui.getAllByRole("alert").length, 1));
   await idle(ui);
   assert.equal(ui.getAllByRole("alert").length, 1);
-  assert.match(ui.getByRole("alert").textContent!, /Choose an empty dedicated folder/);
+  assert.equal(ui.getByRole("alert").textContent, "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.");
   assert.equal(ui.getAllByText(/Choose an empty dedicated folder/).length, 1);
   assert.equal(await occupied.readFileText(["Keep.SLDPRT"]), "unchanged CAD bytes");
   assert.equal((await occupied.listEntries()).length, 1);
