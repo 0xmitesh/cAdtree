@@ -15,7 +15,7 @@ import { changeCaseLifecycle } from './case-lifecycle-service';
 import { createKnowledgeRecord } from '../knowledge/records';
 import {
   BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, INTERNAL_PATH_TEMPLATES, MAX_NAME_BYTES, PROJECT_NAME_ALLOWANCE,
-  WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, deepestNewRecordsTemplate, newRecordsReserve, internalReserve, internalReserveLabel,
+  WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, internalReserve, internalReserveLabel,
   matchInternalPath, projectWorstCase, shapePattern,
 } from './path-budget';
 
@@ -55,12 +55,17 @@ test('projectWorstCase for the example project path', () => {
   // A very long CAD path: the recovery-copy prefix (54) is larger than working/<32>/ (42): 70 + 54 + 200 + 7 = 331.
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 54 + 200 + 7);
   // A short one is dominated by the internal reserve.
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 100 }), 70 + 1 + reserve);
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 40 }), 70 + 1 + reserve);
   // The case allowance is configurable, but never below 4 ("main").
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 10 }), 70 + 54 + 250 + 7);
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 0 }), 70 + 54 + 250 + 7);
   // Classification of the results.
-  assert.equal(classifyPathLength(projectWorstCase({ projectPath: 'C:\\Cad\\Rigs\\projects\\Gripper' })), 'warn');
+  assert.equal(classifyPathLength(projectWorstCase({ projectPath: EXAMPLE })), 'ok');
+  assert.equal(classifyPathLength(projectWorstCase({ projectPath: 95 })), 'warn');
+  // Exact boundaries: projectPath + 1 + internalReserve() (110) is 111 more than the project path.
+  const at = (projectPath: number) => projectWorstCase({ projectPath });
+  assert.deepEqual([88, 89, 129, 130].map(at), [199, 200, 240, 241]);
+  assert.deepEqual([88, 89, 129, 130].map((n) => classifyPathLength(at(n))), ['ok', 'warn', 'warn', 'block']);
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 })), 'block');
 });
 
@@ -222,22 +227,19 @@ test('drift: every path written by a full workflow is covered by a template and 
 
   const unmatched: string[] = [];
   const used = new Set<string>();
-  const reserve = newRecordsReserve();
+  const reserve = internalReserve();
   const tooLong: string[] = [];
-  const legacyHit: string[] = [];
   for (const [kind, list] of [['file', internalFiles], ['dir', internalDirs]] as const) {
     for (const path of list) {
       const label = matchInternalPath(path, kind);
       if (!label) unmatched.push(`${kind}: ${path}`);
       else used.add(label);
-      if (label && (label.includes('(legacy') || /\{(apply|recovery)\}/.test(label))) legacyHit.push(`${kind}: ${path} -> ${label}`);
       const length = path.length + (kind === 'file' ? CRSWAP_CHARS : 0);
       if (length > reserve) tooLong.push(`${length} > ${reserve}: ${path}`);
     }
   }
   assert.deepEqual(unmatched, [], 'a path was written that no INTERNAL_PATH_TEMPLATES entry covers; add a template');
-  assert.deepEqual(tooLong, [], 'a path is longer than newRecordsReserve()');
-  assert.deepEqual(legacyHit, [], 'new code must not write legacy-shaped paths');
+  assert.deepEqual(tooLong, [], 'a path is longer than internalReserve()');
 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
@@ -252,12 +254,8 @@ test('internalReserve equals the deepest template and today\'s value is reported
   assert.equal(internalReserve(), deepest.reserveLength);
   assert.equal(internalReserveLabel(), deepest.label);
   for (const t of INTERNAL_PATH_TEMPLATES) assert.ok(t.reserveLength <= internalReserve(), t.label);
-  assert.equal(deepest.label, 'application unexpected-recovery copy (legacy)');
-  assert.ok(INTERNAL_PATH_TEMPLATES.some((t) => t.legacy) && INTERNAL_PATH_TEMPLATES.some((t) => !t.legacy));
-  const fresh = INTERNAL_PATH_TEMPLATES.filter((t) => !t.legacy);
-  assert.equal(newRecordsReserve(), Math.max(...fresh.map((t) => t.reserveLength)));
-  assert.ok(newRecordsReserve() <= internalReserve());
-  console.log(`path-budget: newRecordsReserve() = ${newRecordsReserve()} (${deepestNewRecordsTemplate().label})`);
+  assert.equal(deepest.label, 'application unexpected-recovery copy');
+  assert.ok(INTERNAL_PATH_TEMPLATES.every((t) => !/legacy/i.test(t.label)));
   console.log(`path-budget: internalReserve() = ${internalReserve()} (${internalReserveLabel()})`);
 });
 
@@ -276,6 +274,6 @@ test('staging session folder is 22 chars, deterministic and collision-free over 
   const staged = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'vault staged object')!;
   assert.equal(staged.reserveLength, 91);
   const marker = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'knowledge publication marker')!;
-  assert.equal(marker.reserveLength, 142);
-  assert.equal(newRecordsReserve(), 142);
+  assert.equal(marker.relativeLength, 97);
+  assert.equal(marker.reserveLength, 97);
 });

@@ -1,3 +1,4 @@
+import { isRecordId } from '../../engine/ids';
 import type { JsonObject } from './types';
 
 export function object(value: unknown): value is JsonObject {
@@ -12,7 +13,7 @@ export function shape(value: unknown, required: string[], optional: string[] = [
 
 export const nonblank = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0 && !value.includes('\0');
 export const checksum = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-export const recordIdIsValid = (value: unknown): value is string => typeof value === 'string' && /^knowledge-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
+export const recordIdIsValid = (value: unknown): value is string => isRecordId(value);
 
 /** Sorted object keys, original strings/array order/numeric values, finite JSON only.
  * Reject lossy JS values rather than silently dropping fields or invoking toJSON/getters. */

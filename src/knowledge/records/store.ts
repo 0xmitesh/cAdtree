@@ -1,6 +1,9 @@
 import type { FileSystemDirectoryAdapter, DirectoryEntryInfo } from '../../engine/fs-adapter';
 import type { VaultState } from '../../engine/types';
 import { hashBytes, hashString } from '../../engine/hash';
+import { FileConflictError } from '../../engine/fs-adapter';
+import { newRecordId } from '../../engine/ids';
+import { compactHex, expandHex } from '../../engine/path-encoding';
 import { withProjectWriterLock } from '../../engine/locks';
 import { bodyChecksum, UnsupportedKnowledgeFormatError, validateEnvelope } from './envelope';
 import { canonicalJson, object, recordIdIsValid, shape } from './json';
@@ -9,9 +12,12 @@ import { resolveRelationships } from './relationships';
 import type { CreateKnowledgeRecordInput, KnowledgeRecordDiagnostic, PersistedKnowledgeEvidence, PublishedKnowledgeRecord, UniversalKnowledgeRecord } from './types';
 
 const ROOT = 'knowledge';
-const idPattern = 'knowledge-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
+/** Record IDs are the short ids.ts format (`YYYYMMDD-HHMMSS-xxxxxx`); nothing else is accepted. */
+const idPattern = '\\d{8}-\\d{6}-[0-9a-z]{6}';
+/** Bounded redraws when a freshly drawn record ID is already taken. */
+const MAX_RECORD_ID_ATTEMPTS = 10;
 const filePattern = new RegExp(`^(${idPattern})\\.json$`);
-const markerPattern = new RegExp(`^(${idPattern})\\.([a-f0-9]{64})\\.done$`);
+const markerPattern = new RegExp(`^(${idPattern})\\.([A-Za-z0-9_-]{43})\\.done$`);
 const prefixPattern = new RegExp(`^(${idPattern})(?=\\.|$)`);
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -23,7 +29,7 @@ export function knowledgeRecordPath(recordId: string): string[] {
 }
 
 export function knowledgePublicationPath(recordId: string, sha256: string): string[] {
-  return [ROOT, 'completed', `${recordId}.${sha256}.done`];
+  return [ROOT, 'completed', `${recordId}.${compactHex(sha256)}.done`];
 }
 
 function header(value: unknown): Pick<KnowledgeRecordDiagnostic, 'recordType' | 'schemaVersion' | 'formatVersion'> {
@@ -101,7 +107,9 @@ export async function reconstructKnowledgeRecords(
         if (!marker || group.markers[0].kind !== 'directory') throw new Error('Invalid knowledge publication marker.');
         if ((await (await vault.getDirectory(publicationPath!.split('/'))).listEntries()).length) throw new Error('Knowledge publication marker is not empty.');
         const recordSha256 = hashBytes(bytes);
-        if (recordSha256 !== marker[2]) throw new Error('Knowledge record bytes do not match the published SHA-256.');
+        let markerSha256: string;
+        try { markerSha256 = expandHex(marker[2]); } catch { throw new Error('Invalid knowledge publication marker checksum encoding.'); }
+        if (recordSha256 !== markerSha256) throw new Error('Knowledge record bytes do not match the published SHA-256.');
         validateEnvelope(parsed, registry);
         if (canonicalJson(parsed) !== raw) throw new Error('Knowledge record is not canonically serialized.');
         if (parsed.recordId !== id || parsed.projectId !== state.project.projectId) throw new Error('Knowledge record identity or project binding mismatch.');
@@ -158,6 +166,8 @@ export class KnowledgePublicationError extends Error {
 /** Create-only append. The actual recording timestamp is assigned here, never copied from a revision. */
 export async function createKnowledgeRecord(
   vault: FileSystemDirectoryAdapter, input: CreateKnowledgeRecordInput, registry: KnowledgeSchemaRegistry = defaultKnowledgeSchemas,
+  /** Test seam: supplies each candidate record ID when the caller gave none. Defaults to newRecordId(). */
+  newId: () => string = newRecordId,
 ): Promise<PublishedKnowledgeRecord> {
   const snapshot: CreateKnowledgeRecordInput = JSON.parse(canonicalJson(input));
   if (!shape(snapshot, ['projectId', 'recordType', 'schemaVersion', 'payload', 'relationships', 'provenance'], ['recordId', 'author'])) throw new Error('Invalid knowledge creation input.');
@@ -167,23 +177,45 @@ export async function createKnowledgeRecord(
     const state = await openExistingVault(vault, { knowledgeSchemas: registry });
     if (state.project.projectId !== snapshot.projectId) throw new Error('Knowledge owner does not match this vault project.');
     if (state.knowledge?.status === 'unavailable') throw new Error('Knowledge storage cannot be inspected safely.');
-    const id = snapshot.recordId ?? `knowledge-${crypto.randomUUID()}`;
-    const path = knowledgeRecordPath(id);
-    if (state.knowledge?.records.some(r => r.record.recordId === id) || state.knowledge?.diagnostics.some(d => d.recordId === id)) throw new Error('Knowledge record identity already exists or is reserved by an incomplete publication.');
     const accepted = new Map((state.knowledge?.records ?? []).map(r => [r.record.recordId, r]));
-    const body: Omit<UniversalKnowledgeRecord, 'integrity'> = {
-      formatVersion: 1, recordId: id, recordType: snapshot.recordType, schemaVersion: snapshot.schemaVersion,
-      projectId: snapshot.projectId, createdAt: new Date().toISOString(),
-      ...(Object.hasOwn(snapshot, 'author') ? { author: snapshot.author } : {}), payload: snapshot.payload,
-      relationships: resolveRelationships(snapshot.relationships, state, accepted, id), provenance: snapshot.provenance,
+    const taken = (candidate: string) => state.knowledge?.records.some(r => r.record.recordId === candidate) || state.knowledge?.diagnostics.some(d => d.recordId === candidate);
+    const build = (id: string) => {
+      const body: Omit<UniversalKnowledgeRecord, 'integrity'> = {
+        formatVersion: 1, recordId: id, recordType: snapshot.recordType, schemaVersion: snapshot.schemaVersion,
+        projectId: snapshot.projectId, createdAt: new Date().toISOString(),
+        ...(Object.hasOwn(snapshot, 'author') ? { author: snapshot.author } : {}), payload: snapshot.payload,
+        relationships: resolveRelationships(snapshot.relationships, state, accepted, id), provenance: snapshot.provenance,
+      };
+      const record: UniversalKnowledgeRecord = { ...body, integrity: { algorithm: 'sha256', bodySha256: bodyChecksum(body), publication: 'directory-marker-v1' } };
+      validateEnvelope(record, registry);
+      const raw = canonicalJson(record);
+      return { id, record, raw, sha256: hashString(raw), path: knowledgeRecordPath(id) };
     };
-    const record: UniversalKnowledgeRecord = { ...body, integrity: { algorithm: 'sha256', bodySha256: bodyChecksum(body), publication: 'directory-marker-v1' } };
-    validateEnvelope(record, registry);
-    const raw = canonicalJson(record), sha256 = hashString(raw);
+    // A caller-supplied ID is never replaced. A generated ID that is already taken (known, or an
+    // exclusive-create clash on the record file, the first write) is redrawn before anything else is written.
+    let built: ReturnType<typeof build> | undefined;
+    let written = false;
+    for (let attempt = 1; !built; attempt++) {
+      const id = snapshot.recordId ?? newId();
+      if (!recordIdIsValid(id)) throw new Error('Invalid permanent knowledge record ID.');
+      if (taken(id)) {
+        if (snapshot.recordId !== undefined) throw new Error('Knowledge record identity already exists or is reserved by an incomplete publication.');
+      } else {
+        const candidate = build(id);
+        if (snapshot.recordId !== undefined) { built = candidate; break; }
+        try { await vault.writeFileText(candidate.path, candidate.raw, { exclusive: true }); built = candidate; written = true; }
+        catch (error) {
+          if (!(error instanceof FileConflictError)) throw new KnowledgePublicationError(`Knowledge publication failed: ${errorText(error)} Reopen the vault to inspect this identity; never overwrite it.`, id, candidate.path.join('/'), false);
+        }
+      }
+      if (!built && attempt >= MAX_RECORD_ID_ATTEMPTS) throw new Error(`No free knowledge record ID after ${MAX_RECORD_ID_ATTEMPTS} attempts. Nothing was written. Try again.`);
+    }
+    const { id, record, raw, sha256, path } = built;
+    const alreadyWritten = written;
     const publication = knowledgePublicationPath(id, sha256);
     let publicationMayExist = false;
     try {
-      await vault.writeFileText(path, raw, { exclusive: true });
+      if (!alreadyWritten) await vault.writeFileText(path, raw, { exclusive: true });
       // Re-read project/relationship evidence after the write and before final publication.
       const refreshed = await openExistingVault(vault, { knowledgeSchemas: registry });
       if (refreshed.project.projectId !== snapshot.projectId || refreshed.knowledge?.status === 'unavailable') throw new Error('Knowledge project or storage changed before publication.');

@@ -9,7 +9,7 @@ import { isRecordId, newRecordId } from './ids';
 import { compactHex } from './path-encoding';
 import { hashString } from './hash';
 import { writeAndVerifyObject } from './object-store';
-import { matchInternalPath, newRecordsReserve, CRSWAP_CHARS } from './path-budget';
+import { matchInternalPath, internalReserve, CRSWAP_CHARS } from './path-budget';
 import {
   importReferenceAttachment, retrieveReferenceAttachment, verifyReferenceLibraryContent, createReferenceReview, referenceChecksum,
   referenceEnrollmentRecordPath,  referenceCatalogPath, referenceCatalogMarkerPath,
@@ -210,10 +210,10 @@ test('a clashing enrollment ID (leftover attempt) draws a new ID and leaves the 
   assert.equal(state.references!.library.length, 1);
 });
 
-test('new-code reference paths fit newRecordsReserve() and hit no legacy template', async () => {
+test('new-code reference paths fit internalReserve() and hit no legacy template', async () => {
   const f = await fixture();
   await importReferenceAttachment(f.vault, f.projectId, file('One.txt', 'one'), meta('One'));
-  const reserve = newRecordsReserve();
+  const reserve = internalReserve();
   const checked: string[] = [];
   const walk = async (path: string[]) => {
     for (const e of await (await f.vault.getDirectory(path)).listEntries()) {
