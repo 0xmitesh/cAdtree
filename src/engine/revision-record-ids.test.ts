@@ -202,3 +202,22 @@ test('Knowledge Lab records can cite an old rev-<uuid> revision and a new record
   }
   assert.equal((await openExistingVault(p.vault)).knowledge!.records.length, 2);
 });
+
+test('a leftover OLD 43-char staging folder stays harmless and is reported; same-ID retry still clashes', async () => {
+  const p = await project();
+  const { getStagingSessionPathSegments } = await import('./object-store');
+  const { hashString } = await import('./hash');
+  const { compactHex } = await import('./path-encoding');
+  const oldName = compactHex(hashString('session-old-attempt'));
+  assert.equal(oldName.length, 43);
+  await p.vault.getDirectory(['staging', oldName], { create: true });
+  const state = await openExistingVault(p.vault);
+  assert.ok(state.incompleteAttempts.some((a) => a.kind === 'staging_artifact' && a.path === `staging/${oldName}`));
+  // Different IDs map to different folders; the same ID clashes on the exclusive claim.
+  const ids = ['20260101-000000-aaaaaa', '20260101-000000-aaaaab'];
+  assert.notDeepEqual(getStagingSessionPathSegments(`session-${ids[0]}`), getStagingSessionPathSegments(`session-${ids[1]}`));
+  await p.vault.getDirectory(getStagingSessionPathSegments(`session-${ids[0]}`), { create: true, exclusiveCreate: true });
+  await assert.rejects(p.vault.getDirectory(getStagingSessionPathSegments(`session-${ids[0]}`), { create: true, exclusiveCreate: true }));
+  await p.main.writeFileText(part, 'old-staging');
+  assert.ok(isRecordId(await save(p, 'old-staging', 'After old staging')));
+});

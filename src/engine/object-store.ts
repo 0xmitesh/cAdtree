@@ -10,8 +10,11 @@ export function getObjectPathSegments(sha256: string): string[] {
   return ['objects', prefix, `${sha256}.bin`];
 }
 
+/** First 22 characters of the compact session hash: 132 bits, collision risk negligible, same safe charset. */
+export const STAGING_SESSION_FOLDER_CHARS = 22;
+
 export function getStagingSessionPathSegments(sessionId: string): string[] {
-  return ['staging', compactHex(hashString(sessionId))];
+  return ['staging', compactHex(hashString(sessionId)).slice(0, STAGING_SESSION_FOLDER_CHARS)];
 }
 
 export function getStagingObjectPathSegments(sessionId: string, sha256: string): string[] {
