@@ -524,3 +524,249 @@ test("home paths cover adopted current, historical-branch and recovered files us
     /mapping is unavailable/,
   );
 });
+
+// The in-memory adapter has no move: recreate the tree under the new name, then remove the original.
+async function renameChild(
+  home: FileSystemDirectoryAdapter,
+  from: string,
+  to: string,
+) {
+  const target = await home.getDirectory([to], { create: true });
+  await copyVerifiedTree(await home.getDirectory([from]), target);
+  await home.removeEntry([from], { recursive: true });
+}
+async function homeWithProjectWorkspace(names: string[]) {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const created = [];
+  for (const name of names) {
+    const w = await createHomeWorkspace(home, name);
+    await importProject(w.workspace.root, await source(), `Part ${name}`);
+    created.push(w);
+  }
+  return { home, created };
+}
+const registrationBytes = async (home: FileSystemDirectoryAdapter) => {
+  const records = await home.getDirectory([".cadtree-home", "workspaces"]);
+  const out: Record<string, string> = {};
+  for (const f of await records.listEntries())
+    out[f.name] = await records.readFileText([f.name]);
+  return out;
+};
+
+test("a renamed workspace folder is found by its workspace id, read-only, and is not listed as unregistered", async () => {
+  const { home, created } = await homeWithProjectWorkspace(["Client ABC"]);
+  const id = created[0].workspace.identity.workspaceId;
+  const bytes = await registrationBytes(home);
+  await renameChild(home, "Client ABC", "Client ABC renamed");
+  const before = await snapshot(home);
+  const read = await openHome(home);
+  assert.equal(read.workspaces.length, 1);
+  const entry = read.workspaces[0];
+  assert.equal(entry.status, "ready");
+  assert.equal(entry.directory, "Client ABC renamed");
+  assert.equal(entry.recordedDirectory, "Client ABC");
+  assert.equal(entry.workspace?.identity.workspaceId, id);
+  assert.equal(entry.workspace?.projects.length, 1);
+  assert.ok(entry.workspace?.projects.every((p) => p.status === "ready"));
+  assert.ok(!read.workspaces.some((e) => e.key.startsWith("unregistered:")));
+  assert.deepEqual(await registrationBytes(home), bytes);
+  assert.equal(await snapshot(home), before);
+});
+
+test("after a workspace folder rename the old recorded name stays taken for new workspaces", async () => {
+  const { home } = await homeWithProjectWorkspace(["Client ABC"]);
+  await renameChild(home, "Client ABC", "Client ABC renamed");
+  const next = await createHomeWorkspace(home, "Client ABC");
+  assert.equal(next.directory, "Client ABC (2)");
+  const read = await openHome(home);
+  assert.equal(read.workspaces.length, 2);
+  assert.ok(read.workspaces.every((e) => e.status === "ready"));
+  assert.deepEqual(read.workspaces.map((e) => e.directory).sort(), [
+    "Client ABC (2)",
+    "Client ABC renamed",
+  ]);
+  assert.equal(new Set(read.workspaces.map((e) => e.workspaceId)).size, 2);
+});
+
+test("swapped workspace folders resolve to the correct folders by id", async () => {
+  const { home, created } = await homeWithProjectWorkspace(["A", "B"]);
+  const [a, b] = created;
+  await renameChild(home, "A", "tmp");
+  await renameChild(home, "B", "A");
+  await renameChild(home, "tmp", "B");
+  const bytes = await registrationBytes(home);
+  const read = await openHome(home);
+  assert.equal(read.workspaces.length, 2);
+  assert.ok(read.workspaces.every((e) => e.status === "ready"));
+  const byId = (id: string) =>
+    read.workspaces.find((e) => e.workspaceId === id)!;
+  assert.equal(byId(a.workspace.identity.workspaceId).directory, "B");
+  assert.equal(byId(b.workspace.identity.workspaceId).directory, "A");
+  assert.deepEqual(await registrationBytes(home), bytes);
+});
+
+test("two copies of a workspace with the recorded folder missing are damaged and no folder is chosen", async () => {
+  const { home, created } = await homeWithProjectWorkspace(["Client ABC"]);
+  await renameChild(home, "Client ABC", "Copy one");
+  await copyVerifiedTree(
+    await home.getDirectory(["Copy one"]),
+    await home.getDirectory(["Copy two"], { create: true }),
+  );
+  const before = await snapshot(home);
+  const read = await openHome(home);
+  const entry = read.workspaces.find(
+    (e) => e.workspaceId === created[0].workspace.identity.workspaceId,
+  )!;
+  assert.equal(entry.status, "damaged");
+  assert.equal(entry.workspace, undefined);
+  assert.equal(entry.directory, "Client ABC");
+  assert.ok(
+    entry.issues.some(
+      (i) =>
+        i.includes("more than one folder") &&
+        i.includes("Copy one") &&
+        i.includes("Copy two"),
+    ),
+  );
+  assert.equal(await snapshot(home), before);
+});
+
+test("a missing workspace folder with no identity match stays damaged", async () => {
+  const { home } = await homeWithProjectWorkspace(["Client ABC"]);
+  await home.removeEntry(["Client ABC"], { recursive: true });
+  const read = await openHome(home);
+  assert.equal(read.workspaces.length, 1);
+  assert.equal(read.workspaces[0].status, "damaged");
+  assert.equal(read.workspaces[0].workspace, undefined);
+  assert.equal(read.workspaces[0].directory, "Client ABC");
+});
+
+test("home paths for a project in a renamed workspace use the new folder name", async () => {
+  const { home, created } = await homeWithProjectWorkspace(["Client ABC"]);
+  const w = created[0];
+  const p = (await openWorkspace(w.workspace.root)).projects[0].project!;
+  await renameChild(home, "Client ABC", "Client ABC renamed");
+  const state = await openHome(home);
+  const entry = state.workspaces[0];
+  const root = entry.workspace!.root;
+  const location = await resolveHomeFilePath(
+    state,
+    entry,
+    await resolveWorkingFilePath(
+      root,
+      w.workspace.identity.workspaceId,
+      p.record.containerPath,
+      "branch-main",
+      "Parts/Pärt.SLDPRT",
+    ),
+  );
+  assert.ok(location.relativeDirectory.startsWith("Client ABC renamed/"));
+});
+
+test("a recorded folder that still carries the workspace id but fails to open is never replaced by a backup copy", async () => {
+  const { home, created } = await homeWithProjectWorkspace(["Client ABC"]);
+  await copyVerifiedTree(
+    created[0].workspace.root,
+    await home.getDirectory(["Client ABC backup"], { create: true }),
+  );
+  // Valid .cadtree-workspace.json, but openWorkspace cannot read the projects folder.
+  await home.removeEntry(["Client ABC", "projects"], { recursive: true });
+  const before = await snapshot(home);
+  const read = await openHome(home);
+  const entry = read.workspaces.find(
+    (e) => e.workspaceId === created[0].workspace.identity.workspaceId,
+  )!;
+  assert.equal(entry.status, "damaged");
+  assert.equal(entry.workspace, undefined);
+  assert.equal(entry.directory, "Client ABC");
+  assert.ok(entry.issues.length > 0);
+  assert.ok(!entry.issues.some((i) => i.includes("more than one folder")));
+  assert.equal(await snapshot(home), before);
+});
+
+test("a recorded folder with an unreadable workspace file falls back to the single folder carrying the id", async () => {
+  // Chosen behaviour: without a readable .cadtree-workspace.json the recorded folder holds no identity, so it counts as missing.
+  const { home, created } = await homeWithProjectWorkspace(["Client ABC"]);
+  await copyVerifiedTree(
+    created[0].workspace.root,
+    await home.getDirectory(["Client ABC backup"], { create: true }),
+  );
+  await home.writeFileText(["Client ABC", ".cadtree-workspace.json"], "{garbled");
+  const read = await openHome(home);
+  const entry = read.workspaces.find(
+    (e) => e.workspaceId === created[0].workspace.identity.workspaceId,
+  )!;
+  assert.equal(entry.status, "ready");
+  assert.equal(entry.directory, "Client ABC backup");
+  assert.equal(entry.recordedDirectory, "Client ABC");
+});
+
+test("a case-only workspace folder rename is found by id", async () => {
+  const { home } = await homeWithProjectWorkspace(["client abc"]);
+  await renameChild(home, "client abc", "Client ABC");
+  const read = await openHome(home);
+  assert.equal(read.workspaces.length, 1);
+  assert.equal(read.workspaces[0].status, "ready");
+  assert.equal(read.workspaces[0].directory, "Client ABC");
+  assert.equal(read.workspaces[0].recordedDirectory, "client abc");
+});
+
+test("an incomplete registration keeps its recorded name taken and its folder is never bound to another registration", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  home.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.includes("Retry me")) throw new Error("Disk write failed");
+    },
+  });
+  await assert.rejects(createHomeWorkspace(home, "Retry me"));
+  home.setHooks({ onBeforeWrite: undefined });
+  if (await home.hasDirectory(["Retry me"]))
+    await home.removeEntry(["Retry me"], { recursive: true });
+  const a = await createHomeWorkspace(home, "A");
+  await renameChild(home, "A", "Retry me");
+  const read = await openHome(home);
+  const incomplete = read.workspaces.find((e) => e.status === "incomplete")!;
+  assert.equal(incomplete.directory, "Retry me");
+  const entryA = read.workspaces.find(
+    (e) => e.workspaceId === a.workspace.identity.workspaceId,
+  )!;
+  assert.equal(entryA.status, "damaged");
+  assert.equal(entryA.workspace, undefined);
+  assert.equal(entryA.directory, "A");
+  assert.equal(
+    (await createHomeWorkspace(home, "Retry me")).directory,
+    "Retry me (2)",
+  );
+});
+
+test("two ready registrations with the same workspace id are both duplicates and nothing is bound", async () => {
+  const { home } = await homeWithProjectWorkspace(["Client ABC"]);
+  const records = await home.getDirectory([".cadtree-home", "workspaces"]);
+  const file = (await records.listEntries()).find(
+    (f) => !f.name.endsWith(".ready.json"),
+  )!.name;
+  const record = JSON.parse(await records.readFileText([file]));
+  record.registrationId = "second";
+  record.directory = "Elsewhere";
+  delete record.payloadSha256;
+  record.payloadSha256 = managementChecksum(record);
+  const text = JSON.stringify(record);
+  await records.writeFileText(["second.json"], text);
+  const marker = {
+    schemaVersion: 1,
+    registrationId: "second",
+    recordSha256: hashString(text),
+  };
+  await records.writeFileText(
+    ["second.ready.json"],
+    JSON.stringify({ ...marker, payloadSha256: managementChecksum(marker) }),
+  );
+  const before = await snapshot(home);
+  const read = await openHome(home);
+  assert.equal(read.workspaces.length, 2);
+  assert.ok(read.workspaces.every((e) => e.status === "duplicate"));
+  assert.ok(read.workspaces.every((e) => !e.workspace));
+  assert.equal(await snapshot(home), before);
+});

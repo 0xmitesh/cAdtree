@@ -51,6 +51,8 @@ export interface HomeWorkspaceEntry {
   key: string;
   name: string;
   directory?: string;
+  /** Directory written in the registration; differs from `directory` when the folder was renamed. */
+  recordedDirectory?: string;
   workspaceId?: string;
   status: "ready" | "damaged" | "incomplete" | "duplicate";
   issues: string[];
@@ -157,6 +159,8 @@ export async function openHome(
   const workspaces: HomeWorkspaceEntry[] = [];
   const records = await root.getDirectory(RECORDS, { create: false });
   const reserved = new Set<string>();
+  const recordedIds = new Map<string, string[]>();
+  const pending: { entry: HomeWorkspaceEntry; r: HomeWorkspaceRecord }[] = [];
   for (const file of await records.listEntries()) {
     if (
       file.kind !== "file" ||
@@ -202,9 +206,14 @@ export async function openHome(
       Object.assign(entry, {
         name: r.name,
         directory: r.directory,
+        recordedDirectory: r.directory,
         workspaceId: r.workspaceId,
       });
       reserved.add(r.directory.toLowerCase());
+      recordedIds.set(r.directory.toLowerCase(), [
+        ...(recordedIds.get(r.directory.toLowerCase()) ?? []),
+        r.workspaceId,
+      ]);
       if (!(await records.hasFile([`${r.registrationId}.ready.json`]))) {
         entry.status = "incomplete";
         throw new Error(
@@ -226,12 +235,58 @@ export async function openHome(
         throw new Error(
           "Workspace publication does not match its registration.",
         );
-      const workspace = await resolveHomeWorkspace(
-        root,
-        home.homeId,
-        r.workspaceId,
-        r.directory,
-      );
+      pending.push({ entry, r });
+    } catch (error) {
+      entry.issues.push(error instanceof Error ? error.message : String(error));
+    }
+    workspaces.push(entry);
+  }
+  // Second pass: all recorded directories are known, so a renamed folder can be found by identity.
+  let folderIds: Map<string, string[]> | undefined;
+  for (const { entry, r } of pending) {
+    try {
+      let workspace: WorkspaceState;
+      try {
+        workspace = await resolveHomeWorkspace(
+          root,
+          home.homeId,
+          r.workspaceId,
+          r.directory,
+        );
+      } catch (error) {
+        folderIds ??= await workspaceFolderIds(root);
+        // Fall back only when the recorded folder is missing, unreadable as a workspace, or holds another identity.
+        // A recorded folder that still carries this identity but fails to open keeps its error; a copy is never bound instead.
+        if (
+          (folderIds.get(r.workspaceId) ?? []).some(
+            (name) => name === r.directory,
+          )
+        )
+          throw error;
+        const matches = (folderIds.get(r.workspaceId) ?? []).filter((name) => {
+          const lower = name.toLowerCase();
+          // Names are compared exactly, so a case-only rename still binds by id. A folder recorded by another registration is only claimable when that registration's own workspace lives elsewhere (a swap).
+          return (
+            name !== r.directory &&
+            (recordedIds.get(lower) ?? []).every(
+              (id) => id === r.workspaceId || folderIds!.has(id),
+            )
+          );
+        });
+        if (!matches.length) throw error;
+        if (matches.length > 1)
+          throw new Error(
+            `Workspace folder not found at "${r.directory}"; it was found in more than one folder (${matches.join(", ")}). No folder was chosen.`,
+          );
+        workspace = await resolveHomeWorkspace(
+          root,
+          home.homeId,
+          r.workspaceId,
+          matches[0],
+        );
+        entry.directory = matches[0];
+        reserved.add(matches[0].toLowerCase());
+      }
       entry.workspace = workspace;
       entry.status = workspace.projects.every((p) => p.status === "ready")
         ? "ready"
@@ -243,7 +298,6 @@ export async function openHome(
     } catch (error) {
       entry.issues.push(error instanceof Error ? error.message : String(error));
     }
-    workspaces.push(entry);
   }
   // Retain identifiable orphan destinations even if a registration was damaged or interrupted.
   for (const child of await root.listEntries()) {
@@ -290,6 +344,25 @@ export async function openHome(
   if ((await identity(root)).homeId !== home.homeId)
     throw new Error("Cadtree home identity changed during discovery.");
   return { root, identity: home, workspaces };
+}
+/** Read-only map of workspace identity to the child folders whose metadata carries it. */
+async function workspaceFolderIds(root: FileSystemDirectoryAdapter) {
+  const found = new Map<string, string[]>();
+  for (const child of await root.listEntries()) {
+    if (child.kind !== "directory" || child.name.startsWith(".")) continue;
+    try {
+      const dir = await root.getDirectory([child.name], { create: false });
+      const value: unknown = JSON.parse(
+        await dir.readFileText([".cadtree-workspace.json"]),
+      );
+      const id = (value as { workspaceId?: unknown } | null)?.workspaceId;
+      if (typeof id === "string")
+        found.set(id, [...(found.get(id) ?? []), child.name].sort());
+    } catch {
+      /* not a readable workspace folder */
+    }
+  }
+  return found;
 }
 export async function resolveHomeWorkspace(
   root: FileSystemDirectoryAdapter,
@@ -361,7 +434,7 @@ async function register(
       const registrationId = `registration-${crypto.randomUUID()}`;
       const directory = await pickFreeName(root, folderNameFor(name, "Workspace"), {
         extraTaken: home.workspaces.flatMap((e) =>
-          e.directory ? [e.directory] : [],
+          [e.directory, e.recordedDirectory].filter((d): d is string => !!d),
         ),
       });
       const record = seal({
