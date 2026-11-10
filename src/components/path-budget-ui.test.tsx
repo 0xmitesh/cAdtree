@@ -306,3 +306,22 @@ test("project dialog: hint and disabled submit from the workspace address; with 
   const root = (await openHome(sample.home)).workspaces[0].workspace!.root;
   assert.equal((await openWorkspace(root)).projects.length, 1);
 });
+
+test("a second prompt replaces a pending one: the first action is cancelled, one dialog remains, nothing is written", async () => {
+  const { sample, ui } = await openSampleProject();
+  const before = await caseCount(sample);
+  await forgetAddresses(ui);
+  fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this revision" })[0]!);
+  const dialog = within(await ui.findByRole("dialog", { name: "Create design case" }));
+  fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: "Twice" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason" }), { target: { value: "Overwrite" } });
+  const create = dialog.getByRole("button", { name: "Create design case" });
+  fireEvent.click(create);
+  await ui.findByRole("dialog", { name: "Add your Cadtree home address" });
+  fireEvent.click(create);
+  await waitFor(() => assert.ok(body().includes("Nothing was created.")));
+  assert.equal(ui.getAllByRole("dialog", { name: "Add your Cadtree home address" }).length, 1);
+  fireEvent.click(within(ui.getByRole("dialog", { name: "Add your Cadtree home address" })).getByRole("button", { name: "Cancel" }));
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog", { name: "Add your Cadtree home address" })));
+  assert.equal(await caseCount(sample), before);
+});

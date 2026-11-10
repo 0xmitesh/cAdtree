@@ -5,10 +5,11 @@ import {
   pathBudgetBlockMessage,
   pathBudgetBlockSentence,
   pathBudgetWarnSentence,
+  presentPathBudgetError,
   projectNameHint,
   workspaceNameHint,
 } from "../utils/path-budget-message";
-import { workspaceWorstPath, joinAddress } from "../engine/path-budget";
+import { workspaceWorstPath, joinAddress, PathBudgetError } from "../engine/path-budget";
 
 const win = { requiredLength: 247, excess: 7, worstPath: "C:\\Cadtree\\Client\\projects\\X\\.cadtree\\ready.json.crswap", shorten: "project" as const };
 
@@ -94,4 +95,18 @@ test("project and case hints use their own worst cases", () => {
   const c = caseNameHint(ws + "\\projects\\Gripper" + "y".repeat(190), "Lighter collar", source)!;
   assert.equal(c.block?.shorten, "case");
   assert.ok(c.block!.worstPath.endsWith("Parts\\Collar.SLDPRT.crswap") || c.block!.worstPath.includes("Lighter collar"));
+});
+
+test("block sentence says 'by 1 character' for an excess of one", () => {
+  assert.match(pathBudgetBlockSentence({ ...win, requiredLength: 241, excess: 1 }), /name by 1 character, or move/);
+});
+
+test("presentPathBudgetError keeps the PathBudgetError as cause and passes other errors through", () => {
+  const original = new PathBudgetError(243, "C:\\Cadtree\\W\\x", "workspace", "W");
+  const shown = presentPathBudgetError(original) as Error;
+  assert.ok(!(shown instanceof PathBudgetError));
+  assert.equal(shown.cause, original);
+  assert.match(shown.message, /Shorten the workspace name by 3 characters/);
+  const plain = new Error("other");
+  assert.equal(presentPathBudgetError(plain), plain);
 });

@@ -33,8 +33,7 @@ import {
   resolveWorkingFilePath,
   resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
-import { PathBudgetError } from "./engine/path-budget";
-import { pathBudgetBlockMessage, pathBudgetWarnSentence } from "./utils/path-budget-message";
+import { presentPathBudgetError, pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
   FolderAddressDialog,
   rememberFolderAddress,
@@ -403,8 +402,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     } catch (error) {
       error = folderPermissionError(error);
       // Over the path limit: the same wording in the banner and in any dialog that shows the rethrown error.
-      if (error instanceof PathBudgetError)
-        error = new Error(pathBudgetBlockMessage(error), { cause: error });
+      error = presentPathBudgetError(error);
       if (current())
         setStatusBanner({
           type:
@@ -1252,6 +1250,20 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   }, [home, homeAddress, workspace]);
   // Required prompt: a home with no saved address is asked once before the next create/import.
   const [addressPrompt, setAddressPrompt] = useState<{ resolve: (saved: boolean) => void } | null>(null);
+  const addressPromptRef = useRef<{ resolve: (saved: boolean) => void } | null>(null);
+  const settleAddressPrompt = (saved: boolean) => {
+    const pending = addressPromptRef.current;
+    addressPromptRef.current = null;
+    setAddressPrompt(null);
+    pending?.resolve(saved);
+  };
+  // Home changed, signed out or unmounted: a pending prompt is cancelled and nothing is written.
+  const settlePromptRef = useRef(settleAddressPrompt);
+  settlePromptRef.current = settleAddressPrompt;
+  useEffect(() => {
+    settlePromptRef.current(false);
+  }, [home?.identity.homeId]);
+  useEffect(() => () => settlePromptRef.current(false), []);
   const ensureHomeAddress = async (scope: "home" | "workspace") => {
     if (!home || budgetHomeAddress()) return;
     // A workspace that is not directly under the home cannot be measured, so it never prompts.
@@ -1260,7 +1272,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       const relative = await home.root.resolveRelativePath(workspace.root);
       if (!relative || relative.length !== 1) return;
     }
-    const saved = await new Promise<boolean>((resolve) => setAddressPrompt({ resolve }));
+    // A newer prompt replaces an older one: settle the old one as cancelled so nothing hangs.
+    settleAddressPrompt(false);
+    const saved = await new Promise<boolean>((resolve) => {
+      const entry = { resolve };
+      addressPromptRef.current = entry;
+      setAddressPrompt(entry);
+    });
     if (!saved)
       throw new Error("Nothing was created. cAdtree needs your Cadtree home address to keep paths within Windows' limit.");
   };
@@ -1276,9 +1294,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setBannerScope("workspace");
       setStatusBanner({ type: "info", message: warning });
     }
-    const { resolve } = addressPrompt;
-    setAddressPrompt(null);
-    resolve(true);
+    settleAddressPrompt(true);
   };
   const addManagedProject = async (
     name: string,
@@ -2681,9 +2697,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               intro="cAdtree needs the full address to keep paths within Windows' limit; the browser can't read it."
               onSave={saveHomeAddressFromPrompt}
               onCancel={() => {
-                const { resolve } = addressPrompt;
-                setAddressPrompt(null);
-                resolve(false);
+                settleAddressPrompt(false);
               }}
             />
           ) : null}

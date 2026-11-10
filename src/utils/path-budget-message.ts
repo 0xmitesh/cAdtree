@@ -12,6 +12,7 @@ import {
   longestOf,
   projectWorstPath,
   workspaceWorstPath,
+  PathBudgetError,
   type PathBudgetReport,
   type PathBudgetShorten,
 } from "../engine/path-budget";
@@ -41,7 +42,7 @@ export function pathBudgetBlockSentence(block: PathBudgetBlock): string {
   const example = posix ? "/Users/<you>/Cadtree" : "C:\\Cadtree";
   return (
     `This location would need a ${block.requiredLength}-character path; the limit is ${BLOCK_PATH_CHARS}. ` +
-    `Shorten the ${SHORTEN_LABEL[block.shorten]} name by ${block.excess} characters, ` +
+    `Shorten the ${SHORTEN_LABEL[block.shorten]} name by ${block.excess} ${block.excess === 1 ? "character" : "characters"}, ` +
     `or move your Cadtree home closer to the drive (e.g. ${example}).` +
     (posix ? " Windows can't open longer paths." : "")
   );
@@ -54,6 +55,11 @@ export function pathBudgetBlockMessage(block: PathBudgetBlock): string {
     block.worstPath,
     "If your Cadtree home has moved, update its address in Home options.",
   ].join("\n");
+}
+
+/** Rewrites a PathBudgetError into a plain Error with the full banner text; the original stays as `cause`. */
+export function presentPathBudgetError(error: unknown): unknown {
+  return error instanceof PathBudgetError ? new Error(pathBudgetBlockMessage(error), { cause: error }) : error;
 }
 
 /** One sentence appended to the success banner when status is 'warn'; "" otherwise. */
