@@ -1,5 +1,5 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { splitAndValidatePath } from "./fs-adapter";
+import { FileConflictError, splitAndValidatePath } from "./fs-adapter";
 import {
   prepareApplyPreview,
   buildApplyPreview,
@@ -10,6 +10,7 @@ import {
   applicationPath,
   applicationPlanPath,
   applicationStagedPath,
+  applicationUnexpectedFolder,
   applicationUnexpectedPath,
   branchApplications,
   changedActions,
@@ -308,10 +309,6 @@ function progress(
     message: `${phase === "restoring_files" ? "Applying" : "Verifying"} ${path}…`,
   });
 }
-const isAlreadyExists = (error: unknown) =>
-  error instanceof Error &&
-  error.message.startsWith("Destination conflict:") &&
-  error.message.includes("already exists");
 const MAX_EVENT_ATTEMPTS = 999;
 /**
  * Creates a new folder named by a fresh event ID (YYYYMMDD-HHMMSS, then -2, -3, ...) with
@@ -334,7 +331,7 @@ export async function createEventFolder(
       });
       return candidate;
     } catch (error) {
-      if (!isAlreadyExists(error)) throw error;
+      if (!(error instanceof FileConflictError)) throw error;
     }
   }
   throw new Error(
@@ -592,7 +589,7 @@ export async function recoverApplication(
           recoveryId ??= await createEventFolder(
             vault,
             options.now,
-            (id) => applicationUnexpectedPath(branchId, operationId, id, 0).slice(0, -1),
+            (id) => applicationUnexpectedFolder(branchId, operationId, id),
             "recovery",
           );
           await stageFile(

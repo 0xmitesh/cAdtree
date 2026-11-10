@@ -137,6 +137,13 @@ export function applicationStagedPath(
     `${sixDigits(index)}.bin`,
   ];
 }
+export function applicationUnexpectedFolder(
+  branchId: string,
+  operationId: string,
+  recoveryId: string,
+): string[] {
+  return [...applicationPath(branchId, operationId), "unexpected", recoveryId];
+}
 export function applicationUnexpectedPath(
   branchId: string,
   operationId: string,
@@ -144,9 +151,7 @@ export function applicationUnexpectedPath(
   index: number,
 ): string[] {
   return [
-    ...applicationPath(branchId, operationId),
-    "unexpected",
-    recoveryId,
+    ...applicationUnexpectedFolder(branchId, operationId, recoveryId),
     `${sixDigits(index)}.bin`,
   ];
 }
