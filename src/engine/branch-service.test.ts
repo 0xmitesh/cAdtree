@@ -821,3 +821,87 @@ test("missing/damaged starting revisions and ambiguous heads block scans and cap
     /damaged/,
   );
 });
+
+const folderNames = async (dir: FileSystemDirectoryAdapter) =>
+  (await dir.listEntries()).map((e) => e.name).sort();
+
+test("design case folders use readable names, counters, and never reuse 'main'", async () => {
+  const { parent, create, workingFolders } = await setup();
+  const make = async (name: string) => {
+    const result = await create(name);
+    workingFolders[result.branch.branchId] = result.workingDir;
+    return result;
+  };
+  const a = await make("Lighter collar");
+  assert.equal(a.workingDir.name, "Lighter collar");
+  await make("Lighter/collar");
+  const slash = await make("Lighter-collar");
+  assert.equal(slash.workingDir.name, "Lighter-collar (2)");
+  const dot = await make("main.");
+  assert.equal(dot.workingDir.name, "main (2)");
+  await parent.getDirectory(["lighter  case"], { create: true });
+  await parent.getDirectory(["Quiet part"], { create: true });
+  const ci = await make("Quiet Part");
+  assert.equal(ci.workingDir.name, "Quiet Part (2)");
+  const reserved = await make("CON");
+  assert.equal(reserved.workingDir.name, "CON (2)");
+  const uni = await make("Ünïcode 設計 案");
+  assert.equal(uni.workingDir.name, "Ünïcode 設計 案");
+  assert.deepEqual(await folderNames(parent), [
+    "CON (2)",
+    "Lighter collar",
+    "Lighter-collar",
+    "Lighter-collar (2)",
+    "Quiet Part (2)",
+    "Quiet part",
+    "lighter  case",
+    "main (2)",
+    "Ünïcode 設計 案",
+  ].sort());
+});
+
+test("a failed case leaves its folder; retry with the same name gets (2) and the breadcrumb matches", async () => {
+  const { vault, parent, create } = await setup();
+  const controller = new AbortController();
+  await assert.rejects(
+    create("Lighter collar", undefined, {
+      signal: controller.signal,
+      onProgress: (p) => {
+        if (p.phase === "restoring_files") controller.abort();
+      },
+    }),
+  );
+  const leftover = await parent.getDirectory(["Lighter collar"]);
+  await leftover.writeFileBytes(["Mark.bin"], new Uint8Array([1]));
+  const crumbs = async () => {
+    const staging = await vault.getDirectory(["staging"]);
+    const names = (await staging.listEntries()).map((e) => e.name);
+    return Promise.all(
+      names
+        .filter((n) => n.endsWith(".branch-attempt.json"))
+        .map(async (n) =>
+          JSON.parse(await vault.readFileText(["staging", n])).destinationName,
+        ),
+    );
+  };
+  assert.deepEqual(await crumbs(), ["Lighter collar"]);
+  vault.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.endsWith(".ready.json")) throw new Error("Interrupted");
+    },
+  });
+  await assert.rejects(create("Lighter collar"), (e: BranchCreationError) =>
+    /Lighter collar \(2\)/.test(e.message),
+  );
+  assert.deepEqual((await crumbs()).sort(), [
+    "Lighter collar",
+    "Lighter collar (2)",
+  ]);
+  vault.setHooks({ onBeforeWrite: undefined });
+  const retry = await create("Lighter collar");
+  assert.equal(retry.workingDir.name, "Lighter collar (3)");
+  assert.deepEqual(
+    [...(await leftover.readFileBytes(["Mark.bin"]))],
+    [1],
+  );
+});

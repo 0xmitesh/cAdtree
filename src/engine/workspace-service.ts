@@ -511,11 +511,20 @@ export async function adoptProject(
           source: sourceVault,
           signature: inventorySignature(copiedVault),
         });
+        // allocateProject always creates "working".
+        const workingRoot = await container.getDirectory(["working"]);
         const folders: WorkingFolderBindings = {};
         for (const branch of state.branches) {
+          // Main stays "main"; design cases get readable names. Each pick lists
+          // the folder again so it sees the cases created before it. The
+          // workspace and project locks are held, and creation stays exclusive.
           const leaf = branch.isMain
             ? "main"
-            : `${slug(branch.name)}-${idSegment(branch.branchId)}`;
+            : await pickFreeName(
+                workingRoot,
+                folderNameFor(branch.name, "Design case"),
+                { extraTaken: ["main"] },
+              );
           const destination = await container.getDirectory(["working", leaf], {
             create: true,
             exclusiveCreate: true,
@@ -726,16 +735,6 @@ function assertWritable(project: ManagedProject) {
     throw new Error(
       `Managed project is read-only until its workspace connections and records are valid. ${project.issues.join(" ")}`,
     );
-}
-function slug(name: string) {
-  return (
-    name
-      .normalize("NFKD")
-      .replace(/[^a-zA-Z0-9 -]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .slice(0, 35) || "project"
-  );
 }
 async function allocateProject(
   root: FileSystemDirectoryAdapter,

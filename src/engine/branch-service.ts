@@ -7,6 +7,7 @@ import {
   type WorkingFolderBindings,
 } from "./branch-state";
 import { withProjectWriterLock } from "./locks";
+import { folderNameFor, pickFreeName } from "./folder-names";
 import { componentWriteBlock } from './component-identity';
 import { hashString } from "./hash";
 import { restoreRevisionToFolder } from "./recovery-service";
@@ -136,15 +137,13 @@ export async function createDesignBranch(
       }
     }
     const branchId = `branch-${crypto.randomUUID()}`;
-    // Readable branch names are never interpreted as filesystem paths.
-    const slug =
-      name
-        .normalize("NFKD")
-        .replace(/[^a-zA-Z0-9 -]/g, "")
-        .trim()
-        .replace(/\s+/g, "-")
-        .slice(0, 40) || "design-case";
-    const folderName = `cAdtree-${slug}-${branchId.slice(7)}`;
+    // Readable name chosen under the project writer lock, before the breadcrumb
+    // records it. "main" is reserved: Main's folder is working/main.
+    const folderName = await pickFreeName(
+      destinationParent,
+      folderNameFor(name, "Design case"),
+      { extraTaken: ["main"] },
+    );
     const stagingPath = ["staging", `${branchId}.branch-attempt.json`];
     let workingDir: FileSystemDirectoryAdapter | undefined;
     let publicationAttempted = false;

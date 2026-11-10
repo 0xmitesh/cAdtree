@@ -422,6 +422,14 @@ test("adoption preserves exact vault records and uncaptured working edits while 
     adopted.record.containerPath,
     "projects/Legacy actuator",
   );
+  assert.equal(
+    adopted.workingPaths["branch-main"],
+    "projects/Legacy actuator/working/main",
+  );
+  assert.equal(
+    adopted.workingPaths[branch.branch.branchId],
+    "projects/Legacy actuator/working/Case A",
+  );
   assert.equal(adopted.record.projectId, first.vaultState.project.projectId);
   assert.equal(await snapshot(adopted.vaultDir), originals[0]);
   assert.equal(
@@ -818,4 +826,72 @@ test("adoption rejects corrupt stored content even when its raw copied bytes mat
     ),
   );
   assert.equal(await snapshot(vault), before);
+});
+
+test("managed cases get readable working folders; 'main.' never takes working/main; adoption keeps readable names", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  let project = await importProject(root, await cadSource(), "Actuator");
+  const first = await captureRevision(
+    project.workingFolders["branch-main"]!,
+    project.vaultDir,
+    { branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders },
+  );
+  const made: Record<string, string> = {};
+  for (const name of ["Lighter collar", "Lighter/collar", "Lighter-collar", "main.", "CON"]) {
+    const created = await createManagedBranch(root, project.record.containerPath, {
+      sourceRevisionId: first.revision.manifest.revisionId,
+      name,
+      reason: "Explore",
+    });
+    project = created;
+    made[name] = created.workingPaths[created.createdBranchId];
+  }
+  const base = project.record.containerPath + "/working/";
+  assert.equal(project.workingPaths["branch-main"], base + "main");
+  assert.deepEqual(made, {
+    "Lighter collar": base + "Lighter collar",
+    "Lighter/collar": base + "Lighter-collar",
+    "Lighter-collar": base + "Lighter-collar (2)",
+    "main.": base + "main (2)",
+    CON: base + "CON (2)",
+  });
+  // Importing the complete managed project into another workspace re-adopts it.
+  const other = new InMemoryFileSystemAdapter("Other workspace");
+  await createWorkspace(other);
+  const source = await root.getDirectory(project.record.containerPath.split("/"));
+  const imported = await importProject(other, source, "ignored");
+  const leaves = Object.values(imported.workingPaths)
+    .map((path) => path.split("/").pop())
+    .sort();
+  assert.deepEqual(
+    leaves,
+    ["CON (2)", "Lighter-collar", "Lighter-collar (2)", "Lighter collar", "main", "main (2)"].sort(),
+  );
+});
+
+test("a Unicode case name is bound at its exact working path and reopens ready", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const project = await importProject(root, await cadSource(), "Actuator");
+  const first = await captureRevision(
+    project.workingFolders["branch-main"]!,
+    project.vaultDir,
+    { branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders },
+  );
+  const created = await createManagedBranch(root, project.record.containerPath, {
+    sourceRevisionId: first.revision.manifest.revisionId,
+    name: "Ünïcode 設計 案",
+    reason: "Explore",
+  });
+  const expected = `${project.record.containerPath}/working/Ünïcode 設計 案`;
+  assert.equal(created.workingPaths[created.createdBranchId], expected);
+  const reopened = await resolveManagedProject(root, project.record.containerPath);
+  assert.ok(reopened.ready);
+  assert.equal(reopened.issues.length, 0);
+  assert.equal(reopened.workingPaths[created.createdBranchId], expected);
+  assert.ok(reopened.workingFolders[created.createdBranchId]);
+  const listed = (await openWorkspace(root)).projects[0].project!;
+  assert.ok(listed.ready);
+  assert.ok(listed.workingFolders[created.createdBranchId]);
 });
