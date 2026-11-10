@@ -845,3 +845,37 @@ test('isEffectivelyEmpty accepts only clutter files', () => {
   assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'file' }, { name: 'a.txt', kind: 'file' }]), false);
   assert.equal(isEffectivelyEmpty([{ name: '._x', kind: 'file' }]), false);
 });
+
+test('read failures on untracked clutter never block capture; the same failure on tracked clutter does', async () => {
+  let failClutter = false;
+  const root = new InMemoryFileSystemAdapter('clutter-err', null, {
+    onBeforeRead: (p) => {
+      if (failClutter && p.endsWith('/.DS_Store')) throw new Error('locked by Finder');
+    },
+  });
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'ClutterErr');
+  await working.writeFileBytes(['bracket.SLDPRT'], new Uint8Array([1]));
+  await working.writeFileBytes(['.DS_Store'], new Uint8Array([2]));
+  failClutter = true;
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(scan.errors, []);
+  assert.equal(scan.canCapture, true);
+  assert.deepEqual(scan.skippedSystemFiles, ['.DS_Store']);
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'despite locked clutter',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(cap.revision.manifest.files.map((f) => f.path), ['bracket.SLDPRT']);
+  // Tracked: the baseline contains .DS_Store, so its read failure must still block.
+  const tracked = {
+    revisionId: 'r', displayNumber: 1, directories: [],
+    files: [{ path: '.DS_Store', size: 1, sha256: 'x', lastModified: 0 }],
+  } as unknown as RevisionManifest;
+  const blocked = await scanBranchChanges(working, MAIN_BRANCH_ID, tracked);
+  assert.equal(blocked.errors.length, 1);
+  assert.equal(blocked.canCapture, false);
+});

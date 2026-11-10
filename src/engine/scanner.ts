@@ -43,21 +43,51 @@ export function partitionSystemFiles(
   const kept: FileEntry[] = [];
   const skipped: string[] = [];
   for (const file of files) {
-    if (!expectedPaths.has(file.path)) {
-      const slash = file.path.lastIndexOf('/');
-      const dir = slash >= 0 ? file.path.slice(0, slash + 1) : '';
-      const base = file.path.slice(slash + 1);
-      if (
-        isSystemClutterName(base) ||
-        (base.startsWith('._') && base.length > 2 && known.has(dir + base.slice(2)))
-      ) {
-        skipped.push(file.path);
-        continue;
-      }
+    if (isUntrackedSystemPath(file.path, expectedPaths, known)) {
+      skipped.push(file.path);
+    } else {
+      kept.push(file);
     }
-    kept.push(file);
   }
   return { files: kept, skipped };
+}
+
+function isUntrackedSystemPath(
+  path: string,
+  expectedPaths: ReadonlySet<string>,
+  known: ReadonlySet<string>
+): boolean {
+  if (expectedPaths.has(path)) return false;
+  const slash = path.lastIndexOf('/');
+  const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
+  const base = path.slice(slash + 1);
+  return (
+    isSystemClutterName(base) ||
+    (base.startsWith('._') && base.length > 2 && known.has(dir + base.slice(2)))
+  );
+}
+
+/**
+ * Splits file-read errors into those for untracked OS clutter (dropped, never block
+ * a capture) and the rest. Errors for tracked paths and for directories are kept.
+ */
+export function partitionSystemErrors(
+  errors: ScanErrorEntry[],
+  scannedFiles: FileEntry[],
+  expectedPaths: ReadonlySet<string>
+): { errors: ScanErrorEntry[]; skipped: string[] } {
+  const known = new Set<string>([...expectedPaths, ...scannedFiles.map((f) => f.path)]);
+  const kept: ScanErrorEntry[] = [];
+  const skipped: string[] = [];
+  for (const e of errors) {
+    const isFileError = e.error.startsWith('Unreadable file') || e.error.startsWith('File size changed');
+    if (isFileError && isUntrackedSystemPath(e.path, expectedPaths, known)) {
+      skipped.push(e.path);
+    } else {
+      kept.push(e);
+    }
+  }
+  return { errors: kept, skipped };
 }
 
 /** True when a folder holds nothing but OS clutter files (directories never count). */
@@ -230,12 +260,14 @@ export async function scanBranchChanges(
 ): Promise<ScanResult> {
   const scannedAt = new Date().toISOString();
   const rawEnumerated = await enumerateWorkingFolder(workingDir, options);
-  const partitioned = partitionSystemFiles(
-    rawEnumerated.files,
-    new Set((baselineManifest?.files ?? []).map((f) => f.path))
-  );
+  const expectedPaths = new Set((baselineManifest?.files ?? []).map((f) => f.path));
+  const partitioned = partitionSystemFiles(rawEnumerated.files, expectedPaths);
+  const droppedErrors = partitionSystemErrors(rawEnumerated.errors, rawEnumerated.files, expectedPaths);
+  partitioned.skipped.push(...droppedErrors.skipped);
+  partitioned.skipped.sort();
   const enumerated = {
     ...rawEnumerated,
+    errors: droppedErrors.errors,
     files: partitioned.files,
     totalBytes: partitioned.files.reduce((n, f) => n + f.size, 0),
   };

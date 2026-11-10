@@ -6,6 +6,7 @@ import {
 } from "./fs-adapter";
 import { computeManifestPayloadChecksum, initializeProjectVault, openExistingVault } from "./vault-service";
 import { hashString } from "./hash";
+import { restoreRevisionToFolder } from "./recovery-service";
 import { captureRevision } from "./revision-service";
 import { createDesignBranch } from "./branch-service";
 import {
@@ -839,6 +840,14 @@ test("a revision that tracks .DS_Store still creates a case, applies and exports
     buildApplyPreview(prepared.context, selection, "Reuse case"),
     selection,
   );
+  // An untracked on-disk .DS_Store at a planned path is surfaced before any write.
+  await main.writeFileText([".DS_Store"], "untracked finder data");
+  await assert.rejects(
+    prepareApplication(vault, review, options),
+    /untracked system file \.DS_Store.*remove it or save it first/,
+  );
+  assert.equal(await main.readFileText([".DS_Store"]), "untracked finder data");
+  await main.removeEntry([".DS_Store"]);
   const op = await applyPreparedApplication(
     vault,
     await prepareApplication(vault, review, options),
@@ -861,4 +870,76 @@ test("a revision that tracks .DS_Store still creates a case, applies and exports
   });
   const out = await reviews.getDirectory([exported.folderName]);
   assert.equal(await out.readFileText([".DS_Store"]), "edited finder data");
+});
+
+test("recovery tolerates an existing root .DS_Store in an otherwise empty destination, writing the saved bytes over it", async () => {
+  const vault = new InMemoryFileSystemAdapter("Vault"),
+    main = new InMemoryFileSystemAdapter("Main"),
+    root = new InMemoryFileSystemAdapter("Root");
+  await main.writeFileText(["Part.SLDPRT"], "geometry");
+  await initializeProjectVault(main, vault, "Recover clutter");
+  const first = await captureRevision(main, vault, {
+    branchId: "branch-main",
+    summary: "Base",
+    notes,
+    workingFolders: { "branch-main": main },
+  });
+  await vault.removeEntry(["components"], { recursive: true });
+  if (await vault.hasFile(["reference-context.json"]))
+    await vault.removeEntry(["reference-context.json"]);
+  await vault.removeEntry(["references"], { recursive: true });
+  const donePath = ["completed", `${first.revision.manifest.revisionId}.done.json`];
+  const done = JSON.parse(await vault.readFileText(donePath));
+  delete done.referenceContext;
+  await vault.writeFileText(donePath, JSON.stringify(done, null, 2));
+  const text = "saved finder data";
+  await vault.writeFileText(getObjectPathSegments(hashString(text)), text);
+  const forged = {
+    ...first.revision.manifest,
+    revisionId: "legacy-clutter",
+    displayNumber: 2,
+    parentRevisionId: first.revision.manifest.revisionId,
+    files: [
+      ...first.revision.manifest.files,
+      { path: ".DS_Store", size: text.length, sha256: hashString(text), lastModified: 0 },
+      { path: "sub/.DS_Store", size: text.length, sha256: hashString(text), lastModified: 0 },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+    directories: ["sub"],
+  };
+  forged.manifestPayloadSha256 = computeManifestPayloadChecksum(forged);
+  const forgedText = JSON.stringify(forged);
+  await vault.writeFileText(["revisions", "legacy-clutter.manifest.json"], forgedText);
+  await vault.writeFileText(
+    ["completed", "legacy-clutter.done.json"],
+    JSON.stringify({ ...done, revisionId: "legacy-clutter", displayNumber: 2, manifestSha256: hashString(forgedText) }),
+  );
+  const dest = await root.getDirectory(["dest"], { create: true });
+  await dest.writeFileText([".DS_Store"], "finder junk");
+  await restoreRevisionToFolder({
+    vaultDir: vault,
+    destinationDir: dest,
+    workingDir: main,
+    revisionId: "legacy-clutter",
+  });
+  assert.equal(await dest.readFileText([".DS_Store"]), text);
+  assert.equal(await dest.readFileText(["sub", ".DS_Store"]), text);
+  // Nested paths stay exclusive: a pre-existing nested clutter file is a conflict.
+  const dest2 = await root.getDirectory(["dest2"], { create: true });
+  await dest2.writeFileText(["sub", ".DS_Store"], "junk");
+  await assert.rejects(
+    restoreRevisionToFolder({ vaultDir: vault, destinationDir: dest2, workingDir: main, revisionId: "legacy-clutter" }),
+    /not empty/,
+  );
+});
+
+test("copyVerifiedTree overwrites only a root clutter file already listed in the destination", async () => {
+  const src = new InMemoryFileSystemAdapter("Src"),
+    dst = new InMemoryFileSystemAdapter("Dst");
+  await src.writeFileText([".DS_Store"], "source finder");
+  await src.writeFileText(["sub", ".DS_Store"], "nested finder");
+  await src.writeFileText(["a.txt"], "a");
+  await dst.writeFileText([".DS_Store"], "junk");
+  await copyVerifiedTree(src, dst);
+  assert.equal(await dst.readFileText([".DS_Store"]), "source finder");
+  assert.equal(await dst.readFileText(["sub", ".DS_Store"]), "nested finder");
 });

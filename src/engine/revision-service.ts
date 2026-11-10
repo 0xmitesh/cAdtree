@@ -11,7 +11,7 @@ import { prepareComponentRecord, publishComponentRecord } from './component-iden
 import { prepareReferenceContext, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext, storeCaptureReferenceAttachments } from './references';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { getStagingSessionPathSegments, writeAndVerifyObject } from './object-store';
-import { enumerateWorkingFolder, partitionSystemFiles, scanBranchChanges } from './scanner';
+import { enumerateWorkingFolder, partitionSystemErrors, partitionSystemFiles, scanBranchChanges } from './scanner';
 import {
   CADTREE_SCHEMA_VERSION,
   CaptureRevisionInput,
@@ -287,12 +287,11 @@ export async function captureRevision(
     const rawPostCapture = await enumerateWorkingFolder(workingDir, {
       signal: input.signal,
     });
+    const baselinePaths = new Set((baselineManifest?.files ?? []).map((f) => f.path));
     const postCaptureInventory = {
       ...rawPostCapture,
-      files: partitionSystemFiles(
-        rawPostCapture.files,
-        new Set((baselineManifest?.files ?? []).map((f) => f.path))
-      ).files,
+      errors: partitionSystemErrors(rawPostCapture.errors, rawPostCapture.files, baselinePaths).errors,
+      files: partitionSystemFiles(rawPostCapture.files, baselinePaths).files,
     };
 
     if (postCaptureInventory.errors.length > 0) {

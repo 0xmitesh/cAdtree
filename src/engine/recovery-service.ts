@@ -213,6 +213,14 @@ async function executeVerifiedRecovery(params: {
         );
       }
 
+      // Root-level OS clutter seen in the destination may be overwritten by a saved
+      // file of the same name; every other path stays exclusive.
+      const tolerated = new Set(
+        preWriteRootEntries
+          .filter((e) => e.kind === 'file' && isSystemClutterName(e.name))
+          .map((e) => e.name)
+      );
+
       // 2. Create required directories with exclusive conflict checks
       onProgress?.({
         phase: 'restoring_directories',
@@ -261,9 +269,11 @@ async function executeVerifiedRecovery(params: {
         });
 
         // Recheck immediately before writing that neither a file nor directory occupies target path
+        const isTolerated = fileSegments.length === 1 && tolerated.has(fileSegments[0]);
         if (
-          (await destinationDir.hasFile(fileSegments)) ||
-          (await destinationDir.hasDirectory(fileSegments))
+          !isTolerated &&
+          ((await destinationDir.hasFile(fileSegments)) ||
+            (await destinationDir.hasDirectory(fileSegments)))
         ) {
           abortedDueToDestinationConflict = true;
           throw new Error(
@@ -279,7 +289,7 @@ async function executeVerifiedRecovery(params: {
           const { bytesWritten } = await destinationDir.writeFileStream(
             fileSegments,
             objectStream,
-            { signal, exclusive: !isSystemClutterName(fileEntry.path.split('/').pop()!) }
+            { signal, exclusive: !isTolerated }
           );
 
           if (bytesWritten !== fileEntry.size) {

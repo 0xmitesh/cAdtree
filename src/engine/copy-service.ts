@@ -69,7 +69,8 @@ export async function copyVerifiedTree(
     "Managed destination",
   );
   throwIfCancelled(options.signal);
-  if (!isEffectivelyEmpty(await destination.listEntries()))
+  const destinationEntries = await destination.listEntries();
+  if (!isEffectivelyEmpty(destinationEntries))
     throw new Error("Copy destination must be fresh and empty.");
   const before = await readVerifiedInventory(source, options);
   for (const path of before.directories) {
@@ -96,8 +97,13 @@ export async function copyVerifiedTree(
       await source.readFileStream(splitAndValidatePath(file.path)),
       {
         signal: options.signal,
-        // Overwriting pre-existing OS clutter in the fresh destination is harmless.
-        exclusive: !isSystemClutterName(file.path.split("/").pop()!),
+        // Only a root-level clutter file that the pre-write listing showed may be
+        // overwritten; every other path stays exclusive.
+        exclusive: !(
+          !file.path.includes("/") &&
+          isSystemClutterName(file.path) &&
+          destinationEntries.some((e) => e.kind === "file" && e.name === file.path)
+        ),
       },
     );
     if (written.bytesWritten !== file.size)

@@ -138,7 +138,7 @@ async function cleanDestination(
   review: ApplicationReview,
   options: CopyOptions,
 ) {
-  const { context } = recompute(state, review);
+  const { context, plan } = recompute(state, review);
   const scan = await scanBranchChanges(
     working,
     review.destinationBranchId,
@@ -160,6 +160,15 @@ async function cleanDestination(
   if (scan.errors.length)
     throw new Error(
       `Destination scan unavailable: ${scan.errors.map((e) => `${e.path}: ${e.error}`).join("; ")}`,
+    );
+  const blocked = plan.actions
+    .filter((a) => a.operation !== "keep")
+    .filter((a) =>
+    scan.skippedSystemFiles?.includes(a.path),
+  );
+  if (blocked.length)
+    throw new Error(
+      `An untracked system file ${blocked.map((a) => a.path).join(", ")} exists at this path in the destination; remove it or save it first. No working files were changed.`,
     );
   if (scan.hasChanges)
     throw new Error(
