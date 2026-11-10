@@ -65,6 +65,8 @@ export interface InternalPathTemplate {
   relativeLength: number;
   /** relativeLength plus CRSWAP_CHARS for files. */
   reserveLength: number;
+  /** True for shapes new code no longer writes; old records with these shapes can still exist. */
+  legacy: boolean;
 }
 
 const UUID = '00000000-0000-4000-8000-000000000000';
@@ -72,6 +74,8 @@ const SHA = 'a'.repeat(64);
 const BRANCH = `branch-${UUID}`;
 const APPLY = `apply-${UUID}`;
 const RECOVERY = `recovery-${UUID}`;
+/** Longest event ID: `YYYYMMDD-HHMMSS-999`. */
+const EVENT = '20260101-000000-999';
 const REV = `rev-${UUID}`;
 const REFERENCE_CATALOG = `reference-catalog-${UUID}`;
 const REFERENCE_ENROLLMENT = `reference-enrollment-${UUID}`;
@@ -84,6 +88,7 @@ export const PATH_TOKENS: Record<string, string> = {
   branch: 'branch-[0-9a-f-]{36}|branch-main',
   apply: 'apply-[0-9a-f-]{36}',
   recovery: 'recovery-[0-9a-f-]{36}',
+  event: '[0-9]{8}-[0-9]{6}(?:-[0-9]{1,3})?',
   rev: 'rev-[0-9a-f-]{36}',
   referenceCatalog: 'reference-catalog-[0-9a-f-]{36}',
   referenceEnrollment: 'reference-enrollment-[0-9a-f-]{36}',
@@ -99,9 +104,9 @@ export const PATH_TOKENS: Record<string, string> = {
 
 const below = (prefix: string, segments: string[]) => [prefix, ...segments];
 
-function template(label: string, kind: 'file' | 'dir', segments: string[], shape: string): InternalPathTemplate {
+function template(label: string, kind: 'file' | 'dir', segments: string[], shape: string, legacy = false): InternalPathTemplate {
   const relativeLength = segments.join('/').length;
-  return { label, kind, segments, shape, relativeLength, reserveLength: relativeLength + (kind === 'file' ? CRSWAP_CHARS : 0) };
+  return { label, kind, segments, shape, relativeLength, reserveLength: relativeLength + (kind === 'file' ? CRSWAP_CHARS : 0), legacy };
 }
 
 const stagingSession = getStagingSessionPathSegments('sample-session');
@@ -145,12 +150,18 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('reference catalog', 'file', below(V, referenceCatalogPath(REFERENCE_CATALOG)), 'vault/references/catalogs/{referenceCatalog}.json'),
   template('reference catalog marker', 'dir', below(V, referenceCatalogMarkerPath(REFERENCE_CATALOG, SHA)), 'vault/references/completed/{b64uuid}.{b64}.done'),
   template('reference context', 'file', below(V, referenceContextPath(REV)), 'vault/references/contexts/{rev}.json'),
-  // Application (apply) evidence.
-  template('application plan', 'file', below(V, applicationPlanPath(BRANCH, APPLY)), 'vault/applications/{branch}/{apply}/plan.json'),
-  template('application event', 'file', below(V, applicationEventPath(BRANCH, APPLY, SEQ)), 'vault/applications/{branch}/{apply}/events/{seq}.json'),
-  template('application before-state copy', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'before', SEQ)), 'vault/applications/{branch}/{apply}/before/{seq}.bin'),
-  template('application source copy', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'source', SEQ)), 'vault/applications/{branch}/{apply}/source/{seq}.bin'),
-  template('application unexpected-recovery copy', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, RECOVERY, SEQ)), 'vault/applications/{branch}/{apply}/unexpected/{recovery}/{seq}.bin'),
+  // Application (apply) evidence. New operations use event IDs; apply-<uuid> / recovery-<uuid> remain for old records.
+  template('application plan', 'file', below(V, applicationPlanPath(BRANCH, EVENT)), 'vault/applications/{branch}/{event}/plan.json'),
+  template('application event', 'file', below(V, applicationEventPath(BRANCH, EVENT, SEQ)), 'vault/applications/{branch}/{event}/events/{seq}.json'),
+  template('application before-state copy', 'file', below(V, applicationStagedPath(BRANCH, EVENT, 'before', SEQ)), 'vault/applications/{branch}/{event}/before/{seq}.bin'),
+  template('application source copy', 'file', below(V, applicationStagedPath(BRANCH, EVENT, 'source', SEQ)), 'vault/applications/{branch}/{event}/source/{seq}.bin'),
+  template('application unexpected-recovery copy', 'file', below(V, applicationUnexpectedPath(BRANCH, EVENT, EVENT, SEQ)), 'vault/applications/{branch}/{event}/unexpected/{event}/{seq}.bin'),
+  template('application plan (legacy)', 'file', below(V, applicationPlanPath(BRANCH, APPLY)), 'vault/applications/{branch}/{apply}/plan.json', true),
+  template('application event (legacy)', 'file', below(V, applicationEventPath(BRANCH, APPLY, SEQ)), 'vault/applications/{branch}/{apply}/events/{seq}.json', true),
+  template('application before-state copy (legacy)', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'before', SEQ)), 'vault/applications/{branch}/{apply}/before/{seq}.bin', true),
+  template('application source copy (legacy)', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'source', SEQ)), 'vault/applications/{branch}/{apply}/source/{seq}.bin', true),
+  template('application unexpected-recovery copy (legacy)', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, RECOVERY, SEQ)), 'vault/applications/{branch}/{apply}/unexpected/{recovery}/{seq}.bin', true),
+  template('application unexpected-recovery copy (legacy apply, event recovery)', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, EVENT, SEQ)), 'vault/applications/{branch}/{apply}/unexpected/{event}/{seq}.bin', true),
   // Knowledge Lab.
   template('knowledge record', 'file', below(V, knowledgeRecordPath(KNOWLEDGE)), 'vault/knowledge/records/{knowledge}.json'),
   template('knowledge publication marker', 'dir', below(V, knowledgePublicationPath(KNOWLEDGE, SHA)), 'vault/knowledge/completed/{knowledge}.{sha}.done'),
@@ -211,6 +222,18 @@ export function deepestInternalTemplate(): InternalPathTemplate {
  */
 export function internalReserve(): number {
   return deepestInternalTemplate().reserveLength;
+}
+
+/**
+ * Longest path that NEW records can produce: like internalReserve() but without legacy-only
+ * shapes (old apply-<uuid> / recovery-<uuid> records). Old records may still exceed it.
+ */
+export function newRecordsReserve(): number {
+  return deepestNewRecordsTemplate().reserveLength;
+}
+
+export function deepestNewRecordsTemplate(): InternalPathTemplate {
+  return INTERNAL_PATH_TEMPLATES.filter((t) => !t.legacy).reduce((a, b) => (b.reserveLength > a.reserveLength ? b : a));
 }
 
 export function internalReserveLabel(): string {

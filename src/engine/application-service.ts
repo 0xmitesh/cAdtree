@@ -25,6 +25,7 @@ import {
 import { getObjectPathSegments, verifyStoredObject } from "./object-store";
 import { hashStream, hashString } from "./hash";
 import { withProjectWriterLock } from "./locks";
+import { eventIdBase, eventIdCandidate } from "./ids";
 import { partitionSystemFiles, scanBranchChanges } from "./scanner";
 import {
   inventorySignature,
@@ -37,6 +38,8 @@ import { assertCaseWritable } from "./case-lifecycle";
 import type { FileEntry, VaultState } from "./types";
 
 export interface ApplicationOptions extends CopyOptions {
+  /** Clock for new event IDs; defaults to the current time. Tests inject a fixed one. */
+  now?: () => Date;
   workingFolders: WorkingFolderBindings;
   resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
 }
@@ -305,6 +308,39 @@ function progress(
     message: `${phase === "restoring_files" ? "Applying" : "Verifying"} ${path}…`,
   });
 }
+const isAlreadyExists = (error: unknown) =>
+  error instanceof Error &&
+  error.message.startsWith("Destination conflict:") &&
+  error.message.includes("already exists");
+const MAX_EVENT_ATTEMPTS = 999;
+/**
+ * Creates a new folder named by a fresh event ID (YYYYMMDD-HHMMSS, then -2, -3, ...) with
+ * exclusiveCreate. Only an "already exists" clash moves to the next candidate; any other
+ * error is rethrown unchanged. Nothing existing is ever reused or overwritten.
+ */
+export async function createEventFolder(
+  vault: FileSystemDirectoryAdapter,
+  now: (() => Date) | undefined,
+  folderFor: (eventId: string) => string[],
+  what: string,
+): Promise<string> {
+  const base = eventIdBase(now ? now() : new Date());
+  for (let attempt = 1; attempt <= MAX_EVENT_ATTEMPTS; attempt++) {
+    const candidate = eventIdCandidate(base, attempt);
+    try {
+      await vault.getDirectory(folderFor(candidate), {
+        create: true,
+        exclusiveCreate: true,
+      });
+      return candidate;
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error;
+    }
+  }
+  throw new Error(
+    `No free ${what} ID for ${base}: all ${MAX_EVENT_ATTEMPTS} candidates are taken. Nothing was written.`,
+  );
+}
 export async function applyPreparedApplication(
   vault: FileSystemDirectoryAdapter,
   prepared: PreparedApplication,
@@ -329,9 +365,12 @@ export async function applyPreparedApplication(
     await cleanDestination(working, state, review, options);
     // A fresh operation ID is never reused. A durable plan precedes staging; a
     // durable attempt precedes each write. Any uncertain outcome remains discoverable.
-    const operationId = `apply-${crypto.randomUUID()}`;
-    const path = applicationPath(review.destinationBranchId, operationId);
-    await vault.getDirectory(path, { create: true, exclusiveCreate: true });
+    const operationId = await createEventFolder(
+      vault,
+      options.now,
+      (id) => applicationPath(review.destinationBranchId, id),
+      "application",
+    );
     const record: ApplicationRecord = sealApplication({
       schemaVersion: 1 as const,
       kind: "cadtree-file-application" as const,
@@ -361,7 +400,7 @@ export async function applyPreparedApplication(
     const op: ApplicationOperation = {
       operationId,
       destinationBranchId: review.destinationBranchId,
-      relativePath: path.join("/"),
+      relativePath: applicationPath(review.destinationBranchId, operationId).join("/"),
       status: "unresolved",
       record,
       events: [],
@@ -533,7 +572,8 @@ export async function recoverApplication(
       op.events.filter((e) => e.kind === "attempt").map((e) => e.path),
     );
     const manualPaths: string[] = [];
-    const recoveryId = `recovery-${crypto.randomUUID()}`;
+    // The recovery ID is allocated lazily, when the first unexpected file is staged.
+    let recoveryId: string | undefined;
     for (const [index, action] of changedActions(op.record).entries()) {
       throwIfCancelled(options.signal);
       let current: FileEntry | null;
@@ -548,7 +588,13 @@ export async function recoverApplication(
       if (!touched.has(action.path) || !same(current, action.after)) {
         // Retain a verified copy of unexpected bytes as well as leaving the live
         // file untouched. No blind rollback of truncated writes or later CAD edits.
-        if (current)
+        if (current) {
+          recoveryId ??= await createEventFolder(
+            vault,
+            options.now,
+            (id) => applicationUnexpectedPath(branchId, operationId, id, 0).slice(0, -1),
+            "recovery",
+          );
           await stageFile(
             vault,
             applicationUnexpectedPath(branchId, operationId, recoveryId, index),
@@ -557,6 +603,7 @@ export async function recoverApplication(
             current,
             options.signal,
           );
+        }
         manualPaths.push(action.path);
         continue;
       }

@@ -15,7 +15,7 @@ import { changeCaseLifecycle } from './case-lifecycle-service';
 import { createKnowledgeRecord } from '../knowledge/records';
 import {
   BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, INTERNAL_PATH_TEMPLATES, MAX_NAME_BYTES, PROJECT_NAME_ALLOWANCE,
-  WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, internalReserve, internalReserveLabel,
+  WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, deepestNewRecordsTemplate, newRecordsReserve, internalReserve, internalReserveLabel,
   matchInternalPath, projectWorstCase, shapePattern,
 } from './path-budget';
 
@@ -249,6 +249,11 @@ test('internalReserve equals the deepest template and today\'s value is reported
   assert.equal(internalReserve(), deepest.reserveLength);
   assert.equal(internalReserveLabel(), deepest.label);
   for (const t of INTERNAL_PATH_TEMPLATES) assert.ok(t.reserveLength <= internalReserve(), t.label);
-  assert.equal(deepest.label, 'application unexpected-recovery copy');
+  assert.equal(deepest.label, 'application unexpected-recovery copy (legacy)');
+  assert.ok(INTERNAL_PATH_TEMPLATES.some((t) => t.legacy) && INTERNAL_PATH_TEMPLATES.some((t) => !t.legacy));
+  const fresh = INTERNAL_PATH_TEMPLATES.filter((t) => !t.legacy);
+  assert.equal(newRecordsReserve(), Math.max(...fresh.map((t) => t.reserveLength)));
+  assert.ok(newRecordsReserve() <= internalReserve());
+  console.log(`path-budget: newRecordsReserve() = ${newRecordsReserve()} (${deepestNewRecordsTemplate().label})`);
   console.log(`path-budget: internalReserve() = ${internalReserve()} (${internalReserveLabel()})`);
 });

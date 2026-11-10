@@ -21,7 +21,10 @@ import {
   recoverApplication,
   abandonApplication,
   requestApplicationWriteAccess,
+  createEventFolder,
 } from "./application-service";
+import { eventIdCandidate, isEventId } from "./ids";
+import { sealApplication } from "./application-records";
 import {
   applicationCaptureBlock,
   branchApplications,
@@ -942,4 +945,133 @@ test("copyVerifiedTree overwrites only a root clutter file already listed in the
   await copyVerifiedTree(src, dst);
   assert.equal(await dst.readFileText([".DS_Store"]), "source finder");
   assert.equal(await dst.readFileText(["sub", ".DS_Store"]), "nested finder");
+});
+
+const FIXED = new Date(Date.UTC(2026, 10, 10, 12, 0, 0));
+const BASE_ID = "20261110-120000";
+const fixedNow = () => new Date(FIXED);
+const interruptAtEvent = (f: Awaited<ReturnType<typeof fixture>>, file: string) =>
+  f.vault.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.includes("/events/") && path.endsWith(file))
+        throw new Error("injected interruption");
+    },
+  });
+const unexpectedDirs = async (f: Awaited<ReturnType<typeof fixture>>, rel: string) => {
+  const dir = await f.vault.getDirectory(rel.split("/"));
+  if (!(await dir.listEntries()).some((e) => e.name === "unexpected")) return [];
+  return (await (await dir.getDirectory(["unexpected"])).listEntries()).map((e) => e.name);
+};
+
+test("a new apply is stored under a short event ID and completes with plan and events intact", async () => {
+  const f = await fixture();
+  const op = await f.apply();
+  assert.equal(op.status, "applied");
+  assert.ok(isEventId(op.operationId), op.operationId);
+  assert.equal(op.relativePath, `applications/branch-main/${op.operationId}`);
+  assert.equal(op.record!.operationId, op.operationId);
+  const listed = await f.op();
+  assert.equal(listed.operationId, op.operationId);
+  assert.equal(listed.status, "applied");
+  assert.deepEqual(listed.events.map((e) => e.kind).at(-1), "applied");
+  assert.ok(listed.record!.plan.actions.length > 0);
+});
+
+test("two applies in the same second get the base ID and -2; recovery without unexpected bytes creates no unexpected folder", async () => {
+  const f = await fixture();
+  const options = { ...f.options, now: fixedNow };
+  interruptAtEvent(f, "000002.json");
+  await assert.rejects(
+    applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options),
+    /injected/,
+  );
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  const first = await f.op();
+  assert.equal(first.operationId, BASE_ID);
+  const recovered = await recoverApplication(f.vault, first.record!.plan.projectId, "branch-main", first.operationId, options);
+  assert.deepEqual(recovered.manualPaths, []);
+  assert.deepEqual(await unexpectedDirs(f, first.relativePath), []);
+  const second = await applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options);
+  assert.equal(second.operationId, `${BASE_ID}-2`);
+  assert.equal(second.status, "applied");
+  const ids = branchApplications(await openExistingVault(f.vault), "branch-main").map((o) => o.operationId).sort();
+  assert.deepEqual(ids, [BASE_ID, `${BASE_ID}-2`]);
+});
+
+test("unexpected bytes are staged under unexpected/<eventId>; a second recovery in the same second gets -2", async () => {
+  const f = await fixture();
+  const options = { ...f.options, now: fixedNow };
+  interruptAtEvent(f, "000004.json");
+  await assert.rejects(
+    applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options),
+    /injected/,
+  );
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  await f.main.writeFileText(part.split("/"), "unexpected later CAD edit");
+  const op = await f.op();
+  const projectId = op.record!.plan.projectId;
+  for (const expected of [[BASE_ID], [BASE_ID, `${BASE_ID}-2`]]) {
+    const result = await recoverApplication(f.vault, projectId, "branch-main", op.operationId, options);
+    assert.deepEqual(result.manualPaths, [part]);
+    assert.deepEqual((await unexpectedDirs(f, op.relativePath)).sort(), expected);
+  }
+  const folder = await f.vault.getDirectory([...op.relativePath.split("/"), "unexpected", BASE_ID]);
+  const entries = await folder.listEntries();
+  assert.equal(entries.length, 1);
+  assert.match(entries[0].name, /^\d{6}\.bin$/);
+  assert.equal((await f.op()).status, "unresolved");
+  assert.equal(await f.main.readFileText(part.split("/")), "unexpected later CAD edit");
+});
+
+test("old apply-<uuid> operations with recovery-<uuid> evidence still list, recover and report beside new event-ID operations", async () => {
+  const f = await fixture();
+  // A new-format interrupted operation provides a valid plan to re-seal under the old shape.
+  interruptAtEvent(f, "000004.json");
+  await assert.rejects(f.apply(), /injected/);
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  const modern = await f.op();
+  assert.ok(isEventId(modern.operationId));
+  const legacyId = "apply-123e4567-e89b-42d3-a456-426614174000";
+  const { checksum: _drop, ...body } = modern.record!;
+  void _drop;
+  const legacyRecord = sealApplication({ ...body, operationId: legacyId });
+  const legacyPath = ["applications", "branch-main", legacyId];
+  await f.vault.writeFileText([...legacyPath, "plan.json"], JSON.stringify(legacyRecord, null, 2), { exclusive: true });
+  const oldEvidence = ["unexpected", "recovery-123e4567-e89b-42d3-a456-426614174001", "000001.bin"];
+  await f.vault.writeFileText([...legacyPath, ...oldEvidence], "old evidence", { exclusive: true });
+  await f.main.writeFileText(part.split("/"), "unexpected later CAD edit");
+
+  const listed = branchApplications(await openExistingVault(f.vault), "branch-main");
+  const legacy = listed.find((o) => o.operationId === legacyId)!;
+  assert.equal(legacy.status, "unresolved");
+  assert.equal(legacy.relativePath, `applications/branch-main/${legacyId}`);
+  assert.equal(listed.find((o) => o.operationId === modern.operationId)!.status, "unresolved");
+  assert.equal(listed.length, 2);
+
+  const options = { ...f.options, now: fixedNow };
+  const result = await recoverApplication(f.vault, modern.record!.plan.projectId, "branch-main", legacyId, options);
+  assert.deepEqual(result.manualPaths, [part]);
+  assert.deepEqual((await unexpectedDirs(f, legacy.relativePath)).sort(), [BASE_ID, "recovery-123e4567-e89b-42d3-a456-426614174001"].sort());
+  const evidence = await readVerifiedInventory(await f.vault.getDirectory(legacyPath));
+  assert.ok(evidence.files.some((e) => e.path === `unexpected/recovery-123e4567-e89b-42d3-a456-426614174001/000001.bin`));
+  assert.equal(listed.find((o) => o.operationId === modern.operationId)!.status, "unresolved");
+});
+
+test("event folder allocation is conservative: clashes move on, other errors pass through, exhaustion writes nothing", async () => {
+  const vault = new InMemoryFileSystemAdapter("Alloc");
+  for (let attempt = 1; attempt <= 999; attempt++)
+    await vault.getDirectory(["p", eventIdCandidate(BASE_ID, attempt)], { create: true });
+  const before = (await (await vault.getDirectory(["p"])).listEntries()).length;
+  await assert.rejects(
+    createEventFolder(vault, fixedNow, (id) => ["p", id], "application"),
+    /No free application ID/,
+  );
+  assert.equal((await (await vault.getDirectory(["p"])).listEntries()).length, before);
+  const broken = {
+    getDirectory: async () => {
+      throw new Error("disk exploded");
+    },
+  } as unknown as FileSystemDirectoryAdapter;
+  await assert.rejects(createEventFolder(broken, fixedNow, (id) => ["p", id], "application"), /disk exploded/);
+  assert.equal(await createEventFolder(vault, fixedNow, (id) => ["q", id], "application"), BASE_ID);
 });
