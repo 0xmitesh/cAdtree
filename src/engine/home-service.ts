@@ -25,7 +25,7 @@ import { hashString } from "./hash";
 import { verifyRevisionObjects } from "./vault-service";
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
 import {
-  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, checkWorstPath, joinAddress, longestPath, longestRelativeFilePath,
+  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, checkWorstPath, joinAddress, longestPath, longestOf, longestRelativePaths,
   projectWorstPath, workspaceWorstPath, type PathBudgetInput, type PathBudgetReport,
 } from './path-budget';
 
@@ -408,12 +408,14 @@ async function checkWorkspaceBudget(
     for (const entry of (await openWorkspace(source)).projects) {
       if (!entry.project) continue;
       let longestFile = "";
+      let longestDir = "";
       let allowance = CASE_ALLOWANCE;
       for (const branch of entry.project.vaultState.branches) {
         const folder = entry.project.workingFolders[branch.branchId];
         if (folder) {
-          const file = await longestRelativeFilePath(folder);
-          if (file.length > longestFile.length) longestFile = file;
+          const found = await longestRelativePaths(folder);
+          longestFile = longestOf([longestFile, found.file]);
+          longestDir = longestOf([longestDir, found.dir]);
         }
         // The readable case folder name used on copy, with room for a counter.
         allowance = Math.max(allowance, folderNameFor(branch.name, "Design case").length + " (2)".length);
@@ -422,6 +424,7 @@ async function checkWorkspaceBudget(
         path: projectWorstPath({
           projectAddress: joinAddress(workspaceAddress, entry.containerPath),
           longestUserFile: longestFile,
+          longestUserDir: longestDir,
           caseAllowance: allowance,
         }),
       });

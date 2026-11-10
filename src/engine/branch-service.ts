@@ -43,7 +43,7 @@ export interface CreateDesignBranchOptions {
    * Called under the project writer lock after the final folder name is chosen and before anything
    * is written. Throwing here leaves nothing behind (e.g. the path budget check).
    */
-  beforeFirstWrite?: (info: { folderName: string; sourceFiles: string[] }) => void | Promise<void>;
+  beforeFirstWrite?: (info: { folderName: string; sourceFiles: string[]; sourceDirectories: string[] }) => void | Promise<void>;
   beforePublish?: (branch: BranchRecord, workingDir: FileSystemDirectoryAdapter) => Promise<void>;
 }
 export class BranchCreationError extends Error {
@@ -159,7 +159,7 @@ export async function createDesignBranch(
       folderNameFor(name, "Design case"),
       { extraTaken: ["main"] },
     );
-    await options.beforeFirstWrite?.({ folderName, sourceFiles: source.files.map((f) => f.path) });
+    await options.beforeFirstWrite?.({ folderName, sourceFiles: source.files.map((f) => f.path), sourceDirectories: source.directories });
     let workingDir: FileSystemDirectoryAdapter | undefined;
     let publicationAttempted = false;
     let branchId = "";

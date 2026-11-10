@@ -7,8 +7,8 @@ import {
   createProject, importProject, createWorkspace, createManagedBranch, recoverManagedCopy, openWorkspace,
 } from './workspace-service';
 import {
-  BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, PROJECT_NAME_ALLOWANCE, PathBudgetError, WARN_PATH_CHARS,
-  addressSeparator, homeSetupWorstCase, internalReserve, joinAddress, longestRelativeFilePath,
+  BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, PROJECT_NAME_ALLOWANCE, WORKSPACE_NAME_ALLOWANCE, PathBudgetError, WARN_PATH_CHARS,
+  addressSeparator, homeSetupWorstCase, internalReserve, joinAddress, longestRelativeFilePath, longestRelativePaths,
   projectWorstCase, projectWorstPath, workspaceWorstPath,
 } from './path-budget';
 
@@ -405,4 +405,38 @@ test('an existing over-limit project still opens and saves', async () => {
   assert.equal(saved.revision.manifest.displayNumber, 1);
   // Constants stay what the approved rules say.
   assert.equal(CASE_ALLOWANCE, 32);
+});
+
+test('workspace name allowance is its own constant and home setup counts it', () => {
+  assert.equal(WORKSPACE_NAME_ALLOWANCE, 24);
+  const home = homeSetupWorstCase(WIN_HOME);
+  assert.equal(home.requiredLength, WIN_HOME.length + 1 + WORKSPACE_NAME_ALLOWANCE + 1 + 'projects'.length + 1 + PROJECT_NAME_ALLOWANCE + 1 + internalReserve());
+});
+
+test('an import whose deepest item is an empty folder blocks; folders get no .crswap', async () => {
+  const root = await freshWorkspace();
+  const source = new InMemoryFileSystemAdapter('CAD');
+  await source.writeFileText(['a.SLDPRT'], 'cad');
+  const deepDir = `Deep/${'x'.repeat(110)}`;
+  await source.getDirectory(deepDir.split('/'), { create: true });
+  const rest = 1 + 'projects'.length + 1 + 'Imported'.length + 1 + 'recoveries'.length + 1 + COPY_FOLDER_LENGTH + 1 + deepDir.length; // no .crswap
+  const atLimit = addressFor(WIN_HOME, rest, BLOCK_PATH_CHARS);
+  const before = await tree(root);
+  await assert.rejects(importProject(root, source, 'Imported', { budget: { workspaceAddress: `${atLimit}W` } }), (error) => {
+    assert.ok(error instanceof PathBudgetError);
+    assert.equal(error.requiredLength, BLOCK_PATH_CHARS + 1);
+    assert.ok(error.worstPath.endsWith('x'.repeat(110)));
+    return true;
+  });
+  assert.deepEqual(await tree(root), before);
+  const ok = await importProject(root, source, 'Imported', { budget: { workspaceAddress: atLimit } });
+  assert.equal(ok.pathBudget!.requiredLength, BLOCK_PATH_CHARS);
+});
+
+test('longestRelativePaths tracks the deepest folder separately', async () => {
+  const root = new InMemoryFileSystemAdapter('src');
+  await root.writeFileText(['a.txt'], 'x');
+  await root.getDirectory(['empty', 'deeper-folder'], { create: true });
+  const found = await longestRelativePaths(root);
+  assert.deepEqual(found, { file: 'a.txt', dir: 'empty/deeper-folder' });
 });

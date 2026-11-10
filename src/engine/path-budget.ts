@@ -39,6 +39,8 @@ export const CRSWAP_CHARS = 7;
 export const CASE_ALLOWANCE = 32;
 /** Future project name length reserved when creating a workspace. */
 export const PROJECT_NAME_ALLOWANCE = 24;
+/** Future workspace folder name length reserved when sizing a home. */
+export const WORKSPACE_NAME_ALLOWANCE = 24;
 
 export type PathLengthClass = 'ok' | 'warn' | 'block';
 
@@ -264,7 +266,7 @@ const withSwap = (path: string) => path + '.crswap';
  * "/"-separated) is given, that file under a design-case folder or a recovery copy. Files carry
  * the `.crswap` allowance. With no user file this equals projectWorstCase().
  */
-export function projectWorstPath(input: { projectAddress: string; longestUserFile?: string; caseAllowance?: number }): string {
+export function projectWorstPath(input: { projectAddress: string; longestUserFile?: string; longestUserDir?: string; caseAllowance?: number }): string {
   assertLength(input.caseAllowance ?? 0, 'case allowance');
   const caseAllowance = Math.max(4, input.caseAllowance ?? CASE_ALLOWANCE);
   const deepest = deepestInternalTemplate();
@@ -272,6 +274,11 @@ export function projectWorstPath(input: { projectAddress: string; longestUserFil
   if (input.longestUserFile) {
     candidates.push(withSwap(joinAddress(input.projectAddress, 'working', 'x'.repeat(caseAllowance), input.longestUserFile)));
     candidates.push(withSwap(joinAddress(input.projectAddress, ...RECOVERY_COPY_TEMPLATE.segments, input.longestUserFile)));
+  }
+  // Folders get no `.crswap`.
+  if (input.longestUserDir) {
+    candidates.push(joinAddress(input.projectAddress, 'working', 'x'.repeat(caseAllowance), input.longestUserDir));
+    candidates.push(joinAddress(input.projectAddress, ...RECOVERY_COPY_TEMPLATE.segments, input.longestUserDir));
   }
   return candidates.reduce((a, b) => (b.length > a.length ? b : a));
 }
@@ -282,13 +289,17 @@ export function workspaceWorstPath(workspaceAddress: string): string {
 }
 
 /** Worst path for a new design case: project + working/<final case folder>/<longest source path> + `.crswap`. */
-export function caseWorstPath(projectAddress: string, caseFolder: string, longestSourcePath: string): string {
-  return withSwap(joinAddress(projectAddress, 'working', caseFolder, longestSourcePath));
+export function caseWorstPath(projectAddress: string, caseFolder: string, longestSourceFile: string, longestSourceDir = ''): string {
+  const file = withSwap(joinAddress(projectAddress, 'working', caseFolder, longestSourceFile));
+  const dir = joinAddress(projectAddress, 'working', caseFolder, longestSourceDir);
+  return dir.length > file.length ? dir : file;
 }
 
 /** Worst path for a recovery copy: project + recoveries/copy-<uuid>/<longest selected path> + `.crswap`. */
-export function recoveryWorstPath(projectAddress: string, copyFolder: string, longestSelectedPath: string): string {
-  return withSwap(joinAddress(projectAddress, 'recoveries', copyFolder, longestSelectedPath));
+export function recoveryWorstPath(projectAddress: string, copyFolder: string, longestSelectedFile: string, longestSelectedDir = ''): string {
+  const file = withSwap(joinAddress(projectAddress, 'recoveries', copyFolder, longestSelectedFile));
+  const dir = joinAddress(projectAddress, 'recoveries', copyFolder, longestSelectedDir);
+  return dir.length > file.length ? dir : file;
 }
 
 export interface HomeSetupWorstCase {
@@ -299,11 +310,13 @@ export interface HomeSetupWorstCase {
 
 /**
  * Pure helper for the home setup warning (UI only; the engine never blocks home setup). Uses both
- * allowances: a workspace folder as long as PROJECT_NAME_ALLOWANCE, then a project of
- * PROJECT_NAME_ALLOWANCE and a design case of CASE_ALLOWANCE.
+ * Counts: home + a workspace folder of WORKSPACE_NAME_ALLOWANCE + `projects` + a project folder of
+ * PROJECT_NAME_ALLOWANCE + the project worst case with no user files, which is cAdtree's own
+ * deepest internal path (internalReserve()). The design-case allowance is not a separate term:
+ * its `working/<case>/` prefix is shorter than the internal reserve and only matters with user files.
  */
 export function homeSetupWorstCase(homeAddress: string): HomeSetupWorstCase {
-  const worstPath = workspaceWorstPath(joinAddress(homeAddress, 'w'.repeat(PROJECT_NAME_ALLOWANCE)));
+  const worstPath = workspaceWorstPath(joinAddress(homeAddress, 'w'.repeat(WORKSPACE_NAME_ALLOWANCE)));
   return { worstPath, requiredLength: worstPath.length, status: classifyPathLength(worstPath.length) };
 }
 
@@ -362,17 +375,31 @@ export function longestPath(paths: string[]): string | undefined {
   return paths.reduce<string | undefined>((a, b) => (a === undefined || b.length > a.length ? b : a), undefined);
 }
 
-/** Longest relative FILE path ("/"-separated, no `.crswap`) below a folder; '' when it has no files. Names only: nothing is read or hashed. */
-export async function longestRelativeFilePath(dir: FileSystemDirectoryAdapter): Promise<string> {
-  let longest = '';
+/** Longest relative file and folder paths ("/"-separated, no `.crswap`); '' when none. */
+export interface LongestPaths { file: string; dir: string }
+
+/** Names only: nothing is read or hashed. Skips nothing. */
+export async function longestRelativePaths(dir: FileSystemDirectoryAdapter): Promise<LongestPaths> {
+  const longest: LongestPaths = { file: '', dir: '' };
   const walk = async (current: FileSystemDirectoryAdapter, prefix: string): Promise<void> => {
     for (const entry of await current.listEntries()) {
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.kind === 'file') {
-        if (relative.length > longest.length) longest = relative;
-      } else await walk(await current.getDirectory([entry.name], { create: false }), relative);
+        if (relative.length > longest.file.length) longest.file = relative;
+      } else {
+        if (relative.length > longest.dir.length) longest.dir = relative;
+        await walk(await current.getDirectory([entry.name], { create: false }), relative);
+      }
     }
   };
   await walk(dir, '');
   return longest;
 }
+
+/** Longest relative FILE path below a folder; '' when it has no files. */
+export async function longestRelativeFilePath(dir: FileSystemDirectoryAdapter): Promise<string> {
+  return (await longestRelativePaths(dir)).file;
+}
+
+/** The longest string of a list ('' for none). */
+export const longestOf = (paths: string[]): string => paths.reduce((a, b) => (b.length > a.length ? b : a), '');

@@ -26,7 +26,7 @@ import {
 } from "./vault-service";
 import { createDesignBranch } from "./branch-service";
 import {
-  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, caseWorstPath, checkWorstPath, joinAddress, longestRelativeFilePath,
+  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, caseWorstPath, checkWorstPath, joinAddress, longestOf, longestRelativePaths,
   projectWorstPath, recoveryWorstPath, type PathBudgetInput, type PathBudgetReport,
 } from "./path-budget";
 import { componentWriteBlock } from './component-identity';
@@ -491,10 +491,12 @@ export async function adoptProject(
   }
   // Names only (no hashing), before any lock or write: the longest file across the working folders.
   let longestUserFile = "";
+  let longestUserDir = "";
   if (options.budget?.workspaceAddress)
     for (const branch of initial.branches) {
-      const file = await longestRelativeFilePath(sourceFolders[branch.branchId]!);
-      if (file.length > longestUserFile.length) longestUserFile = file;
+      const found = await longestRelativePaths(sourceFolders[branch.branchId]!);
+      longestUserFile = longestOf([longestUserFile, found.file]);
+      longestUserDir = longestOf([longestUserDir, found.dir]);
     }
   // Always workspace registration first, then project lock; managed branch/capture only need the project lock.
   return withProjectWriterLock(`workspace:${workspace.workspaceId}`, () =>
@@ -537,6 +539,7 @@ export async function adoptProject(
         {
           workspaceAddress: options.budget?.workspaceAddress,
           longestUserFile,
+          longestUserDir,
           // Readable case folder names are chosen on copy; leave room for a counter.
           caseAllowance: Math.max(
             CASE_ALLOWANCE,
@@ -702,12 +705,11 @@ export async function createManagedBranch(
   const result = await createDesignBranch({
     ...branchInput,
     // Path budget: only the new case's own paths, checked with the final folder name before any write.
-    beforeFirstWrite: async ({ folderName, sourceFiles }) => {
+    beforeFirstWrite: async ({ folderName, sourceFiles, sourceDirectories }) => {
       const workspaceAddress = input.budget?.workspaceAddress;
       if (!workspaceAddress) return;
-      const longest = sourceFiles.reduce((a, b) => (b.length > a.length ? b : a), "");
       pathBudget = checkWorstPath(
-        caseWorstPath(joinAddress(workspaceAddress, containerPath), folderName, longest),
+        caseWorstPath(joinAddress(workspaceAddress, containerPath), folderName, longestOf(sourceFiles), longestOf(sourceDirectories)),
         "case",
         folderName,
       );
@@ -770,13 +772,11 @@ export async function recoverManagedCopy(
     // Path budget: the folder name is final and nothing has been written yet.
     let pathBudget: PathBudgetReport = UNCHECKED_PATH_BUDGET;
     if (options.budget?.workspaceAddress) {
-      const paths =
-        selectedPaths ??
-        project.vaultState.revisions.find((r) => r.manifest.revisionId === revisionId)?.manifest.files.map((f) => f.path) ??
-        [];
-      const longest = paths.reduce((a, b) => (b.length > a.length ? b : a), "");
+      const manifest = project.vaultState.revisions.find((r) => r.manifest.revisionId === revisionId)?.manifest;
+      const files = selectedPaths ?? manifest?.files.map((f) => f.path) ?? [];
+      const dirs = selectedPaths ? [] : manifest?.directories ?? [];
       pathBudget = checkWorstPath(
-        recoveryWorstPath(joinAddress(options.budget.workspaceAddress, containerPath), copyFolder, longest),
+        recoveryWorstPath(joinAddress(options.budget.workspaceAddress, containerPath), copyFolder, longestOf(files), longestOf(dirs)),
         "project",
         // The copy folder name is fixed; the project folder name is what the user can shorten.
         containerPath.split("/").at(-1)!,
@@ -826,6 +826,8 @@ interface ProjectBudget {
   workspaceAddress?: string;
   /** Longest relative file path the project will hold (import/adoption); '' for an empty project. */
   longestUserFile?: string;
+  /** Longest relative folder path (no `.crswap`). */
+  longestUserDir?: string;
   caseAllowance?: number;
 }
 async function allocateProject(
@@ -845,6 +847,7 @@ async function allocateProject(
         projectWorstPath({
           projectAddress: joinAddress(budget.workspaceAddress, path),
           longestUserFile: budget.longestUserFile,
+          longestUserDir: budget.longestUserDir,
           caseAllowance: budget.caseAllowance,
         }),
         "project",
@@ -1036,8 +1039,8 @@ async function initializeManagedProject(
     );
   const workspace = await workspaceIdentity(root);
   // Names only (no hashing), before the lock or any write: the longest file of an import source.
-  const longestUserFile =
-    source && options.budget?.workspaceAddress ? await longestRelativeFilePath(source) : "";
+  const longestUser =
+    source && options.budget?.workspaceAddress ? await longestRelativePaths(source) : { file: "", dir: "" };
   return withProjectWriterLock(
     `workspace:${workspace.workspaceId}`,
     async () => {
@@ -1060,7 +1063,8 @@ async function initializeManagedProject(
       const origin = source ? "import" : "create";
       const { path, container, pathBudget } = await allocateProject(root, name, origin, {
         workspaceAddress: options.budget?.workspaceAddress,
-        longestUserFile,
+        longestUserFile: longestUser.file,
+        longestUserDir: longestUser.dir,
       });
       try {
         const main = await container.getDirectory(["working", "main"], {
