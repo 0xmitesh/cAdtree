@@ -619,7 +619,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             if (error instanceof DOMException && error.name === "AbortError")
               throw new Error(
                 create
-                  ? "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home."
+                  ? "Folder selection was cancelled. Choose an empty dedicated folder, suggested name Cadtree, to create your Cadtree home."
                   : "Folder selection was cancelled. Choose your existing Cadtree home folder to continue.",
               );
             throw error;
