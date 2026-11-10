@@ -19,6 +19,7 @@ import {
 } from "./vault-service";
 import {
   CADTREE_SCHEMA_VERSION,
+  MAIN_BRANCH_ID,
   type BranchRecord,
   type ProgressUpdate,
   type VaultState,
@@ -164,6 +165,8 @@ export async function createDesignBranch(
       // before anything else is written; other cases' records are never touched.
       for (let attempt = 1; ; attempt++) {
         const candidate = (options.newBranchId ?? newRecordId)();
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(candidate) || candidate === MAIN_BRANCH_ID)
+          throw new Error("Invalid design case ID. Nothing was written.");
         const known =
           state.branches.some((b) => b.branchId === candidate) ||
           (await vaultDir.hasFile(branchRecordPath(candidate))) ||
@@ -187,8 +190,7 @@ export async function createDesignBranch(
             stagingPath = branchAttemptPath(candidate);
             break;
           } catch (error) {
-            if (!(error instanceof FileConflictError) && !/already exists/i.test(error instanceof Error ? error.message : ""))
-              throw error;
+            if (!(error instanceof FileConflictError)) throw error;
           }
         }
         if (attempt >= MAX_BRANCH_ID_ATTEMPTS)

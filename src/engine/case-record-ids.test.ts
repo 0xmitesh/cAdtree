@@ -194,3 +194,19 @@ test('adopting a vault that holds old-format and new-format cases binds both to 
   const reopened = await resolveManagedProject(root, adopted.record.containerPath);
   assert.ok(reopened.workingFolders[OLD_ID] && reopened.workingFolders[newCase.branch.branchId]);
 });
+
+test('an injected case ID must be a safe segment and not branch-main; nothing is written otherwise', async () => {
+  const { created, main, firstId } = await project();
+  const vault = created.vaultDir;
+  for (const bad of ['', 'branch-main', 'a/b', '..', 'x'.repeat(65), 'sp ace', 'a.b']) {
+    const parent = new InMemoryFileSystemAdapter('Cases');
+    const before = (await vault.listEntries()).map((e) => e.name).join();
+    await assert.rejects(
+      createDesignBranch({ vaultDir: vault, destinationParent: parent, workingFolders: { [MAIN_BRANCH_ID]: main }, sourceRevisionId: firstId, name: 'Bad', reason: 'r', newBranchId: () => bad }),
+      /Invalid design case ID/,
+    );
+    assert.equal((await parent.listEntries()).length, 0);
+    assert.equal(await vault.hasDirectory(['staging']) ? (await (await vault.getDirectory(['staging'])).listEntries()).some((e) => e.name.endsWith('.branch-attempt.json')) : false, false);
+    assert.equal((await vault.listEntries()).map((e) => e.name).join(), before);
+  }
+});
