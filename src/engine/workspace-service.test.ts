@@ -639,7 +639,7 @@ test("interruption at project publication and branch mapping leaves no ready alt
       root.setHooks({
         onBeforeWrite: (path) => {
           if (
-            path.includes("/.cadtree/branches/branch-") &&
+            path.includes("/.cadtree/branches/") &&
             !path.endsWith("branch-main.json")
           )
             throw new Error("Mapping publication failed");

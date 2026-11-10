@@ -617,7 +617,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     const targetLower = leafName.toLowerCase();
     for (const [existingName] of dir.children.entries()) {
       if (existingName === leafName || existingName.toLowerCase() === targetLower) {
-        throw new Error(
+        throw new FileConflictError(
           `Destination conflict: "${relPath}" already exists (collides with "${existingName}"). Recovery refuses to overwrite existing files.`
         );
       }
