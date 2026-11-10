@@ -156,6 +156,11 @@ test('a vault with OLD references (compact and full-hex markers) loads unchanged
   assert.ok((await names(f.vault, ['references', 'completed'])).some(n => n.startsWith(`${f.cat2Id}.`) && n.length > 71));
   // Reopening from scratch gives the same library.
   assert.deepEqual((await openExistingVault(f.vault)).references!.library, state.references!.library);
+  // The legacy reference's first (legacy) version is still retrievable byte-for-byte after the mixed imports.
+  const legacyVersion = state.references!.library[0].versions[0];
+  assert.match(legacyVersion.versionId, /^reference-version-/);
+  const retrieved = await retrieveReferenceAttachment(f.vault, f.projectId, f.refA, legacyVersion.versionId);
+  assert.equal(new TextDecoder().decode(retrieved.bytes as Uint8Array), 'legacy A');
 });
 
 test('legacy compact UUID markers can never be mistaken for record IDs (v4 byte 6 property), and new markers round-trip', () => {
