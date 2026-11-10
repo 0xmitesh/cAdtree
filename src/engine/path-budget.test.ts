@@ -260,3 +260,22 @@ test('internalReserve equals the deepest template and today\'s value is reported
   console.log(`path-budget: newRecordsReserve() = ${newRecordsReserve()} (${deepestNewRecordsTemplate().label})`);
   console.log(`path-budget: internalReserve() = ${internalReserve()} (${internalReserveLabel()})`);
 });
+
+test('staging session folder is 22 chars, deterministic and collision-free over many session IDs', async () => {
+  const { getStagingSessionPathSegments, getStagingObjectPathSegments } = await import('./object-store');
+  const a = getStagingSessionPathSegments('session-x');
+  assert.equal(a[0], 'staging');
+  assert.equal(a[1]!.length, 22);
+  assert.match(a[1]!, /^[A-Za-z0-9_-]{22}$/);
+  assert.deepEqual(getStagingSessionPathSegments('session-x'), a);
+  const seen = new Set<string>();
+  for (let i = 0; i < 20000; i++) seen.add(getStagingSessionPathSegments(`session-20260101-000000-${i.toString(16)}`)[1]!);
+  assert.equal(seen.size, 20000);
+  const sha = 'a'.repeat(64);
+  assert.equal(getStagingObjectPathSegments('session-x', sha)[2]!.length, 43 + 4);
+  const staged = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'vault staged object')!;
+  assert.equal(staged.reserveLength, 91);
+  const marker = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'knowledge publication marker')!;
+  assert.equal(marker.reserveLength, 142);
+  assert.equal(newRecordsReserve(), 142);
+});

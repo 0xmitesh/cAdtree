@@ -239,7 +239,7 @@ export async function captureRevision(
     }
     const referenceBoundary = await ensureReferenceStore(vaultDir, vaultState);
 
-    // The first write for a revision (after all review validation, so a rejected capture writes nothing) is the exclusive creation of its staging session folder,
+    // The first revision-specific write (after all review validation, so a rejected capture writes nothing) is the exclusive creation of its staging session folder,
     // which claims the record ID. A clash (existing revision files, leftover attempt) draws a
     // new ID before anything else is written; other revisions' files are never touched.
     let revisionId = '';

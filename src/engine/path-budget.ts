@@ -148,8 +148,8 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('vault revision completion marker (legacy revision ID)', 'file', below(V, revisionCompletionPath(LEGACY_REV)), 'vault/completed/{legacyRev}.done.json', true),
   template('vault cache index', 'file', [V, 'cache', 'index.json'], 'vault/cache/index.json'),
   template('vault content object', 'file', below(V, getObjectPathSegments(SHA)), 'vault/objects/{sha2}/{sha}.bin'),
-  template('vault staged object', 'file', below(V, getStagingObjectPathSegments('sample-session', SHA)), 'vault/staging/{b64}/{b64}.tmp'),
-  template('vault staging session folder', 'dir', below(V, stagingSession), 'vault/staging/{b64}'),
+  template('vault staged object', 'file', below(V, getStagingObjectPathSegments('sample-session', SHA)), 'vault/staging/{b64uuid}/{b64}.tmp'),
+  template('vault staging session folder', 'dir', below(V, stagingSession), 'vault/staging/{b64uuid}'),
   template('vault branch attempt', 'file', below(V, branchAttemptPath(CASE_ID)), 'vault/staging/{caseId}.branch-attempt.json'),
   template('vault branch attempt (legacy case ID)', 'file', below(V, branchAttemptPath(BRANCH)), 'vault/staging/{branch}.branch-attempt.json', true),
   // Component identity.
