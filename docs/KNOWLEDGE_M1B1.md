@@ -19,6 +19,8 @@ Implemented locally on `experiment/knowledge-lab`. No push, commit, PR or merge.
 | `src/knowledge/types.ts`, `src/knowledge/index.ts` | Separate `persistedRecords` and `persistedDiagnostics` collections; original M1A algorithms unchanged |
 | `docs/M1B-1-examples.json` | Two complete API results generated using a disposable in-memory vault |
 
+Note: `docs/M1B-1-examples.json` predates the 11 Nov 2026 ID format change and uses historical `knowledge-<uuid>` record IDs and full-hex publication markers; they are not valid in the current format.
+
 ## Actual envelope and examples
 
 | Field | Meaning |

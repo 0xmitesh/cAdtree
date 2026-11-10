@@ -62,6 +62,10 @@ test('projectWorstCase for the example project path', () => {
   // Classification of the results.
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: EXAMPLE })), 'ok');
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: 95 })), 'warn');
+  // Exact boundaries: projectPath + 1 + internalReserve() (110) is 111 more than the project path.
+  const at = (projectPath: number) => projectWorstCase({ projectPath });
+  assert.deepEqual([88, 89, 129, 130].map(at), [199, 200, 240, 241]);
+  assert.deepEqual([88, 89, 129, 130].map((n) => classifyPathLength(at(n))), ['ok', 'warn', 'warn', 'block']);
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 })), 'block');
 });
 
@@ -225,20 +229,17 @@ test('drift: every path written by a full workflow is covered by a template and 
   const used = new Set<string>();
   const reserve = internalReserve();
   const tooLong: string[] = [];
-  const legacyHit: string[] = [];
   for (const [kind, list] of [['file', internalFiles], ['dir', internalDirs]] as const) {
     for (const path of list) {
       const label = matchInternalPath(path, kind);
       if (!label) unmatched.push(`${kind}: ${path}`);
       else used.add(label);
-      if (label && (label.includes('(legacy') || /\{(apply|recovery)\}/.test(label))) legacyHit.push(`${kind}: ${path} -> ${label}`);
       const length = path.length + (kind === 'file' ? CRSWAP_CHARS : 0);
       if (length > reserve) tooLong.push(`${length} > ${reserve}: ${path}`);
     }
   }
   assert.deepEqual(unmatched, [], 'a path was written that no INTERNAL_PATH_TEMPLATES entry covers; add a template');
   assert.deepEqual(tooLong, [], 'a path is longer than internalReserve()');
-  assert.deepEqual(legacyHit, [], 'new code must not write legacy-shaped paths');
 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);

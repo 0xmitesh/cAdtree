@@ -144,6 +144,8 @@ storage dependency.
 `tests/knowledge-retrieval-fixture.ts`, which publishes and reopens an in-memory
 vault through existing cAdtree APIs. It is a review artifact, not a storage format.
 
+It predates the 11 Nov 2026 ID format change and uses historical `knowledge-<uuid>` record IDs.
+
 The component starts as `collar.SLDPRT` on Main, is explicitly renamed to
 `collar_plate.SLDPRT`, and also appears as `collar.SLDPRT` on the alternative
 branch forked from the first revision. Main has a later reference-only revision.

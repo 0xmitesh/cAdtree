@@ -139,7 +139,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('reference catalog', 'file', below(V, referenceCatalogPath(CASE_ID)), 'vault/references/catalogs/{recordId}.json'),
   template('reference catalog marker', 'dir', below(V, referenceCatalogMarkerPath(CASE_ID, SHA)), 'vault/references/completed/{recordId}.{b64}.done'),
   template('reference context', 'file', below(V, referenceContextPath(REV)), 'vault/references/contexts/{rev}.json'),
-  // Application (apply) evidence. New operations use event IDs; apply-<uuid> / recovery-<uuid> remain for old records.
+  // Application (apply) evidence, keyed by event IDs.
   template('application plan', 'file', below(V, applicationPlanPath(CASE_ID, EVENT)), 'vault/applications/{caseId}/{event}/plan.json'),
   template('application event', 'file', below(V, applicationEventPath(CASE_ID, EVENT, SEQ)), 'vault/applications/{caseId}/{event}/events/{seq}.json'),
   template('application before-state copy', 'file', below(V, applicationStagedPath(CASE_ID, EVENT, 'before', SEQ)), 'vault/applications/{caseId}/{event}/before/{seq}.bin'),

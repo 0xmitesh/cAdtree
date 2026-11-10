@@ -110,6 +110,7 @@ test('F1 preserves pre-fix example hashes (the old-ID docs examples are hash ora
     cadDesignChange: PublishedKnowledgeRecord; genericObservation: PublishedKnowledgeRecord;
   };
   // These examples were generated before F1. Their recorded digests are the compatibility oracle.
+  // validateEnvelope is left out: these docs examples use historical knowledge-<uuid> record IDs, which are no longer valid.
   for (const previous of [examples.cadDesignChange, examples.genericObservation]) {
     assert.equal(bodyChecksum(previous.record), previous.source.bodySha256);
     assert.equal(hashString(canonicalJson(previous.record)), previous.source.recordSha256);
