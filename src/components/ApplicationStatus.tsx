@@ -102,7 +102,7 @@ export function ApplicationStatus({
                 </ul>
                 <p className="small">
                   Unexpected byte copies, when readable, are kept under this
-                  operation's unexpected/recovery-ID/ folder using the same
+                  operation's unexpected/&lt;recovery ID&gt;/ folder using the same
                   action index. A partial or truncated file is never blindly
                   overwritten. After manually restoring affected paths to their
                   recorded before-state, retry recovery. Newly created empty

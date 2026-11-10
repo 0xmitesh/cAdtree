@@ -15,7 +15,7 @@ import { changeCaseLifecycle } from './case-lifecycle-service';
 import { createKnowledgeRecord } from '../knowledge/records';
 import {
   BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, INTERNAL_PATH_TEMPLATES, MAX_NAME_BYTES, PROJECT_NAME_ALLOWANCE,
-  WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, internalReserve, internalReserveLabel,
+  WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, deepestNewRecordsTemplate, newRecordsReserve, internalReserve, internalReserveLabel,
   matchInternalPath, projectWorstCase, shapePattern,
 } from './path-budget';
 
@@ -222,19 +222,22 @@ test('drift: every path written by a full workflow is covered by a template and 
 
   const unmatched: string[] = [];
   const used = new Set<string>();
-  const reserve = internalReserve();
+  const reserve = newRecordsReserve();
   const tooLong: string[] = [];
+  const legacyHit: string[] = [];
   for (const [kind, list] of [['file', internalFiles], ['dir', internalDirs]] as const) {
     for (const path of list) {
       const label = matchInternalPath(path, kind);
       if (!label) unmatched.push(`${kind}: ${path}`);
       else used.add(label);
+      if (label && (label.includes('(legacy') || /\{(apply|recovery)\}/.test(label))) legacyHit.push(`${kind}: ${path} -> ${label}`);
       const length = path.length + (kind === 'file' ? CRSWAP_CHARS : 0);
       if (length > reserve) tooLong.push(`${length} > ${reserve}: ${path}`);
     }
   }
   assert.deepEqual(unmatched, [], 'a path was written that no INTERNAL_PATH_TEMPLATES entry covers; add a template');
-  assert.deepEqual(tooLong, [], 'a path is longer than internalReserve()');
+  assert.deepEqual(tooLong, [], 'a path is longer than newRecordsReserve()');
+  assert.deepEqual(legacyHit, [], 'new code must not write legacy-shaped paths');
 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
@@ -249,6 +252,11 @@ test('internalReserve equals the deepest template and today\'s value is reported
   assert.equal(internalReserve(), deepest.reserveLength);
   assert.equal(internalReserveLabel(), deepest.label);
   for (const t of INTERNAL_PATH_TEMPLATES) assert.ok(t.reserveLength <= internalReserve(), t.label);
-  assert.equal(deepest.label, 'application unexpected-recovery copy');
+  assert.equal(deepest.label, 'application unexpected-recovery copy (legacy)');
+  assert.ok(INTERNAL_PATH_TEMPLATES.some((t) => t.legacy) && INTERNAL_PATH_TEMPLATES.some((t) => !t.legacy));
+  const fresh = INTERNAL_PATH_TEMPLATES.filter((t) => !t.legacy);
+  assert.equal(newRecordsReserve(), Math.max(...fresh.map((t) => t.reserveLength)));
+  assert.ok(newRecordsReserve() <= internalReserve());
+  console.log(`path-budget: newRecordsReserve() = ${newRecordsReserve()} (${deepestNewRecordsTemplate().label})`);
   console.log(`path-budget: internalReserve() = ${internalReserve()} (${internalReserveLabel()})`);
 });

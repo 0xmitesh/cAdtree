@@ -13,6 +13,14 @@ export interface WriteOptions {
   exclusive?: boolean;
 }
 
+/** Thrown when an exclusive create finds the name already taken. Message text is unchanged. */
+export class FileConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FileConflictError';
+  }
+}
+
 export interface FileSystemDirectoryAdapter {
   readonly name: string;
   readonly kind: 'real' | 'memory';
@@ -349,7 +357,7 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     const targetLower = leafName.toLowerCase();
     for await (const [existingName] of iterable) {
       if (existingName === leafName || existingName.toLowerCase() === targetLower) {
-        throw new Error(
+        throw new FileConflictError(
           `Destination conflict: "${relPath}" already exists (collides with "${existingName}"). Recovery refuses to overwrite existing files.`
         );
       }
@@ -644,7 +652,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
       if (options?.exclusiveCreate && options.create && i === pathSegments.length - 1) {
         for (const existingName of curr.children.keys()) {
           if (existingName.toLowerCase() === seg.toLowerCase()) {
-            throw new Error(`Destination conflict: "${existingName}" already exists.`);
+            throw new FileConflictError(`Destination conflict: "${existingName}" already exists.`);
           }
         }
       }
