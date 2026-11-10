@@ -11,7 +11,7 @@ import { prepareComponentRecord, publishComponentRecord } from './component-iden
 import { prepareReferenceContext, referenceContextSignature, ensureReferenceStore, verifyReferenceContextContent, verifyReferencePublication, publishReferenceContext, storeCaptureReferenceAttachments } from './references';
 import { getBranchBaseline, validateOperationWorkingFolders } from './branch-state';
 import { getStagingSessionPathSegments, writeAndVerifyObject } from './object-store';
-import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
+import { enumerateWorkingFolder, partitionSystemFiles, scanBranchChanges } from './scanner';
 import {
   CADTREE_SCHEMA_VERSION,
   CaptureRevisionInput,
@@ -284,9 +284,16 @@ export async function captureRevision(
       message: 'Checking source stability after object capture...',
     });
 
-    const postCaptureInventory = await enumerateWorkingFolder(workingDir, {
+    const rawPostCapture = await enumerateWorkingFolder(workingDir, {
       signal: input.signal,
     });
+    const postCaptureInventory = {
+      ...rawPostCapture,
+      files: partitionSystemFiles(
+        rawPostCapture.files,
+        new Set((baselineManifest?.files ?? []).map((f) => f.path))
+      ).files,
+    };
 
     if (postCaptureInventory.errors.length > 0) {
       throw new Error(

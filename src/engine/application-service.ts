@@ -22,7 +22,7 @@ import {
 import { getObjectPathSegments, verifyStoredObject } from "./object-store";
 import { hashStream, hashString } from "./hash";
 import { withProjectWriterLock } from "./locks";
-import { scanBranchChanges } from "./scanner";
+import { partitionSystemFiles, scanBranchChanges } from "./scanner";
 import {
   inventorySignature,
   readVerifiedInventory,
@@ -470,7 +470,14 @@ export async function applyPreparedApplication(
         path: action.path,
       });
     }
-    const result = await readVerifiedInventory(working, options);
+    const rawResult = await readVerifiedInventory(working, options);
+    const result = {
+      ...rawResult,
+      files: partitionSystemFiles(
+        rawResult.files,
+        new Set(plan.resultFiles.map((f) => f.path)),
+      ).files,
+    };
     if (
       inventorySignature(result) !==
       inventorySignature({

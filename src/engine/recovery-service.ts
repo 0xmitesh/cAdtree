@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty, isSystemClutterName } from "./scanner";
 import {
   checkCaseInsensitiveCollisions,
   FileSystemDirectoryAdapter,
@@ -85,7 +86,7 @@ async function executeVerifiedRecovery(params: {
   const lockKey = `recovery-lock:${vaultDir.name}:${destinationDir.name}`;
   return withProjectWriterLock(lockKey, async () => {
     const existingDestEntries = await destinationDir.listEntries();
-    if (existingDestEntries.length > 0) {
+    if (!isEffectivelyEmpty(existingDestEntries)) {
       throw new Error(
         `Recovery destination "${destinationDir.name}" is not empty (contains ${existingDestEntries.length} item(s)). Select a fresh, empty folder for recovery.`
       );
@@ -205,7 +206,7 @@ async function executeVerifiedRecovery(params: {
 
       // Recheck that destination root is still completely empty right before materialization
       const preWriteRootEntries = await destinationDir.listEntries();
-      if (preWriteRootEntries.length > 0) {
+      if (!isEffectivelyEmpty(preWriteRootEntries)) {
         abortedDueToDestinationConflict = true;
         throw new Error(
           `Destination conflict: folder "${destinationDir.name}" was populated (${preWriteRootEntries[0].name}) after initial check. Recovery stopped to avoid overwriting existing content.`
@@ -278,7 +279,7 @@ async function executeVerifiedRecovery(params: {
           const { bytesWritten } = await destinationDir.writeFileStream(
             fileSegments,
             objectStream,
-            { signal, exclusive: true }
+            { signal, exclusive: !isSystemClutterName(fileEntry.path.split('/').pop()!) }
           );
 
           if (bytesWritten !== fileEntry.size) {

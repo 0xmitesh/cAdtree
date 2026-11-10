@@ -4,7 +4,8 @@ import {
   InMemoryFileSystemAdapter,
   type FileSystemDirectoryAdapter,
 } from "./fs-adapter";
-import { initializeProjectVault, openExistingVault } from "./vault-service";
+import { computeManifestPayloadChecksum, initializeProjectVault, openExistingVault } from "./vault-service";
+import { hashString } from "./hash";
 import { captureRevision } from "./revision-service";
 import { createDesignBranch } from "./branch-service";
 import {
@@ -33,6 +34,7 @@ import {
   inventorySignature,
 } from "./copy-service";
 import { scanBranchChanges } from "./scanner";
+import { prepareReviewExport, exportRevisionForReview } from "./review-export";
 import type { CaptureRevisionInput } from "./types";
 import {
   createWorkspace,
@@ -706,4 +708,157 @@ test("explicit preparation can renew a read-only folder permission; denied renew
     (await openExistingVault(f.vault)).applicationOperations!.length,
     0,
   );
+});
+
+test("a revision that tracks .DS_Store still creates a case, applies and exports with the clutter file written and verified", async () => {
+  const vault = new InMemoryFileSystemAdapter("Vault"),
+    main = new InMemoryFileSystemAdapter("Main"),
+    parent = new InMemoryFileSystemAdapter("Cases"),
+    reviews = new InMemoryFileSystemAdapter("Reviews");
+  const folders: Record<string, FileSystemDirectoryAdapter> = {
+    "branch-main": main,
+  };
+  await main.writeFileText(["Part.SLDPRT"], "geometry");
+  await initializeProjectVault(main, vault, "Clutter");
+  const first = await captureRevision(main, vault, {
+    branchId: "branch-main",
+    summary: "Base",
+    notes,
+    workingFolders: folders,
+  });
+  // Model a pre-feature vault (no component or reference evidence).
+  await vault.removeEntry(["components"], { recursive: true });
+  if (await vault.hasFile(["reference-context.json"]))
+    await vault.removeEntry(["reference-context.json"]);
+  await vault.removeEntry(["references"], { recursive: true });
+  const firstDonePath = [
+    "completed",
+    `${first.revision.manifest.revisionId}.done.json`,
+  ];
+  const firstDone = JSON.parse(await vault.readFileText(firstDonePath));
+  delete firstDone.referenceContext;
+  await vault.writeFileText(firstDonePath, JSON.stringify(firstDone, null, 2));
+  // Forge a legacy revision that already tracks `.DS_Store` (untracked clutter is
+  // otherwise skipped, so a current capture can never produce one).
+  const clutterText = "legacy finder data";
+  const clutterSha = hashString(clutterText);
+  await vault.writeFileText(getObjectPathSegments(clutterSha), clutterText);
+  const forged = {
+    ...first.revision.manifest,
+    revisionId: "legacy-clutter",
+    displayNumber: 2,
+    parentRevisionId: first.revision.manifest.revisionId,
+    files: [
+      ...first.revision.manifest.files,
+      {
+        path: ".DS_Store",
+        size: clutterText.length,
+        sha256: clutterSha,
+        lastModified: 0,
+      },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+  };
+  forged.manifestPayloadSha256 = computeManifestPayloadChecksum(forged);
+  const forgedText = JSON.stringify(forged);
+  await vault.writeFileText(
+    ["revisions", "legacy-clutter.manifest.json"],
+    forgedText,
+  );
+  const legacyCompletion: Record<string, unknown> = {
+    ...firstDone,
+  };
+  delete legacyCompletion.referenceContext;
+  await vault.writeFileText(
+    ["completed", "legacy-clutter.done.json"],
+    JSON.stringify({
+      ...legacyCompletion,
+      revisionId: "legacy-clutter",
+      displayNumber: 2,
+      manifestSha256: hashString(forgedText),
+    }),
+  );
+  const base = { revision: { manifest: forged } };
+  // d. The tracked file is absent from main's working folder: reported as deleted.
+  const mainScan = await scanBranchChanges(main, "branch-main", forged);
+  assert.deepEqual(mainScan.deleted.map((f) => f.path), [".DS_Store"]);
+
+  const created = await createDesignBranch({
+    vaultDir: vault,
+    destinationParent: parent,
+    workingFolders: folders,
+    sourceRevisionId: base.revision.manifest.revisionId,
+    name: "Clutter case",
+    reason: "Verify tracked clutter",
+  });
+  assert.equal(
+    await created.workingDir.readFileText([".DS_Store"]),
+    "legacy finder data",
+  );
+  folders[created.branch.branchId] = created.workingDir;
+  await created.workingDir.writeFileText([".DS_Store"], "edited finder data");
+  await created.workingDir.writeFileText(["Part.SLDPRT"], "case geometry");
+  const caseScan = await scanBranchChanges(
+    created.workingDir,
+    created.branch.branchId,
+    base.revision.manifest,
+  );
+  assert.deepEqual(caseScan.skippedSystemFiles, []);
+  const sourceSave = await captureRevision(created.workingDir, vault, {
+    branchId: created.branch.branchId,
+    summary: "Case edits",
+    notes,
+    workingFolders: folders,
+  });
+  assert.ok(
+    sourceSave.revision.manifest.files.some((f) => f.path === ".DS_Store"),
+  );
+
+  // Main deletes the tracked file, so applying the case must write it back.
+  const mainSave = await captureRevision(main, vault, {
+    branchId: "branch-main",
+    summary: "Main drops clutter",
+    notes,
+    workingFolders: folders,
+  });
+  assert.ok(!mainSave.revision.manifest.files.some((f) => f.path === ".DS_Store"));
+  const state = await openExistingVault(vault);
+  const prepared = prepareApplyPreview(
+    state,
+    sourceSave.revision.manifest.revisionId,
+    "branch-main",
+  );
+  if (prepared.status !== "available") throw new Error(prepared.reason);
+  const selection = Object.fromEntries(
+    prepared.context.rows
+      .filter((r) => r.kind === "available" || r.kind === "conflict")
+      .map((r) => [r.path, { selected: true, decision: "use-source" as const }]),
+  );
+  assert.ok(selection[".DS_Store"]);
+  const options = { workingFolders: folders };
+  const review = applicationReview(
+    buildApplyPreview(prepared.context, selection, "Reuse case"),
+    selection,
+  );
+  const op = await applyPreparedApplication(
+    vault,
+    await prepareApplication(vault, review, options),
+    options,
+  );
+  assert.equal(op.status, "applied");
+  assert.equal(await main.readFileText([".DS_Store"]), "edited finder data");
+
+  const plan = prepareReviewExport(
+    await openExistingVault(vault),
+    sourceSave.revision.manifest.revisionId,
+    { kind: "complete", selectedPaths: [], labelFilenames: false },
+  );
+  const exported = await exportRevisionForReview({
+    vaultDir: vault,
+    parent: reviews,
+    plan,
+    folderName: plan.folderName,
+    workingFolders: folders,
+  });
+  const out = await reviews.getDirectory([exported.folderName]);
+  assert.equal(await out.readFileText([".DS_Store"]), "edited finder data");
 });

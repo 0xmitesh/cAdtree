@@ -5,6 +5,9 @@ import {
 } from "./fs-adapter";
 import {
   enumerateWorkingFolder,
+  isEffectivelyEmpty,
+  partitionSystemFiles,
+  isSystemClutterName,
   type EnumerateWorkingFolderResult,
 } from "./scanner";
 import type { ProgressUpdate } from "./types";
@@ -66,7 +69,7 @@ export async function copyVerifiedTree(
     "Managed destination",
   );
   throwIfCancelled(options.signal);
-  if ((await destination.listEntries()).length)
+  if (!isEffectivelyEmpty(await destination.listEntries()))
     throw new Error("Copy destination must be fresh and empty.");
   const before = await readVerifiedInventory(source, options);
   for (const path of before.directories) {
@@ -91,7 +94,11 @@ export async function copyVerifiedTree(
     const written = await destination.writeFileStream(
       splitAndValidatePath(file.path),
       await source.readFileStream(splitAndValidatePath(file.path)),
-      { signal: options.signal, exclusive: true },
+      {
+        signal: options.signal,
+        // Overwriting pre-existing OS clutter in the fresh destination is harmless.
+        exclusive: !isSystemClutterName(file.path.split("/").pop()!),
+      },
     );
     if (written.bytesWritten !== file.size)
       throw new Error(`Incomplete copy of "${file.path}".`);
@@ -105,7 +112,12 @@ export async function copyVerifiedTree(
     totalBytes: before.totalBytes,
     message: "Verifying the copied bytes and directory hierarchy…",
   });
-  const copied = await readVerifiedInventory(destination, options);
+  const beforePaths = new Set(before.files.map((f) => f.path));
+  const rawCopied = await readVerifiedInventory(destination, options);
+  const copied = {
+    ...rawCopied,
+    files: partitionSystemFiles(rawCopied.files, beforePaths).files,
+  };
   if (inventorySignature(copied) !== inventorySignature(before))
     throw new Error(
       "Copied files or directories do not match the source inventory.",
@@ -118,7 +130,11 @@ export async function copyVerifiedTree(
     totalBytes: before.totalBytes,
     message: "Rechecking source stability before publication…",
   });
-  const after = await readVerifiedInventory(source, options);
+  const rawAfter = await readVerifiedInventory(source, options);
+  const after = {
+    ...rawAfter,
+    files: partitionSystemFiles(rawAfter.files, beforePaths).files,
+  };
   if (inventorySignature(after) !== inventorySignature(before))
     throw new Error(
       "Source changed during the copy. Save and close CAD documents, then retry into a fresh destination.",

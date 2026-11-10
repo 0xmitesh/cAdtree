@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty } from "./engine/scanner";
 import { useEffect, useRef, useState } from "react";
 import {
   type FileSystemDirectoryAdapter,
@@ -628,7 +629,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         if ((await root.requestPermission("readwrite")) !== "granted")
           throw new Error("Read/write folder access was denied. Allow local folder access in your browser site settings, then reconnect your Cadtree home.");
         if (create) {
-          if ((await root.listEntries()).length)
+          if (!isEffectivelyEmpty(await root.listEntries()))
             throw new Error(
               "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.",
             );

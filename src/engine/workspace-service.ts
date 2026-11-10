@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty } from "./scanner";
 import {
   type FileSystemDirectoryAdapter,
   splitAndValidatePath,
@@ -209,7 +210,7 @@ export async function createWorkspace(
     if (!name.trim()) throw new Error("Workspace name is required.");
     if ((await root.queryPermission("readwrite")) !== "granted")
       throw new Error("Grant write access to the selected workspace folder.");
-    if ((await root.listEntries()).length)
+    if (!isEffectivelyEmpty(await root.listEntries()))
       throw new Error(
         "Create a workspace only in an empty folder. Use Open workspace for an existing one.",
       );

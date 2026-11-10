@@ -301,6 +301,16 @@ export function ChangesCaptureView({
           </button>
         </Notice>
       ) : null}
+      {scan?.skippedSystemFiles?.length ? (
+        <p className="muted small" data-testid="skipped-system-files">
+          Skipped {scan.skippedSystemFiles.length} system{" "}
+          {scan.skippedSystemFiles.length === 1 ? "file" : "files"}:{" "}
+          {scan.skippedSystemFiles.slice(0, 3).join(", ")}
+          {scan.skippedSystemFiles.length > 3
+            ? ` +${scan.skippedSystemFiles.length - 3} more`
+            : ""}
+        </p>
+      ) : null}
       {busy ? (
         <OperationProgress progress={progress} onCancel={onCancelOperation} />
       ) : null}

@@ -1,5 +1,6 @@
 import {
   checkCaseInsensitiveCollisions,
+  DirectoryEntryInfo,
   FileSystemDirectoryAdapter,
   splitAndValidatePath,
 } from './fs-adapter';
@@ -17,6 +18,51 @@ export interface EnumerateWorkingFolderResult {
   directories: string[];
   errors: ScanErrorEntry[];
   totalBytes: number;
+}
+
+/**
+ * OS-generated clutter names (Finder, Explorer). These are never CAD data, but a
+ * file that a saved revision already contains is always tracked normally.
+ */
+export function isSystemClutterName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower === '.ds_store' || lower === 'thumbs.db' || lower === 'desktop.ini';
+}
+
+/**
+ * Splits scanned files into kept files and skipped untracked OS clutter. A file is
+ * skipped only when its path is not in `expectedPaths` and it is either a clutter
+ * name or a macOS AppleDouble `._x` companion whose `x` sibling exists (scanned or
+ * expected). Anything the expected set contains is never hidden.
+ */
+export function partitionSystemFiles(
+  files: FileEntry[],
+  expectedPaths: ReadonlySet<string>
+): { files: FileEntry[]; skipped: string[] } {
+  const known = new Set<string>([...expectedPaths, ...files.map((f) => f.path)]);
+  const kept: FileEntry[] = [];
+  const skipped: string[] = [];
+  for (const file of files) {
+    if (!expectedPaths.has(file.path)) {
+      const slash = file.path.lastIndexOf('/');
+      const dir = slash >= 0 ? file.path.slice(0, slash + 1) : '';
+      const base = file.path.slice(slash + 1);
+      if (
+        isSystemClutterName(base) ||
+        (base.startsWith('._') && base.length > 2 && known.has(dir + base.slice(2)))
+      ) {
+        skipped.push(file.path);
+        continue;
+      }
+    }
+    kept.push(file);
+  }
+  return { files: kept, skipped };
+}
+
+/** True when a folder holds nothing but OS clutter files (directories never count). */
+export function isEffectivelyEmpty(entries: DirectoryEntryInfo[]): boolean {
+  return entries.every((e) => e.kind === 'file' && isSystemClutterName(e.name));
 }
 
 /**
@@ -183,7 +229,16 @@ export async function scanBranchChanges(
   }
 ): Promise<ScanResult> {
   const scannedAt = new Date().toISOString();
-  const enumerated = await enumerateWorkingFolder(workingDir, options);
+  const rawEnumerated = await enumerateWorkingFolder(workingDir, options);
+  const partitioned = partitionSystemFiles(
+    rawEnumerated.files,
+    new Set((baselineManifest?.files ?? []).map((f) => f.path))
+  );
+  const enumerated = {
+    ...rawEnumerated,
+    files: partitioned.files,
+    totalBytes: partitioned.files.reduce((n, f) => n + f.size, 0),
+  };
 
   const baselineFilesMap = new Map<string, FileEntry>();
   const baselineDirsSet = new Set<string>();
@@ -262,6 +317,7 @@ export async function scanBranchChanges(
     addedDirectories,
     deletedDirectories,
     errors: enumerated.errors,
+    skippedSystemFiles: partitioned.skipped,
     hasChanges: hasFileOrDirDelta,
     canCapture,
     totalBytes: enumerated.totalBytes,
