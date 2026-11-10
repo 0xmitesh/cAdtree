@@ -10,6 +10,8 @@ import { createReferenceReview, importReferenceAttachment } from '../engine/refe
 import { restoreRevisionToFolder } from '../engine/recovery-service';
 import { inventorySignature, readVerifiedInventory } from '../engine/copy-service';
 import { hashString } from '../engine/hash';
+import { compactHex } from '../engine/path-encoding';
+import { newRecordId } from '../engine/ids';
 import { buildKnowledgeIndex } from './index';
 import { canonicalJson, object } from './records/json';
 import { bodyChecksum } from './records/envelope';
@@ -28,7 +30,7 @@ const cad: CadDesignChangePayload = {
   assumptions: ['Load is axial.'], observations: ['Prototype validation pending.'],
 };
 const generic = { description: '  A handwritten note about a non-CAD workflow.\n', attributes: { count: 3, temperature: { value: 22.5, unit: '°C' }, tags: ['trial', null], original: '6.0 mm' } };
-const id = (n: number) => `knowledge-00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const id = (n: number) => `20260101-000000-${String(n).padStart(6, '0')}`;
 
 async function fixture(withRevision = false) {
   const working = new InMemoryFileSystemAdapter('Main'), vault = new InMemoryFileSystemAdapter('Vault');
@@ -74,7 +76,7 @@ async function inventoryWithoutKnowledge(dir: InMemoryFileSystemAdapter) {
 async function publishRaw(vault: InMemoryFileSystemAdapter, value: object) {
   const raw = canonicalJson(value), record = value as { recordId: string };
   await vault.writeFileText(['knowledge', 'records', `${record.recordId}.json`], raw);
-  await vault.getDirectory(['knowledge', 'completed', `${record.recordId}.${hashString(raw)}.done`], { create: true });
+  await vault.getDirectory(['knowledge', 'completed', `${record.recordId}.${compactHex(hashString(raw))}.done`], { create: true });
   return raw;
 }
 
@@ -242,7 +244,7 @@ test('duplicate identities, competing publications, corruption and dependent rec
   assert.ok(state.knowledge!.diagnostics.some(d => /SHA-256/.test(d.reason)));
   await assert.rejects(readKnowledgeRecord(f.vault, f.projectId, id(1)), /unavailable/);
   assert.match(await f.vault.readFileText(first.source.recordPath.split('/')), /tampered/);
-  await f.vault.getDirectory(['knowledge', 'completed', `${id(3)}.${'b'.repeat(64)}.done`], { create: true });
+  await f.vault.getDirectory(['knowledge', 'completed', `${id(3)}.${compactHex('b'.repeat(64))}.done`], { create: true });
   state = await openExistingVault(f.vault);
   assert.ok(state.knowledge!.diagnostics.some(d => d.recordId === id(3) && /Competing/.test(d.reason)));
   assert.equal(state.corruptedRecords.length, 0);
@@ -275,7 +277,7 @@ test('empty partial files, malformed JSON, missing/nonempty markers and future s
   await f.vault.writeFileText([...healthy.source.publicationPath.split('/'), 'unexpected'], 'modified marker');
   const future = { ...healthy.record, recordId: id(4), formatVersion: 99 };
   const raw = await publishRaw(f.vault, future);
-  await f.vault.getDirectory(['knowledge', 'completed', `${id(5)}.${'b'.repeat(64)}.done`], { create: true });
+  await f.vault.getDirectory(['knowledge', 'completed', `${id(5)}.${compactHex('b'.repeat(64))}.done`], { create: true });
   const state = await openExistingVault(f.vault);
   assert.equal(state.knowledge!.records.length, 0);
   for (const number of [1, 2]) assert.equal(state.knowledge!.diagnostics.find(d => d.recordId === id(number))?.status, 'incomplete');
@@ -358,4 +360,63 @@ test('legacy projects and CAD capture/recovery remain usable with a broken knowl
   await restoreRevisionToFolder({ vaultDir: f.vault, destinationDir: recovered, workingDir: f.working, revisionId: saved.revision.manifest.revisionId });
   assert.equal(await recovered.readFileText(['collar.SLDPRT']), 'next CAD geometry');
   await assert.rejects(createKnowledgeRecord(f.vault, f.input()), /cannot be inspected/);
+});
+
+test('new-format records use short record IDs and compact publication markers, and reopen', async () => {
+  const f = await fixture(true);
+  const created = await createKnowledgeRecord(f.vault, f.input({ recordType: 'cad.design-change', payload: cad, relationships: relationships(f) }));
+  assert.match(created.record.recordId, /^\d{8}-\d{6}-[0-9a-z]{6}$/);
+  assert.equal(created.source.publicationPath, `knowledge/completed/${created.record.recordId}.${compactHex(created.source.recordSha256)}.done`);
+  assert.equal(created.source.publicationPath.split('/').pop()!.length, 22 + 1 + 43 + 5);
+  const dependent = await createKnowledgeRecord(f.vault, f.input({ relationships: [{ relation: 'related', target: { kind: 'record', projectId: f.projectId, recordId: created.record.recordId } }] }));
+  const reopened = await openExistingVault(f.vault);
+  assert.deepEqual(reopened.knowledge!.records.map(r => r.record.recordId).sort(), [created.record.recordId, dependent.record.recordId].sort());
+  assert.deepEqual(reopened.knowledge!.diagnostics, []);
+  assert.deepEqual(await readKnowledgeRecord(f.vault, f.projectId, dependent.record.recordId), dependent);
+  assert.equal(dependent.record.relationships[0].binding.kind, 'record');
+  for (const old of ['knowledge-00000000-0000-4000-8000-000000000001', 'KNOWLEDGE', '20260101-000000-ABCDEF', '20260101-000000-abcde']) {
+    await assert.rejects(readKnowledgeRecord(f.vault, f.projectId, old), /Invalid permanent knowledge record ID/);
+    await assert.rejects(createKnowledgeRecord(f.vault, f.input({ recordId: old })), /Invalid permanent knowledge record ID/);
+  }
+});
+
+test('markers with a non-canonical or mismatched checksum, or a non-record-ID name, are reported and never trusted', async () => {
+  const f = await fixture();
+  const made = await createKnowledgeRecord(f.vault, f.input({ recordId: id(1) }));
+  const marker = made.source.publicationPath.split('/');
+  const compact = marker[2].split('.')[1];
+  // Non-canonical: flip the last character so trailing bits are non-zero but the length stays 43.
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const other = alphabet[(alphabet.indexOf(compact[42]) + 1) % 64];
+  const variants = [`${id(2)}.${compact.slice(0, 42)}${other}.done`, `${id(3)}.${compactHex('c'.repeat(64))}.done`, `${id(4)}.${'b'.repeat(64)}.done`, `knowledge-${id(5)}.${compact}.done`];
+  for (const name of variants) await f.vault.getDirectory(['knowledge', 'completed', name], { create: true });
+  const raw2 = canonicalJson({ ...made.record, recordId: id(3) });
+  await f.vault.writeFileText(['knowledge', 'records', `${id(3)}.json`], raw2);
+  const raw2b = canonicalJson({ ...made.record, recordId: id(2) });
+  await f.vault.writeFileText(['knowledge', 'records', `${id(2)}.json`], raw2b);
+  const raw4 = canonicalJson({ ...made.record, recordId: id(4) });
+  await f.vault.writeFileText(['knowledge', 'records', `${id(4)}.json`], raw4);
+  const state = await openExistingVault(f.vault);
+  assert.deepEqual(state.knowledge!.records.map(r => r.record.recordId), [id(1)]);
+  const d = state.knowledge!.diagnostics;
+  assert.ok(d.some(x => x.recordId === id(2) && x.status === 'unavailable' && /Invalid knowledge publication marker/.test(x.reason)));
+  assert.ok(d.some(x => x.recordId === id(3) && /do not match the published SHA-256/.test(x.reason)));
+  assert.ok(d.some(x => x.recordId === id(4) && /Invalid knowledge publication marker/.test(x.reason)));
+  assert.ok(d.some(x => x.status === 'unsupported' && x.recordPath.endsWith(variants[3])));
+});
+
+test('a clash on a generated record ID draws a new ID and never overwrites the other record', async () => {
+  const f = await fixture();
+  const taken = newRecordId();
+  await f.vault.writeFileText(['knowledge', 'records', `${taken}.json`], 'someone else\'s bytes');
+  const drawn: string[] = [];
+  const ids = [taken, taken, '20260101-000000-zzzzzz'];
+  const created = await createKnowledgeRecord(f.vault, f.input(), undefined, () => { const next = ids.shift()!; drawn.push(next); return next; });
+  assert.equal(created.record.recordId, '20260101-000000-zzzzzz');
+  assert.equal(drawn.length, 3);
+  assert.equal(await f.vault.readFileText(['knowledge', 'records', `${taken}.json`]), 'someone else\'s bytes');
+  await assert.rejects(createKnowledgeRecord(f.vault, f.input(), undefined, () => taken), /No free knowledge record ID/);
+  await assert.rejects(createKnowledgeRecord(f.vault, f.input({ recordId: taken })), /already exists or is reserved/);
+  assert.equal(await f.vault.readFileText(['knowledge', 'records', `${taken}.json`]), 'someone else\'s bytes');
+  await assert.rejects(createKnowledgeRecord(f.vault, f.input(), undefined, () => 'not-a-record-id'), /Invalid permanent knowledge record ID/);
 });

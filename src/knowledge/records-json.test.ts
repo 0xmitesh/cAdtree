@@ -105,34 +105,13 @@ test('F1 preserves ordinary and frozen arrays, nested values, ordering and deter
   assert.deepEqual((await openExistingVault(vault)).knowledge!.records, [stored]);
 });
 
-test('F1 preserves pre-fix example hashes and reconstructs an unchanged published record', async () => {
+test('F1 preserves pre-fix example hashes (the old-ID docs examples are hash oracles only; they are no longer reopened)', async () => {
   const examples = JSON.parse(await readFile(new URL('../../docs/M1B-1-examples.json', import.meta.url), 'utf8')) as {
     cadDesignChange: PublishedKnowledgeRecord; genericObservation: PublishedKnowledgeRecord;
   };
   // These examples were generated before F1. Their recorded digests are the compatibility oracle.
   for (const previous of [examples.cadDesignChange, examples.genericObservation]) {
-    validateEnvelope(previous.record, defaultKnowledgeSchemas);
     assert.equal(bodyChecksum(previous.record), previous.source.bodySha256);
     assert.equal(hashString(canonicalJson(previous.record)), previous.source.recordSha256);
   }
-  const previous = examples.genericObservation;
-  const template = await initializeProjectVault(new InMemoryFileSystemAdapter('Template Working'), new InMemoryFileSystemAdapter('Template Vault'), 'Pre-fix example');
-  const project = { ...template.project, projectId: previous.record.projectId };
-  project.payloadSha256 = computeProjectIdentityChecksum(project);
-  const branch = { ...template.branches[0], projectId: project.projectId };
-  branch.payloadSha256 = computeBranchRecordChecksum(branch);
-  // Reopen a disposable legacy vault with the pre-fix record's owner and original publication.
-  const vault = new InMemoryFileSystemAdapter('Pre-fix Record Vault');
-  await vault.writeFileText(['project.json'], JSON.stringify(project));
-  await vault.writeFileText(['branches', 'branch-main.json'], JSON.stringify(branch));
-  const originalBytes = canonicalJson(previous.record);
-  await vault.writeFileText(previous.source.recordPath.split('/'), originalBytes);
-  await vault.getDirectory(previous.source.publicationPath.split('/'), { create: true });
-  const inventory = inventorySignature(await readVerifiedInventory(vault));
-  vault.setHooks({ writePermission: 'denied' });
-  const reopened = await openExistingVault(vault);
-  assert.deepEqual(reopened.knowledge!.records, [previous]);
-  assert.deepEqual(reopened.knowledge!.diagnostics, []);
-  assert.equal(await vault.readFileText(previous.source.recordPath.split('/')), originalBytes);
-  assert.equal(inventorySignature(await readVerifiedInventory(vault)), inventory);
 });

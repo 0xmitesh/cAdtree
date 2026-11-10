@@ -1,3 +1,4 @@
+import { compactHex } from '../../src/engine/path-encoding';
 import type { ReconstructedRevision, VaultState } from '../../src/engine/types';
 import type { ProjectReference } from '../../src/engine/references';
 import { hashString } from '../../src/engine/hash';
@@ -76,17 +77,17 @@ export function syntheticKnowledgeState(): VaultState {
     validateEnvelope(record, defaultKnowledgeSchemas);
     const recordSha256 = hashString(canonicalJson(record));
     const entry: PublishedKnowledgeRecord = { record, source: { recordPath: `knowledge/records/${recordId}.json`, jsonPointer: '', recordSha256,
-      bodySha256: record.integrity.bodySha256, publicationPath: `knowledge/completed/${recordId}.${recordSha256}.done`, formatVersion: 1, recordType, schemaVersion: 1 },
+      bodySha256: record.integrity.bodySha256, publicationPath: `knowledge/completed/${recordId}.${compactHex(recordSha256)}.done`, formatVersion: 1, recordType, schemaVersion: 1 },
       verification: { metadata: 'checksum_verified', attachmentBytes: 'not_checked', claims: 'not_verified' } };
     accepted.set(recordId, entry); state.knowledge!.records.push(entry);
   };
-  const designId = 'knowledge-00000000-0000-4000-8000-000000000001';
+  const designId = '20260101-000000-000001';
   add(designId, 'cad.design-change', { problem: 'Local bending near bolt holes.', change: { status: 'proposed', description: 'Explore an 8 mm collar.' },
     rationale: 'Recorded proposal; validation pending.', propertyChanges: [{ property: 'thickness', before: 6, after: 8, unit: 'mm' }] }, [
     { relation: 'related', target: { kind: 'component', projectId, revisionId: 'r02', componentId: collarId } },
     { relation: 'evidence', target: { kind: 'reference-version', projectId, revisionId: 'r03', referenceId: reference.referenceId, versionId: reference.versions[0].versionId, associationPointer: '/links/0' } },
   ]);
-  add('knowledge-00000000-0000-4000-8000-000000000002', 'generic.observation', { description: 'Alternative collar study observation.', attributes: { status: 'Not validated', sampleCount: 3 } }, [
+  add('20260101-000000-000002', 'generic.observation', { description: 'Alternative collar study observation.', attributes: { status: 'Not validated', sampleCount: 3 } }, [
     { relation: 'related', target: { kind: 'component', projectId, revisionId: 'r03', componentId: collarId } },
     { relation: 'related', target: { kind: 'record', projectId, recordId: designId } },
   ]);

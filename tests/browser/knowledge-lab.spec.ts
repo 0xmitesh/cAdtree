@@ -32,7 +32,7 @@ test('retrieval timeline keeps Main ownership and exact alternative-branch citat
   await retrieval.getByRole('combobox', { name: 'Record source', exact: true }).selectOption('m1b-persisted');
   await retrieval.getByRole('combobox', { name: 'Record type', exact: true }).selectOption('cad.design-change');
   const event = retrieval.getByRole('article', { name: 'Snapshot r02', exact: true });
-  const card = event.getByRole('article', { name: 'Retrieved record knowledge-00000000-0000-4000-8000-000000000001' });
+  const card = event.getByRole('article', { name: 'Retrieved record 20260101-000000-000001' });
   await expect(card.getByText('Explore an 8 mm collar.', { exact: true })).toBeVisible();
   const eventCitation = event.locator(':scope > .kl-citation').filter({ hasText: 'evidence' });
   await expect(eventCitation.locator(':scope > summary')).toContainText('Thicker collar');

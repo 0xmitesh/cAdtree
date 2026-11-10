@@ -11,7 +11,7 @@ import { branchApplications } from './application-records';
 import { caseLifecycle } from './case-lifecycle';
 import { changeCaseLifecycle } from './case-lifecycle-service';
 import { isRecordId } from './ids';
-import { matchInternalPath, newRecordsReserve, CRSWAP_CHARS } from './path-budget';
+import { matchInternalPath, internalReserve, CRSWAP_CHARS } from './path-budget';
 import { MAIN_BRANCH_ID } from './types';
 
 const notes = { problem: 'p', modification: 'm', observations: 'o' };
@@ -107,7 +107,7 @@ test('a new case gets a record ID used by every record; save, interrupted apply,
     const label = matchInternalPath(rel, 'file');
     assert.ok(label, `unlisted path ${rel}`);
     assert.ok(!label!.includes('(legacy'), `${rel} hit ${label}`);
-    assert.ok(rel.length + CRSWAP_CHARS <= newRecordsReserve(), rel);
+    assert.ok(rel.length + CRSWAP_CHARS <= internalReserve(), rel);
   }
 });
 

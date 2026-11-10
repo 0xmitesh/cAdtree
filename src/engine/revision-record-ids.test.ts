@@ -12,7 +12,7 @@ import { prepareReviewExport, exportRevisionForReview } from './review-export';
 import { componentRecordPath } from './component-identity';
 import { referenceContextPath } from './references';
 import { isRecordId } from './ids';
-import { matchInternalPath, newRecordsReserve, CRSWAP_CHARS } from './path-budget';
+import { matchInternalPath, internalReserve, CRSWAP_CHARS } from './path-budget';
 import { layoutRevisions } from '../history/layout';
 import { fileHistory } from '../history/file-history';
 import { buildKnowledgeIndex } from '../knowledge';
@@ -100,7 +100,7 @@ test('a new revision gets a record ID used by manifest, completion, component an
     const label = matchInternalPath(rel, 'file');
     assert.ok(label, `unlisted path ${rel}`);
     assert.ok(!label!.includes('(legacy'), `${rel} hit ${label}`);
-    assert.ok(rel.length + CRSWAP_CHARS <= newRecordsReserve(), rel);
+    assert.ok(rel.length + CRSWAP_CHARS <= internalReserve(), rel);
   }
 });
 
@@ -188,7 +188,7 @@ test('Knowledge Lab records can cite an old rev-<uuid> revision and a new record
   assert.equal(buildKnowledgeIndex(state).revisions.length, 2);
   for (const [n, revisionId] of [[1, oldId], [2, newId]] as const) {
     const componentId = state.components!.revisions[revisionId].files[0].componentId;
-    const recordId = `knowledge-00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+    const recordId = `20260101-000000-${String(n).padStart(6, '0')}`;
     const created = await createKnowledgeRecord(p.vault, {
       projectId, recordId, recordType: 'generic.observation', schemaVersion: 1,
       payload: { description: 'note', attributes: {} }, provenance: { kind: 'user-entered' },
