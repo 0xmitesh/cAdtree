@@ -24,11 +24,17 @@ import { folderNameFor, pickFreeName } from "./folder-names";
 import { hashString } from "./hash";
 import { verifyRevisionObjects } from "./vault-service";
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
+import {
+  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, checkWorstPath, joinAddress, longestPath, longestRelativeFilePath,
+  projectWorstPath, workspaceWorstPath, type PathBudgetInput, type PathBudgetReport,
+} from './path-budget';
 
 const IDENTITY = ".cadtree-home.json";
 const RECORDS = [".cadtree-home", "workspaces"];
 export interface HomeOperationOptions extends CopyOptions {
   expectedHomeId?: string;
+  /** Absolute home address for the path budget check; without it the check is reported as 'unchecked'. */
+  budget?: Pick<PathBudgetInput, "homeAddress">;
 }
 export interface HomeIdentity {
   schemaVersion: number;
@@ -384,6 +390,47 @@ export async function resolveHomeWorkspace(
     );
   return workspace;
 }
+/**
+ * Worst case for a workspace folder `directory` in the home at `homeAddress`: a future project plus
+ * the project worst case (nothing for the user's files). When bringing a workspace in, each of its
+ * projects is also measured with its real folder name, longest file and working-folder names.
+ * Read-only. Unknown address: reported as unchecked.
+ */
+async function checkWorkspaceBudget(
+  homeAddress: string | undefined,
+  directory: string,
+  source: FileSystemDirectoryAdapter | undefined,
+): Promise<PathBudgetReport> {
+  if (!homeAddress) return UNCHECKED_PATH_BUDGET;
+  const workspaceAddress = joinAddress(homeAddress, directory);
+  const candidates: { path: string }[] = [{ path: workspaceWorstPath(workspaceAddress) }];
+  if (source) {
+    for (const entry of (await openWorkspace(source)).projects) {
+      if (!entry.project) continue;
+      let longestFile = "";
+      let allowance = CASE_ALLOWANCE;
+      for (const branch of entry.project.vaultState.branches) {
+        const folder = entry.project.workingFolders[branch.branchId];
+        if (folder) {
+          const file = await longestRelativeFilePath(folder);
+          if (file.length > longestFile.length) longestFile = file;
+        }
+        // The readable case folder name used on copy, with room for a counter.
+        allowance = Math.max(allowance, folderNameFor(branch.name, "Design case").length + " (2)".length);
+      }
+      candidates.push({
+        path: projectWorstPath({
+          projectAddress: joinAddress(workspaceAddress, entry.containerPath),
+          longestUserFile: longestFile,
+          caseAllowance: allowance,
+        }),
+      });
+    }
+  }
+  const worst = longestPath(candidates.map((c) => c.path))!;
+  // The name the user can shorten is always the workspace folder name.
+  return checkWorstPath(worst, "workspace", directory);
+}
 async function register(
   root: FileSystemDirectoryAdapter,
   name: string,
@@ -438,6 +485,8 @@ async function register(
           [e.directory, e.recordedDirectory].filter((d): d is string => !!d),
         ),
       });
+      // Path budget: the final folder name is known and nothing has been written yet.
+      const pathBudget = await checkWorkspaceBudget(options.budget?.homeAddress, directory, source);
       const record = seal({
         schemaVersion: 1,
         homeId: first.homeId,
@@ -537,7 +586,7 @@ async function register(
             recordSha256: hashString(recordText),
           }),
         );
-        return { workspace: verified, directory };
+        return { workspace: verified, directory, pathBudget };
       } catch (error) {
         throw new WorkspaceOperationError(
           error instanceof Error ? error.message : String(error),

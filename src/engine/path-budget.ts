@@ -14,6 +14,7 @@
  * not listed here, so a new builder cannot sneak in unnoticed.
  */
 import { MAX_NAME_BYTES } from './folder-names';
+import type { FileSystemDirectoryAdapter } from './fs-adapter';
 import {
   applicationEventPath, applicationPlanPath, applicationStagedPath, applicationUnexpectedPath,
 } from './application-records';
@@ -230,4 +231,148 @@ export function projectWorstCase(input: { projectPath: string | number; longestU
   const recoveryPrefix = 1 + RECOVERY_COPY_TEMPLATE.relativeLength + 1;
   const user = projectLength + Math.max(workingPrefix, recoveryPrefix) + longestUserPath + CRSWAP_CHARS;
   return Math.max(internal, user);
+}
+
+// ---------------------------------------------------------------------------
+// Address-aware worst cases and the creation-time check (Item 2 P5)
+// ---------------------------------------------------------------------------
+
+export type PathSeparator = '\\' | '/';
+
+/** Windows drive (`C:\...`, `C:/...`) and UNC (`\\server\...`) addresses use `\`; everything else uses `/`. */
+export function addressSeparator(address: string): PathSeparator {
+  return address.includes('\\') || /^[A-Za-z]:/.test(address) ? '\\' : '/';
+}
+
+/**
+ * Joins an absolute address and relative segments with the address's own separator, without
+ * double separators. A segment may itself contain "/" (cAdtree's relative paths); it is split.
+ */
+export function joinAddress(address: string, ...segments: string[]): string {
+  const sep = addressSeparator(address);
+  let base = address;
+  while (base.length > 0 && (base.endsWith('/') || base.endsWith('\\'))) base = base.slice(0, -1);
+  const parts = segments.flatMap((segment) => segment.split(/[\\/]+/)).filter((part) => part.length > 0);
+  return [base, ...parts].join(sep);
+}
+
+const withSwap = (path: string) => path + '.crswap';
+
+/**
+ * Worst full ABSOLUTE path (as a string; its length is the worst-case length) below a project
+ * folder: the longest of cAdtree's own internal path, and, when `longestUserFile` (relative,
+ * "/"-separated) is given, that file under a design-case folder or a recovery copy. Files carry
+ * the `.crswap` allowance. With no user file this equals projectWorstCase().
+ */
+export function projectWorstPath(input: { projectAddress: string; longestUserFile?: string; caseAllowance?: number }): string {
+  assertLength(input.caseAllowance ?? 0, 'case allowance');
+  const caseAllowance = Math.max(4, input.caseAllowance ?? CASE_ALLOWANCE);
+  const deepest = deepestInternalTemplate();
+  const candidates = [joinAddress(input.projectAddress, ...deepest.segments) + (deepest.kind === 'file' ? '.crswap' : '')];
+  if (input.longestUserFile) {
+    candidates.push(withSwap(joinAddress(input.projectAddress, 'working', 'x'.repeat(caseAllowance), input.longestUserFile)));
+    candidates.push(withSwap(joinAddress(input.projectAddress, ...RECOVERY_COPY_TEMPLATE.segments, input.longestUserFile)));
+  }
+  return candidates.reduce((a, b) => (b.length > a.length ? b : a));
+}
+
+/** Worst path for a new workspace: workspace address + projects + a project-name allowance + the project worst case. */
+export function workspaceWorstPath(workspaceAddress: string): string {
+  return projectWorstPath({ projectAddress: joinAddress(workspaceAddress, 'projects', 'p'.repeat(PROJECT_NAME_ALLOWANCE)) });
+}
+
+/** Worst path for a new design case: project + working/<final case folder>/<longest source path> + `.crswap`. */
+export function caseWorstPath(projectAddress: string, caseFolder: string, longestSourcePath: string): string {
+  return withSwap(joinAddress(projectAddress, 'working', caseFolder, longestSourcePath));
+}
+
+/** Worst path for a recovery copy: project + recoveries/copy-<uuid>/<longest selected path> + `.crswap`. */
+export function recoveryWorstPath(projectAddress: string, copyFolder: string, longestSelectedPath: string): string {
+  return withSwap(joinAddress(projectAddress, 'recoveries', copyFolder, longestSelectedPath));
+}
+
+export interface HomeSetupWorstCase {
+  worstPath: string;
+  requiredLength: number;
+  status: PathLengthClass;
+}
+
+/**
+ * Pure helper for the home setup warning (UI only; the engine never blocks home setup). Uses both
+ * allowances: a workspace folder as long as PROJECT_NAME_ALLOWANCE, then a project of
+ * PROJECT_NAME_ALLOWANCE and a design case of CASE_ALLOWANCE.
+ */
+export function homeSetupWorstCase(homeAddress: string): HomeSetupWorstCase {
+  const worstPath = workspaceWorstPath(joinAddress(homeAddress, 'w'.repeat(PROJECT_NAME_ALLOWANCE)));
+  return { worstPath, requiredLength: worstPath.length, status: classifyPathLength(worstPath.length) };
+}
+
+/** Which name the user can shorten to get under the limit. */
+export type PathBudgetShorten = 'workspace' | 'project' | 'case';
+
+/** What the UI shows after a creation that went ahead. */
+export interface PathBudgetReport {
+  /** 'unchecked': the home address is unknown, so nothing was measured (never the same as 'ok'). */
+  status: 'ok' | 'warn' | 'unchecked';
+  /** Worst-case absolute length, 0 when unchecked. */
+  requiredLength: number;
+  /** The worst absolute path, '' when unchecked. */
+  worstPath: string;
+}
+
+/** Engine option: the absolute addresses the user told cAdtree about. Both are optional. */
+export interface PathBudgetInput {
+  /** Absolute address of the Cadtree home (used when creating or bringing in a workspace). */
+  homeAddress?: string;
+  /** Absolute address of the workspace folder (used for projects, design cases and recovery copies). */
+  workspaceAddress?: string;
+}
+
+export const UNCHECKED_PATH_BUDGET: PathBudgetReport = Object.freeze({ status: 'unchecked', requiredLength: 0, worstPath: '' });
+
+export class PathBudgetError extends Error {
+  readonly limit = BLOCK_PATH_CHARS;
+  readonly excess: number;
+  constructor(
+    readonly requiredLength: number,
+    readonly worstPath: string,
+    readonly shorten: PathBudgetShorten,
+    /** The final folder name that was checked (counter included). */
+    readonly checkedName: string,
+  ) {
+    super(
+      `The full path would reach ${requiredLength} characters, ${requiredLength - BLOCK_PATH_CHARS} over the ${BLOCK_PATH_CHARS} limit. ` +
+      `Shorten the ${shorten} name "${checkedName}". Nothing was created.`,
+    );
+    this.name = 'PathBudgetError';
+    this.excess = requiredLength - BLOCK_PATH_CHARS;
+  }
+}
+
+/** Classifies the worst path: throws PathBudgetError above the limit, otherwise reports ok or warn. */
+export function checkWorstPath(worstPath: string, shorten: PathBudgetShorten, name: string): PathBudgetReport {
+  const requiredLength = worstPath.length;
+  const cls = classifyPathLength(requiredLength);
+  if (cls === 'block') throw new PathBudgetError(requiredLength, worstPath, shorten, name);
+  return { status: cls, requiredLength, worstPath };
+}
+
+/** The longest of several worst paths (first wins a tie); undefined for none. */
+export function longestPath(paths: string[]): string | undefined {
+  return paths.reduce<string | undefined>((a, b) => (a === undefined || b.length > a.length ? b : a), undefined);
+}
+
+/** Longest relative FILE path ("/"-separated, no `.crswap`) below a folder; '' when it has no files. Names only: nothing is read or hashed. */
+export async function longestRelativeFilePath(dir: FileSystemDirectoryAdapter): Promise<string> {
+  let longest = '';
+  const walk = async (current: FileSystemDirectoryAdapter, prefix: string): Promise<void> => {
+    for (const entry of await current.listEntries()) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.kind === 'file') {
+        if (relative.length > longest.length) longest = relative;
+      } else await walk(await current.getDirectory([entry.name], { create: false }), relative);
+    }
+  };
+  await walk(dir, '');
+  return longest;
 }
