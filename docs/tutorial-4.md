@@ -60,17 +60,17 @@ Alt text: Close view of the real Create design case form: Lightweight bracket in
 
 Main and the Design Case have separate working locations inside the same managed project.
 
-- Main uses working/main. Lightweight bracket uses its own uniquely named child of working. Editing that case's files does not directly modify Main.
+- Main uses working/main. Lightweight bracket uses its own folder named after the case, working/Lightweight bracket. Editing that case's files does not directly modify Main.
 - Settings → Working folder shows the active direction's exact location. In Changes, reveal unchanged files if needed and use a file's Copy folder path; paste it into your file manager to reach that folder.
 - Open the CAD files from that location. Keep managed folders where cAdtree creates them.
 
 Visual 1 (Concept): **Two working folders, one project: edit the folder for your chosen direction.**
 
-Alt text: Bracket Assembly has two separate children under working: main for Main, and a unique case folder allocated by cAdtree for Lightweight bracket. Saved history is shared in the project's separate vault. Settings shows exact generated locations.
+Alt text: Bracket Assembly has two separate children under working: main for Main, and a folder named after the case for Lightweight bracket. Saved history is shared in the project's separate vault. Settings shows exact locations.
 
 Visual 2 (cAdtree): **1. In Settings, check Working folder for the active case's exact location.**
 
-Alt text: Real shared project header shows Working case Lightweight bracket; Settings shows Working folder ending in working slash the uniquely generated cAdtree-Lightweight-bracket folder.
+Alt text: Real shared project header shows Working case Lightweight bracket; Settings shows Working folder ending in working slash Lightweight bracket.
 
 Visual 3 (cAdtree): **2. In Changes, reveal unchanged files if needed and use Copy folder path.**
 
@@ -91,7 +91,7 @@ Alt text: Real Bracket Assembly shared project header shows Main selected in Wor
 
 Visual 2 (cAdtree): **2. Choose Lightweight bracket in Working case to work on the alternative.**
 
-Alt text: Real shared Working case selector has Lightweight bracket selected; Settings shows its separate generated Working folder.
+Alt text: Real shared Working case selector has Lightweight bracket selected; Settings shows its separate Working folder.
 
 Visual 3 (cAdtree): **3. History confirms the current case and the saved revision it started from.**
 
@@ -140,13 +140,13 @@ The engine verifies saved ancestry and folder isolation, restores the entire sav
 
 ## 5. Actual working-folder and switching behavior
 
-Within a managed project, Main is working/main. A new case lives below the same working parent in cAdtree-<name slug>-<generated UUID>. The example's exact captured workspace-relative path is:
+Within a managed project, Main is working/main. A new case lives below the same working parent in a folder named after the case, with a counter on a clash, e.g. Lightweight bracket (2). The example's exact captured workspace-relative path is:
 
 ```text
-projects/Bracket-Assembly-b286ae06-f0e5-445b-b98d-dfd3b623c966/working/cAdtree-Lightweight-bracket-5c242b02-0bc9-4601-9f9f-bd6ab38df4c6
+projects/Bracket Assembly/working/Lightweight bracket
 ```
 
-The concept diagram deliberately labels this a unique case folder; Settings screenshots show the exact generated location. No user-facing instruction asks the user to type an ID or move managed folders. The shared vault sits outside these editable working folders.
+The concept diagram deliberately labels this a folder named after the case; Settings screenshots show the exact location. No user-facing instruction asks the user to type an ID or move managed folders. The shared vault sits outside these editable working folders.
 
 Working case is the single shared selector above History, Changes, References and Settings. Choosing it resolves the recorded folder and scans that direction. History separately displays the case origin, engineering reason and inspected revision's case label. Revision selection and graph ancestry highlighting do not switch working context. Explorer also supports explicit branch switching; the tutorial teaches only the selector.
 

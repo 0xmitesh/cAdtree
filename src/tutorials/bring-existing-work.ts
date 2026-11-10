@@ -103,7 +103,7 @@ export const BRING_EXISTING_WORK_TUTORIAL: TutorialDefinition = {
       note: "Check CAD references in the managed copy after import. cAdtree does not rewrite native CAD references.",
       visuals: [{
         src: "/tutorials/bring-existing-work/step-5-managed-files.svg",
-        alt: "Original Bracket Assembly CAD folder remains unchanged. The new managed project inside Cadtree Home and Client A contains working/main for editing and a separate vault for saved history. Display names simplify generated folder suffixes.",
+        alt: "Original Bracket Assembly CAD folder remains unchanged. The new managed project inside Cadtree Home and Client A contains working/main for editing and a separate vault for saved history.",
         caption: "Work in the managed working/main copy. The original is a separate copy, not a live connection.",
         kind: "concept",
       }],
@@ -131,7 +131,7 @@ export const BRING_EXISTING_WORK_TUTORIAL: TutorialDefinition = {
         },
         {
           src: "/tutorials/bring-existing-work/step-6-managed-main.png",
-          alt: "Real Bracket Assembly Settings shows Working folder ending in working/main under the generated managed project folder, with a separate revision vault.",
+          alt: "Real Bracket Assembly Settings shows Working folder ending in working/main under the managed project folder, with a separate revision vault.",
           caption: "3. Open Settings and find Working folder: this managed working/main is where you work.",
           kind: "cadtree",
         },

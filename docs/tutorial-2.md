@@ -8,7 +8,7 @@ The eight cAdtree PNGs are real Windows Chrome captures of the current App and i
 
 Sample: Cadtree home / Tutorial Workspace / Bracket Assembly / working/main. Files: Bracket.SLDPRT (500 KB initially; 504 KB after the saved edit), Mount.SLDPRT (250 KB), BracketAssembly.SLDASM (125 KB). These are opaque byte fixtures with CAD extensions, not valid SolidWorks models. No SolidWorks session or geometry change was tested.
 
-Windows: one generated Windows 11 File Explorer instructional image with a cursor in the address field and the same sample file names. Its illustrative path shortens generated folder suffixes; the tutorial tells users to paste their own copied path. Concepts: two exact SVG diagrams, not app screenshots.
+Windows: one generated Windows 11 File Explorer instructional image with a cursor in the address field and the same sample file names. The tutorial tells users to paste their own copied path. Concepts: two exact SVG diagrams, not app screenshots.
 
 ## Workflow findings
 
@@ -37,11 +37,11 @@ Asset: `/tutorials/save-first-revision/step-1-saves-and-revisions.svg`
 Your live CAD files belong in Main's working/main folder.
 
 - For an empty project, open Settings. Working folder shows the location relative to your workspace; place your CAD files there.
-- Copy folder path copies a listed file's containing folder. The Windows illustration shortens generated folder names; paste your own copied address.
+- Copy folder path copies a listed file's containing folder. Paste it into File Explorer's address bar.
 
 Visual 1 — cAdtree: 1. Open Settings and find Working folder; place your CAD files in this working/main folder.
 
-Alt text: Real cAdtree Settings, Folder connections: Working folder ends in projects/Bracket-Assembly with its generated suffix, then working/main.
+Alt text: Real cAdtree Settings, Folder connections: Working folder ends in projects/Bracket Assembly, then working/main.
 
 Asset: `/tutorials/save-first-revision/step-2-working-folder.png`
 
