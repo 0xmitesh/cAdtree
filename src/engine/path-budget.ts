@@ -160,10 +160,14 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('case lifecycle record', 'file', below(V, lifecyclePath(CASE_ID, SEQ)), 'vault/case-lifecycle/{caseId}.{seq}.json'),
   template('case lifecycle record (legacy case ID)', 'file', below(V, lifecyclePath(BRANCH, SEQ)), 'vault/case-lifecycle/{branch}.{seq}.json', true),
   // References.
-  template('reference enrollment record', 'file', below(V, referenceEnrollmentRecordPath(REFERENCE_ENROLLMENT)), 'vault/references/enrollment/{referenceEnrollment}.json'),
-  template('reference enrollment marker', 'dir', below(V, referenceEnrollmentMarkerPath(REFERENCE_ENROLLMENT, SHA)), 'vault/references/enrollment/{b64uuid}.{b64}.done'),
-  template('reference catalog', 'file', below(V, referenceCatalogPath(REFERENCE_CATALOG)), 'vault/references/catalogs/{referenceCatalog}.json'),
-  template('reference catalog marker', 'dir', below(V, referenceCatalogMarkerPath(REFERENCE_CATALOG, SHA)), 'vault/references/completed/{b64uuid}.{b64}.done'),
+  template('reference enrollment record', 'file', below(V, referenceEnrollmentRecordPath(CASE_ID)), 'vault/references/enrollment/{rev}.json'),
+  template('reference enrollment marker', 'dir', below(V, referenceEnrollmentMarkerPath(CASE_ID, SHA)), 'vault/references/enrollment/{rev}.{b64}.done'),
+  template('reference catalog', 'file', below(V, referenceCatalogPath(CASE_ID)), 'vault/references/catalogs/{rev}.json'),
+  template('reference catalog marker', 'dir', below(V, referenceCatalogMarkerPath(CASE_ID, SHA)), 'vault/references/completed/{rev}.{b64}.done'),
+  template('reference enrollment record (legacy ID)', 'file', below(V, referenceEnrollmentRecordPath(REFERENCE_ENROLLMENT)), 'vault/references/enrollment/{referenceEnrollment}.json', true),
+  template('reference enrollment marker (legacy ID)', 'dir', below(V, referenceEnrollmentMarkerPath(REFERENCE_ENROLLMENT, SHA)), 'vault/references/enrollment/{b64uuid}.{b64}.done', true),
+  template('reference catalog (legacy ID)', 'file', below(V, referenceCatalogPath(REFERENCE_CATALOG)), 'vault/references/catalogs/{referenceCatalog}.json', true),
+  template('reference catalog marker (legacy ID)', 'dir', below(V, referenceCatalogMarkerPath(REFERENCE_CATALOG, SHA)), 'vault/references/completed/{b64uuid}.{b64}.done', true),
   template('reference context', 'file', below(V, referenceContextPath(REV)), 'vault/references/contexts/{rev}.json'),
   template('reference context (legacy revision ID)', 'file', below(V, referenceContextPath(LEGACY_REV)), 'vault/references/contexts/{legacyRev}.json', true),
   // Application (apply) evidence. New operations use event IDs; apply-<uuid> / recovery-<uuid> remain for old records.
