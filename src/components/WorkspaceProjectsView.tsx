@@ -9,12 +9,15 @@ import type {
   WorkspaceState,
   WorkspaceProjectEntry,
 } from "../engine/workspace-service";
-import { Modal, Notice, OperationProgress } from "./ui";
+import { MessageLines, Modal, Notice, OperationProgress } from "./ui";
+import { pathBudgetBlockSentence, projectNameHint } from "../utils/path-budget-message";
 import type { ProgressUpdate } from "../engine/types";
 
 export interface WorkspaceProjectsViewProps {
   onAllWorkspaces: () => void;
   workspace: WorkspaceState;
+  /** Absolute address of the workspace folder, when known (drives the name hint). */
+  workspaceAddress?: string;
   busy: boolean;
   progress: ProgressUpdate | null;
   onRefresh: () => Promise<void>;
@@ -31,6 +34,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
   const busy = props.busy || choosingFolder;
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const nameHint = projectNameHint(props.workspaceAddress, name);
   const [pickerMessage, setPickerMessage] = useState("");
   const [choosingLocation, setChoosingLocation] = useState<string | null>(null);
   const run = async (action: () => Promise<void>) => {
@@ -106,7 +110,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
           </button>
         </div>
       </div>
-      {error ? <Notice type="error">{error}</Notice> : null}
+      {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
       <section className="recent-projects">
         <div className="section-heading">
           <h2>Workspace projects</h2>
@@ -245,11 +249,16 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   onChange={(event) => setName(event.target.value)}
                 />
               </label>
+              {nameHint?.block ? (
+                <p className="field-help" role="alert">{pathBudgetBlockSentence(nameHint.block)}</p>
+              ) : nameHint?.text ? (
+                <p className="field-help">{nameHint.text}</p>
+              ) : null}
               <p>
                 A new project folder will be created inside{" "}
                 {props.workspace.identity.name} automatically.
               </p>
-              {error ? <Notice type="error">{error}</Notice> : null}
+              {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
               <div className="modal-actions">
                 <button
                   type="button"
@@ -258,7 +267,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                 >
                   Cancel
                 </button>
-                <button className="button primary">Create project</button>
+                <button className="button primary" disabled={Boolean(nameHint?.block)}>Create project</button>
               </div>
             </fieldset>
           </form>
@@ -282,7 +291,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
             working in the new copy after import and check its CAD references.
           </p>
           {pickerMessage ? <Notice>{pickerMessage}</Notice> : null}
-          {error ? <Notice type="error">{error}</Notice> : null}
+          {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
           <div className="modal-actions">
             <button
               className="button secondary"

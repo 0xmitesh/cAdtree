@@ -7,12 +7,15 @@ import {
 } from "../engine/home-service";
 import type { RememberedHome } from "../engine/idb-store";
 import type { ProgressUpdate } from "../engine/types";
-import { Modal, Notice, OperationProgress } from "./ui";
+import { MessageLines, Modal, Notice, OperationProgress } from "./ui";
+import { pathBudgetBlockSentence, workspaceNameHint } from "../utils/path-budget-message";
 import { HomeFolderAddressSetting } from "./FilePathShortcuts";
 import { HomeWelcome } from "./HomeWelcome";
 
 export function HomeWorkspacesView(props: {
   home: HomeState | null;
+  /** Absolute address of the Cadtree home, when known (drives the name hint). */
+  homeAddress?: string;
   intro?: boolean;
   remembered: RememberedHome | null;
   busy: boolean;
@@ -30,6 +33,7 @@ export function HomeWorkspacesView(props: {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const nameHint = workspaceNameHint(props.homeAddress, name);
   const run = async (action: () => Promise<void>) => {
     setError("");
     try {
@@ -117,7 +121,7 @@ export function HomeWorkspacesView(props: {
           </div>
         </div>
       ) : null}
-      {error ? <Notice type="error">{error}</Notice> : null}
+      {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
       {!props.home || props.intro ? (
         <HomeWelcome
           remembered={props.remembered}
@@ -226,7 +230,7 @@ export function HomeWorkspacesView(props: {
             Choose the existing workspace folder using the native folder picker.
             Workspace groups do not grant collaboration permissions.
           </p>
-          {error ? <Notice type="error">{error}</Notice> : null}
+          {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
           <div className="modal-actions">
             <button
               className="button secondary"
@@ -275,11 +279,16 @@ export function HomeWorkspacesView(props: {
                   onChange={(e) => setName(e.target.value)}
                 />
               </label>
+              {nameHint?.block ? (
+                <p className="field-help" role="alert">{pathBudgetBlockSentence(nameHint.block)}</p>
+              ) : nameHint?.text ? (
+                <p className="field-help">{nameHint.text}</p>
+              ) : null}
               <p>
                 A new folder will be allocated inside {props.home?.root.name}{" "}
                 automatically.
               </p>
-              {error ? <Notice type="error">{error}</Notice> : null}
+              {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
               <div className="modal-actions">
                 <button
                   type="button"
@@ -288,7 +297,7 @@ export function HomeWorkspacesView(props: {
                 >
                   Cancel
                 </button>
-                <button className="button primary">Create workspace</button>
+                <button className="button primary" disabled={Boolean(nameHint?.block)}>Create workspace</button>
               </div>
             </fieldset>
           </form>

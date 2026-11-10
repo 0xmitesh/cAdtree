@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { normalizeFolderPath } from "../utils/folder-path";
 import { saveWorkspacePath } from "../engine/idb-store";
 import { Modal, Notice } from "./ui";
+import { homeSetupWorstCase } from "../engine/path-budget";
 import type { HomeState } from "../engine/home-service";
 
 export interface HomeAddress {
@@ -31,6 +32,8 @@ export function FolderAddressDialog({
   required = true,
   title,
   submitLabel,
+  intro,
+  note,
   onSave,
   onCancel,
   onBack,
@@ -41,6 +44,10 @@ export function FolderAddressDialog({
   required?: boolean;
   title?: string;
   submitLabel?: string;
+  /** Replaces the default explanation paragraph. */
+  intro?: string;
+  /** Extra line under the explanation, e.g. a reminder when editing an existing address. */
+  note?: string;
   onSave: (normalizedPath: string) => Promise<void>;
   onCancel: () => void;
   onBack?: () => void;
@@ -49,6 +56,19 @@ export function FolderAddressDialog({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const id = useId();
+  // Non-blocking: saving still works. Measured from the normalized form of what is typed.
+  const longHome = (() => {
+    if (!home) return 0;
+    let typed = "";
+    try {
+      typed = normalizeFolderPath(input);
+    } catch {
+      return 0;
+    }
+    if (!typed) return 0;
+    const worst = homeSetupWorstCase(typed);
+    return worst.status === "ok" ? 0 : worst.requiredLength;
+  })();
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
@@ -65,10 +85,10 @@ export function FolderAddressDialog({
         Selected folder: <strong>{folderName}</strong>
       </p>
       <p>
-        The browser grants folder access but does not share its full absolute
-        address. The address you enter is used for copying locations; cAdtree
-        cannot compare it with the selected folder.
+        {intro ??
+          "The browser grants folder access but does not share its full absolute address. The address you enter is used for copying locations; cAdtree cannot compare it with the selected folder."}
       </p>
+      {note ? <p>{note}</p> : null}
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -116,6 +136,11 @@ export function FolderAddressDialog({
             <p><strong>Linux:</strong> In your file manager, open the folder, select the location bar (usually Ctrl+L) and copy. Paste a copied folder path into the location bar to open it.</p>
             <p>Examples: {"D:\\Cadtree, \\\\server\\share\\Cadtree, /Users/mitesh/Documents/Cadtree, /home/mitesh/Documents/Cadtree"}. Moving this folder may require updating this local address.</p>
           </details>
+          {longHome ? (
+            <Notice type="info">
+              This address is long: projects here would need {longHome} characters. A shorter home such as C:\Cadtree leaves more room.
+            </Notice>
+          ) : null}
           {error ? <Notice type="error">{error}</Notice> : null}
           <div className="modal-actions">
             {onBack ? (
