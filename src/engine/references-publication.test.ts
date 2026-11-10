@@ -79,30 +79,8 @@ test('baseline capture and reference publication fit the Windows directory limit
   assert.equal(next.vaultState.references!.contexts[next.revision.manifest.revisionId].record!.links[0].versionId, ref.versions[0].versionId);
 });
 
-test('original directory publication names remain readable alongside compact names', async () => {
-  const f = await fixture();
-  const original = await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
-  const evidence = original.references!;
-  const enrollment = await f.disk.getDirectory(['references', 'enrollment']);
-  const record = (await enrollment.listEntries()).find(entry => entry.kind === 'file')!;
-  const enrollmentId = record.name.slice(0, -5);
-  const enrollmentHash = hashString(await enrollment.readFileText([record.name]));
-  const compactEnrollment = (await enrollment.listEntries()).find(entry => entry.kind === 'directory')!;
-  await enrollment.removeEntry([compactEnrollment.name], { recursive: true });
-  await enrollment.getDirectory([`${enrollmentId}.${enrollmentHash}.done`], { create: true });
-  const completed = await f.disk.getDirectory(['references', 'completed']);
-  const compactCatalog = (await completed.listEntries())[0];
-  await completed.removeEntry([compactCatalog.name], { recursive: true });
-  await completed.getDirectory([`${evidence.catalogId}.${evidence.catalogSha256}.done`], { create: true });
-  const reopened = await openExistingVault(f.vault);
-  assert.equal(reopened.references!.status, 'available');
-  assert.deepEqual(reopened.references!.library, evidence.library);
-  const mixed = await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
-  assert.equal(mixed.references!.status, 'available');
-  assert.equal(mixed.references!.library.length, 2);
-  const ref = mixed.references!.library[0];
-  assert.deepEqual((await retrieveReferenceAttachment(f.vault, f.projectId, ref.referenceId, ref.versions[0].versionId)).bytes, bytes);
-});
+// The original-name readability test moved to reference-record-ids.test.ts: new references have record IDs, so
+// a full-hex marker can only be built from legacy-ID fixtures.
 
 for (const phase of ['open', 'write', 'close'] as const) for (const first of [true, false]) {
   test(`native ${phase} failure after ${first ? 'first enrollment' : 'subsequent catalog'} file creation leaves diagnostics, retrieval, retry and CAD capture usable`, async () => {

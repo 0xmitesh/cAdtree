@@ -68,7 +68,9 @@ function validateLibrary(library: ProjectReference[], previous: ProjectReference
     ref.tags.forEach(tag => text(tag, 128));
     if (!Array.isArray(ref.versions) || !ref.versions.length) throw new Error('A reference must preserve its versions.');
     for (const v of ref.versions) {
-      // New IDs have no kind prefix: a version ID must never equal any reference ID.
+      // New IDs carry no kind prefix, so the old prefix can no longer reveal a swapped ID. The kind is fixed by
+      // where the ID sits (field/folder) and swaps are caught by the sealed checksum and project binding; this
+      // check additionally rejects a version ID that equals any reference ID.
       if (v.referenceId !== ref.referenceId || !safeId(v.versionId, 'reference-version') || versions.has(v.versionId) || library.some(r => r.referenceId === v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
       text(v.originalFilename, 1024); text(v.fileType, 256);
       if (v.savedBy !== undefined) validateReferenceAuthor(v.savedBy);
@@ -122,7 +124,8 @@ function directoryPublication(name: string, prefix: string) {
   }
   // Retain the original directory format for already-published vaults.
   const match = /^(.+)\.([a-f0-9]{64})\.done$/.exec(name);
-  if (!match || !safeId(match[1], prefix)) throw new Error('Unexpected reference publication directory.');
+  // Legacy-only: a record ID with a full-hex checksum is a shape that never existed and must be rejected.
+  if (!match || !new RegExp(`^${prefix}-[0-9a-f-]{36}$`).test(match[1])) throw new Error('Unexpected reference publication directory.');
   return { id: match[1], sha256: match[2] };
 }
 async function readDirectoryPublication(vault: FileSystemDirectoryAdapter, markerPath: string[], recordPath: string[], sha256: string) {
@@ -294,7 +297,7 @@ export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, st
     if (!isRecordId(candidate)) throw new Error('Invalid reference record ID. Nothing was written.');
     try { sha256 = await writeVerified(vault, referenceEnrollmentRecordPath(candidate), boundary); id = candidate; break; }
     catch (error) { if (!(error instanceof FileConflictError)) throw error; }
-    if (attempt >= MAX_REFERENCE_ID_ATTEMPTS) throw new Error(`No free reference record ID after ${MAX_REFERENCE_ID_ATTEMPTS} attempts. Nothing was written. Try again.`);
+    if (attempt >= MAX_REFERENCE_ID_ATTEMPTS) throw new Error(`No free reference record ID after ${MAX_REFERENCE_ID_ATTEMPTS} attempts. No reference enrollment was written. Try again.`);
   }
   await commitDirectory(vault, referenceEnrollmentMarkerPath(id, sha256));
   return boundary;

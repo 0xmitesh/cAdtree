@@ -12,7 +12,7 @@ import { writeAndVerifyObject } from './object-store';
 import { matchInternalPath, newRecordsReserve, CRSWAP_CHARS } from './path-budget';
 import {
   importReferenceAttachment, retrieveReferenceAttachment, verifyReferenceLibraryContent, createReferenceReview, referenceChecksum,
-  referenceEnrollmentRecordPath, referenceEnrollmentMarkerPath, referenceCatalogPath, referenceCatalogMarkerPath,
+  referenceEnrollmentRecordPath,  referenceCatalogPath, referenceCatalogMarkerPath,
   MAX_REFERENCE_ID_ATTEMPTS, type ProjectReference,
 } from './references';
 import { buildReferenceBrowser } from '../history/reference-browser';
@@ -46,7 +46,7 @@ async function legacyVault() {
   const put = async (path: string[], value: object) => { const text = JSON.stringify(value, null, 2); await f.vault.writeFileText(path, text, { exclusive: true }); return hashString(text); };
   const enrollId = `reference-enrollment-${uuidN(1)}`;
   const enrollSha = await put(referenceEnrollmentRecordPath(enrollId), boundary);
-  await f.vault.getDirectory(referenceEnrollmentMarkerPath(enrollId, enrollSha), { create: true, exclusiveCreate: true });
+  await f.vault.getDirectory(['references', 'enrollment', `${enrollId}.${enrollSha}.done`], { create: true, exclusiveCreate: true }); // full-hex legacy enrollment marker
   const store = async (name: string, text: string) => {
     const bytes = new TextEncoder().encode(text), sha = hashString(text);
     await writeAndVerifyObject(f.vault, 'legacy-session', sha, bytes.length, async () => new Blob([bytes]).stream());
@@ -223,4 +223,13 @@ test('new-code reference paths fit newRecordsReserve() and hit no legacy templat
   };
   await walk(['references']);
   assert.equal(checked.length, 4); // enrollment record + marker, catalog record + marker
+});
+
+test('a record ID with a full-hex checksum marker never existed and is rejected as unexpected', async () => {
+  const f = await fixture();
+  await importReferenceAttachment(f.vault, f.projectId, file('One.txt', 'one'), meta('One'));
+  await f.vault.getDirectory(['references', 'completed', `${newRecordId()}.${hashString('y')}.done`], { create: true, exclusiveCreate: true });
+  const state = await openExistingVault(f.vault);
+  assert.notEqual(state.references!.status, 'available');
+  assert.match(state.references!.reason!, /Unexpected reference publication directory/);
 });
