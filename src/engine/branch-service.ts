@@ -1,5 +1,6 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { validateDirectoryIsolation } from "./fs-adapter";
+import { FileConflictError, validateDirectoryIsolation } from "./fs-adapter";
+import { newRecordId } from "./ids";
 import {
   assertRevisionAncestry,
   branchNameKey,
@@ -33,6 +34,10 @@ export interface CreateDesignBranchOptions {
   signal?: AbortSignal;
   onProgress?: (progress: ProgressUpdate) => void;
   resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
+  /** Test seam: supplies each candidate record ID. Defaults to newRecordId(). */
+  newBranchId?: () => string;
+  /** Extra clash check for stores outside the vault (e.g. the workspace breadcrumb). Read-only. */
+  isBranchIdTaken?: (branchId: string) => Promise<boolean>;
   beforePublish?: (branch: BranchRecord, workingDir: FileSystemDirectoryAdapter) => Promise<void>;
 }
 export class BranchCreationError extends Error {
@@ -70,6 +75,8 @@ function validateName(state: VaultState, name: string) {
 export const branchAttemptPath = (branchId: string): string[] => ["staging", `${branchId}.branch-attempt.json`];
 export const branchRecordPath = (branchId: string): string[] => ["branches", `${branchId}.branch.json`];
 export const branchReadyPath = (branchId: string): string[] => ["branches", `${branchId}.ready.json`];
+/** New cases try this many record IDs before giving up; nothing is written for a rejected ID. */
+export const MAX_BRANCH_ID_ATTEMPTS = 5;
 export async function createDesignBranch(
   options: CreateDesignBranchOptions,
 ): Promise<{
@@ -139,7 +146,6 @@ export async function createDesignBranch(
         );
       }
     }
-    const branchId = `branch-${crypto.randomUUID()}`;
     // Readable name chosen under the project writer lock, before the breadcrumb
     // records it. "main" is reserved: Main's folder is working/main.
     const folderName = await pickFreeName(
@@ -147,22 +153,49 @@ export async function createDesignBranch(
       folderNameFor(name, "Design case"),
       { extraTaken: ["main"] },
     );
-    const stagingPath = branchAttemptPath(branchId);
     let workingDir: FileSystemDirectoryAdapter | undefined;
     let publicationAttempted = false;
+    let branchId = "";
+    let stagingPath: string[] = [];
     try {
       checkCancelled(signal);
-      await vaultDir.writeFileText(
-        stagingPath,
-        JSON.stringify({
-          branchId,
-          name,
-          sourceRevisionId,
-          destinationName: folderName,
-          startedAt: new Date().toISOString(),
-        }),
-        { exclusive: true },
-      );
+      // The staging attempt is the first write for a case and is exclusive, so it claims the
+      // record ID. A clash (existing case, leftover attempt, existing breadcrumb) draws a new ID
+      // before anything else is written; other cases' records are never touched.
+      for (let attempt = 1; ; attempt++) {
+        const candidate = (options.newBranchId ?? newRecordId)();
+        const known =
+          state.branches.some((b) => b.branchId === candidate) ||
+          (await vaultDir.hasFile(branchRecordPath(candidate))) ||
+          (await vaultDir.hasFile(branchReadyPath(candidate))) ||
+          (await vaultDir.hasFile(branchAttemptPath(candidate))) ||
+          (options.isBranchIdTaken ? await options.isBranchIdTaken(candidate) : false);
+        if (!known) {
+          try {
+            await vaultDir.writeFileText(
+              branchAttemptPath(candidate),
+              JSON.stringify({
+                branchId: candidate,
+                name,
+                sourceRevisionId,
+                destinationName: folderName,
+                startedAt: new Date().toISOString(),
+              }),
+              { exclusive: true },
+            );
+            branchId = candidate;
+            stagingPath = branchAttemptPath(candidate);
+            break;
+          } catch (error) {
+            if (!(error instanceof FileConflictError) && !/already exists/i.test(error instanceof Error ? error.message : ""))
+              throw error;
+          }
+        }
+        if (attempt >= MAX_BRANCH_ID_ATTEMPTS)
+          throw new Error(
+            `No free design case ID after ${MAX_BRANCH_ID_ATTEMPTS} attempts. Nothing was written. Try again.`,
+          );
+      }
       workingDir = await destinationParent.getDirectory([folderName], {
         create: true,
         exclusiveCreate: true,

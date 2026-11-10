@@ -72,6 +72,8 @@ export interface InternalPathTemplate {
 const UUID = '00000000-0000-4000-8000-000000000000';
 const SHA = 'a'.repeat(64);
 const BRANCH = `branch-${UUID}`;
+/** New design cases: `YYYYMMDD-HHMMSS-xxxxxx` (22 chars). */
+const CASE_ID = '20260101-000000-abcdef';
 const APPLY = `apply-${UUID}`;
 const RECOVERY = `recovery-${UUID}`;
 /** Longest event ID: `YYYYMMDD-HHMMSS-999`. */
@@ -85,7 +87,9 @@ const V = 'vault';
 
 /** Placeholders usable in `shape`, each with the regular expression a real value must match. */
 export const PATH_TOKENS: Record<string, string> = {
-  branch: 'branch-[0-9a-f-]{36}|branch-main',
+  branch: 'branch-[0-9a-f-]{36}',
+  anyBranch: '[0-9]{8}-[0-9]{6}-[0-9a-z]{6}|branch-[0-9a-f-]{36}|branch-main',
+  caseId: '[0-9]{8}-[0-9]{6}-[0-9a-z]{6}|branch-main',
   apply: 'apply-[0-9a-f-]{36}',
   recovery: 'recovery-[0-9a-f-]{36}',
   event: '[0-9]{8}-[0-9]{6}(?:-[0-9]{1,3})?',
@@ -112,8 +116,8 @@ function template(label: string, kind: 'file' | 'dir', segments: string[], shape
 const stagingSession = getStagingSessionPathSegments('sample-session');
 
 /**
- * Maximum lengths assume the CURRENT ID formats (UUID-based, plus the new ids.ts formats once
- * wired). Legacy or non-UUID IDs accepted by lenient `safeId` validators may be longer and are
+ * Maximum lengths assume the CURRENT ID formats (new cases and events use the ids.ts formats;
+ * UUID-based case IDs, apply-<uuid> and recovery-<uuid> remain as legacy shapes). Legacy or non-UUID IDs accepted by lenient `safeId` validators may be longer and are
  * not covered.
  */
 export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
@@ -121,7 +125,8 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('project record', 'file', ['.cadtree', 'project.json'], '.cadtree/project.json'),
   template('project ready marker', 'file', ['.cadtree', 'ready.json'], '.cadtree/ready.json'),
   template('project creation attempt', 'file', ['.cadtree', 'attempt.json'], '.cadtree/attempt.json'),
-  template('branch location record', 'file', ['.cadtree', 'branches', `${BRANCH}.json`], '.cadtree/branches/{branch}.json'),
+  template('branch location record', 'file', ['.cadtree', 'branches', `${CASE_ID}.json`], '.cadtree/branches/{caseId}.json'),
+  template('branch location record (legacy case ID)', 'file', ['.cadtree', 'branches', `${BRANCH}.json`], '.cadtree/branches/{branch}.json', true),
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
   template('recovery copy folder', 'dir', ['recoveries', `copy-${UUID}`], 'recoveries/copy-{uuid}'),
@@ -129,21 +134,25 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   // Vault core.
   template('vault project record', 'file', [V, 'project.json'], 'vault/project.json'),
   template('vault main branch record', 'file', [V, 'branches', 'branch-main.json'], 'vault/branches/branch-main.json'),
-  template('vault branch record', 'file', below(V, branchRecordPath(BRANCH)), 'vault/branches/{branch}.branch.json'),
-  template('vault branch ready marker', 'file', below(V, branchReadyPath(BRANCH)), 'vault/branches/{branch}.ready.json'),
+  template('vault branch record', 'file', below(V, branchRecordPath(CASE_ID)), 'vault/branches/{caseId}.branch.json'),
+  template('vault branch ready marker', 'file', below(V, branchReadyPath(CASE_ID)), 'vault/branches/{caseId}.ready.json'),
+  template('vault branch record (legacy case ID)', 'file', below(V, branchRecordPath(BRANCH)), 'vault/branches/{branch}.branch.json', true),
+  template('vault branch ready marker (legacy case ID)', 'file', below(V, branchReadyPath(BRANCH)), 'vault/branches/{branch}.ready.json', true),
   template('vault revision manifest', 'file', below(V, revisionManifestPath(REV)), 'vault/revisions/{rev}.manifest.json'),
   template('vault revision completion marker', 'file', below(V, revisionCompletionPath(REV)), 'vault/completed/{rev}.done.json'),
   template('vault cache index', 'file', [V, 'cache', 'index.json'], 'vault/cache/index.json'),
   template('vault content object', 'file', below(V, getObjectPathSegments(SHA)), 'vault/objects/{sha2}/{sha}.bin'),
   template('vault staged object', 'file', below(V, getStagingObjectPathSegments('sample-session', SHA)), 'vault/staging/{b64}/{b64}.tmp'),
   template('vault staging session folder', 'dir', below(V, stagingSession), 'vault/staging/{b64}'),
-  template('vault branch attempt', 'file', below(V, branchAttemptPath(BRANCH)), 'vault/staging/{branch}.branch-attempt.json'),
+  template('vault branch attempt', 'file', below(V, branchAttemptPath(CASE_ID)), 'vault/staging/{caseId}.branch-attempt.json'),
+  template('vault branch attempt (legacy case ID)', 'file', below(V, branchAttemptPath(BRANCH)), 'vault/staging/{branch}.branch-attempt.json', true),
   // Component identity.
   template('component boundary', 'file', [V, 'components', 'boundary.json'], 'vault/components/boundary.json'),
   template('component ready marker', 'file', [V, 'components', 'ready.json'], 'vault/components/ready.json'),
   template('component revision record', 'file', below(V, componentRecordPath(REV)), 'vault/components/revisions/{rev}.json'),
   // Case lifecycle.
-  template('case lifecycle record', 'file', below(V, lifecyclePath(BRANCH, SEQ)), 'vault/case-lifecycle/{branch}.{seq}.json'),
+  template('case lifecycle record', 'file', below(V, lifecyclePath(CASE_ID, SEQ)), 'vault/case-lifecycle/{caseId}.{seq}.json'),
+  template('case lifecycle record (legacy case ID)', 'file', below(V, lifecyclePath(BRANCH, SEQ)), 'vault/case-lifecycle/{branch}.{seq}.json', true),
   // References.
   template('reference enrollment record', 'file', below(V, referenceEnrollmentRecordPath(REFERENCE_ENROLLMENT)), 'vault/references/enrollment/{referenceEnrollment}.json'),
   template('reference enrollment marker', 'dir', below(V, referenceEnrollmentMarkerPath(REFERENCE_ENROLLMENT, SHA)), 'vault/references/enrollment/{b64uuid}.{b64}.done'),
@@ -151,17 +160,22 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('reference catalog marker', 'dir', below(V, referenceCatalogMarkerPath(REFERENCE_CATALOG, SHA)), 'vault/references/completed/{b64uuid}.{b64}.done'),
   template('reference context', 'file', below(V, referenceContextPath(REV)), 'vault/references/contexts/{rev}.json'),
   // Application (apply) evidence. New operations use event IDs; apply-<uuid> / recovery-<uuid> remain for old records.
-  template('application plan', 'file', below(V, applicationPlanPath(BRANCH, EVENT)), 'vault/applications/{branch}/{event}/plan.json'),
-  template('application event', 'file', below(V, applicationEventPath(BRANCH, EVENT, SEQ)), 'vault/applications/{branch}/{event}/events/{seq}.json'),
-  template('application before-state copy', 'file', below(V, applicationStagedPath(BRANCH, EVENT, 'before', SEQ)), 'vault/applications/{branch}/{event}/before/{seq}.bin'),
-  template('application source copy', 'file', below(V, applicationStagedPath(BRANCH, EVENT, 'source', SEQ)), 'vault/applications/{branch}/{event}/source/{seq}.bin'),
-  template('application unexpected-recovery copy', 'file', below(V, applicationUnexpectedPath(BRANCH, EVENT, EVENT, SEQ)), 'vault/applications/{branch}/{event}/unexpected/{event}/{seq}.bin'),
-  template('application plan (legacy)', 'file', below(V, applicationPlanPath(BRANCH, APPLY)), 'vault/applications/{branch}/{apply}/plan.json', true),
-  template('application event (legacy)', 'file', below(V, applicationEventPath(BRANCH, APPLY, SEQ)), 'vault/applications/{branch}/{apply}/events/{seq}.json', true),
-  template('application before-state copy (legacy)', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'before', SEQ)), 'vault/applications/{branch}/{apply}/before/{seq}.bin', true),
-  template('application source copy (legacy)', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'source', SEQ)), 'vault/applications/{branch}/{apply}/source/{seq}.bin', true),
-  template('application unexpected-recovery copy (legacy)', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, RECOVERY, SEQ)), 'vault/applications/{branch}/{apply}/unexpected/{recovery}/{seq}.bin', true),
-  template('application unexpected-recovery copy (legacy apply, event recovery)', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, EVENT, SEQ)), 'vault/applications/{branch}/{apply}/unexpected/{event}/{seq}.bin', true),
+  template('application plan', 'file', below(V, applicationPlanPath(CASE_ID, EVENT)), 'vault/applications/{caseId}/{event}/plan.json'),
+  template('application plan (legacy case ID)', 'file', below(V, applicationPlanPath(BRANCH, EVENT)), 'vault/applications/{branch}/{event}/plan.json', true),
+  template('application event', 'file', below(V, applicationEventPath(CASE_ID, EVENT, SEQ)), 'vault/applications/{caseId}/{event}/events/{seq}.json'),
+  template('application event (legacy case ID)', 'file', below(V, applicationEventPath(BRANCH, EVENT, SEQ)), 'vault/applications/{branch}/{event}/events/{seq}.json', true),
+  template('application before-state copy', 'file', below(V, applicationStagedPath(CASE_ID, EVENT, 'before', SEQ)), 'vault/applications/{caseId}/{event}/before/{seq}.bin'),
+  template('application before-state copy (legacy case ID)', 'file', below(V, applicationStagedPath(BRANCH, EVENT, 'before', SEQ)), 'vault/applications/{branch}/{event}/before/{seq}.bin', true),
+  template('application source copy', 'file', below(V, applicationStagedPath(CASE_ID, EVENT, 'source', SEQ)), 'vault/applications/{caseId}/{event}/source/{seq}.bin'),
+  template('application source copy (legacy case ID)', 'file', below(V, applicationStagedPath(BRANCH, EVENT, 'source', SEQ)), 'vault/applications/{branch}/{event}/source/{seq}.bin', true),
+  template('application unexpected-recovery copy', 'file', below(V, applicationUnexpectedPath(CASE_ID, EVENT, EVENT, SEQ)), 'vault/applications/{caseId}/{event}/unexpected/{event}/{seq}.bin'),
+  template('application unexpected-recovery copy (legacy case ID)', 'file', below(V, applicationUnexpectedPath(BRANCH, EVENT, EVENT, SEQ)), 'vault/applications/{branch}/{event}/unexpected/{event}/{seq}.bin', true),
+  template('application plan (legacy)', 'file', below(V, applicationPlanPath(BRANCH, APPLY)), 'vault/applications/{anyBranch}/{apply}/plan.json', true),
+  template('application event (legacy)', 'file', below(V, applicationEventPath(BRANCH, APPLY, SEQ)), 'vault/applications/{anyBranch}/{apply}/events/{seq}.json', true),
+  template('application before-state copy (legacy)', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'before', SEQ)), 'vault/applications/{anyBranch}/{apply}/before/{seq}.bin', true),
+  template('application source copy (legacy)', 'file', below(V, applicationStagedPath(BRANCH, APPLY, 'source', SEQ)), 'vault/applications/{anyBranch}/{apply}/source/{seq}.bin', true),
+  template('application unexpected-recovery copy (legacy)', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, RECOVERY, SEQ)), 'vault/applications/{anyBranch}/{apply}/unexpected/{recovery}/{seq}.bin', true),
+  template('application unexpected-recovery copy (legacy apply, event recovery)', 'file', below(V, applicationUnexpectedPath(BRANCH, APPLY, EVENT, SEQ)), 'vault/applications/{anyBranch}/{apply}/unexpected/{event}/{seq}.bin', true),
   // Knowledge Lab.
   template('knowledge record', 'file', below(V, knowledgeRecordPath(KNOWLEDGE)), 'vault/knowledge/records/{knowledge}.json'),
   template('knowledge publication marker', 'dir', below(V, knowledgePublicationPath(KNOWLEDGE, SHA)), 'vault/knowledge/completed/{knowledge}.{sha}.done'),

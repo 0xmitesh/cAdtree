@@ -648,8 +648,8 @@ test("a saved branch survives write acknowledgement errors and reopens independe
   vault.setHooks({
     onAfterWrite: (path) => {
       if (
-        path.includes("/branches/branch-") &&
-        !path.endsWith("branch-main.json")
+        path.includes("/branches/") &&
+        (path.endsWith(".branch.json") || path.endsWith(".ready.json"))
       )
         throw new Error("Lost acknowledgement");
     },

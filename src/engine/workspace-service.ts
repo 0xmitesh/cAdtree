@@ -656,6 +656,8 @@ export async function createManagedBranch(
     sourceRevisionId: string;
     name: string;
     reason: string;
+    /** Test seam: supplies each candidate case ID (see createDesignBranch). */
+    newBranchId?: () => string;
   } & CopyOptions,
 ): Promise<
   ManagedProject & { createdBranchId: string; publicationWarning?: string }
@@ -672,6 +674,11 @@ export async function createManagedBranch(
     vaultDir: project.vaultDir,
     workingFolders: project.workingFolders,
     destinationParent: parent,
+    // A leftover breadcrumb with the same ID (no matching vault record) also counts as a clash.
+    isBranchIdTaken: async (branchId) => {
+      const container = await resolve(root, containerPath, "projects");
+      return container.hasFile([".cadtree", "branches", `${idSegment(branchId)}.json`]);
+    },
     resolveWorkingFolders: async (state) => {
       const current = await resolveManagedProject(root, containerPath, state);
       assertWritable(current);
