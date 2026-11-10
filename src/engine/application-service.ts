@@ -8,6 +8,9 @@ import {
 import {
   appendApplicationEvent,
   applicationPath,
+  applicationPlanPath,
+  applicationStagedPath,
+  applicationUnexpectedPath,
   branchApplications,
   changedActions,
   sealApplication,
@@ -248,11 +251,12 @@ function stagedPath(
   side: "before" | "source",
   index: number,
 ) {
-  return [
-    ...applicationPath(op.destinationBranchId, op.operationId),
+  return applicationStagedPath(
+    op.destinationBranchId,
+    op.operationId,
     side,
-    `${String(index).padStart(6, "0")}.bin`,
-  ];
+    index,
+  );
 }
 async function verifiedFile(
   dir: FileSystemDirectoryAdapter,
@@ -346,10 +350,11 @@ export async function applyPreparedApplication(
       },
     });
     const text = JSON.stringify(record, null, 2);
-    await vault.writeFileText([...path, "plan.json"], text, {
+    const planPath = applicationPlanPath(review.destinationBranchId, operationId);
+    await vault.writeFileText(planPath, text, {
       exclusive: true,
     });
-    if ((await vault.readFileText([...path, "plan.json"])) !== text)
+    if ((await vault.readFileText(planPath)) !== text)
       throw new Error(
         "Application plan readback failed. Reopen and inspect retained operation storage.",
       );
@@ -546,12 +551,7 @@ export async function recoverApplication(
         if (current)
           await stageFile(
             vault,
-            [
-              ...applicationPath(branchId, operationId),
-              "unexpected",
-              recoveryId,
-              `${String(index).padStart(6, "0")}.bin`,
-            ],
+            applicationUnexpectedPath(branchId, operationId, recoveryId, index),
             working,
             splitAndValidatePath(action.path),
             current,

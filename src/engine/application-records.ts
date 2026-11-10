@@ -107,6 +107,49 @@ export function applicationPath(
     throw new Error("Unsafe application identity.");
   return ["applications", branchId, operationId];
 }
+const sixDigits = (n: number) => String(n).padStart(6, "0");
+export function applicationPlanPath(
+  branchId: string,
+  operationId: string,
+): string[] {
+  return [...applicationPath(branchId, operationId), "plan.json"];
+}
+export function applicationEventPath(
+  branchId: string,
+  operationId: string,
+  sequence: number,
+): string[] {
+  return [
+    ...applicationPath(branchId, operationId),
+    "events",
+    `${sixDigits(sequence)}.json`,
+  ];
+}
+export function applicationStagedPath(
+  branchId: string,
+  operationId: string,
+  side: "before" | "source",
+  index: number,
+): string[] {
+  return [
+    ...applicationPath(branchId, operationId),
+    side,
+    `${sixDigits(index)}.bin`,
+  ];
+}
+export function applicationUnexpectedPath(
+  branchId: string,
+  operationId: string,
+  recoveryId: string,
+  index: number,
+): string[] {
+  return [
+    ...applicationPath(branchId, operationId),
+    "unexpected",
+    recoveryId,
+    `${sixDigits(index)}.bin`,
+  ];
+}
 function validateRecord(
   record: ApplicationRecord,
   state: VaultState,
@@ -494,11 +537,11 @@ export async function appendApplicationEvent(
     at: new Date().toISOString(),
     ...fields,
   });
-  const path = [
-    ...applicationPath(operation.destinationBranchId, operation.operationId),
-    "events",
-    `${String(event.sequence).padStart(6, "0")}.json`,
-  ];
+  const path = applicationEventPath(
+    operation.destinationBranchId,
+    operation.operationId,
+    event.sequence,
+  );
   const text = JSON.stringify(event, null, 2);
   await vault.writeFileText(path, text, { exclusive: true });
   if ((await vault.readFileText(path)) !== text)
