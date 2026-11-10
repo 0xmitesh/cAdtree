@@ -1256,8 +1256,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           project,
           context,
           source
-            ? `Continue working in this copy: ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
-            : `Created project "${project.record.name}". Save your CAD files in ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`,
+            ? `Continue working in this copy: ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
+            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`,
         );
       },
       true,
@@ -1713,7 +1713,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: `Created and verified "${params.name}". Open ${workspace.identity.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}`,
+              message: `Created and verified "${params.name}". Open ${workspace.root.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}`,
             });
           return;
         }
@@ -1740,7 +1740,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         if (context.current())
           setLastRestoreReport({
             result: recovered.result,
-            destinationPath: `${workspace.identity.name}/${recovered.relativePath}`,
+            destinationPath: `${workspace.root.name}/${recovered.relativePath}`,
             recoveredFiles: {
               relativeDirectory: recovered.relativePath,
               paths:

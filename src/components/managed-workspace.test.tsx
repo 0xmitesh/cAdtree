@@ -312,3 +312,24 @@ test("managed action preflight notices a folder lost after opening, before it di
     false,
   );
 });
+
+test("path messages name the real workspace folder, not the display name", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const { workspace } = await createHomeWorkspace(home, "Acme: Rigs");
+  assert.equal(workspace.identity.name, "Acme: Rigs");
+  assert.equal(workspace.root.name, "Acme- Rigs");
+  const ui = render(<App />);
+  await openHomeWorkspace(ui, home);
+  fireEvent.click(ui.getByRole("button", { name: "Create project" }));
+  const dialog = within(ui.getByRole("dialog", { name: "Create project" }));
+  fireEvent.change(dialog.getByRole("textbox", { name: "Project name" }), {
+    target: { value: "Rig" },
+  });
+  fireEvent.click(dialog.getByRole("button", { name: "Create project" }));
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  await idle(ui);
+  const text = ui.container.textContent!;
+  assert.match(text, /Save your CAD files in Acme- Rigs\/projects\//);
+  assert.ok(!text.includes("Acme: Rigs/"));
+});
