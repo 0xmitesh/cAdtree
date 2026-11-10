@@ -45,6 +45,7 @@ import {
   restoreRevisionToFolder,
   restoreSelectedFilesToFolder,
 } from "./engine/recovery-service";
+import { joinAddress } from "./engine/path-budget";
 import { captureRevision, ReviewStaleError } from "./engine/revision-service";
 import { componentWriteBlock, enableComponentTracking, type IdentityReview } from './engine/component-identity';
 import {
@@ -972,11 +973,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 expectedHomeId: home.identity.homeId,
                 signal: context.signal,
                 onProgress: context.progress,
+                budget: { homeAddress: budgetHomeAddress() },
               })
             : await createHomeWorkspace(home.root, name!, {
                 expectedHomeId: home.identity.homeId,
                 signal: context.signal,
                 onProgress: context.progress,
+                budget: { homeAddress: budgetHomeAddress() },
               });
           const next = await openHome(home.root);
           if (!context.current()) return;
@@ -1214,6 +1217,15 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
+  // Absolute addresses for the engine's path budget check. Unknown (undefined) means "unchecked".
+  const budgetHomeAddress = (): string | undefined =>
+    home && homeAddress && homeAddress.homeId === home.identity.homeId ? homeAddress.path : undefined;
+  const budgetWorkspaceAddress = async (): Promise<string | undefined> => {
+    const base = budgetHomeAddress();
+    if (!base || !home || !workspace || !homeAddress) return undefined;
+    const relative = await homeAddress.root.resolveRelativePath(workspace.root);
+    return relative && relative.length === 1 ? joinAddress(base, relative[0]) : undefined;
+  };
   const addManagedProject = async (
     name: string,
     source?: FileSystemDirectoryAdapter,
@@ -1232,6 +1244,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         const options = {
           signal: context.signal,
           onProgress: context.progress,
+          budget: { workspaceAddress: await budgetWorkspaceAddress() },
         };
         const project = source
           ? await importProject(workspace.root, source, name, options)
@@ -1686,6 +1699,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               reason: params.reason,
               signal: context.signal,
               onProgress: context.progress,
+              budget: { workspaceAddress: await budgetWorkspaceAddress() },
             },
           );
           if (!context.current()) return;
@@ -1736,7 +1750,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           managedProject.record.containerPath,
           revisionId,
           selectedPaths,
-          { signal: context.signal, onProgress: context.progress },
+          {
+            signal: context.signal,
+            onProgress: context.progress,
+            budget: { workspaceAddress: await budgetWorkspaceAddress() },
+          },
         );
         if (context.current())
           setLastRestoreReport({
