@@ -145,6 +145,19 @@ export function managedPath(path: string, prefix?: string): string[] {
     throw new Error(`Managed path must be a descendant of ${prefix}.`);
   return segments;
 }
+/** Leaf folder name of a stored branch location (`projects/<any>/working/<leaf>`). */
+function workingLeaf(storedPath: string): string {
+  const stored = managedPath(storedPath);
+  if (
+    stored.length !== 4 ||
+    stored[0] !== "projects" ||
+    stored[2] !== "working"
+  )
+    throw new Error(
+      "Working location must identify a branch leaf, not a shared container.",
+    );
+  return stored[3];
+}
 async function resolve(
   root: FileSystemDirectoryAdapter,
   path: string,
@@ -240,15 +253,23 @@ async function readProjectRecord(
   );
   if (
     record.workspaceId !== workspace.workspaceId ||
-    record.containerPath !== containerPath ||
-    record.vaultPath !== `${containerPath}/vault` ||
     !["create", "import", "adoption"].includes(String(record.origin))
   )
     throw new Error(
-      "Managed project identity or location does not match this workspace.",
+      "Managed project identity does not match this workspace.",
     );
   idSegment(String(record.projectId));
-  return { container, record: record as unknown as ManagedProjectRecord };
+  // Identity comes from the metadata IDs, not the folder name: the stored
+  // containerPath/vaultPath are only the creation-time location. Callers get the
+  // actual current location in memory; the file on disk (covered by ready.json) is untouched.
+  return {
+    container,
+    record: {
+      ...record,
+      containerPath,
+      vaultPath: `${containerPath}/vault`,
+    } as unknown as ManagedProjectRecord,
+  };
 }
 export async function resolveManagedProject(
   root: FileSystemDirectoryAdapter,
@@ -312,12 +333,10 @@ export async function resolveManagedProject(
         raw.branchId !== branch.branchId
       )
         throw new Error("Branch location identity mismatch.");
-      const path = String(raw.workingPath);
-      const segments = managedPath(path, `${containerPath}/working`);
-      if (segments.length !== 4)
-        throw new Error(
-          "Working location must identify a branch leaf, not a shared container.",
-        );
+      // The stored path records where the leaf was created; only its shape and leaf
+      // name matter. The actual location is always under this project's working/.
+      const path = `${containerPath}/working/${workingLeaf(String(raw.workingPath))}`;
+      managedPath(path, `${containerPath}/working`);
       if (
         Object.values(workingPaths).some(
           (other) => other.toLowerCase() === path.toLowerCase(),
@@ -396,7 +415,7 @@ export async function openWorkspace(
           await container.readFileText([".cadtree", "attempt.json"]),
         );
         if (
-          attempt.containerPath === containerPath &&
+          typeof attempt.containerPath === "string" &&
           ["create", "import", "adoption"].includes(attempt.operation) &&
           typeof attempt.name === "string" &&
           !(await container.hasFile([".cadtree", "ready.json"]))
@@ -883,19 +902,21 @@ export async function importProject(
     checkRecord(record, 'imported managed project');
     requireStrings(record, ['projectId', 'workspaceId', 'containerPath', 'vaultPath'], 'Imported project');
     const ready = JSON.parse(await source.readFileText(['.cadtree', 'ready.json']));
-    if (ready.schemaVersion !== VERSION || ready.projectId !== record.projectId || ready.workspaceId !== record.workspaceId || ready.recordSha256 !== hashString(text) || record.vaultPath !== `${record.containerPath}/vault`) throw new Error('Imported project publication does not match its location records.');
+    if (ready.schemaVersion !== VERSION || ready.projectId !== record.projectId || ready.workspaceId !== record.workspaceId || ready.recordSha256 !== hashString(text)) throw new Error('Imported project publication does not match its location records.');
     const vault = await source.getDirectory(['vault']);
     const state = await openExistingVault(vault);
     if (state.project.projectId !== record.projectId || componentWriteBlock(state) || referenceWriteBlock(state)) throw new Error(componentWriteBlock(state) ?? referenceWriteBlock(state) ?? 'Imported project identity mismatch.');
     const folders: WorkingFolderBindings = {};
+    const leaves = new Set<string>();
     for (const branch of state.branches) {
       const location = JSON.parse(await source.readFileText(['.cadtree', 'branches', `${idSegment(branch.branchId)}.json`]));
       checkRecord(location, 'imported branch location');
       requireStrings(location, ['workingPath'], 'Imported branch');
       if (location.projectId !== record.projectId || location.workspaceId !== record.workspaceId || location.branchId !== branch.branchId) throw new Error('Imported branch location identity mismatch.');
-      const segments = managedPath(String(location.workingPath), `${record.containerPath}/working`);
-      if (segments.length !== 4 || managedPath(String(record.containerPath), 'projects').length !== 2) throw new Error('Imported branch is not an independent working leaf.');
-      folders[branch.branchId] = await source.getDirectory(segments.slice(2));
+      const leaf = workingLeaf(String(location.workingPath));
+      if (leaves.has(leaf.toLowerCase())) throw new Error('Imported branch locations collide (case-insensitive).');
+      leaves.add(leaf.toLowerCase());
+      folders[branch.branchId] = await source.getDirectory(['working', leaf]);
     }
     return adoptProject(root, vault, folders, options);
   }
