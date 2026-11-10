@@ -165,8 +165,10 @@ test("duplicate display names allocate independent readable child folders under 
     createHomeWorkspace(root, "Client ABC"),
     createHomeWorkspace(root, "Client ABC"),
   ]);
-  assert.notEqual(a.directory.toLowerCase(), b.directory.toLowerCase());
-  assert.match(a.directory, /^Client ABC-/);
+  assert.deepEqual([a.directory, b.directory].sort(), [
+    "Client ABC",
+    "Client ABC (2)",
+  ]);
   assert.notEqual(
     a.workspace.identity.workspaceId,
     b.workspace.identity.workspaceId,
@@ -177,15 +179,53 @@ test("duplicate display names allocate independent readable child folders under 
 test("workspace names allocate safe readable locations including Unicode, reserved names, separators and leading dots", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
-  for (const name of ["..Client ABC", "CON", "Client/ABC", ".", "தமிழ்"]) {
+  const expected: Record<string, string> = {
+    "..Client ABC": "Client ABC",
+    CON: "CON (2)",
+    "Client/ABC": "Client-ABC",
+    ".": "Workspace",
+    "தமிழ்": "தமிழ்",
+  };
+  for (const name of Object.keys(expected)) {
     const created = await createHomeWorkspace(home, name);
-    assert.ok(!created.directory.startsWith("."));
-    assert.ok(!created.directory.includes("/"));
+    assert.equal(created.directory, expected[name]);
     assert.equal(created.workspace.identity.name, name);
   }
   assert.ok(
     (await openHome(home)).workspaces.every((e) => e.status === "ready"),
   );
+});
+test("workspace folder names are exact, case-insensitively unique, and never reuse an incomplete registration", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const first = await createHomeWorkspace(home, "Client ABC");
+  assert.equal(first.directory, "Client ABC");
+  const second = await createHomeWorkspace(home, "Client ABC");
+  assert.equal(second.directory, "Client ABC (2)");
+
+  const other = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(other);
+  await other.getDirectory(["client abc"], { create: true });
+  assert.equal(
+    (await createHomeWorkspace(other, "Client ABC")).directory,
+    "Client ABC (2)",
+  );
+
+  const failing = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(failing);
+  failing.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.includes("Retry me")) throw new Error("Disk write failed");
+    },
+  });
+  await assert.rejects(createHomeWorkspace(failing, "Retry me"));
+  failing.setHooks({ onBeforeWrite: undefined });
+  const entries = (await openHome(failing)).workspaces;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].status, "incomplete");
+  assert.equal(entries[0].directory, "Retry me");
+  const retry = await createHomeWorkspace(failing, "Retry me");
+  assert.equal(retry.directory, "Retry me (2)");
 });
 test("home setup refuses unrelated populated storage, overlap, unsupported schemas, and permission loss without writes", async () => {
   const root = new InMemoryFileSystemAdapter("Populated");
@@ -336,6 +376,7 @@ test("cancellation, source instability, disk failure and interrupted ready publi
     if (mode !== "change") assert.equal(await snapshot(original), before);
     const retry = await bringWorkspaceIntoHome(home, original);
     assert.notEqual(retry.directory, read.workspaces[0].directory);
+    assert.match(retry.directory, / \(2\)$/);
     const reopened = await openHome(home);
     assert.equal(reopened.workspaces.length, 2);
     assert.equal(

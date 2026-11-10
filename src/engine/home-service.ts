@@ -19,6 +19,7 @@ import {
   type CopyOptions,
 } from "./copy-service";
 import { withProjectWriterLock } from "./locks";
+import { folderNameFor, pickFreeName } from "./folder-names";
 import { hashString } from "./hash";
 import { verifyRevisionObjects } from "./vault-service";
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
@@ -309,17 +310,6 @@ export async function resolveHomeWorkspace(
     );
   return workspace;
 }
-function readableName(name: string) {
-  return (
-    name
-      .normalize("NFKC")
-      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
-      .replace(/^[ .]+/g, "")
-      .replace(/[ .]+$/g, "")
-      .trim()
-      .slice(0, 65) || "Workspace"
-  );
-}
 async function register(
   root: FileSystemDirectoryAdapter,
   name: string,
@@ -369,7 +359,11 @@ async function register(
     const run = async () => {
       throwIfCancelled(options.signal);
       const registrationId = `registration-${crypto.randomUUID()}`;
-      const directory = `${readableName(name)}-${crypto.randomUUID()}`;
+      const directory = await pickFreeName(root, folderNameFor(name, "Workspace"), {
+        extraTaken: home.workspaces.flatMap((e) =>
+          e.directory ? [e.directory] : [],
+        ),
+      });
       const record = seal({
         schemaVersion: 1,
         homeId: first.homeId,

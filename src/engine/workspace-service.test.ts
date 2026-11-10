@@ -13,6 +13,7 @@ import {
   createManagedBranch,
   recoverManagedCopy,
   adoptProject,
+  WorkspaceOperationError,
   managementChecksum,
   type ManagedProject,
 } from "./workspace-service";
@@ -97,7 +98,8 @@ test("new-project cancellation retains an incomplete folder and creation/import 
   const incomplete = (await openWorkspace(root)).projects[0];
   assert.equal(incomplete.status, "incomplete");
   const retry = await createProject(root, "New design");
-  assert.notEqual(retry.record.containerPath, incomplete.containerPath);
+  assert.equal(incomplete.containerPath, "projects/New design");
+  assert.equal(retry.record.containerPath, "projects/New design (2)");
   await assert.rejects(importProject(root, await cadSource(), " new DESIGN "), /already present/);
   const race = await Promise.allSettled([
     createProject(root, "Other design"),
@@ -105,6 +107,31 @@ test("new-project cancellation retains an incomplete folder and creation/import 
   ]);
   assert.equal(race.filter((result) => result.status === "fulfilled").length, 1);
   assert.equal((await openWorkspace(root)).projects.length, 3);
+});
+
+test("project folders are readable and clashing names get a counter", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const a = await createProject(root, "Packaging Gripper");
+  assert.equal(a.record.containerPath, "projects/Packaging Gripper");
+  const b = await createProject(root, "Packaging/Gripper");
+  assert.equal(b.record.containerPath, "projects/Packaging-Gripper");
+  const c = await createProject(root, "Packaging-Gripper ");
+  assert.equal(c.record.containerPath, "projects/Packaging-Gripper (2)");
+  const d = await importProject(root, await cadSource(), "Packaging Gripper.");
+  assert.equal(d.record.containerPath, "projects/Packaging Gripper (2)");
+  assert.ok(a.ready && b.ready && c.ready && d.ready);
+});
+
+test("a missing projects folder fails as a plain error, not a retained destination", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  await root.removeEntry(["projects"], { recursive: true });
+  await assert.rejects(createProject(root, "Anything"), (error: Error) => {
+    assert.ok(!(error instanceof WorkspaceOperationError));
+    assert.doesNotMatch(error.message, /Destination retained/);
+    return true;
+  });
 });
 
 test("two projects import and reopen from one root with exact independent leaves and no artificial revisions", async () => {
@@ -316,6 +343,12 @@ test("import failures and source instability remain incomplete; retry uses anoth
       retry.record.containerPath,
       failed.projects[0]?.containerPath,
     );
+    // "read" fails during source classification, before any destination exists,
+    // so nothing is left behind and the retry gets the plain name.
+    assert.equal(
+      retry.record.containerPath,
+      failure === "read" ? "projects/Retry project" : "projects/Retry project (2)",
+    );
     assert.equal(
       (await root.getDirectory(["projects"])).listEntries instanceof Function,
       true,
@@ -385,6 +418,10 @@ test("adoption preserves exact vault records and uncaptured working edits while 
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   const adopted = await adoptProject(root, vault, folders);
+  assert.equal(
+    adopted.record.containerPath,
+    "projects/Legacy actuator",
+  );
   assert.equal(adopted.record.projectId, first.vaultState.project.projectId);
   assert.equal(await snapshot(adopted.vaultDir), originals[0]);
   assert.equal(
