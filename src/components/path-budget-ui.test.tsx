@@ -160,17 +160,30 @@ test("design case dialog: hint below 30 left, block text and disabled submit whe
   assert.equal(create().disabled, true);
 });
 
-test("home setup warns, without blocking, when the address is long", async () => {
+test("home setup warns, without blocking, only when the address leaves less than the default name allowances", async () => {
   const saved: string[] = [];
   const ui = render(
     <FolderAddressDialog home folderName="Cadtree" onSave={async (p) => void saved.push(p)} onCancel={() => {}} />,
   );
+  assert.ok(body().includes("used for copying locations and to keep paths within Windows' limit"));
   const input = ui.getByRole("textbox", { name: "Cadtree home folder address" });
-  fireEvent.change(input, { target: { value: "D:\\Cadtree" } });
+  const type = (value: string) => fireEvent.change(input, { target: { value } });
+  type("D:\\Cadtree");
   assert.ok(!body().includes("This address is long"));
+  // A normal 43-character address needs 213 characters: no warning.
+  type("/Users/" + "x".repeat(36));
+  assert.ok(!body().includes("This address is long"));
+  // 75 characters need 245: warns, with the POSIX example.
+  const posix = "/Users/" + "x".repeat(68);
+  type(posix);
+  assert.ok(
+    body().includes(
+      "This address is long: with typical workspace and project names, projects here would need 245 characters (limit 240). A shorter home such as /Users/<you>/Cadtree leaves more room.",
+    ),
+  );
   const long = "D:\\" + "h".repeat(120);
-  fireEvent.change(input, { target: { value: long } });
-  assert.match(body(), /This address is long: projects here would need \d+ characters\. A shorter home such as C:\\Cadtree leaves more room\./);
+  type(long);
+  assert.match(body(), /would need \d+ characters \(limit 240\)\. A shorter home such as C:\\Cadtree leaves more room\./);
   fireEvent.click(ui.getByRole("button", { name: "Complete setup" }));
   await waitFor(() => assert.deepEqual(saved, [long]));
 });
