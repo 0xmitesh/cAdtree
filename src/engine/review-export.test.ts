@@ -251,3 +251,12 @@ test('truncation of project and branch parts strips a trailing space or dot', ()
   const project = 'A'.repeat(27) + ' . tail', branch = 'B'.repeat(23) + ' . tail';
   assert.equal(exportFolderBaseName(project, branch, 'R01'), 'A'.repeat(27) + ' - ' + 'B'.repeat(23) + ' - R01');
 });
+
+test('prepareReviewExport succeeds for a reserved-looking project name and uses the counter base', async () => {
+  const f = await fixture();
+  const state = { ...f.saved.vaultState, project: { ...f.saved.vaultState.project, name: 'CON.x' } };
+  const plan = prepareReviewExport(state, f.plan.revisionId, complete);
+  assert.equal(plan.folderName, 'CON (2).x - Main - R01');
+  assert.ok(!isReservedFolderName(plan.folderName));
+  assert.ok(plan.folderName.length <= 64);
+});
