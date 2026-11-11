@@ -68,9 +68,9 @@ function validateLibrary(library: ProjectReference[], previous: ProjectReference
     ref.tags.forEach(tag => text(tag, 128));
     if (!Array.isArray(ref.versions) || !ref.versions.length) throw new Error('A reference must preserve its versions.');
     for (const v of ref.versions) {
-      // New IDs carry no kind prefix, so the old prefix can no longer reveal a swapped ID. The kind is fixed by
-      // where the ID sits (field/folder) and swaps are caught by the sealed checksum and project binding; this
-      // check additionally rejects a version ID that equals any reference ID.
+      // Record IDs carry no kind prefix. The kind is fixed by where the ID sits (field/folder) and swaps are
+      // caught by the sealed checksum and project binding; this check additionally rejects a version ID that
+      // equals any reference ID.
       if (v.referenceId !== ref.referenceId || !safeId(v.versionId) || versions.has(v.versionId) || library.some(r => r.referenceId === v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
       text(v.originalFilename, 1024); text(v.fileType, 256);
       if (v.savedBy !== undefined) validateReferenceAuthor(v.savedBy);

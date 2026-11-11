@@ -10,7 +10,7 @@ import { compactHex } from './path-encoding';
 import { hashString } from './hash';
 import { matchInternalPath, internalReserve, CRSWAP_CHARS } from './path-budget';
 import {
-  importReferenceAttachment, retrieveReferenceAttachment, verifyReferenceLibraryContent, createReferenceReview, 
+  importReferenceAttachment, retrieveReferenceAttachment, verifyReferenceLibraryContent, createReferenceReview,
   referenceCatalogMarkerPath,
   MAX_REFERENCE_ID_ATTEMPTS,
 } from './references';

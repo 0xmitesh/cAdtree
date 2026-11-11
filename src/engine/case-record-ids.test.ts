@@ -168,6 +168,32 @@ test('adopting a vault that holds two cases binds both to their working folders'
   assert.ok(reopened.workingFolders[oldId] && reopened.workingFolders[newCase.branch.branchId]);
 });
 
+test('cases list in name order (Main first), whatever order they were created in', async () => {
+  const { root, firstId, containerPath } = await project();
+  const zeta = await createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Zeta', reason: 'r' });
+  const alpha = await createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Alpha', reason: 'r' });
+  assert.ok(isRecordId(zeta.createdBranchId) && isRecordId(alpha.createdBranchId));
+  const reopened = await resolveManagedProject(root, containerPath);
+  assert.equal(reopened.vaultState.branches[0].isMain, true);
+  assert.deepEqual(reopened.vaultState.branches.slice(1).map((b) => b.name), ['Alpha', 'Zeta']);
+});
+
+test('apply from one case onto another case works and changes only the target', async () => {
+  const { root, created, firstId, containerPath } = await project();
+  const a = await createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Case A', reason: 'r' });
+  const b = await createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Case B', reason: 'r' });
+  const folders = (await resolveManagedProject(root, containerPath)).workingFolders;
+  const dirA = folders[a.createdBranchId]!, dirB = folders[b.createdBranchId]!;
+  await dirA.writeFileText(part, 'case A edit');
+  const saved = await captureRevision(dirA, created.vaultDir, { branchId: a.createdBranchId, summary: 'A edit', notes, workingFolders: folders });
+  const { run } = await applyOnto(created.vaultDir, folders, saved.revision.manifest.revisionId, b.createdBranchId);
+  await run();
+  assert.equal(await dirB.readFileText(part), 'case A edit');
+  assert.equal(await dirA.readFileText(part), 'case A edit');
+  assert.equal(await folders[MAIN_BRANCH_ID]!.readFileText(part), 'base');
+  assert.ok(branchApplications(await openExistingVault(created.vaultDir), b.createdBranchId).at(-1)!.operationId);
+});
+
 test('an injected case ID must be a safe segment and not branch-main; nothing is written otherwise', async () => {
   const { created, main, firstId } = await project();
   const vault = created.vaultDir;

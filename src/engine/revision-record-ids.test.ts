@@ -11,7 +11,7 @@ import { restoreRevisionToFolder } from './recovery-service';
 import { prepareReviewExport, exportRevisionForReview } from './review-export';
 import { componentRecordPath } from './component-identity';
 import { referenceContextPath } from './references';
-import { isRecordId } from './ids';
+import { isRecordId, newRecordId } from './ids';
 import { matchInternalPath, internalReserve, CRSWAP_CHARS } from './path-budget';
 import { layoutRevisions } from '../history/layout';
 import { fileHistory } from '../history/file-history';
@@ -204,3 +204,16 @@ test('Knowledge Lab records can cite record-ID revisions', async () => {
   assert.equal((await openExistingVault(p.vault)).knowledge!.records.length, 2);
 });
 
+
+test('a leftover staging folder from an interrupted capture is reported as staging_artifact and stays harmless', async () => {
+  const p = await project();
+  const { getStagingSessionPathSegments } = await import('./object-store');
+  const leftover = getStagingSessionPathSegments(`session-${newRecordId()}`);
+  await p.vault.getDirectory(leftover, { create: true });
+  await p.vault.writeFileText([...leftover, 'orphan.tmp'], 'partial');
+  const state = await openExistingVault(p.vault);
+  assert.ok(state.incompleteAttempts.some((a) => a.kind === 'staging_artifact' && a.path === leftover.join('/')));
+  assert.equal(await p.vault.readFileText([...leftover, 'orphan.tmp']), 'partial');
+  assert.ok(isRecordId(await save(p, 'after-leftover', 'After leftover')));
+  assert.equal(await p.vault.readFileText([...leftover, 'orphan.tmp']), 'partial');
+});
