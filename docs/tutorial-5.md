@@ -13,7 +13,7 @@ Implemented on branch `codex/tutorial-5-compare-apply-recover` from merged main 
 | 3 | Understand what Compare means | 0 real screenshots; 1 concepts |
 | 4 | Review before applying | 3 real screenshots; 0 concepts |
 | 5 | Apply reviewed changes | 4 real screenshots; 0 concepts |
-| 6 | Return to earlier work | 3 real screenshots; 1 concepts |
+| 6 | Return to a saved version | 3 real screenshots; 0 concepts |
 | 7 | Preserve the Design Case | 3 real screenshots; 0 concepts |
 
 ## 2. Exact user-facing copy
@@ -142,37 +142,32 @@ Alt text: Real History shows Main Rev 007, Adopt lightweight bracket after revie
 
 Asset: [step-5-saved-main.png](../public/tutorials/compare-apply-recover/step-5-saved-main.png)
 
-### Step 6 of 7 — Return to earlier work
+### Step 6 of 7 — Return to a saved version
 
-A saved revision gives you a known design state to return to. Restore project copy recovers it into another folder.
+A saved revision gives you a known design state to return to. Bring back onto Main makes Main's working files match it, after you review every change.
 
-- Select Rev 003 in History and choose Restore project copy. Check the revision and file count, keep the managed destination and click Restore copy.
-- cAdtree creates a verified fresh copy under this project's recoveries folder. Recovery report shows its location; Restored files — copy paths provides Copy folder path so you can reach and open it manually.
-- Main and the case stay unchanged. This does not switch the working case or create a revision. Viewing an old revision alone restores nothing; this recovery is a separate copy, not a destructive rollback.
+- Save your current work first; unsaved working changes block a bring-back. Select Rev 003 in History and choose Bring back onto Main…. cAdtree lists every difference between Main's latest saved state and Rev 003, all pre-selected: Bring back, Replace with Rev 003's version, or Remove (not in Rev 003).
+- Deselect any file you want to keep as it is, enter the Engineering reason for bringing this back and click Prepare bring-back. Check the counts in the confirmation, acknowledge that CAD documents are saved and closed, then click Bring back confirmed changes.
+- Only Main's working files change, and no revision is saved yet. Check the files in CAD, then save a revision; History shows Brought back from Rev 003. Files that were replaced or removed are kept with the operation and Rev 007 stays in history, so nothing is lost.
+- To get a separate copy to look at or share instead, use Export on the revision. Renamed files cannot be brought back yet; export them or create a design case from the revision.
 
-Visual 1 (Concept): **Recover an earlier saved state as a separate copy while keeping current work.**
+Visual 1 (cAdtree): **1. Select the earlier revision in History, then choose Bring back onto Main….**
 
-Alt text: Saved Rev 003 is copied into a new recovery folder. Current Main Rev 007 and Lightweight bracket working files remain in place and unchanged; recovery adds no revision.
+Alt text: Real History details for the selected Rev 003, Reviewed baseline, with Bring back onto Main… focused.
 
-Asset: [step-6-recovery-copy.svg](../public/tutorials/compare-apply-recover/step-6-recovery-copy.svg)
+Asset: [step-6-bring-back-action.png](../public/tutorials/compare-apply-recover/step-6-bring-back-action.png)
 
-Visual 2 (cAdtree): **1. Select the earlier revision in History, then choose Restore project copy.**
+Visual 2 (cAdtree): **2. Review the pre-selected changes, give the reason and click Prepare bring-back.**
 
-Alt text: Real History action group for the selected Rev 003 with Restore project copy focused.
+Alt text: Real Bring back an earlier revision preview shows the pre-selected differences between Main and Rev 003 and the Engineering reason for bringing this back field.
 
-Asset: [step-6-restore-action.png](../public/tutorials/compare-apply-recover/step-6-restore-action.png)
+Asset: [step-6-bring-back-review.png](../public/tutorials/compare-apply-recover/step-6-bring-back-review.png)
 
-Visual 3 (cAdtree): **2. Check the saved revision and separate destination, then click Restore copy.**
+Visual 3 (cAdtree): **3. Main's working files now match Rev 003; save a revision to record it.**
 
-Alt text: Real Restore a complete project copy dialog identifies Rev 003, four files and the automatic project recoveries destination, with Restore copy focused.
+Alt text: Real Bring back completed dialog reports that the files were brought back into working files and the revision is not yet saved.
 
-Asset: [step-6-restore-confirmation.png](../public/tutorials/compare-apply-recover/step-6-restore-confirmation.png)
-
-Visual 4 (cAdtree): **3. Find the verified copy in Recovery report; use its path to reach the recovered files.**
-
-Alt text: Real Complete project copy verified result confirms four files restored from Rev 003; expanded Recovery report shows the generated recoveries/copy folder location.
-
-Asset: [step-6-restored-copy.png](../public/tutorials/compare-apply-recover/step-6-restored-copy.png)
+Asset: [step-6-brought-back.png](../public/tutorials/compare-apply-recover/step-6-brought-back.png)
 
 ### Step 7 of 7 — Preserve the Design Case
 
@@ -207,7 +202,7 @@ History selects the revision to inspect. Its Compare button opens Compare saved 
 
 Added, Deleted, Modified and Unchanged describe saved path presence and content hashes. Modified does not mean geometry changed; metadata edits in a CAD file can also change its bytes. Compare shows overall engineering notes and per-file notes at the two endpoints, plus directory additions/deletions including empty directories. It does not summarize all intervening notes, scan working files, verify stored binary objects, evaluate CAD compatibility or infer feature, geometry or stress changes. Missing, corrupt, ambiguous or invalid endpoint metadata makes the comparison unavailable. The tutorial uses the normal History route rather than teaching the secondary Compare with Main route in Design cases.
 
-Terminology retained from the build: Main, Design cases, branch, Compare, Compare saved revisions, From revision, To revision, Swap, Review changes to apply, Base, Source, Destination, Prepare application, Confirm working-file application, Apply confirmed changes, Restore project copy, Restore copy, Archive case and Reopen case. The product still exposes branch in some UI; there is no global rename and no new Merge action or Git lesson.
+Terminology retained from the build: Main, Design cases, branch, Compare, Compare saved revisions, From revision, To revision, Swap, Review changes to apply, Base, Source, Destination, Prepare application, Confirm working-file application, Apply confirmed changes, Bring back onto Main…, Prepare bring-back, Bring back confirmed changes, Export, Archive case and Reopen case. The product still exposes branch in some UI; there is no global rename and no new Merge action or Git lesson.
 
 Sources inspected: `src/components/CompareRevisionsDialog.tsx`, `src/engine/snapshot-comparison.ts`, `src/components/HistoryRecoveryView.tsx`.
 
@@ -227,13 +222,13 @@ Sources inspected: `src/components/ApplyPreviewDialog.tsx`, `src/components/Appl
 
 ## 5. Actual recovery behavior
 
-The primary historical recovery taught is History → Restore project copy → Restore a complete project copy → Restore copy. The managed default allocates a fresh unique child under `<project>/recoveries/copy-<uuid>`, verifies saved file objects and the complete recovered output, and preserves empty folders. The UI also offers an external destination, but the tutorial keeps the managed default, so no Windows picker visual is necessary.
+Restore copy no longer exists. The lesson teaches History → select an earlier revision of the active branch → Bring back onto Main… → Make Main match Rev 003 (every difference pre-selected; deselect to bring back only some files; an Engineering reason for bringing this back is required) → Prepare bring-back → Confirm bringing back into working files → Bring back confirmed changes. The dialog ends with Bring back completed: Brought back into working files — revision not yet saved. Unsaved working changes block the operation, and renamed files cannot be brought back yet.
 
-The result is Complete project copy verified. Recovery report gives its actual relative location. Restored files — copy paths exposes Copy folder path, which the user can paste into their file manager to reach/open the recovered project manually. Recovery does not overwrite the working folders, switch branches or create a revision. Merely inspecting an old revision performs no restoration. Create design case from this revision is a distinct alternative-workflow action already taught in Tutorial 4.
+The engineer checks the files in CAD and saves a revision; History then shows Brought back from Rev 003. Replaced and removed files are kept with the operation, and the latest revision stays in history. The capture script stops after the completion dialog and does not save the revision.
 
-Copy selected files also exists and can omit assembly dependencies; it is not the primary recovery lesson. The product also uses Recover for an interrupted working-file application’s retained before-state, which is separate from historical Restore project copy. No destructive historical Rollback action was found or invented; these terms are not treated interchangeably.
+Export writes a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`) from any revision, whole or selected files, including files deleted later. It is mentioned briefly as the way to get a copy to look at or share. Create design case from this revision remains the distinct alternative-workflow action taught in Tutorial 4. The product also uses Recover for an interrupted working-file application’s retained before-state, which is separate from Bring back. No destructive historical Rollback action exists.
 
-Sources inspected: `src/components/HistoryRecoveryView.tsx`, `src/engine/recovery-service.ts`, `src/engine/workspace-service.ts`, `src/components/ApplicationStatus.tsx`, `src/engine/application-service.ts`.
+Sources inspected: `src/components/HistoryRecoveryView.tsx`, `src/components/ApplyPreviewDialog.tsx`, `src/engine/workspace-service.ts`, `src/components/ApplicationStatus.tsx`, `src/engine/application-service.ts`.
 
 ## 6. Actual Archive behavior
 
@@ -259,15 +254,15 @@ The fixture is Tutorial Workspace / Bracket Assembly / Lightweight bracket. It u
 | Rev 006 | Main | Mounting detail refined |
 | Rev 007 | Main | Adopt lightweight bracket after review |
 
-Revision numbers are project-wide. Case creation adds no revision. Applying Rev 005 to Main at Rev 006 leaves six saved revisions; the later normal save creates Rev 007 with Main Rev 006 as its parent and Applied from Rev 005 provenance. Restoring Rev 003 recovers its four files and empty Exports directory. Archive retains all seven revisions and the unchanged source case files.
+Revision numbers are project-wide. Case creation adds no revision. Applying Rev 005 to Main at Rev 006 leaves six saved revisions; the later normal save creates Rev 007 with Main Rev 006 as its parent and Applied from Rev 005 provenance. Bringing back Rev 003 changes Main's working files to match its four files and writes no revision. Archive retains all seven revisions and the unchanged source case files.
 
-Capture assertions passed: Compare and Swap make no storage changes; no initial review selection; confirmation requires acknowledgement; exact three apply actions; Main’s independent Mount hash survives; source case signature stays unchanged; no automatic revision; expected Rev 007 parent/provenance; restored inventory exactly matches Rev 003; Main stays unchanged during recovery; archive retains history/files. One picker is used only to open the disposable home in the capture harness. Tutorial playback itself invokes no picker.
+Capture assertions passed: Compare and Swap make no storage changes; no initial review selection; confirmation requires acknowledgement; exact three apply actions; Main’s independent Mount hash survives; source case signature stays unchanged; no automatic revision; expected Rev 007 parent/provenance; after Bring back, Main's working files exactly match Rev 003 with no new revision and the case unchanged; archive retains history/files. One picker is used only to open the disposable home in the capture harness. Tutorial playback itself invokes no picker.
 
 Evidence (local ignored artifacts): `artifacts/tutorial-5/capture-verification.json`, `viewer-verification.json` and `contact.png`. Reproduction requires the repo’s installed dependencies and Chrome on Windows: `npm run build`, `node tests/tutorial-5-capture.cjs`, `node tests/tutorial-5-check.cjs`.
 
 ## 8. Conceptual visuals
 
-Three precise SVGs were created: shared Rev 003 origin with Main Rev 006 versus case Rev 005; same-path file hash evidence and its geometry limitation; and Rev 003 copied to a separate recovery location while current work remains unchanged. Each has descriptive SVG text and useful adjacent tutorial copy/alt text. They are simple instructional diagrams consistent with the existing teal/purple graph conventions.
+Two precise SVGs were created: shared Rev 003 origin with Main Rev 006 versus case Rev 005; and same-path file hash evidence and its geometry limitation. Each has descriptive SVG text and useful adjacent tutorial copy/alt text. They are simple instructional diagrams consistent with the existing teal/purple graph conventions.
 
 ### Asset inventory and SHA-256
 
@@ -288,10 +283,9 @@ All paths below are under `public/tutorials/compare-apply-recover/`.
 | step-5-confirm-actions.png | Real cAdtree | `fc346c5222344ab46e1357931a733bb29f7c1720364c3b2414e95ec961cbf4c4` |
 | step-5-confirm-apply.png | Real cAdtree | `25125411e8892f257984b57a335896bc125c1fc452360f03ecf8d686aa21c123` |
 | step-5-saved-main.png | Real cAdtree | `fab4dc005a405415daa0bf8a8f24e80e5d9a10e844a5ca68a9f7b377ac8ed81e` |
-| step-6-recovery-copy.svg | Concept SVG | `7a2fb036c376ff07a785d58e4d206235d47fd012c9744f4bfb056380adbefb66` |
-| step-6-restore-action.png | Real cAdtree | `0999cccc9e00f0ac7d34241c9e6986f5ad03a6ca6f262e949c855849306ba87d` |
-| step-6-restore-confirmation.png | Real cAdtree | `4b13b8d3227aa7cee5819aec6c2693e872e7185131439b762e1a35277c7483d0` |
-| step-6-restored-copy.png | Real cAdtree | `f1346916a2cf241e3ce90d690cf15621643390341f7ef063ec933767d0161eab` |
+| step-6-bring-back-action.png | Real cAdtree | `3df72cf4e4c6293221fec77e277431f6a3799e3ff324215f0e7a4e44d59ae687` |
+| step-6-bring-back-review.png | Real cAdtree | `4d4b8e88ae9c20ea176c93424f610a48e249567346479de0cdaf37298e04e3f0` |
+| step-6-brought-back.png | Real cAdtree | `a0e568a34a05513c014a6dabf3235df4b510079311ec7ec48f6b0e4d7457627a` |
 | step-7-archive-action.png | Real cAdtree | `0622daba6096575418e6b0899b767fd6411bc40527bffa9a75f4aa6eed7442b0` |
 | step-7-archive-confirmation.png | Real cAdtree | `6429023f4287af052a24ea743511a19c10d1a787899c062b4cacaece222ce572` |
 | step-7-archived-case.png | Real cAdtree | `728115309712f28595495567a9c0762eb40b1607362e24a693082fbf0f160c23` |
@@ -299,7 +293,7 @@ All paths below are under `public/tutorials/compare-apply-recover/`.
 ## 9. Files/components changed
 
 - `src/tutorials/compare-apply-recover.ts`: independent seven-step final tutorial definition.
-- `public/tutorials/compare-apply-recover/`: 17 real PNG captures and three SVG concepts.
+- `public/tutorials/compare-apply-recover/`: 17 real PNG captures and two SVG concepts.
 - `src/components/LearnCadtree.tsx`: final card import/binding, title and available status only.
 - `src/components/final-tutorial.test.tsx`, `src/tutorials/compare-apply-recover.test.ts`: final tutorial interaction, isolation and asset checks.
 - `tests/compare-apply-recover-sample.ts`: disposable controlled sample using real services.
@@ -322,7 +316,7 @@ Only the existing `compare-recover` card was enabled. Its title is now Compare, 
 | Focused new final component/definition tests | Three passed (also covered by the suites above) |
 | `npm run lint` | TypeScript passed |
 | `npm run build` | Passed; existing Vite config/chunk/dynamic-import advisories remain |
-| `node tests/tutorial-5-capture.cjs` | 17 captures, complete Compare → Review → Apply → save → restore → archive assertions passed; no page errors |
+| `node tests/tutorial-5-capture.cjs` | 17 captures, complete Compare → Review → Apply → save → bring back → archive assertions passed; no page errors |
 | `node tests/tutorial-5-check.cjs` | All 20 visuals passed at 1366 × 900, 1100 × 1244 and 390 × 844; no page errors or horizontal overflow |
 | Running preview at http://127.0.0.1:2526/ | All seven steps traversed in the user’s in-app browser; Finish returns focus to the final Learn trigger |
 
