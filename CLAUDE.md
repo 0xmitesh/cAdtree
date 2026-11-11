@@ -56,7 +56,22 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - Projects are found by `projectId`. Stored `containerPath`, `vaultPath` and `workingPath` are informational; only the working leaf name is used.
 - Workspaces are found by `workspaceId`. If a registered folder is missing, the lookup by ID is read-only.
 - Copies that share an ID are marked duplicate and read-only, never merged.
-- Old UUID-named folders still load.
+- We are in a building phase with no active users, so old on-disk formats need not stay readable. Some readers still accept older shapes, but new code must not depend on that.
+- Display names live in metadata. Renaming a workspace or project folder in Finder or Explorer changes its location, not its name (current behaviour; an open product decision may change it).
+
+**IDs** (`src/engine/ids.ts`, the generators and validators):
+- Record ID `YYYYMMDD-HHMMSS-xxxxxx`: UTC time plus 6 random lowercase `[0-9a-z]`. Used for design cases (branch IDs, except Main), revisions, references and Knowledge Lab records.
+- Event ID `YYYYMMDD-HHMMSS`, with `-2`…`-999` on a clash. Used for Apply operations and for recovery attempts of an interrupted Apply (`applications/<case>/<apply>/unexpected/<recovery>/`).
+- Main stays `branch-main`. No type prefixes. Branch and project names never go into IDs. Never infer order from an ID; parent links and recorded timestamps decide it.
+- Vault objects stay content-addressed: `objects/<2>/<sha256>.bin`.
+- Clashes are detected with `FileConflictError` (`src/engine/fs-adapter.ts`) and then redrawn or counted, never overwritten.
+- These still use UUIDs: home, workspace, registration, project and component IDs (`home-`, `workspace-`, `registration-`, `proj-`, `component-<uuid>`) and recovery copy folders (`copy-<uuid>`). Except `registration-` and `copy-`, they don't appear in paths.
+
+**OS clutter:**
+- Untracked `.DS_Store`, `Thumbs.db`, `desktop.ini` and AppleDouble `._x` companions (when `x` exists) are skipped and listed in scans and captures. Tracked ones are handled like any file.
+- The same rule applies to every verify-after-write comparison.
+- Empty-folder checks tolerate clutter-named files.
+- Code: `partitionSystemFiles`, `isEffectivelyEmpty` in `src/engine/scanner.ts`.
 
 **Stack:**
 - React 19, TypeScript, Vite and Tailwind.
@@ -71,7 +86,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
    - Writes are staged, then read back and hash-verified.
    - Publication uses completion or ready markers.
    - New folders are created with `exclusiveCreate`.
-   - The write order is fixed. For example, a home registration is written before its folder, and a branch breadcrumb before the case folder.
+   - The write order is fixed. For example, a home registration is written before its folder. A design case goes: exclusive staging attempt, working folder, restored files, workspace breadcrumb, vault branch record, then the ready marker last.
 2. **Fail conservatively.** Damaged, ambiguous or incomplete state becomes read-only or reported, never silently repaired, rebound or overwritten. Leftovers from failed attempts are kept and never reused: a retry gets `(2)`.
 3. **Never touch a user's real CAD folders.** Tests and experiments use disposable homes and in-memory adapters (`InMemoryFileSystemAdapter`). Retrieval and history views do no writes.
 4. **Review before apply.** Older parts may not fit newer assemblies, so conflicts are surfaced and never hidden.
@@ -84,7 +99,15 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
    - Missing information is shown, and "no match" is never presented as "nothing happened".
    - Read-only by default. Determinism comes before AI.
    - The Explorer is development-only, on port 2727.
-6. **Browser path limits.** Measured with Chrome on Windows: folder creation fails at a full path of 248 characters or more, and file writes fail at about 252 or more (because of `.crswap`). cAdtree's own naming must never cause path errors. See Item 2 in the status doc. These limits have not been measured on macOS or Linux.
+6. **Browser path limits.**
+   - Measured with Chrome on Windows: folder creation fails at a full path of 248 characters or more, and file writes fail at about 252 or more (because of `.crswap`).
+   - Measured with Chrome on macOS (10 Nov 2026): a single name may be 255 characters (macOS counts characters; 120 three-byte characters = 360 bytes were accepted). Folder and file creation fail at a full path of 1024, and file writes at 1017 (`.crswap`). Linux is still unmeasured.
+   - **Enforced rule (Item 2):** one standard on every platform. The full absolute path is counted in UTF-16 units; warn from 200, block above 240, plus 7 for the `.crswap` sibling of a written file; names are capped at 255 bytes.
+   - Future worst case = project path + internal reserve, or project path + case allowance (32) or recovery prefix + the longest user file or folder. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (currently 110). New internal paths must keep `npm test`'s drift test green.
+   - Checks run in the engine after the final folder name is chosen and before the first write: workspace, project create/import/adopt, design case, recovery copy.
+   - Existing projects are never blocked from opening or saving. An unknown home address means unchecked, never "ok".
+   - Safety net: `PathTooLongError` (`src/engine/path-limits.ts`) turns `InvalidStateError`/`NotFoundError` on creates and writes at the measured real limits into "Path too long" with the real path.
+   - cAdtree's own naming must never cause path errors.
 
 ## 4. How we work
 
@@ -128,7 +151,7 @@ npm run dev                  # app, http://127.0.0.1:2500 (real Firebase sign-in
 npm run dev:synthetic        # synthetic preview, :2517 (fake "Test Engineer" sign-in; seeds 4 workspaces/9 projects)
 npm run dev:knowledge-lab    # :2727, Knowledge Explorer at /tests/knowledge-lab.html
 npm run lint                 # tsc --noEmit
-npm test                     # engine/history/knowledge/components (~436 tests)
+npm test                     # engine/history/knowledge/components (~548 tests)
 npm run test:knowledge-lab   # 27 tests
 npm run build
 npm run test:ui              # Playwright; needs `npx playwright install chromium` or CADTREE_BROWSER_CHANNEL=chrome
@@ -150,11 +173,12 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 On Windows, `_test-home` has a deliberately deep path for reproducing path-budget problems.
 
 **Agent environment** (Claude sessions with a connected folder):
-- **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, and kills background processes when each call ends.
-- **Running tests:** run them in a scratch copy with Linux `node_modules`, created with `npm ci` in the foreground.
-- **Moving commits:** move commits to and from GitHub as git bundles through a temporary `_transfer` folder, and delete that folder afterwards. Push and open PRs from the cloud session with the GitHub REST API; GraphQL is blocked.
+- **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
+- **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
+- **Running tests:** run them in the cloud session's own clone of GitHub `cadtree-knowledge-lab`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked).
+- **Updating the Mac checkout:** fast-forward it after each merge with a git bundle through a temporary `_transfer` folder, and delete that folder afterwards.
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
-- **Git writes need delete permission:** git has to delete its own lock files, so request delete permission at the first git write.
+- **Git writes need delete permission:** git has to delete its own lock files in the connected folder. Request delete permission again at the first git write of each session.
 
 ## 6. Key docs
 
