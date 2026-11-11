@@ -71,6 +71,31 @@ const copyFile = (file: FileEntry | null) => (file ? { ...file } : null);
 
 /** Read-only preparation. The destination uses the canonical branch baseline;
  * the base follows verified parent edges, never numbering or immediate-parent guesses. */
+/**
+ * Which Apply flow a source revision takes for a destination branch:
+ * "latest" (the branch's newest revision; nothing to do), "revert" (an earlier
+ * revision in the branch's own history) or "merge". Falls back to "merge" when
+ * the baseline or ancestry cannot be established, so the dialog shows the
+ * engine's reason instead of guessing.
+ */
+export function applyModeFor(
+  state: VaultState,
+  sourceId: string,
+  destinationBranchId: string,
+): "merge" | "revert" | "latest" {
+  try {
+    const baseline = getBranchBaseline(state, destinationBranchId);
+    if (!baseline) return "merge";
+    if (baseline.revisionId === sourceId) return "latest";
+    const graph = layoutRevisions(state, destinationBranchId);
+    return ancestryOf(graph, baseline.revisionId).has(sourceId)
+      ? "revert"
+      : "merge";
+  } catch {
+    return "merge";
+  }
+}
+
 export function prepareApplyPreview(
   state: VaultState,
   sourceId: string,

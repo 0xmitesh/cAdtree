@@ -1694,7 +1694,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: "Applied to working files — revision not yet saved.",
+              message:
+                prepared.plan.mode === "revert"
+                  ? "Brought back into working files — revision not yet saved."
+                  : "Applied to working files — revision not yet saved.",
             });
         } finally {
           if (context.current()) await refreshApplicationState();
