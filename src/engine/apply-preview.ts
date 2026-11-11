@@ -22,7 +22,9 @@ export interface PreviewFileRow {
   source: FileEntry | null;
   destination: FileEntry | null;
 }
+export type ApplyMode = "merge" | "revert";
 export interface ApplyPreviewContext {
+  mode: ApplyMode;
   projectId: string;
   destinationBranchId: string;
   base: ReconstructedRevision;
@@ -48,6 +50,7 @@ export interface PreviewAction {
   after: FileEntry | null;
 }
 export interface ApplyPreviewPlan {
+  mode: ApplyMode;
   projectId: string;
   sourceRevisionId: string;
   destinationRevisionId: string;
@@ -72,8 +75,11 @@ export function prepareApplyPreview(
   state: VaultState,
   sourceId: string,
   destinationBranchId: string,
+  mode: ApplyMode = "merge",
 ): ApplyPreviewPreparation {
   try {
+    if (mode !== "merge" && mode !== "revert")
+      throw new Error(`Unknown apply mode "${String(mode)}".`);
     const identityBlock = componentWriteBlock(state);
     if (identityBlock) throw new Error(identityBlock);
     const assertBranch = (id: string) => {
@@ -99,6 +105,10 @@ export function prepareApplyPreview(
       throw new Error(
         `Destination baseline unavailable. ${destinationEndpoint.reason}`,
       );
+    if (sourceId === baseline.revisionId)
+      throw new Error(
+        `${sourceId} is already the latest saved revision of this branch; there is nothing to bring back or apply.`,
+      );
     const graph = layoutRevisions(state, destinationBranchId);
     const sourceAncestors = ancestryOf(graph, sourceId);
     const destinationAncestors = ancestryOf(graph, baseline.revisionId);
@@ -108,6 +118,14 @@ export function prepareApplyPreview(
     if (!baseId)
       throw new Error(
         "No trustworthy shared ancestor could be established. Parent history may be missing, damaged, ambiguous, cyclic, or disconnected. No application plan was guessed.",
+      );
+    if (mode === "merge" && baseId === sourceId)
+      throw new Error(
+        `${sourceId} is an earlier revision in this branch's history, so applying it would change nothing. Use "Bring back" to restore files from it.`,
+      );
+    if (mode === "revert" && baseId !== sourceId)
+      throw new Error(
+        `${sourceId} is not an earlier revision in this branch's history. Bringing back is only for earlier revisions in the same history; use Apply changes instead.`,
       );
     const parents = new Map(
       graph.edges.map((edge) => [edge.child, edge.parent]),
@@ -144,7 +162,12 @@ export function prepareApplyPreview(
     };
     validatePath(sourceId);
     validatePath(baseline.revisionId);
-    const baseEndpoint = comparisonEndpoint(state, baseId);
+    // Revert: the destination baseline is the base, so every difference to the
+    // older source is an ordinary, conflict-free source change.
+    const baseEndpoint = comparisonEndpoint(
+      state,
+      mode === "revert" ? baseline.revisionId : baseId,
+    );
     if (baseEndpoint.status !== "available")
       throw new Error(`Base unavailable. ${baseEndpoint.reason}`);
     const base = baseEndpoint.revision,
@@ -188,7 +211,7 @@ export function prepareApplyPreview(
           const presentIds = ids.filter(Boolean);
           if (new Set(presentIds).size > 1) identityBlock = 'Different components occupy this path. Applying across component identities is not supported.';
           for (const componentId of presentIds) {
-            if (endpoints.some(e => e?.files.some(f => f.componentId === componentId && f.path !== path))) identityBlock = 'This component has different paths across the saved endpoints. Rename-dependent application is blocked; no destination filename is guessed.';
+            if (endpoints.some(e => e?.files.some(f => f.componentId === componentId && f.path !== path))) identityBlock = mode === 'revert' ? 'This file was renamed since that revision. Bringing back cannot undo renames yet. Export that revision, or create a design case from it, to get the older file.' : 'This component has different paths across the saved endpoints. Rename-dependent application is blocked; no destination filename is guessed.';
           }
         }
       }
@@ -211,6 +234,7 @@ export function prepareApplyPreview(
     return {
       status: "available",
       context: {
+        mode,
         projectId: state.project.projectId,
         destinationBranchId,
         base,
@@ -330,6 +354,7 @@ export function buildApplyPreview(
       "Resolve file/directory path collisions; this result cannot be marked ready.",
     );
   return {
+    mode: context.mode,
     projectId: context.projectId,
     sourceRevisionId: context.source.manifest.revisionId,
     destinationRevisionId: context.destination.manifest.revisionId,

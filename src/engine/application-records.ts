@@ -1,10 +1,12 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
 import { splitAndValidatePath } from "./fs-adapter";
 import { hashString } from "./hash";
-import type { ApplyPreviewPlan, PreviewChoice } from "./apply-preview";
+import type { ApplyMode, ApplyPreviewPlan, PreviewChoice } from "./apply-preview";
 import type { FileEntry, RevisionManifest, VaultState } from "./types";
 
 export interface ApplicationReview {
+  /** Absent only in older records, which read as "merge". */
+  mode?: ApplyMode;
   projectId: string;
   sourceRevisionId: string;
   destinationBranchId: string;
@@ -19,7 +21,10 @@ export interface ApplicationRecord {
   createdAt: string;
   sourceBranchId: string;
   review: ApplicationReview;
-  plan: Pick<
+  plan: {
+    /** Absent only in older records, which read as "merge". */
+    mode?: ApplyMode;
+  } & Pick<
     ApplyPreviewPlan,
     | "projectId"
     | "sourceRevisionId"
@@ -175,11 +180,16 @@ function validateRecord(
     plan.destinationBranchId !== branchId ||
     review.destinationBranchId !== branchId ||
     review.sourceRevisionId !== plan.sourceRevisionId ||
+    !["merge", "revert"].includes(review.mode ?? "merge") ||
+    !["merge", "revert"].includes(plan.mode ?? "merge") ||
+    (review.mode ?? "merge") !== (plan.mode ?? "merge") ||
     ![
       plan.sourceRevisionId,
       plan.baseRevisionId,
       plan.destinationRevisionId,
     ].every(safeId) ||
+    ((plan.mode ?? "merge") === "revert" &&
+      plan.baseRevisionId !== plan.destinationRevisionId) ||
     !plan.reason?.trim() ||
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||
