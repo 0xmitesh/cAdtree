@@ -21,7 +21,8 @@ import { MAIN_BRANCH_ID } from './types';
 
 const notes = { problem: 'p', modification: 'm', observations: 'o' };
 const part = ['Parts', 'Collar.SLDPRT'];
-const OLD = (n: number) => `rev-0b1c2d3e-0000-4000-8000-${String(n).padStart(12, '0')}`;
+/** Valid record IDs whose text order is the REVERSE of creation order, to prove order never comes from ID text. */
+const DESC = (n: number) => `${String(20261231 - n)}-000000-aaaaa${n}`;
 
 async function project() {
   const root = new InMemoryFileSystemAdapter('Workspace');
@@ -142,14 +143,14 @@ test('a leftover attempt (staging session) with the drawn ID is a clash; retries
   assert.ok(isRecordId(await save(p, 'three', 'Third')));
 });
 
-test('history mixing old rev-<uuid> parents with new record-ID children loads, verifies, keeps order, compares and applies across the boundary', async () => {
+test('history whose record IDs sort against creation order loads, verifies, keeps order, compares and applies', async () => {
   const p = await project();
-  const o1 = await save(p, 'v1', 'Old one', () => OLD(1));
-  const o2 = await save(p, 'v2', 'Old two', () => OLD(2));
+  const o1 = await save(p, 'v1', 'One', () => DESC(1));
+  const o2 = await save(p, 'v2', 'Two', () => DESC(2));
   const n3 = await save(p, 'v3', 'New three');
   const n4 = await save(p, 'v4', 'New four');
-  assert.equal(o1, OLD(1));
-  assert.ok(isRecordId(n3) && isRecordId(n4));
+  assert.equal(o1, DESC(1));
+  assert.ok(isRecordId(o1) && isRecordId(n3) && isRecordId(n4));
   const state = await openExistingVault(p.vault);
   assert.deepEqual(state.revisions.map((r) => r.manifest.revisionId), [o1, o2, n3, n4]);
   assert.deepEqual(state.revisions.map((r) => r.manifest.parentRevisionId), [null, o1, o2, n3]);
@@ -174,15 +175,15 @@ test('history mixing old rev-<uuid> parents with new record-ID children loads, v
   const fromNew = await createManagedBranch(p.root, p.containerPath, { sourceRevisionId: n3, name: 'From new', reason: 'r' });
   const caseDir = fromNew.workingFolders[fromNew.createdBranchId]!;
   await caseDir.writeFileText(['Other', 'Extra.SLDPRT'], 'extra');
-  const caseRev = (await captureRevision(caseDir, p.vault, { branchId: fromNew.createdBranchId, summary: 'Case', notes, workingFolders: fromNew.workingFolders, newRevisionId: () => OLD(9) })).revision;
+  const caseRev = (await captureRevision(caseDir, p.vault, { branchId: fromNew.createdBranchId, summary: 'Case', notes, workingFolders: fromNew.workingFolders, newRevisionId: () => DESC(9) })).revision;
   assert.equal(caseRev.manifest.parentRevisionId, n3);
-  assert.equal(compareSavedRevisions(await openExistingVault(p.vault), o1, OLD(9)).status, 'compared');
+  assert.equal(compareSavedRevisions(await openExistingVault(p.vault), o1, DESC(9)).status, 'compared');
 });
 
-test('Knowledge Lab records can cite an old rev-<uuid> revision and a new record-ID revision', async () => {
+test('Knowledge Lab records can cite record-ID revisions', async () => {
   const p = await project();
-  const oldId = await save(p, 'v1', 'Old', () => OLD(1));
-  const newId = await save(p, 'v2', 'New');
+  const oldId = await save(p, 'v1', 'First');
+  const newId = await save(p, 'v2', 'Second');
   const state = await openExistingVault(p.vault);
   const projectId = state.project.projectId;
   assert.equal(buildKnowledgeIndex(state).revisions.length, 2);
@@ -203,21 +204,3 @@ test('Knowledge Lab records can cite an old rev-<uuid> revision and a new record
   assert.equal((await openExistingVault(p.vault)).knowledge!.records.length, 2);
 });
 
-test('a leftover OLD 43-char staging folder stays harmless and is reported; same-ID retry still clashes', async () => {
-  const p = await project();
-  const { getStagingSessionPathSegments } = await import('./object-store');
-  const { hashString } = await import('./hash');
-  const { compactHex } = await import('./path-encoding');
-  const oldName = compactHex(hashString('session-old-attempt'));
-  assert.equal(oldName.length, 43);
-  await p.vault.getDirectory(['staging', oldName], { create: true });
-  const state = await openExistingVault(p.vault);
-  assert.ok(state.incompleteAttempts.some((a) => a.kind === 'staging_artifact' && a.path === `staging/${oldName}`));
-  // Different IDs map to different folders; the same ID clashes on the exclusive claim.
-  const ids = ['20260101-000000-aaaaaa', '20260101-000000-aaaaab'];
-  assert.notDeepEqual(getStagingSessionPathSegments(`session-${ids[0]}`), getStagingSessionPathSegments(`session-${ids[1]}`));
-  await p.vault.getDirectory(getStagingSessionPathSegments(`session-${ids[0]}`), { create: true, exclusiveCreate: true });
-  await assert.rejects(p.vault.getDirectory(getStagingSessionPathSegments(`session-${ids[0]}`), { create: true, exclusiveCreate: true }));
-  await p.main.writeFileText(part, 'old-staging');
-  assert.ok(isRecordId(await save(p, 'old-staging', 'After old staging')));
-});

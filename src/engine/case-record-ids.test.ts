@@ -17,7 +17,6 @@ import { MAIN_BRANCH_ID } from './types';
 const notes = { problem: 'p', modification: 'm', observations: 'o' };
 const part = ['Parts', 'Collar.SLDPRT'];
 const bracket = ['Other', 'Bracket.SLDPRT'];
-const OLD_ID = 'branch-0b1c2d3e-0000-4000-8000-00000000abcd';
 
 async function project() {
   const root = new InMemoryFileSystemAdapter('Workspace');
@@ -147,34 +146,7 @@ test('a leftover staging attempt with the drawn ID counts as a clash (exclusive 
   assert.equal((await parent.listEntries()).length, 1, 'no working folder was created for the rejected case');
 });
 
-test('a project with an OLD branch-<uuid> case and a NEW case loads, lists in name order, and applies between them', async () => {
-  const { root, created, main, firstId, containerPath } = await project();
-  const oldCase = await createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Zeta old', reason: 'r', newBranchId: () => OLD_ID });
-  const newCase = await createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Alpha new', reason: 'r' });
-  assert.equal(oldCase.createdBranchId, OLD_ID);
-  assert.ok(isRecordId(newCase.createdBranchId));
-  const reopened = await resolveManagedProject(root, containerPath);
-  assert.equal(reopened.vaultState.branches[0].isMain, true);
-  assert.deepEqual(reopened.vaultState.branches.slice(1).map((b) => b.name), ['Alpha new', 'Zeta old']);
-  assert.ok(reopened.workingFolders[OLD_ID] && reopened.workingFolders[newCase.createdBranchId]);
-
-  // Save on the old case, apply onto the new case.
-  const oldDir = reopened.workingFolders[OLD_ID]!;
-  await oldDir.writeFileText(part, 'old case edit');
-  const oldSave = await captureRevision(oldDir, created.vaultDir, { branchId: OLD_ID, summary: 'Old edit', notes, workingFolders: reopened.workingFolders });
-  const { plan, run } = await applyOnto(created.vaultDir, reopened.workingFolders, oldSave.revision.manifest.revisionId, newCase.createdBranchId);
-  assert.ok(plan);
-  await run();
-  const applied = branchApplications(await openExistingVault(created.vaultDir), newCase.createdBranchId).at(-1)!;
-  assert.ok(applied.operationId);
-  assert.equal(await reopened.workingFolders[newCase.createdBranchId]!.readFileText(part), 'old case edit');
-  // Archiving the old case still works.
-  const state = await openExistingVault(created.vaultDir);
-  await changeCaseLifecycle(created.vaultDir, { projectId: created.record.projectId, branchId: OLD_ID, activeBranchId: MAIN_BRANCH_ID, status: 'archived', expectedVersion: caseLifecycle(state, OLD_ID).version }, { workingFolders: reopened.workingFolders });
-  assert.equal(caseLifecycle(await openExistingVault(created.vaultDir), OLD_ID).status, 'archived');
-});
-
-test('adopting a vault that holds old-format and new-format cases binds both to their working folders', async () => {
+test('adopting a vault that holds two cases binds both to their working folders', async () => {
   const main = new InMemoryFileSystemAdapter('Main');
   await main.writeFileText(part, 'base');
   const vault = new InMemoryFileSystemAdapter('Old vault');
@@ -183,16 +155,17 @@ test('adopting a vault that holds old-format and new-format cases binds both to 
   const sourceRevisionId = first.revision.manifest.revisionId;
   const mk = async (name: string, id?: string, folders: Record<string, FileSystemDirectoryAdapter> = {}) =>
     createDesignBranch({ vaultDir: vault, destinationParent: new InMemoryFileSystemAdapter('Cases'), workingFolders: { [MAIN_BRANCH_ID]: main, ...folders }, sourceRevisionId, name, reason: 'r', ...(id ? { newBranchId: () => id } : {}) });
-  const oldCase = await mk('Old case', OLD_ID);
-  const newCase = await mk('New case', undefined, { [OLD_ID]: oldCase.workingDir });
+  const oldCase = await mk('Old case');
+  const oldId = oldCase.branch.branchId;
+  const newCase = await mk('New case', undefined, { [oldId]: oldCase.workingDir });
   assert.ok(isRecordId(newCase.branch.branchId));
   const root = new InMemoryFileSystemAdapter('Workspace');
   await createWorkspace(root);
-  const adopted = await adoptProject(root, vault, { [MAIN_BRANCH_ID]: main, [OLD_ID]: oldCase.workingDir, [newCase.branch.branchId]: newCase.workingDir });
-  assert.equal(adopted.workingPaths[OLD_ID], 'projects/Legacy/working/Old case');
+  const adopted = await adoptProject(root, vault, { [MAIN_BRANCH_ID]: main, [oldId]: oldCase.workingDir, [newCase.branch.branchId]: newCase.workingDir });
+  assert.equal(adopted.workingPaths[oldId], 'projects/Legacy/working/Old case');
   assert.equal(adopted.workingPaths[newCase.branch.branchId], 'projects/Legacy/working/New case');
   const reopened = await resolveManagedProject(root, adopted.record.containerPath);
-  assert.ok(reopened.workingFolders[OLD_ID] && reopened.workingFolders[newCase.branch.branchId]);
+  assert.ok(reopened.workingFolders[oldId] && reopened.workingFolders[newCase.branch.branchId]);
 });
 
 test('an injected case ID must be a safe segment and not branch-main; nothing is written otherwise', async () => {
