@@ -1,5 +1,5 @@
 /**
- * ID standards for FUTURE records (not yet used by the app).
+ * ID standards for cAdtree records (see CLAUDE.md §2 "IDs").
  *
  * Record ID: `YYYYMMDD-HHMMSS-xxxxxx`, UTC date/time plus six random characters
  * from [0-9a-z]. 22 ASCII characters.

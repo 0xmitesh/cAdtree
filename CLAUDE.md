@@ -56,16 +56,16 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - Projects are found by `projectId`. Stored `containerPath`, `vaultPath` and `workingPath` are informational; only the working leaf name is used.
 - Workspaces are found by `workspaceId`. If a registered folder is missing, the lookup by ID is read-only.
 - Copies that share an ID are marked duplicate and read-only, never merged.
-- We are in a building phase with no active users, so old on-disk formats need not stay readable (decided 11 Nov 2026). Some readers still accept older shapes, but new code must not depend on that.
+- We are in a building phase with no active users, so old on-disk formats need not stay readable. Some readers still accept older shapes, but new code must not depend on that.
 - Display names live in metadata. Renaming a workspace or project folder in Finder or Explorer changes its location, not its name (current behaviour; an open product decision may change it).
 
 **IDs** (`src/engine/ids.ts`, the generators and validators):
-- Record ID `YYYYMMDD-HHMMSS-xxxxxx`: UTC time plus 6 random lowercase `[0-9a-z]`. Used for design cases (branch IDs), revisions, references and Knowledge Lab records.
+- Record ID `YYYYMMDD-HHMMSS-xxxxxx`: UTC time plus 6 random lowercase `[0-9a-z]`. Used for design cases (branch IDs, except Main), revisions, references and Knowledge Lab records.
 - Event ID `YYYYMMDD-HHMMSS`, with `-2`…`-999` on a clash. Used for Apply operations and for recovery attempts of an interrupted Apply (`applications/<case>/<apply>/unexpected/<recovery>/`).
-- Main stays `branch-main`. No type prefixes. Branch and project names never go into IDs. Order never comes from an ID.
+- Main stays `branch-main`. No type prefixes. Branch and project names never go into IDs. Never infer order from an ID; parent links and recorded timestamps decide it.
 - Vault objects stay content-addressed: `objects/<2>/<sha256>.bin`.
 - Clashes are detected with `FileConflictError` (`src/engine/fs-adapter.ts`) and then redrawn or counted, never overwritten.
-- Not yet converted: workspace, home and registration IDs (`workspace-<uuid>`, `registration-<uuid>`) and recovery copy folders (`copy-<uuid>`).
+- These still use UUIDs: home, workspace, registration, project and component IDs (`home-`, `workspace-`, `registration-`, `proj-`, `component-<uuid>`) and recovery copy folders (`copy-<uuid>`). Except `registration-` and `copy-`, they don't appear in paths.
 
 **OS clutter:**
 - Untracked `.DS_Store`, `Thumbs.db`, `desktop.ini` and AppleDouble `._x` companions (when `x` exists) are skipped and listed in scans and captures. Tracked ones are handled like any file.
@@ -102,8 +102,8 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 6. **Browser path limits.**
    - Measured with Chrome on Windows: folder creation fails at a full path of 248 characters or more, and file writes fail at about 252 or more (because of `.crswap`).
    - Measured with Chrome on macOS (10 Nov 2026): a single name may be 255 characters (macOS counts characters; 120 three-byte characters = 360 bytes were accepted). Folder and file creation fail at a full path of 1024, and file writes at 1017 (`.crswap`). Linux is still unmeasured.
-   - **Enforced rule (Item 2):** one standard on every platform. The full absolute path is counted in UTF-16 units; warn from 200, block above 240, plus 7 for written files; names are capped at 255 bytes.
-   - Future worst case = project path + internal reserve, or project path + case allowance (32) or recovery prefix + the longest user file or folder. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (110 today). New internal paths must keep `npm test`'s drift test green.
+   - **Enforced rule (Item 2):** one standard on every platform. The full absolute path is counted in UTF-16 units; warn from 200, block above 240, plus 7 for the `.crswap` sibling of a written file; names are capped at 255 bytes.
+   - Future worst case = project path + internal reserve, or project path + case allowance (32) or recovery prefix + the longest user file or folder. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (currently 110). New internal paths must keep `npm test`'s drift test green.
    - Checks run in the engine after the final folder name is chosen and before the first write: workspace, project create/import/adopt, design case, recovery copy.
    - Existing projects are never blocked from opening or saving. An unknown home address means unchecked, never "ok".
    - Safety net: `PathTooLongError` (`src/engine/path-limits.ts`) turns `InvalidStateError`/`NotFoundError` on creates and writes at the measured real limits into "Path too long" with the real path.
