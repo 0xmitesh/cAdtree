@@ -78,6 +78,7 @@ export function applicationReview(
   choices: ApplicationReview["choices"],
 ): ApplicationReview {
   return {
+    mode: plan.mode,
     projectId: plan.projectId,
     sourceRevisionId: plan.sourceRevisionId,
     destinationBranchId: plan.destinationBranchId,
@@ -94,6 +95,7 @@ function recompute(state: VaultState, review: ApplicationReview) {
     state,
     review.sourceRevisionId,
     review.destinationBranchId,
+    review.mode ?? "merge",
   );
   if (preparation.status !== "available") throw new Error(preparation.reason);
   const plan = buildApplyPreview(
@@ -376,6 +378,7 @@ export async function applyPreparedApplication(
       sourceBranchId: context.source.manifest.branchId,
       review: structuredClone(review),
       plan: {
+        mode: plan.mode,
         projectId: plan.projectId,
         sourceRevisionId: plan.sourceRevisionId,
         destinationRevisionId: plan.destinationRevisionId,

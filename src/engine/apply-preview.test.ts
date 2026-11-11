@@ -352,3 +352,24 @@ test("readiness requires a reason, source actions and valid selections; preserve
   plan.actions[0].source!.sha256 = "mutated-action-only";
   assert.equal(JSON.stringify(state), before);
 });
+
+test("older revision of the same branch: merge says use Bring back, revert uses the baseline as base, latest revision is rejected in both modes", () => {
+  const { state } = fixture();
+  const merge = prepareApplyPreview(state, "base", "branch-main");
+  assert.equal(merge.status, "unavailable");
+  assert.match((merge as { reason: string }).reason, /older revision.*Bring back/);
+  const r = prepareApplyPreview(state, "base", "branch-main", "revert");
+  if (r.status !== "available") throw new Error(r.reason);
+  assert.equal(r.context.mode, "revert");
+  assert.equal(r.context.base.manifest.revisionId, "destination");
+  assert.equal(r.context.rows.filter((x) => x.kind === "available").length, 15);
+  assert.ok(r.context.rows.every((x) => x.kind !== "conflict"));
+  for (const mode of ["merge", "revert"] as const) {
+    const latest = prepareApplyPreview(state, "destination", "branch-main", mode);
+    assert.equal(latest.status, "unavailable");
+    assert.match((latest as { reason: string }).reason, /already the latest saved revision/);
+  }
+  const caseRevert = prepareApplyPreview(state, "source", "branch-main", "revert");
+  assert.equal(caseRevert.status, "unavailable");
+  assert.match((caseRevert as { reason: string }).reason, /not an older revision/);
+});
