@@ -159,15 +159,20 @@ function ApplyPreviewBody({
     caseLabel(state, revision.manifest.branchId);
   const endpointCards = revert
     ? [
-        { key: "now", title: `Now · ${caseLabel(state, context.destinationBranchId)}`, revision: context.destination },
+        { key: "now", title: `Latest saved · ${caseLabel(state, context.destinationBranchId)}`, revision: context.destination },
         { key: "back", title: `Bring back · ${formatRevisionNumber(context.source.manifest.displayNumber)}`, revision: context.source },
       ]
     : null;
-  const endpoints = [
-    { side: "Base", revision: context.base },
-    { side: "Source", revision: context.source },
-    { side: "Destination", revision: context.destination },
-  ];
+  const endpoints = revert
+    ? [
+        { side: "Latest saved", revision: context.destination },
+        { side: "Bring back", revision: context.source },
+      ]
+    : [
+        { side: "Base", revision: context.base },
+        { side: "Source", revision: context.source },
+        { side: "Destination", revision: context.destination },
+      ];
   const candidates = context.rows.filter(
     (row) => row.kind === "available" || row.kind === "conflict",
   );
@@ -205,12 +210,12 @@ function ApplyPreviewBody({
   const stateAndNotes = (row: PreviewFileRow) => (
     <details className="disclosure preview-file-evidence">
       <summary>Saved file states and notes</summary>
-      <div className="comparison-file-endpoints preview-three-columns">
+      <div className={revert ? "comparison-file-endpoints" : "comparison-file-endpoints preview-three-columns"}>
         {endpoints.map(({ side, revision }) => {
           const file =
             side === "Base"
               ? row.base
-              : side === "Source"
+              : side === "Source" || side === "Bring back"
                 ? row.source
                 : row.destination;
           const notes =
@@ -573,13 +578,15 @@ function ApplyPreviewBody({
         </label>
         <details className="disclosure">
           <summary>
-            Overall engineering notes · Base, Source and Destination
+            {revert
+              ? "Overall engineering notes · Latest saved and Bring back"
+              : "Overall engineering notes · Base, Source and Destination"}
           </summary>
           <p className="muted small">
             Notes describe these saved revisions only, not every intervening
             change.
           </p>
-          <div className="comparison-file-endpoints preview-three-columns">
+          <div className={revert ? "comparison-file-endpoints" : "comparison-file-endpoints preview-three-columns"}>
             {endpoints.map(({ side, revision }) => (
               <section
                 key={side}

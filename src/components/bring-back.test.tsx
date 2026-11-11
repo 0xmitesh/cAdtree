@@ -231,7 +231,7 @@ test("revert dialog: two endpoint cards, revert note and counts, Changes to revi
   const ui = render(
     <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
   );
-  assert.ok(ui.getByRole("region", { name: "Now · Main" }).textContent!.includes("Rev 006"));
+  assert.ok(ui.getByRole("region", { name: "Latest saved · Main" }).textContent!.includes("Rev 006"));
   assert.ok(ui.getByRole("region", { name: "Bring back · Rev 003" }).textContent!.includes("Rev 003"));
   assert.equal(ui.queryByRole("region", { name: "Base saved revision" }), null);
   assert.ok(ui.getByText("Compares saved byte hashes of the two revisions; it does not merge geometry or verify CAD compatibility."));
@@ -243,6 +243,15 @@ test("revert dialog: two endpoint cards, revert note and counts, Changes to revi
   assert.ok(ui.getByRole("region", { name: "Changes to review" }));
   assert.ok(ui.getByText("Changes to review (3)"));
   assert.match(ui.container.textContent!, /saved states\. Current uncaptured/);
+  fireEvent.click(ui.getByText("Overall engineering notes · Latest saved and Bring back"));
+  assert.ok(ui.getByRole("region", { name: "Latest saved overall notes at Rev 006" }));
+  assert.ok(ui.getByRole("region", { name: "Bring back overall notes at Rev 003" }));
+  assert.equal(ui.queryByRole("region", { name: /^(Base|Source|Destination) overall notes/ }), null);
+  const article = within(ui.getByRole("article", { name: "Source change: Old.txt" }));
+  fireEvent.click(article.getByText("Saved file states and notes"));
+  assert.ok(article.getByRole("region", { name: "Bring back file notes at Rev 003: Old.txt" }));
+  assert.ok(article.getByRole("region", { name: "Latest saved file notes at Rev 006: Old.txt" }));
+  assert.equal(article.queryByRole("region", { name: /^(Base|Source|Destination) file notes/ }), null);
 });
 
 test("merge dialog keeps three cards and singular/plural counts", () => {
@@ -296,4 +305,16 @@ test("revert completion names both revisions; merge completion keeps its wording
   const doneM = await waitFor(() => mg.ui.getByRole("dialog", { name: "Application completed" }));
   assert.match(doneM.textContent!, /The source Design Case and its saved history remain available\./);
   assert.match(doneM.textContent!, /application provenance/);
+});
+
+test("revert counts pluralise", () => {
+  const state = fixture();
+  state.revisions[2].manifest.files.push({ path: "Old2.txt", sha256: "9".repeat(8), size: 3, lastModified: 0 });
+  const ui = render(
+    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
+  );
+  assert.match(
+    ui.getByRole("status", { name: "Proposed result summary" }).textContent!,
+    /2 files brought back · 1 replaced · 1 removed/,
+  );
 });
