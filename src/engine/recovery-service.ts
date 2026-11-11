@@ -1,6 +1,7 @@
 import { isEffectivelyEmpty, isSystemClutterName } from "./scanner";
 import {
   checkCaseInsensitiveCollisions,
+  FileConflictError,
   FileSystemDirectoryAdapter,
   splitAndValidatePath,
   validateDirectoryIsolation,
@@ -208,7 +209,7 @@ async function executeVerifiedRecovery(params: {
       const preWriteRootEntries = await destinationDir.listEntries();
       if (!isEffectivelyEmpty(preWriteRootEntries)) {
         abortedDueToDestinationConflict = true;
-        throw new Error(
+        throw new FileConflictError(
           `Destination conflict: folder "${destinationDir.name}" was populated (${preWriteRootEntries[0].name}) after initial check. Recovery stopped to avoid overwriting existing content.`
         );
       }
@@ -238,7 +239,7 @@ async function executeVerifiedRecovery(params: {
         const segments = splitAndValidatePath(dirPath);
         if (await destinationDir.hasFile(segments)) {
           abortedDueToDestinationConflict = true;
-          throw new Error(
+          throw new FileConflictError(
             `Destination conflict: a file already exists at directory path "${dirPath}".`
           );
         }
@@ -276,7 +277,7 @@ async function executeVerifiedRecovery(params: {
             (await destinationDir.hasDirectory(fileSegments)))
         ) {
           abortedDueToDestinationConflict = true;
-          throw new Error(
+          throw new FileConflictError(
             `Destination conflict: "${fileEntry.path}" already exists in destination folder. Recovery stopped without overwriting.`
           );
         }
@@ -298,10 +299,7 @@ async function executeVerifiedRecovery(params: {
             );
           }
         } catch (writeErr) {
-          if (
-            writeErr instanceof Error &&
-            writeErr.message.startsWith('Destination conflict:')
-          ) {
+          if (writeErr instanceof FileConflictError) {
             abortedDueToDestinationConflict = true;
           }
           throw writeErr;

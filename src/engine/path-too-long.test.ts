@@ -231,3 +231,42 @@ test('POSIX file create fails at 1024, not 1017; the message shows the maximum a
   const mid = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'f.bin', 1020) });
   await assert.rejects(mid.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof DOMException);
 });
+
+// ---- RealFileSystemAdapter.getDirectory exclusiveCheck: conflict class vs swallowed probe errors ----
+
+function probeHandle(onFile: () => never | void) {
+  const calls: string[] = [];
+  const child = {} as FileSystemDirectoryHandle;
+  const handle = {
+    getFileHandle: async () => {
+      calls.push('getFileHandle');
+      onFile();
+      return {} as FileSystemFileHandle;
+    },
+    getDirectoryHandle: async () => {
+      calls.push('getDirectoryHandle');
+      return child;
+    },
+  };
+  return { handle: handle as unknown as FileSystemDirectoryHandle, calls };
+}
+
+test('RealFileSystemAdapter exclusiveCheck: an existing file at the segment rejects with FileConflictError', async () => {
+  const { handle, calls } = probeHandle(() => {});
+  await assert.rejects(
+    new RealFileSystemAdapter(handle).getDirectory(['x'], { create: true, exclusiveCheck: true }),
+    (e) => e instanceof FileConflictError && /Destination conflict/.test(e.message),
+  );
+  assert.deepEqual(calls, ['getFileHandle']);
+});
+
+test('RealFileSystemAdapter exclusiveCheck: NotFoundError and TypeMismatchError from the file probe are swallowed', async () => {
+  for (const name of ['NotFoundError', 'TypeMismatchError']) {
+    const { handle, calls } = probeHandle(() => {
+      throw new DOMException('probe', name);
+    });
+    const dir = await new RealFileSystemAdapter(handle).getDirectory(['x'], { create: true, exclusiveCheck: true });
+    assert.ok(dir instanceof RealFileSystemAdapter);
+    assert.deepEqual(calls, ['getFileHandle', 'getDirectoryHandle']);
+  }
+});

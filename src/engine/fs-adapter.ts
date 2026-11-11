@@ -313,15 +313,13 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
         // Ensure a file does not already occupy this path segment
         try {
           await curr.getFileHandle(seg, { create: false });
-          throw new Error(
+          throw new FileConflictError(
             `Destination conflict: a file already exists at directory path "${pathSegments
               .slice(0, i + 1)
               .join('/')}"`
           );
         } catch (err) {
-          if (err instanceof Error && err.message.startsWith('Destination conflict:')) {
-            throw err;
-          }
+          if (err instanceof FileConflictError) throw err;
         }
       }
       try {
@@ -761,7 +759,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
           const segLower = seg.toLowerCase();
           for (const [existingName, existingNode] of curr.children.entries()) {
             if (existingName.toLowerCase() === segLower && existingNode.kind === 'file') {
-              throw new Error(
+              throw new FileConflictError(
                 `Destination conflict: a file "${existingName}" already exists at directory path "${pathSegments
                   .slice(0, i + 1)
                   .join('/')}"`
@@ -779,6 +777,13 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
         };
         curr.children.set(seg, next);
       } else if (next.kind !== 'directory') {
+        if (options?.exclusiveCheck && options?.create) {
+          throw new FileConflictError(
+            `Destination conflict: a file "${seg}" already exists at directory path "${pathSegments
+              .slice(0, i + 1)
+              .join('/')}"`
+          );
+        }
         throw new Error(
           `Destination conflict: "${pathSegments
             .slice(0, i + 1)
