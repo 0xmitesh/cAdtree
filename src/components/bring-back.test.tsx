@@ -122,13 +122,13 @@ test("revert dialog: title, rows pre-selected with revert labels, deselect one t
   assert.ok(w.getByRole("checkbox", { name: "Select Bring back: Old.txt" }));
   assert.ok(w.getByRole("checkbox", { name: "Select Remove (not in Rev 003): Extra.txt" }));
   assert.ok(w.getByRole("checkbox", { name: "Select Replace with Rev 003's version: Parts/Housing.SLDPRT" }));
-  assert.match(dialog.textContent!, /kept as evidence; save a revision afterwards/);
+  assert.match(dialog.textContent!, /Nothing is lost: Main.s latest saved revision stays in history.*Save a revision afterwards/);
   assert.doesNotMatch(dialog.textContent!, /Start with nothing selected/);
   fireEvent.click(w.getByRole("checkbox", { name: "Select Remove (not in Rev 003): Extra.txt" }));
-  const prepare = w.getByRole("button", { name: "Prepare application" }) as HTMLButtonElement;
+  const prepare = w.getByRole("button", { name: "Prepare bring-back" }) as HTMLButtonElement;
   assert.equal(prepare.disabled, true, "reason is required");
   fireEvent.change(
-    w.getByRole("textbox", { name: "Engineering reason for proposed application" }),
+    w.getByRole("textbox", { name: "Engineering reason for bringing this back" }),
     { target: { value: "Housing change was wrong" } },
   );
   assert.equal(prepare.disabled, false);
@@ -146,6 +146,8 @@ test("revert dialog: title, rows pre-selected with revert labels, deselect one t
     ["Old.txt", "Parts/Housing.SLDPRT"],
   );
   assert.doesNotMatch(confirm.textContent!, /Extra\.txt/);
+  assert.match(confirm.textContent!, /1 file brought back · 1 replaced/);
+  assert.doesNotMatch(confirm.textContent!, /removed/);
   fireEvent.click(within(confirm).getByRole("checkbox"));
   fireEvent.click(within(confirm).getByRole("button", { name: "Bring back confirmed changes" }));
   await waitFor(() => ui.getByRole("dialog", { name: "Bring back completed" }));

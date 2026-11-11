@@ -146,6 +146,9 @@ function ApplyPreviewBody({
   const retained = context.rows.filter(
     (row) => row.kind === "no-source-change",
   );
+  const reasonLabel = revert
+    ? "Engineering reason for bringing this back"
+    : "Engineering reason for proposed application";
   const sourceLabel = formatRevisionNumber(
     context.source.manifest.displayNumber,
   );
@@ -324,6 +327,22 @@ function ApplyPreviewBody({
           be rechecked under the project writer lock before application.
         </p>
         <h3>Confirmed additions, replacements and deletions</h3>
+        {revert ? (
+          <p>
+            <strong>
+              {[
+                [prepared.plan.actions.filter((a) => a.operation === "add").length, "brought back"],
+                [prepared.plan.actions.filter((a) => a.operation === "replace").length, "replaced"],
+                [prepared.plan.actions.filter((a) => a.operation === "delete").length, "removed"],
+              ]
+                .filter(([n]) => n)
+                .map(([n, w], i) =>
+                  i === 0 ? `${n} ${n === 1 ? "file" : "files"} ${w}` : `${n} ${w}`,
+                )
+                .join(" · ")}
+            </strong>
+          </p>
+        ) : null}
         <ul className="application-actions">
           {prepared.plan.actions.map((action) => (
             <li key={action.path}>
@@ -493,15 +512,19 @@ function ApplyPreviewBody({
           </Notice>
         ) : null}
         <label className="field preview-reason">
-          <span>Engineering reason for proposed application</span>
+          <span>{reasonLabel}</span>
           <textarea
             ref={reasonFocus}
-            aria-label="Engineering reason for proposed application"
+            aria-label={reasonLabel}
             aria-required="true"
             rows={2}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Explain which design changes you want to reuse and why."
+            placeholder={
+              revert
+                ? "Explain why you are bringing this earlier version back."
+                : "Explain which design changes you want to reuse and why."
+            }
             disabled={running}
           />
         </label>
@@ -543,7 +566,7 @@ function ApplyPreviewBody({
           <h3>Source changes to review ({candidates.length})</h3>
           <p className="muted small">
             {revert
-              ? `All changes are selected. ${destinationName}'s current files are kept as evidence; save a revision afterwards.`
+              ? `All changes are selected. Nothing is lost: ${destinationName}'s latest saved revision stays in history, and the files you replace are kept with this operation. Save a revision afterwards.`
               : "Start with nothing selected. Destination-only files and source-unchanged files are retained, not offered as deletions."}
           </p>
           {!candidates.length ? (
@@ -765,7 +788,9 @@ function ApplyPreviewBody({
             onClick={() => void prepare()}
           >
             {application
-              ? "Prepare application"
+              ? revert
+                ? "Prepare bring-back"
+                : "Prepare application"
               : "Apply — unavailable in preview"}
           </button>
         </div>
