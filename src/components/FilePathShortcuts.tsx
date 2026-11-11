@@ -110,7 +110,7 @@ export function FilePathShortcutsProvider({
     const location = await request.resolve();
     if (!workspaceId || location.workspaceId !== workspaceId)
       throw new Error(
-        "File path unavailable. Open the relevant managed workspace first. Absolute locations for external project or recovery folders are not known to the browser.",
+        "File path unavailable. Open the relevant managed workspace first. Absolute locations for external project folders are not known to the browser.",
       );
     if (currentVersion !== version.current) return;
     // A click can arrive before the initial preference read finishes.

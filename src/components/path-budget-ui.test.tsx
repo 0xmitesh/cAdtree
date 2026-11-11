@@ -137,13 +137,13 @@ function caseDialog(projectAddress: string | undefined) {
 }
 
 test("design case dialog: hint below 30 left, block text and disabled submit when over, nothing when the address is unknown", () => {
-  // "D:\...\Collar.SLDPRT.crswap" under working/<folder>: length = base + folder + 28 + ...
+  // The 32-character incomplete marker is longer than the short source file, so it decides: working/<folder>/<marker>.crswap.
   const unknown = caseDialog(undefined);
   fireEvent.change(unknown.getByRole("textbox", { name: "Case name" }), { target: { value: "x".repeat(300) } });
   assert.ok(!/characters? left|would need/.test(body()));
   unknown.unmount();
   const base = "D:\\Cadtree\\W\\projects\\P";
-  const fixed = (base + "\\working\\\\Parts\\Collar.SLDPRT.crswap").length;
+  const fixed = (base + "\\working\\\\_CADTREE_RECOVERY_INCOMPLETE.txt.crswap").length;
   const room = 240 - fixed; // name length that lands exactly on 240
   const ui = caseDialog(base);
   const name = (n: number) => fireEvent.change(ui.getByRole("textbox", { name: "Case name" }), { target: { value: "c".repeat(n) } });

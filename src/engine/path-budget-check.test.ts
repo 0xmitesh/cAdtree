@@ -291,8 +291,9 @@ async function projectWithRevision(file = 'Parts/Collar.SLDPRT') {
   });
   return { root, project, revisionId: first.revision.manifest.revisionId, containerPath: project.record.containerPath, file };
 }
+const MARKER = '_CADTREE_RECOVERY_INCOMPLETE.txt';
 const caseRest = (containerPath: string, folder: string, file: string) =>
-  1 + containerPath.length + 1 + 'working'.length + 1 + folder.length + 1 + file.length + CRSWAP_CHARS;
+  1 + containerPath.length + 1 + 'working'.length + 1 + folder.length + 1 + Math.max(file.length, MARKER.length) + CRSWAP_CHARS;
 
 for (const [label, base] of [['Windows', WIN_HOME], ['POSIX', POSIX_HOME]] as const) {
   test(`design case: ok, warn and block (${label} address)`, async () => {
@@ -305,7 +306,7 @@ for (const [label, base] of [['Windows', WIN_HOME], ['POSIX', POSIX_HOME]] as co
     const ok = await make('Lighter collar', 150, '20260101-000000-aaaaaa');
     assert.equal(ok.pathBudget.status, 'ok');
     assert.equal(ok.pathBudget.requiredLength, 150);
-    assert.ok(ok.pathBudget.worstPath.endsWith('Collar.SLDPRT.crswap'));
+    assert.ok(ok.pathBudget.worstPath.endsWith(`${MARKER}.crswap`)); // the 32-char marker is longer than the short source file
     const warned = await make('Thicker collar', 220, '20260101-000000-bbbbbb');
     assert.equal(warned.pathBudget.status, 'warn');
 
@@ -321,6 +322,28 @@ for (const [label, base] of [['Windows', WIN_HOME], ['POSIX', POSIX_HOME]] as co
     assert.deepEqual(await tree(root), before);
   });
 }
+
+test('design case: a long case name with short files is decided by the incomplete marker', async () => {
+  const { root, revisionId, containerPath, file } = await projectWithRevision();
+  assert.ok(file.length < MARKER.length);
+  const name = 'L'.repeat(100);
+  const make = (target: number, id: string) =>
+    createManagedBranch(root, containerPath, {
+      sourceRevisionId: revisionId, name, reason: 'try', newBranchId: () => id,
+      budget: { workspaceAddress: addressFor(WIN_HOME, caseRest(containerPath, name, file), target) },
+    });
+  // Exactly at the limit with the marker counted; counting only the short source file would give a shorter verdict.
+  const before = await tree(root);
+  await assert.rejects(make(BLOCK_PATH_CHARS + 1, '20260101-000000-dddddd'), (error) => {
+    assert.ok(error instanceof PathBudgetError);
+    assert.ok(error.worstPath.endsWith(`${MARKER}.crswap`));
+    assert.equal(error.requiredLength, BLOCK_PATH_CHARS + 1);
+    return true;
+  });
+  assert.deepEqual(await tree(root), before);
+  const ok = await make(BLOCK_PATH_CHARS, '20260101-000000-eeeeee');
+  assert.equal(ok.pathBudget.requiredLength, BLOCK_PATH_CHARS);
+});
 
 test('design case counter name is the one checked', async () => {
   const { root, revisionId, containerPath, file } = await projectWithRevision();

@@ -70,7 +70,6 @@ export interface InternalPathTemplate {
   reserveLength: number;
 }
 
-const UUID = '00000000-0000-4000-8000-000000000000';
 const SHA = 'a'.repeat(64);
 /** New design cases: `YYYYMMDD-HHMMSS-xxxxxx` (22 chars). */
 const CASE_ID = '20260101-000000-abcdef';
@@ -103,6 +102,9 @@ function template(label: string, kind: 'file' | 'dir', segments: string[], shape
   return { label, kind, segments, shape, relativeLength, reserveLength: relativeLength + (kind === 'file' ? CRSWAP_CHARS : 0) };
 }
 
+/** Written into the case folder when creation fails (same name as RECOVERY_MARKER_FILENAME in recovery-service). */
+const CASE_INCOMPLETE_MARKER = '_CADTREE_RECOVERY_INCOMPLETE.txt';
+
 const stagingSession = getStagingSessionPathSegments('sample-session');
 
 /**
@@ -117,7 +119,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
   // Incomplete marker written into a design-case working folder when case creation fails.
-  template('design case incomplete marker', 'file', ['working', 'x'.repeat(CASE_ALLOWANCE), '_CADTREE_RECOVERY_INCOMPLETE.txt'], 'working/{leaf}/_CADTREE_RECOVERY_INCOMPLETE.txt'),
+  template('design case incomplete marker', 'file', ['working', 'x'.repeat(CASE_ALLOWANCE), CASE_INCOMPLETE_MARKER], 'working/{leaf}/_CADTREE_RECOVERY_INCOMPLETE.txt'),
   // Vault core.
   template('vault project record', 'file', [V, 'project.json'], 'vault/project.json'),
   template('vault main branch record', 'file', [V, 'branches', 'branch-main.json'], 'vault/branches/branch-main.json'),
@@ -265,9 +267,13 @@ export function workspaceWorstPath(workspaceAddress: string): string {
   return projectWorstPath({ projectAddress: joinAddress(workspaceAddress, 'projects', 'p'.repeat(PROJECT_NAME_ALLOWANCE)) });
 }
 
-/** Worst path for a new design case: project + working/<final case folder>/<longest source path> + `.crswap`. */
+/**
+ * Worst path for a new design case: project + working/<final case folder>/<longest of the source files and the
+ * incomplete marker written if creation fails> + `.crswap` (the marker is written like any file).
+ */
 export function caseWorstPath(projectAddress: string, caseFolder: string, longestSourceFile: string, longestSourceDir = ''): string {
-  const file = withSwap(joinAddress(projectAddress, 'working', caseFolder, longestSourceFile));
+  const fileTerm = longestSourceFile.length > CASE_INCOMPLETE_MARKER.length ? longestSourceFile : CASE_INCOMPLETE_MARKER;
+  const file = withSwap(joinAddress(projectAddress, 'working', caseFolder, fileTerm));
   const dir = joinAddress(projectAddress, 'working', caseFolder, longestSourceDir);
   return dir.length > file.length ? dir : file;
 }
@@ -307,7 +313,7 @@ export interface PathBudgetReport {
 export interface PathBudgetInput {
   /** Absolute address of the Cadtree home (used when creating or bringing in a workspace). */
   homeAddress?: string;
-  /** Absolute address of the workspace folder (used for projects, design cases and recovery copies). */
+  /** Absolute address of the workspace folder (used for projects and design cases). */
   workspaceAddress?: string;
 }
 

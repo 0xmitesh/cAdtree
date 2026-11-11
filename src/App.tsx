@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   type FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
-  validateDirectoryIsolation,
 } from "./engine/fs-adapter";
 import {
   clearAllConvenienceMetadata,

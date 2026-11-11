@@ -31,9 +31,6 @@ import {
 } from "./path-budget";
 import { componentWriteBlock } from './component-identity';
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
-import {
-  restoreRevisionToFolder,
-} from "./recovery-service";
 import { MAIN_BRANCH_ID, type BranchRecord, type VaultState } from "./types";
 
 const WORKSPACE_FILE = ".cadtree-workspace.json";
