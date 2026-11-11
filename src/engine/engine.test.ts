@@ -550,8 +550,8 @@ test('FileConflictError: a file occupying a path that must become a directory is
   assert.equal(await dest.hasDirectory(['Thumbs.db']), false);
 });
 
-test('FileConflictError: InMemoryFileSystemAdapter.getDirectory exclusiveCheck rejects a case-differing colliding file', async () => {
-  for (const [fileName, dirName] of [['X', 'x']]) {
+test('FileConflictError: InMemoryFileSystemAdapter.getDirectory exclusiveCheck rejects an exact-case or case-differing colliding file', async () => {
+  for (const [fileName, dirName] of [['x', 'x'], ['X', 'x']]) {
     const root = new InMemoryFileSystemAdapter('fce-c-disk');
     await root.writeFileBytes([fileName], new Uint8Array([1]));
     await assert.rejects(
@@ -598,6 +598,18 @@ test('FileConflictError: a write-time conflict from the adapter sets the conflic
   assert.deepEqual(await dest.readFileBytes(['Parts', 'Part1.SLDPRT']), existing);
   // Something was written (the Parts directory) before the conflict, so the marker must exist.
   assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), true);
+});
+
+test('In-memory getDirectory without exclusiveCheck keeps the plain Error for a file in the way', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-c2-disk');
+  await root.writeFileBytes(['x'], new Uint8Array([1]));
+  for (const options of [{ create: true }, { exclusiveCheck: true }, undefined]) {
+    await assert.rejects(
+      () => root.getDirectory(['x'], options),
+      (err: unknown) =>
+        err instanceof Error && !(err instanceof FileConflictError) && /is a file, not a directory/.test(err.message)
+    );
+  }
 });
 
 test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency, and selected-file recovery', async () => {

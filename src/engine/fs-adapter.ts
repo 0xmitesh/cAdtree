@@ -777,6 +777,13 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
         };
         curr.children.set(seg, next);
       } else if (next.kind !== 'directory') {
+        if (options?.exclusiveCheck && options?.create) {
+          throw new FileConflictError(
+            `Destination conflict: a file "${seg}" already exists at directory path "${pathSegments
+              .slice(0, i + 1)
+              .join('/')}"`
+          );
+        }
         throw new Error(
           `Destination conflict: "${pathSegments
             .slice(0, i + 1)
