@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   type FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
-  validateDirectoryIsolation,
 } from "./engine/fs-adapter";
 import {
   clearAllConvenienceMetadata,
@@ -31,7 +30,6 @@ import {
 } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
-  resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
 import { presentPathBudgetError, pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
@@ -42,10 +40,6 @@ import {
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import { exportRevisionForReview } from './engine/review-export';
 import type { ExportReviewAction } from './components/ReviewExportDialog';
-import {
-  restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
-} from "./engine/recovery-service";
 import { joinAddress } from "./engine/path-budget";
 import { captureRevision, ReviewStaleError } from "./engine/revision-service";
 import { componentWriteBlock, enableComponentTracking, type IdentityReview } from './engine/component-identity';
@@ -76,7 +70,6 @@ import {
   type FileSpecificNote,
   MAIN_BRANCH_ID,
   type ProgressUpdate,
-  type RestoreResult,
   type ScanResult,
   type VaultState,
 } from "./engine/types";
@@ -137,7 +130,6 @@ import {
   importProject,
   resolveManagedProject,
   createManagedBranch,
-  recoverManagedCopy,
   type WorkspaceState,
   type ManagedProject,
   type WorkspaceProjectEntry,
@@ -145,7 +137,7 @@ import {
 
 type ActiveTab = "connect" | "changes" | "history" | "references" | "diagnostics";
 type Operation =
-  "scan" | "capture" | "restore" | "verify" | "branch" | "connect" | "apply" | "export" | "references";
+  "scan" | "capture" | "verify" | "branch" | "connect" | "apply" | "export" | "references";
 type Context = {
   version: number;
   signal: AbortSignal;
@@ -262,11 +254,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
-  const [lastRestoreReport, setLastRestoreReport] = useState<{
-    result: RestoreResult;
-    destinationPath?: string;
-    recoveredFiles?: { relativeDirectory: string; paths: string[] };
-  } | null>(null);
   // Synchronous guards also cover rapid double clicks before React renders disabled controls.
   const operationRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
@@ -280,7 +267,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    setLastRestoreReport(null);
     setActiveBranchId(MAIN_BRANCH_ID);
     setActiveTab("connect");
     setStatusBanner(null);
@@ -553,7 +539,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    setLastRestoreReport(null);
     setActiveBranchId(MAIN_BRANCH_ID);
     setActiveTab("connect");
     setStatusBanner(null);
@@ -1424,7 +1409,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setActiveBranchId(branchId);
     setWorkingDir(folders[branchId] ?? null);
     setScanResult(null);
-    setLastRestoreReport(null);
     setActiveTab(state.revisions.length ? "history" : "changes");
   };
   const handleSelectBranch = async (branchId: string) => {
@@ -1437,7 +1421,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     contextVersion.current++;
     setScanResult(null);
-    setLastRestoreReport(null);
     setStatusBanner(null);
     await perform("scan", async (context) => {
       const state = await openExistingVault(vaultDir);
@@ -1786,7 +1769,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           setWorkingDir(current.workingFolders[current.createdBranchId]!);
           setActiveBranchId(current.createdBranchId);
           setScanResult(null);
-          setLastRestoreReport(null);
           const warning = await persistWorkspace(
             workspace,
             current.record.containerPath,
@@ -1813,84 +1795,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const restore = async (
-    revisionId: string,
-    selectedPaths?: string[],
-    external = false,
-  ) => {
-    if (!vaultDir || !vaultState) return;
-    await perform("restore", async (context) => {
-      setLastRestoreReport(null);
-      if (managedProject && workspace && !external) {
-        const recovered = await recoverManagedCopy(
-          workspace.root,
-          managedProject.record.containerPath,
-          revisionId,
-          selectedPaths,
-          {
-            signal: context.signal,
-            onProgress: context.progress,
-            budget: { workspaceAddress: await budgetWorkspaceAddress() },
-          },
-        );
-        if (context.current())
-          setLastRestoreReport({
-            result: recovered.result,
-            destinationPath: `${workspace.root.name}/${recovered.relativePath}`,
-            recoveredFiles: {
-              relativeDirectory: recovered.relativePath,
-              paths:
-                selectedPaths ??
-                managedProject.vaultState.revisions
-                  .find(
-                    (revision) => revision.manifest.revisionId === revisionId,
-                  )!
-                  .manifest.files.map((file) => file.path),
-            },
-          });
-        return;
-      }
-      const destinationDir = await pickFolder("readwrite");
-      const state = await openExistingVault(vaultDir);
-      await validateWorkingFolderBindings(state, vaultDir, workingFolders);
-      // Plain recovery must also remain isolated from every branch working folder.
-      for (const branch of state.branches)
-        await validateDirectoryIsolation(
-          destinationDir,
-          workingFolders[branch.branchId]!,
-          "Recovery destination",
-          `"${branch.name}" working folder`,
-        );
-      const options = {
-        vaultDir,
-        destinationDir,
-        workingDir,
-        workingFolders,
-        revisionId,
-        signal: context.signal,
-        onProgress: context.progress,
-      };
-      const result = selectedPaths
-        ? await restoreSelectedFilesToFolder({ ...options, selectedPaths })
-        : await restoreRevisionToFolder(options);
-      if (context.current()) {
-        setLastRestoreReport({ result });
-        if (!selectedPaths)
-          setVaultState((previous) =>
-            previous
-              ? {
-                  ...previous,
-                  revisions: previous.revisions.map((revision) =>
-                    revision.manifest.revisionId === revisionId
-                      ? { ...revision, integrityStatus: "objects_verified" }
-                      : revision,
-                  ),
-                }
-              : previous,
-          );
-      }
-    });
-  };
   const handleExportForReview: ExportReviewAction = async (plan, parent, folderName) => {
     if (!vaultDir || !vaultState) throw new Error('Open the saved project before exporting.');
     const result = await perform('export', async context => exportRevisionForReview({
@@ -1905,13 +1809,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     if (!result) throw new Error('Export did not complete.');
     return result;
   };
-  const handleRestoreFullProject = (revisionId: string, external?: boolean) =>
-    restore(revisionId, undefined, external);
-  const handleRestoreSelectedFiles = (
-    revisionId: string,
-    selectedPaths: string[],
-    external?: boolean,
-  ) => restore(revisionId, selectedPaths, external);
   const handleVerifyObjects = async (ids: string[]) => {
     if (!vaultDir || !vaultState) return;
     await perform("verify", async (context) => {
@@ -2004,7 +1901,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setWorkingFolders(managed.workingFolders);
       setWorkingDir(managed.workingFolders[activeBranchId] ?? null);
       setScanResult(null);
-      setLastRestoreReport(null);
       setActiveTab("history");
       setStatusBanner({
         type: "info",
@@ -2016,7 +1912,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    setLastRestoreReport(null);
     if (vaultDir) {
       setVaultState(await openExistingVault(vaultDir));
       setActiveTab("history");
@@ -2046,7 +1941,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const busy = operation !== null || signOutPending;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
-  const isRestoring = operation === "restore";
   const isVerifyingAll = operation === "verify";
   const isCreatingBranch = operation === "branch";
   const navigate = (tab: ActiveTab) => {
@@ -2573,14 +2467,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                     }}
                     vaultState={vaultState}
                     activeBranchId={activeBranchId}
-                    isRestoring={isRestoring}
                     progress={progress}
-                    lastRestoreReport={lastRestoreReport}
                     statusBanner={null}
-                    onRestoreFullProject={handleRestoreFullProject}
                     onExportForReview={handleExportForReview}
                     isExporting={operation === 'export'}
-                    onRestoreSelectedFiles={handleRestoreSelectedFiles}
                     onVerifySingleRevisionObjects={
                       handleVerifySingleRevisionObjects
                     }
@@ -2623,36 +2513,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                     operationsBlockedReason={
                       managedBlockReason ??
                       (managedProject && missingConnections.length
-                        ? "Reconnect workspace before creating branches or recovering copies."
+                        ? "Reconnect workspace before creating branches."
                         : undefined)
                     }
                     onCreateBranch={handleCreateBranch}
                     isCreatingBranch={isCreatingBranch}
                     resolveWorkingFilePath={(branchId, path) =>
                       workingFileResolver(branchId, path)()
-                    }
-                    resolveRecoveredFilePath={
-                      lastRestoreReport?.recoveredFiles &&
-                      workspace &&
-                      managedProject
-                        ? async (path) => {
-                            const location = await resolveRecoveredFilePath(
-                              workspace.root,
-                              workspace.identity.workspaceId,
-                              managedProject.record.containerPath,
-                              lastRestoreReport.recoveredFiles!
-                                .relativeDirectory,
-                              path,
-                            );
-                            return shortcutHome && homeEntry?.directory
-                              ? resolveHomeFilePath(
-                                  shortcutHome,
-                                  homeEntry,
-                                  location,
-                                )
-                              : location;
-                          }
-                        : undefined
                     }
                   />
                 </div>

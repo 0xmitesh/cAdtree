@@ -3,7 +3,7 @@ import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { useState } from "react";
 import { scenarioState } from "../../tests/history-data";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import {
   HistoryRecoveryView,
   type HistoryRecoveryViewProps,
@@ -22,10 +22,6 @@ import {
 import { scanBranchChanges } from "../engine/scanner";
 import { formatTimestamp } from "../utils/format";
 import { captureRevision, ReviewStaleError } from "../engine/revision-service";
-import {
-  restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
-} from "../engine/recovery-service";
 
 afterEach(cleanup);
 test("the inspected revision stays readable outside highlighted ancestry in both graph and list", () => {
@@ -147,90 +143,14 @@ test("branch highlighting and zoom controls change only viewing state", () => {
   assert.ok(ui.getByText("80%")); // jsdom clientWidth is zero; zoom is bounded.
 });
 const noop = async () => {};
-test("recovery review sends the exact snapshot and selected paths to the existing engine", async () => {
-  const disk = new InMemoryFileSystemAdapter("recovery-ui");
-  const working = await disk.getDirectory(["Working"], { create: true });
-  const vault = await disk.getDirectory(["Vault"], { create: true });
-  await working.writeFileBytes(
-    ["Housing.SLDPRT"],
-    new Uint8Array([0, 255, 2, 3]),
-  );
-  await working.writeFileBytes(["Shaft.SLDPRT"], new Uint8Array([4, 5, 6]));
-  await initializeProjectVault(working, vault, "Recovery UI");
-  const captured = await captureRevision(working, vault, {
-    branchId: "branch-main",
-    summary: "Verified baseline",
-    notes: { problem: "", modification: "", observations: "" },
-  });
-  const fullDestination = await disk.getDirectory(["FullCopy"], {
-    create: true,
-  });
-  const selectedDestination = await disk.getDirectory(["SelectedCopy"], {
-    create: true,
-  });
-  const results: any[] = [];
-  const ui = render(
-    <HistoryRecoveryView
-      {...historyProps({
-        vaultState: captured.vaultState,
-        onRestoreFullProject: async (revisionId) => {
-          results.push(
-            await restoreRevisionToFolder({
-              vaultDir: vault,
-              workingDir: working,
-              destinationDir: fullDestination,
-              revisionId,
-            }),
-          );
-        },
-        onRestoreSelectedFiles: async (revisionId, selectedPaths) => {
-          results.push(
-            await restoreSelectedFilesToFolder({
-              vaultDir: vault,
-              workingDir: working,
-              destinationDir: selectedDestination,
-              revisionId,
-              selectedPaths,
-            }),
-          );
-        },
-      })}
-    />,
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
-  assert.equal(results.length, 0);
-  fireEvent.click(ui.getByRole("button", { name: "Choose destination" }));
-  await waitFor(() => assert.equal(results.length, 1));
-  assert.equal(results[0].restoredFilesCount, 2);
-  fireEvent.click(
-    ui.getByRole("checkbox", { name: "Select Housing.SLDPRT for recovery" }),
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Copy selected files (1)" }));
-  fireEvent.click(ui.getByRole("button", { name: "Choose destination" }));
-  await waitFor(() => assert.equal(results.length, 2));
-  assert.equal(results[1].kind, "selected_files");
-  assert.deepEqual(
-    [...(await selectedDestination.readFileBytes(["Housing.SLDPRT"]))],
-    [0, 255, 2, 3],
-  );
-  assert.equal(await selectedDestination.hasFile(["Shaft.SLDPRT"]), false);
-  assert.deepEqual(
-    [...(await working.readFileBytes(["Housing.SLDPRT"]))],
-    [0, 255, 2, 3],
-  );
-});
 function historyProps(
   overrides: Partial<HistoryRecoveryViewProps> = {},
 ): HistoryRecoveryViewProps {
   return {
     vaultState: historyState(2),
     activeBranchId: "branch-main",
-    isRestoring: false,
     progress: null,
-    lastRestoreReport: null,
     statusBanner: null,
-    onRestoreFullProject: noop,
-    onRestoreSelectedFiles: noop,
     onVerifySingleRevisionObjects: noop,
     onCancelOperation: () => {},
     ...overrides,
@@ -261,40 +181,33 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   );
   assert.equal(JSON.stringify(props.vaultState), before);
 });
-test("both recovery entry points disclose revision and file count before destination selection", async () => {
-  const full: string[] = [];
-  const partial: { id: string; paths: string[] }[] = [];
+test("History offers no restore-copy buttons and Export receives the selected files", () => {
   const ui = render(
     <HistoryRecoveryView
       {...historyProps({
-        onRestoreFullProject: async (id) => {
-          full.push(id);
-        },
-        onRestoreSelectedFiles: async (id, paths) => {
-          partial.push({ id, paths });
+        onExportForReview: async () => {
+          throw new Error("Export must not run");
         },
       })}
     />,
   );
-  fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
-  assert.equal(full.length, 0);
-  assert.ok(ui.getByText("5 files · Complete project snapshot"));
-  fireEvent.click(ui.getByRole("button", { name: "Choose destination" }));
-  await waitFor(() => assert.deepEqual(full, ["r2"]));
+  assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
+  assert.equal(ui.queryByRole("button", { name: /Copy selected files/ }), null);
+  assert.equal(ui.queryByText(/Recovery creates a separate copy/), null);
   fireEvent.click(
     ui.getByRole("checkbox", {
-      name: "Select Parts/Housing.SLDPRT for recovery",
+      name: "Select Parts/Housing.SLDPRT for export",
     }),
   );
-  fireEvent.click(ui.getByRole("button", { name: "Copy selected files (1)" }));
-  assert.equal(partial.length, 0);
-  assert.ok(ui.getByText("1 file · Selected-file copy"));
-  fireEvent.click(ui.getByRole("button", { name: "Choose destination" }));
-  await waitFor(() =>
-    assert.deepEqual(partial, [{ id: "r2", paths: ["Parts/Housing.SLDPRT"] }]),
+  fireEvent.click(ui.getByRole("button", { name: "Export for review" }));
+  const dialog = within(ui.getByRole("dialog"));
+  fireEvent.click(dialog.getByRole("radio", { name: /Selected files/ }));
+  assert.equal(
+    (dialog.getByRole("checkbox", { name: "Export Parts/Housing.SLDPRT" }) as HTMLInputElement).checked,
+    true,
   );
 });
-test("unchanged files are available; deleted files can only be recovered from their earlier snapshot", () => {
+test("unchanged files are available; deleted files can only be exported from their earlier snapshot", () => {
   const state = historyState(2);
   state.revisions[1].manifest.files = state.revisions[1].manifest.files.filter(
     (f) => f.path !== "Parts/Output_shaft.SLDPRT",
@@ -305,39 +218,39 @@ test("unchanged files are available; deleted files can only be recovered from th
   assert.equal(
     (
       ui.getByRole("checkbox", {
-        name: "Select Parts/Output_shaft.SLDPRT for recovery",
+        name: "Select Parts/Output_shaft.SLDPRT for export",
       }) as HTMLInputElement
     ).disabled,
     true,
   );
   assert.equal(
-    ui.queryByRole("checkbox", { name: "Select Actuator.SLDASM for recovery" }),
+    ui.queryByRole("checkbox", { name: "Select Actuator.SLDASM for export" }),
     null,
   );
   fireEvent.click(ui.getByRole("button", { name: /Show .* unchanged files/ }));
   assert.ok(
-    ui.getByRole("checkbox", { name: "Select Actuator.SLDASM for recovery" }),
+    ui.getByRole("checkbox", { name: "Select Actuator.SLDASM for export" }),
   );
   fireEvent.click(ui.getByRole("button", { name: /View in parent revision/ }));
   assert.equal(
     (
       ui.getByRole("checkbox", {
-        name: "Select Parts/Output_shaft.SLDPRT for recovery",
+        name: "Select Parts/Output_shaft.SLDPRT for export",
       }) as HTMLInputElement
     ).checked,
     true,
   );
   assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
 });
-test("damaged records stay visible and block recovery; metadata does not claim content verification", () => {
-  const props = historyProps();
+test("damaged records stay visible and block export; metadata does not claim content verification", () => {
+  const props = historyProps({ onExportForReview: async () => { throw new Error("no"); } });
   props.vaultState.revisions[1].integrityStatus = "corrupted";
   const ui = render(<HistoryRecoveryView {...props} />);
-  assert.ok(ui.getByText("Damaged revision · recovery blocked"));
+  assert.ok(ui.getByText("Damaged revision · export blocked"));
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Restore project copy",
+        name: "Export for review",
       }) as HTMLButtonElement
     ).disabled,
     true,

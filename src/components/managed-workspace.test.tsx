@@ -101,7 +101,7 @@ test("projects use name-only creation and picker-only import, including cancella
   assert.equal((await openWorkspace(root)).projects.length, 1);
 });
 
-test("UI imports into a workspace, creates cases without parent pickers, recovers copies, and reconnects all cases with one root", async () => {
+test("UI imports into a workspace, creates cases without parent pickers, and reconnects all cases with one root", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const source = new InMemoryFileSystemAdapter("Original CAD");
@@ -167,33 +167,12 @@ test("UI imports into a workspace, creates cases without parent pickers, recover
   project = (await openWorkspace(root)).projects[0].project!;
   assert.equal(project.vaultState.revisions.length, 1);
   assert.equal(project.vaultState.branches.length, 4);
-  fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
-  await waitFor(() => assert.ok(ui.queryByRole("dialog")));
-  dialog = within(ui.getByRole("dialog"));
-  assert.ok(
-    dialog.getByRole("checkbox", {
-      name: "Choose an external destination instead",
-    }),
+  assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
+  assert.equal(
+    await root.hasDirectory([...project.record.containerPath.split("/"), "recoveries"]),
+    false,
   );
-  fireEvent.click(dialog.getByRole("button", { name: "Restore copy" }));
-  await idle(ui);
-  assert.equal(picker.calls(), pickerCount);
-  assert.match(ui.container.textContent!, /recoveries\/copy-/);
-  // An explicit external override still uses a user-chosen destination.
-  const external = new InMemoryFileSystemAdapter("External recovery");
-  picker.queue.push(nativeDirectory(external));
-  fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
-  await waitFor(() => assert.ok(ui.queryByRole("dialog")));
-  dialog = within(ui.getByRole("dialog"));
-  fireEvent.click(
-    dialog.getByRole("checkbox", {
-      name: "Choose an external destination instead",
-    }),
-  );
-  fireEvent.click(dialog.getByRole("button", { name: "Choose destination" }));
-  await idle(ui);
-  assert.equal(picker.calls(), pickerCount + 1);
-  assert.equal(await snap(external), before);
+  assert.equal(await snap(source), before);
   assert.equal((await openExistingVault(project.vaultDir)).branches.length, 4);
   // Reopening from a clean app has no per-branch handle cache.
   cleanup();
@@ -265,7 +244,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Restore project copy",
+        name: "Export for review",
       }) as HTMLButtonElement
     ).disabled,
     true,

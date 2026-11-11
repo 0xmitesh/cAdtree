@@ -20,7 +20,6 @@ import { captureRevision } from "./revision-service";
 import { enumerateWorkingFolder, scanBranchChanges } from "./scanner";
 import {
   restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
 } from "./recovery-service";
 import { getObjectPathSegments } from "./object-store";
 import { hashString } from "./hash";
@@ -203,17 +202,6 @@ for (const mode of ["missing", "malformed"] as const) {
           workingFolders: bindings,
           revisionId: first.manifest.revisionId,
           destinationDir: nested,
-        }),
-        /Folder isolation|Reconnect.*Case A|nested inside/,
-      );
-      await assert.rejects(
-        restoreSelectedFilesToFolder({
-          vaultDir: vault,
-          workingDir: main,
-          workingFolders: bindings,
-          revisionId: first.manifest.revisionId,
-          destinationDir: nested,
-          selectedPaths: [first.manifest.files[0].path],
         }),
         /Folder isolation|Reconnect.*Case A|nested inside/,
       );

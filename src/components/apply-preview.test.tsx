@@ -23,16 +23,8 @@ function fixture() {
 const props = (state = fixture()): HistoryRecoveryViewProps => ({
   vaultState: state,
   activeBranchId: "branch-main",
-  isRestoring: false,
   progress: null,
-  lastRestoreReport: null,
   statusBanner: null,
-  onRestoreFullProject: async () => {
-    throw new Error("Recovery must not run");
-  },
-  onRestoreSelectedFiles: async () => {
-    throw new Error("Recovery must not run");
-  },
   onVerifySingleRevisionObjects: async () => {
     throw new Error("Verification must not run");
   },
@@ -258,7 +250,7 @@ test("unavailable shared ancestry stays explicit while ordinary Compare keeps it
   });
   assert.ok(ui.getByRole("status", { name: "Comparison counts" }));
 });
-test("closing preview preserves History inspection, file filter and recovery selection; project changes close it", () => {
+test("closing preview preserves History inspection, file filter and export selection; project changes close it", () => {
   const state = fixture();
   const ui = render(<HistoryRecoveryView {...props(state)} />);
   fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
@@ -266,14 +258,14 @@ test("closing preview preserves History inspection, file filter and recovery sel
   });
   fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
   fireEvent.click(
-    ui.getByRole("checkbox", { name: `Select ${path} for recovery` }),
+    ui.getByRole("checkbox", { name: `Select ${path} for export` }),
   );
   fireEvent.click(ui.getByRole("button", { name: "Review changes to apply" }));
   fireEvent.click(ui.getByRole("button", { name: "Close preview" }));
   assert.equal(
     (
       ui.getByRole("checkbox", {
-        name: `Select ${path} for recovery`,
+        name: `Select ${path} for export`,
       }) as HTMLInputElement
     ).checked,
     true,

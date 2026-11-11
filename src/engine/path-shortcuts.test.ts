@@ -6,14 +6,12 @@ import {
 } from "../utils/windows-path";
 import {
   resolveWorkingFilePath,
-  resolveRecoveredFilePath,
 } from "./path-shortcuts";
 import { InMemoryFileSystemAdapter } from "./fs-adapter";
 import {
   createWorkspace,
   importProject,
   createManagedBranch,
-  recoverManagedCopy,
   managementChecksum,
 } from "./workspace-service";
 import { captureRevision } from "./revision-service";
@@ -211,53 +209,4 @@ test("working shortcuts use validated on-disk branch mappings, not display names
     /locations need attention/,
   );
   assert.equal(await root.hasDirectory(customPath.split("/")), false);
-});
-
-test("restored-copy shortcuts point to verified recovery leaves, reject vault/working paths, and notice missing copies", async () => {
-  const { root, workspaceId, project, revisionId } = await fixture();
-  const recovered = await recoverManagedCopy(
-    root,
-    project.record.containerPath,
-    revisionId,
-    ["Parts/Nested/Bracket.SLDPRT"],
-  );
-  const location = await resolveRecoveredFilePath(
-    root,
-    workspaceId,
-    project.record.containerPath,
-    recovered.relativePath,
-    "Parts/Nested/Bracket.SLDPRT",
-  );
-  assert.equal(location.relativeDirectory, recovered.relativePath);
-  assert.match(
-    composeWindowsFilePaths("D:\\Root", location).file,
-    /\\recoveries\\copy-[^\\]+\\Parts\\Nested\\Bracket.SLDPRT$/,
-  );
-  await assert.rejects(
-    resolveRecoveredFilePath(
-      root,
-      workspaceId,
-      project.record.containerPath,
-      project.record.vaultPath,
-      "objects/anything",
-    ),
-    /descendant/,
-  );
-  await root.removeEntry(recovered.relativePath.split("/"), {
-    recursive: true,
-  });
-  await assert.rejects(
-    resolveRecoveredFilePath(
-      root,
-      workspaceId,
-      project.record.containerPath,
-      recovered.relativePath,
-      "Parts/Nested/Bracket.SLDPRT",
-    ),
-    /restored folder is missing/,
-  );
-  assert.equal(
-    await root.hasDirectory(recovered.relativePath.split("/")),
-    false,
-  );
 });

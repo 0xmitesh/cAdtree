@@ -35,7 +35,6 @@ import {
 import { captureRevision, ReviewStaleError } from './revision-service';
 import {
   restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
 } from './recovery-service';
 import { CADTREE_SCHEMA_VERSION, MAIN_BRANCH_ID, RevisionManifest } from './types';
 import { getObjectPathSegments } from './object-store';
@@ -383,7 +382,7 @@ test('Regression Fix 2: Same-count directory rename/replacement during capture a
   assert.equal(state.revisions.length, 0);
 });
 
-test('Regression Fix 3: Destination file appearing after initial check is never overwritten during full or selected-file recovery', async () => {
+test('Regression Fix 3: Destination file appearing after initial check is never overwritten during full-revision restore', async () => {
   const root = new InMemoryFileSystemAdapter('fix3-disk');
   const workingDir = await root.getDirectory(['Working'], { create: true });
   const vaultDir = await root.getDirectory(['Vault'], { create: true });
@@ -430,8 +429,8 @@ test('Regression Fix 3: Destination file appearing after initial check is never 
   const survivingBytesA = await destDirA.readFileBytes(['Parts', 'Part1.SLDPRT']);
   assert.deepEqual(survivingBytesA, preciousExistingBytes);
 
-  // Scenario B: Same race during selected-file recovery, plus pre-existing _CADTREE_RECOVERY_INCOMPLETE.txt must not be overwritten
-  const destDirB = (await root.getDirectory(['Dest_Race_Selected'], {
+  // Scenario B: Same race during a second full restore, plus pre-existing _CADTREE_RECOVERY_INCOMPLETE.txt must not be overwritten
+  const destDirB = (await root.getDirectory(['Dest_Race_Second'], {
     create: true,
   })) as InMemoryFileSystemAdapter;
   const existingMarkerBytes = new TextEncoder().encode('USER_EXISTING_MARKER_CONTENT');
@@ -453,11 +452,10 @@ test('Regression Fix 3: Destination file appearing after initial check is never 
 
   await assert.rejects(
     () =>
-      restoreSelectedFilesToFolder({
+      restoreRevisionToFolder({
         vaultDir,
         destinationDir: destDirB,
         revisionId: cap.revision.manifest.revisionId,
-        selectedPaths: ['Parts/Part1.SLDPRT'],
       }),
     /Destination conflict/
   );
@@ -656,7 +654,7 @@ test('FileConflictError: per-file precheck catches a file that appears after the
   assert.deepEqual(await dest.readFileBytes(['B.bin']), existing);
 });
 
-test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency, and selected-file recovery', async () => {
+test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency', async () => {
   const root = new InMemoryFileSystemAdapter('refinement-disk');
   const workingDir = await root.getDirectory(['SolidWorks_Project'], { create: true });
   const vaultDir = await root.getDirectory(['SolidWorks_Vault'], { create: true });
@@ -780,53 +778,6 @@ test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unch
   assert.equal(diff3.deleted.length, 1);
   assert.equal(diff3.deleted[0].path, 'Part5.SLDPRT');
   assert.deepEqual(diff3.deletedDirectories, ['Empty_Reference_Folder']);
-
-  // Selected-file recovery: recover ONLY Part1.SLDPRT from Revision 001 into a fresh folder
-  const singleFileDest = await root.getDirectory(['Recover_Single_Part1_Rev001'], {
-    create: true,
-  });
-  const singleRes = await restoreSelectedFilesToFolder({
-    vaultDir,
-    destinationDir: singleFileDest,
-    workingDir,
-    revisionId: cap1.revision.manifest.revisionId,
-    selectedPaths: ['Part1.SLDPRT'],
-  });
-
-  assert.equal(singleRes.kind, 'selected_files');
-  assert.equal(singleRes.restoredFilesCount, 1);
-  assert.equal(singleRes.restoredDirectoriesCount, 0);
-  assert.deepEqual(singleRes.selectedPaths, ['Part1.SLDPRT']);
-
-  const enumSingle = await enumerateWorkingFolder(singleFileDest);
-  assert.equal(enumSingle.files.length, 1);
-  assert.equal(enumSingle.files[0].path, 'Part1.SLDPRT');
-  assert.equal(enumSingle.directories.length, 0); // Empty_Reference_Folder & Subparts were NOT created
-  assert.deepEqual(await singleFileDest.readFileBytes(['Part1.SLDPRT']), part1V1);
-
-  // Multi-file recovery with nested paths: recover Subparts/Part3.SLDPRT and Part5.SLDPRT from Rev 002
-  const multiFileDest = await root.getDirectory(['Recover_Multi_Nested_Rev002'], {
-    create: true,
-  });
-  const multiRes = await restoreSelectedFilesToFolder({
-    vaultDir,
-    destinationDir: multiFileDest,
-    workingDir,
-    revisionId: cap2.revision.manifest.revisionId,
-    selectedPaths: ['Subparts/Part3.SLDPRT', 'Part5.SLDPRT'],
-  });
-
-  assert.equal(multiRes.kind, 'selected_files');
-  assert.equal(multiRes.restoredFilesCount, 2);
-  assert.equal(multiRes.restoredDirectoriesCount, 1); // Only 'Subparts' directory created!
-  const enumMulti = await enumerateWorkingFolder(multiFileDest);
-  assert.deepEqual(
-    enumMulti.files.map((f) => f.path),
-    ['Part5.SLDPRT', 'Subparts/Part3.SLDPRT']
-  );
-  assert.deepEqual(enumMulti.directories, ['Subparts']);
-  assert.deepEqual(await multiFileDest.readFileBytes(['Subparts', 'Part3.SLDPRT']), part3);
-  assert.deepEqual(await multiFileDest.readFileBytes(['Part5.SLDPRT']), part5);
 });
 
 test('Backward compatibility: existing vault manifests without fileNotes open and verify without rewriting history, while tampered fileNotes fail checksum', async () => {

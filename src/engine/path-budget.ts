@@ -70,7 +70,6 @@ export interface InternalPathTemplate {
   reserveLength: number;
 }
 
-const UUID = '00000000-0000-4000-8000-000000000000';
 const SHA = 'a'.repeat(64);
 /** New design cases: `YYYYMMDD-HHMMSS-xxxxxx` (22 chars). */
 const CASE_ID = '20260101-000000-abcdef';
@@ -103,6 +102,9 @@ function template(label: string, kind: 'file' | 'dir', segments: string[], shape
   return { label, kind, segments, shape, relativeLength, reserveLength: relativeLength + (kind === 'file' ? CRSWAP_CHARS : 0) };
 }
 
+/** Written into the case folder when creation fails (same name as RECOVERY_MARKER_FILENAME in recovery-service). */
+const CASE_INCOMPLETE_MARKER = '_CADTREE_RECOVERY_INCOMPLETE.txt';
+
 const stagingSession = getStagingSessionPathSegments('sample-session');
 
 /**
@@ -116,8 +118,8 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('branch location record', 'file', ['.cadtree', 'branches', `${CASE_ID}.json`], '.cadtree/branches/{caseId}.json'),
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
-  template('recovery copy folder', 'dir', ['recoveries', `copy-${UUID}`], 'recoveries/copy-{uuid}'),
-  template('recovery incomplete marker', 'file', ['recoveries', `copy-${UUID}`, '_CADTREE_RECOVERY_INCOMPLETE.txt'], 'recoveries/copy-{uuid}/_CADTREE_RECOVERY_INCOMPLETE.txt'),
+  // Incomplete marker written into a design-case working folder when case creation fails.
+  template('design case incomplete marker', 'file', ['working', 'x'.repeat(CASE_ALLOWANCE), CASE_INCOMPLETE_MARKER], 'working/{leaf}/_CADTREE_RECOVERY_INCOMPLETE.txt'),
   // Vault core.
   template('vault project record', 'file', [V, 'project.json'], 'vault/project.json'),
   template('vault main branch record', 'file', [V, 'branches', 'branch-main.json'], 'vault/branches/branch-main.json'),
@@ -171,8 +173,6 @@ export function shapePattern(shape: string): RegExp {
   }
   return new RegExp(`^${source}$`);
 }
-
-const RECOVERY_COPY_TEMPLATE = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'recovery copy folder')!;
 
 const compiled = INTERNAL_PATH_TEMPLATES.map((t) => ({ template: t, pattern: shapePattern(t.shape) }));
 // Every parent folder of a template is itself a folder cAdtree creates.
@@ -228,10 +228,7 @@ export function projectWorstCase(input: { projectPath: string | number; longestU
   const internal = projectLength + 1 + internalReserve();
   // "/working/<case>/" before the user's relative path.
   const workingPrefix = '/working/'.length + caseAllowance + 1;
-  // "/recoveries/copy-<uuid>/" for user files restored into a recovery copy. This term goes away
-  // when Item 4 removes "Restore copy". Built from the same template constants as the reserve.
-  const recoveryPrefix = 1 + RECOVERY_COPY_TEMPLATE.relativeLength + 1;
-  const user = projectLength + Math.max(workingPrefix, recoveryPrefix) + longestUserPath + CRSWAP_CHARS;
+  const user = projectLength + workingPrefix + longestUserPath + CRSWAP_CHARS;
   return Math.max(internal, user);
 }
 
@@ -247,7 +244,7 @@ const withSwap = (path: string) => path + '.crswap';
 /**
  * Worst full ABSOLUTE path (as a string; its length is the worst-case length) below a project
  * folder: the longest of cAdtree's own internal path, and, when `longestUserFile` (relative,
- * "/"-separated) is given, that file under a design-case folder or a recovery copy. Files carry
+ * "/"-separated) is given, that file under a design-case folder. Files carry
  * the `.crswap` allowance. With no user file this equals projectWorstCase().
  */
 export function projectWorstPath(input: { projectAddress: string; longestUserFile?: string; longestUserDir?: string; caseAllowance?: number }): string {
@@ -257,12 +254,10 @@ export function projectWorstPath(input: { projectAddress: string; longestUserFil
   const candidates = [joinAddress(input.projectAddress, ...deepest.segments) + (deepest.kind === 'file' ? '.crswap' : '')];
   if (input.longestUserFile) {
     candidates.push(withSwap(joinAddress(input.projectAddress, 'working', 'x'.repeat(caseAllowance), input.longestUserFile)));
-    candidates.push(withSwap(joinAddress(input.projectAddress, ...RECOVERY_COPY_TEMPLATE.segments, input.longestUserFile)));
   }
   // Folders get no `.crswap`.
   if (input.longestUserDir) {
     candidates.push(joinAddress(input.projectAddress, 'working', 'x'.repeat(caseAllowance), input.longestUserDir));
-    candidates.push(joinAddress(input.projectAddress, ...RECOVERY_COPY_TEMPLATE.segments, input.longestUserDir));
   }
   return candidates.reduce((a, b) => (b.length > a.length ? b : a));
 }
@@ -272,17 +267,14 @@ export function workspaceWorstPath(workspaceAddress: string): string {
   return projectWorstPath({ projectAddress: joinAddress(workspaceAddress, 'projects', 'p'.repeat(PROJECT_NAME_ALLOWANCE)) });
 }
 
-/** Worst path for a new design case: project + working/<final case folder>/<longest source path> + `.crswap`. */
+/**
+ * Worst path for a new design case: project + working/<final case folder>/<longest of the source files and the
+ * incomplete marker written if creation fails> + `.crswap` (the marker is written like any file).
+ */
 export function caseWorstPath(projectAddress: string, caseFolder: string, longestSourceFile: string, longestSourceDir = ''): string {
-  const file = withSwap(joinAddress(projectAddress, 'working', caseFolder, longestSourceFile));
+  const fileTerm = longestSourceFile.length > CASE_INCOMPLETE_MARKER.length ? longestSourceFile : CASE_INCOMPLETE_MARKER;
+  const file = withSwap(joinAddress(projectAddress, 'working', caseFolder, fileTerm));
   const dir = joinAddress(projectAddress, 'working', caseFolder, longestSourceDir);
-  return dir.length > file.length ? dir : file;
-}
-
-/** Worst path for a recovery copy: project + recoveries/copy-<uuid>/<longest selected path> + `.crswap`. */
-export function recoveryWorstPath(projectAddress: string, copyFolder: string, longestSelectedFile: string, longestSelectedDir = ''): string {
-  const file = withSwap(joinAddress(projectAddress, 'recoveries', copyFolder, longestSelectedFile));
-  const dir = joinAddress(projectAddress, 'recoveries', copyFolder, longestSelectedDir);
   return dir.length > file.length ? dir : file;
 }
 
@@ -321,7 +313,7 @@ export interface PathBudgetReport {
 export interface PathBudgetInput {
   /** Absolute address of the Cadtree home (used when creating or bringing in a workspace). */
   homeAddress?: string;
-  /** Absolute address of the workspace folder (used for projects, design cases and recovery copies). */
+  /** Absolute address of the workspace folder (used for projects and design cases). */
   workspaceAddress?: string;
 }
 
