@@ -561,7 +561,7 @@ test('FileConflictError: InMemoryFileSystemAdapter.getDirectory exclusiveCheck r
   }
 });
 
-test('FileConflictError: a write-time conflict from the adapter sets the conflict flag and still leaves the partial-recovery marker', async () => {
+test('FileConflictError: a write-time adapter conflict surfaces as FileConflictError and the partial-recovery marker is written because a destination entry was already counted as written', async () => {
   const root = new InMemoryFileSystemAdapter('fce-d-disk');
   const workingDir = await root.getDirectory(['Working'], { create: true });
   const vaultDir = await root.getDirectory(['Vault'], { create: true });
@@ -596,7 +596,8 @@ test('FileConflictError: a write-time conflict from the adapter sets the conflic
   );
   assert.ok(injected);
   assert.deepEqual(await dest.readFileBytes(['Parts', 'Part1.SLDPRT']), existing);
-  // Something was written (the Parts directory) before the conflict, so the marker must exist.
+  // The marker is written regardless of the conflict flag: wroteAnyDestinationEntry is set before
+  // writeFileStream (and the Parts directory was created), so the marker rule alone explains it.
   assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), true);
 });
 
@@ -610,6 +611,49 @@ test('In-memory getDirectory without exclusiveCheck keeps the plain Error for a 
         err instanceof Error && !(err instanceof FileConflictError) && /is a file, not a directory/.test(err.message)
     );
   }
+});
+
+test('FileConflictError: per-file precheck catches a file that appears after the root recheck and never overwrites it', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-e-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = (await root.getDirectory(['Vault'], { create: true })) as InMemoryFileSystemAdapter;
+  await workingDir.writeFileBytes(['A.bin'], generateDeterministicBinaryBytes('FCE_E_A', 1024));
+  await workingDir.writeFileBytes(['B.bin'], generateDeterministicBinaryBytes('FCE_E_B', 1024));
+  await workingDir.getDirectory(['D'], { create: true });
+  await initializeProjectVault(workingDir, vaultDir, 'FCE E');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_E'], { create: true })) as InMemoryFileSystemAdapter;
+  const existing = new TextEncoder().encode('APPEARED_LATE');
+  // Step 2 creates directory "D" in the destination only after the root recheck, so the first
+  // vault read that sees "D" is file A's object read in step 3: after A's precheck and before
+  // B's precheck.
+  let injected = false;
+  vaultDir.setHooks({
+    onBeforeRead: async () => {
+      if (!injected && (await dest.hasDirectory(['D']))) {
+        injected = true;
+        await dest.writeFileBytes(['B.bin'], existing);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) =>
+      err instanceof FileConflictError && /"B\.bin" already exists in destination folder/.test(err.message)
+  );
+  assert.ok(injected);
+  assert.deepEqual(await dest.readFileBytes(['B.bin']), existing);
 });
 
 test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency, and selected-file recovery', async () => {
