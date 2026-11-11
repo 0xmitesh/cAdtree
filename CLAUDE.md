@@ -35,13 +35,13 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
         ├── vault/           objects/<2>/<sha256>.bin, revisions/, branches/, completed/, components/, references/,
         │                    applications/, case-lifecycle/, staging/  (immutable, verified history)
         ├── working/main     Main's working files (the user edits these in CAD)
-        ├── working/<Case>   one independent working folder per design case (branch)
-        └── recoveries/copy-<uuid>   restored copies (Item 4 plans to remove "Restore copy")
+        └── working/<Case>   one independent working folder per design case (branch)
 ```
 
 **Concepts:**
 - **Revision:** an immutable, project-wide snapshot with notes. Revisions don't nest folders: bytes live in `vault/objects`.
 - **Design case:** a branch from a saved revision, with its own working folder. Cases are archived, never auto-deleted.
+- **Apply:** two modes. Merge brings a design case's changes into another branch. Revert ("Bring back") makes a branch match an earlier revision of itself: every difference is reviewed, and the user saves a revision afterwards.
 - **Component identity:** a stable ID that is separate from the filename. Renames are confirmed explicitly, and identity is never guessed from names or hashes.
 - **Reference:** a versioned supporting document pinned to a revision or component.
 
@@ -65,7 +65,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - Main stays `branch-main`. No type prefixes. Branch and project names never go into IDs. Never infer order from an ID; parent links and recorded timestamps decide it.
 - Vault objects stay content-addressed: `objects/<2>/<sha256>.bin`.
 - Clashes are detected with `FileConflictError` (`src/engine/fs-adapter.ts`) and then redrawn or counted, never overwritten.
-- These still use UUIDs: home, workspace, registration, project and component IDs (`home-`, `workspace-`, `registration-`, `proj-`, `component-<uuid>`) and recovery copy folders (`copy-<uuid>`). Except `registration-` and `copy-`, they don't appear in paths.
+- These still use UUIDs: home, workspace, registration, project and component IDs (`home-`, `workspace-`, `registration-`, `proj-`, `component-<uuid>`). Except `registration-`, they don't appear in paths.
 
 **OS clutter:**
 - Untracked `.DS_Store`, `Thumbs.db`, `desktop.ini` and AppleDouble `._x` companions (when `x` exists) are skipped and listed in scans and captures. Tracked ones are handled like any file.
@@ -103,8 +103,8 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
    - Measured with Chrome on Windows: folder creation fails at a full path of 248 characters or more, and file writes fail at about 252 or more (because of `.crswap`).
    - Measured with Chrome on macOS (10 Nov 2026): a single name may be 255 characters (macOS counts characters; 120 three-byte characters = 360 bytes were accepted). Folder and file creation fail at a full path of 1024, and file writes at 1017 (`.crswap`). Linux is still unmeasured.
    - **Enforced rule (Item 2):** one standard on every platform. The full absolute path is counted in UTF-16 units; warn from 200, block above 240, plus 7 for the `.crswap` sibling of a written file; names are capped at 255 bytes.
-   - Future worst case = project path + internal reserve, or project path + case allowance (32) or recovery prefix + the longest user file or folder. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (currently 110). New internal paths must keep `npm test`'s drift test green.
-   - Checks run in the engine after the final folder name is chosen and before the first write: workspace, project create/import/adopt, design case, recovery copy.
+   - Future worst case = project path + internal reserve, or project path + case allowance (32) + the longest user file or folder, where the design-case check also counts the 32-character incomplete marker (`_CADTREE_RECOVERY_INCOMPLETE.txt`) written into `working/<case>/` if creation fails. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (currently 110). New internal paths must keep `npm test`'s drift test green.
+   - Checks run in the engine after the final folder name is chosen and before the first write: workspace, project create/import/adopt, design case.
    - Existing projects are never blocked from opening or saving. An unknown home address means unchecked, never "ok".
    - Safety net: `PathTooLongError` (`src/engine/path-limits.ts`) turns `InvalidStateError`/`NotFoundError` on creates and writes at the measured real limits into "Path too long" with the real path.
    - cAdtree's own naming must never cause path errors.
@@ -161,7 +161,7 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 
 **Environment notes**
 - **Requirements:** Node 24 LTS, version 24.12 or newer.
-- **Flaky tests:** `src/components/navigation-cleanup.test.tsx` and `home-setup.test.tsx` sometimes fail under full-suite load. If they fail, rerun them on their own and rerun the full suite.
+- **Flaky tests:** `src/components/navigation-cleanup.test.tsx`, `home-setup.test.tsx` and `branches.test.tsx` sometimes fail under full-suite load. If they fail, rerun them on their own and rerun the full suite.
 - **Unfinished cleanup:** some leftovers from AI Studio are still there: the package name `react-example`, unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) and a Gemini key in `.env.example`. None of them are used.
 
 **Local checkouts**
