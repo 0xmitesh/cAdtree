@@ -94,32 +94,3 @@ export async function resolveWorkingFilePath(
     filePath,
   });
 }
-
-/** Only a successfully recovered managed destination is passed here by the app. */
-export async function resolveRecoveredFilePath(
-  root: FileSystemDirectoryAdapter,
-  workspaceId: string,
-  containerPath: string,
-  relativeDirectory: string,
-  filePath: string,
-): Promise<FilePathLocation> {
-  const project = await resolveManagedProject(root, containerPath);
-  if (project.record.workspaceId !== workspaceId)
-    throw new Error("Workspace identity changed. Reopen the workspace.");
-  const parts = managedPath(relativeDirectory, `${containerPath}/recoveries`);
-  if (parts.length !== managedPath(containerPath).length + 2)
-    throw new Error("Invalid recovered-copy location.");
-  let directory: FileSystemDirectoryAdapter;
-  try {
-    directory = await root.getDirectory(parts, { create: false });
-  } catch {
-    throw new Error(
-      "File path unavailable. The restored folder is missing or inaccessible. Reconnect the workspace.",
-    );
-  }
-  return existingFile(root, directory, {
-    workspaceId,
-    relativeDirectory,
-    filePath,
-  });
-}

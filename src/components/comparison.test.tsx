@@ -14,23 +14,19 @@ const props = (
 ): HistoryRecoveryViewProps => ({
   vaultState: historyState(4),
   activeBranchId: "branch-main",
-  isRestoring: false,
   progress: null,
-  lastRestoreReport: null,
   statusBanner: null,
-  onRestoreFullProject: async () => {},
-  onRestoreSelectedFiles: async () => {},
   onVerifySingleRevisionObjects: async () => {},
   onCancelOperation: () => {},
   ...overrides,
 });
 
-test("Compare initializes from the actual parent, swaps endpoints, compares nonadjacent and identical revisions, and preserves History inspection/recovery selection", () => {
+test("Compare initializes from the actual parent, swaps endpoints, compares nonadjacent and identical revisions, and preserves History inspection/export selection", () => {
   const state = historyState(4),
     before = JSON.stringify(state);
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(
-    ui.getByRole("checkbox", { name: `Select ${path} for recovery` }),
+    ui.getByRole("checkbox", { name: `Select ${path} for export` }),
   );
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
@@ -89,7 +85,7 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
   assert.equal(
     (
       ui.getByRole("checkbox", {
-        name: `Select ${path} for recovery`,
+        name: `Select ${path} for export`,
       }) as HTMLInputElement
     ).checked,
     true,

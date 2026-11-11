@@ -1,3 +1,4 @@
+import { MAIN_BRANCH_ID } from "./types";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -16,7 +17,6 @@ import {
   createManagedBranch,
   managementChecksum,
   openWorkspace,
-  recoverManagedCopy,
 } from "./workspace-service";
 import {
   readVerifiedInventory,
@@ -30,7 +30,6 @@ import { hashString } from "./hash";
 import {
   resolveHomeFilePath,
   resolveWorkingFilePath,
-  resolveRecoveredFilePath,
 } from "./path-shortcuts";
 import { composeWindowsFilePaths } from "../utils/windows-path";
 import { getObjectPathSegments } from "./object-store";
@@ -468,7 +467,7 @@ test("whole-workspace copying holds source project locks until verified publicat
     2,
   );
 });
-test("home paths cover adopted current, historical-branch and recovered files using the validated extra level", async () => {
+test("home paths cover adopted current and historical-branch files using the validated extra level", async () => {
   const { root: original, project, first } = await existing();
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
@@ -493,26 +492,15 @@ test("home paths cover adopted current, historical-branch and recovered files us
       `D:\\Cadtree\\${adopted.directory}\\${p.workingPaths[branchId].replaceAll("/", "\\")}\\Parts`,
     );
   }
-  const recovered = await recoverManagedCopy(
-    adopted.workspace.root,
-    p.record.containerPath,
-    first.revision.manifest.revisionId,
-    undefined,
-  );
   const location = await resolveHomeFilePath(
     state,
     entry,
-    await resolveRecoveredFilePath(
+    await resolveWorkingFilePath(
       adopted.workspace.root,
       adopted.workspace.identity.workspaceId,
       p.record.containerPath,
-      recovered.relativePath,
+      MAIN_BRANCH_ID,
       "Parts/Pärt.SLDPRT",
-    ),
-  );
-  assert.ok(
-    location.relativeDirectory.startsWith(
-      `${adopted.directory}/${project.record.containerPath}/recoveries/`,
     ),
   );
   await home.removeEntry([adopted.directory], { recursive: true });

@@ -40,12 +40,8 @@ const props = (
 ): HistoryRecoveryViewProps => ({
   vaultState: state,
   activeBranchId,
-  isRestoring: false,
   progress: null,
-  lastRestoreReport: null,
   statusBanner: null,
-  onRestoreFullProject: async () => {},
-  onRestoreSelectedFiles: async () => {},
   onVerifySingleRevisionObjects: async () => {},
   onCancelOperation: () => {},
 });

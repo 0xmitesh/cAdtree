@@ -119,18 +119,8 @@ function Preview() {
             <HistoryRecoveryView
               vaultState={state}
               activeBranchId="branch-main"
-              isRestoring={false}
               progress={null}
-              lastRestoreReport={null}
               statusBanner={null}
-              onRestoreFullProject={async (id) =>
-                setMessage("Full copy requested: " + id)
-              }
-              onRestoreSelectedFiles={async (id, paths) =>
-                setMessage(
-                  "Selected copy requested: " + id + " · " + paths.join(", "),
-                )
-              }
               onVerifySingleRevisionObjects={noop}
               onCancelOperation={() => {}}
               onGoToChanges={() => setView("changes")}

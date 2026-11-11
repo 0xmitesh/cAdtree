@@ -451,47 +451,9 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   await waitFor(() => assert.equal(copied.length, 2));
   assert.equal(copied[1], copied[0]); // inspecting Main while Case A is active
   assert.equal(currentBranchId(ui), branch.createdBranchId);
-  assert.ok(ui.getByText(/Restore a copy for the exact historical bytes/));
-  fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
-  await waitFor(() => assert.ok(ui.getByRole("dialog")));
-  fireEvent.click(
-    within(ui.getByRole("dialog")).getByRole("button", {
-      name: "Restore copy",
-    }),
-  );
-  await idle(ui);
-  fireEvent.click(ui.getByText(/Restored files — copy paths/));
-  fireEvent.click(
-    ui.getByRole("button", {
-      name: `Copy folder path — Restored copy · ${filePath}`,
-    }),
-  );
-  await waitFor(() => assert.equal(copied.length, 3));
-  assert.match(copied[2], /\\recoveries\\copy-[^\\]+\\Parts\\内側$/);
-  picks.push(
-    nativeDirectory(new InMemoryFileSystemAdapter("External recovery")),
-  );
-  fireEvent.click(ui.getByRole("button", { name: "Restore project copy" }));
-  await waitFor(() => assert.ok(ui.getByRole("dialog")));
-  const externalReview = within(ui.getByRole("dialog"));
-  fireEvent.click(
-    externalReview.getByRole("checkbox", {
-      name: "Choose an external destination instead",
-    }),
-  );
-  fireEvent.click(
-    externalReview.getByRole("button", { name: "Choose destination" }),
-  );
-  await idle(ui);
-  assert.ok(
-    ui.getByText(
-      /full local path is not known for this external destination/,
-    ),
-  );
-  assert.ok(
-    !ui.queryByRole("button", { name: /^Copy folder path — Restored copy/ }),
-  );
-  assert.equal(copied.length, 3);
+  assert.ok(ui.getByText(/Export this\s+revision for the exact historical bytes/));
+  assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
+  assert.equal(copied.length, 2);
   assert.equal(
     (await openWorkspace(root)).projects[0].project!.vaultState.revisions
       .length,

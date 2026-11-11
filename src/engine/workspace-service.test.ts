@@ -11,7 +11,6 @@ import {
   importProject,
   resolveManagedProject,
   createManagedBranch,
-  recoverManagedCopy,
   adoptProject,
   WorkspaceOperationError,
   managementChecksum,
@@ -74,7 +73,7 @@ test("name-only project creation reopens an empty Main, then captures CAD files 
   const reopened = (await openWorkspace(root)).projects[0].project!;
   assert.equal(reopened.record.projectId, project.record.projectId);
   assert.deepEqual(await reopened.workingFolders["branch-main"]!.listEntries(), []);
-  assert.ok(await root.hasDirectory([...project.record.containerPath.split("/"), "recoveries"]));
+  assert.equal(await root.hasDirectory([...project.record.containerPath.split("/"), "recoveries"]), false);
   await reopened.workingFolders["branch-main"]!.writeFileBytes(["Part.SLDPRT"], new Uint8Array([0, 255, 42]));
   const saved = await captureRevision(reopened.workingFolders["branch-main"]!, reopened.vaultDir, {
     branchId: "branch-main", summary: "First design", notes,
@@ -170,7 +169,7 @@ test("two projects import and reopen from one root with exact independent leaves
   }
 });
 
-test("managed Main and three cases diverge with automatic branch/recovery destinations and branch-only inventories", async () => {
+test("managed Main and three cases diverge with automatic branch destinations and branch-only inventories", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   let project = await importProject(root, await cadSource(), "Actuator");
@@ -221,26 +220,6 @@ test("managed Main and three cases diverge with automatic branch/recovery destin
   assert.equal(
     await snapshot(project.workingFolders["branch-main"]!),
     mainBefore,
-  );
-  const full = await recoverManagedCopy(
-    root,
-    project.record.containerPath,
-    first.revision.manifest.revisionId,
-    undefined,
-  );
-  const selected = await recoverManagedCopy(
-    root,
-    project.record.containerPath,
-    first.revision.manifest.revisionId,
-    ["Parts/Pärt.SLDPRT"],
-  );
-  assert.notEqual(full.relativePath, selected.relativePath);
-  const destination = await root.getDirectory(full.relativePath.split("/"));
-  assert.equal(await snapshot(destination), await snapshot(await cadSource()));
-  const selectedDir = await root.getDirectory(selected.relativePath.split("/"));
-  assert.deepEqual(
-    (await readVerifiedInventory(selectedDir)).files.map((file) => file.path),
-    ["Parts/Pärt.SLDPRT"],
   );
   assert.equal((await openExistingVault(project.vaultDir)).revisions.length, 6);
   assert.equal((await openExistingVault(project.vaultDir)).branches.length, 4);
@@ -522,15 +501,6 @@ test("malformed mappings, unknown schemas, permission loss, and overlapping bran
         name: "Blocked",
         reason: "Must fail early",
       }),
-      /read-only/,
-    );
-    await assert.rejects(
-      recoverManagedCopy(
-        root,
-        project.record.containerPath,
-        first.revision.manifest.revisionId,
-        undefined,
-      ),
       /read-only/,
     );
   }
@@ -1045,17 +1015,6 @@ test("a renamed project with a new case imports into another workspace as a read
   const reopened = (await openWorkspace(other)).projects;
   assert.equal(reopened.length, 1);
   assert.equal(reopened[0].status, "ready");
-});
-
-test("recovery copies on a renamed project land under its current folder and the project reopens ready", async () => {
-  const { root, first, renamed } = await renamedProjectWithCase();
-  const recovered = await recoverManagedCopy(root, renamed, first.revision.manifest.revisionId, undefined);
-  assert.ok(recovered);
-  const recoveries = await root.getDirectory([...renamed.split("/"), "recoveries"]);
-  assert.equal((await recoveries.listEntries()).length, 1);
-  const entry = (await openWorkspace(root)).projects[0];
-  assert.equal(entry.status, "ready");
-  assert.equal(entry.containerPath, renamed);
 });
 
 test("import rejects a source whose branch locations share a leaf case-insensitively and writes nothing", async () => {

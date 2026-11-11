@@ -346,17 +346,15 @@ export function FilePathActions({
   filePath,
   resolve,
   historicalBranch,
-  restored = false,
 }: {
   filePath: string;
   resolve: ResolveFilePath;
   historicalBranch?: string;
-  restored?: boolean;
 }) {
   const context = useContext(Shortcuts);
   if (!context) return null;
   const label = "Copy folder path";
-  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : restored ? "Restored copy · " : ""}${filePath}`;
+  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : ""}${filePath}`;
   return (
     <div
       className={`file-path-actions${historicalBranch ? " historical" : ""}`}

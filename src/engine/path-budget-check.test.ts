@@ -4,7 +4,7 @@ import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from './fs
 import { captureRevision } from './revision-service';
 import { createHome, createHomeWorkspace, bringWorkspaceIntoHome, openHome } from './home-service';
 import {
-  createProject, importProject, createWorkspace, createManagedBranch, recoverManagedCopy, openWorkspace,
+  createProject, importProject, createWorkspace, createManagedBranch, openWorkspace,
 } from './workspace-service';
 import {
   BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, PROJECT_NAME_ALLOWANCE, WORKSPACE_NAME_ALLOWANCE, PathBudgetError, WARN_PATH_CHARS,
@@ -15,7 +15,6 @@ import {
 const WIN_HOME = 'C:\\Users\\Mitesh\\Documents\\Cadtree';
 const POSIX_HOME = '/Users/mitesh/Cadtree';
 const notes = { problem: 'p', modification: 'm', observations: 'o' };
-const COPY_FOLDER_LENGTH = 'copy-'.length + 36;
 
 async function tree(dir: FileSystemDirectoryAdapter, prefix = ''): Promise<string[]> {
   const out: string[] = [];
@@ -162,7 +161,7 @@ async function sourceWorkspaceWithFile(file: string[]) {
 }
 
 test('bringing a workspace in checks each project with its real name and longest file', async () => {
-  const { source } = await sourceWorkspaceWithFile(['Parts', `${'d'.repeat(120)}.SLDPRT`]);
+  const { source } = await sourceWorkspaceWithFile(['Parts', `${'d'.repeat(132)}.SLDPRT`]);
   const home = await freshHome();
   const before = await tree(home);
   // The workspace name alone fits easily; the adopted project's deep file does not.
@@ -189,7 +188,7 @@ async function freshWorkspace() {
 }
 const projectRest = (leaf: string, file = '') =>
   Math.max(1 + 'projects'.length + 1 + leaf.length + 1 + internalReserve(),
-    file ? 1 + 'projects'.length + 1 + leaf.length + 1 + 'recoveries'.length + 1 + COPY_FOLDER_LENGTH + 1 + file.length + CRSWAP_CHARS : 0);
+    file ? 1 + 'projects'.length + 1 + leaf.length + 1 + 'working'.length + 1 + CASE_ALLOWANCE + 1 + file.length + CRSWAP_CHARS : 0);
 
 for (const [label, base] of [['Windows', WIN_HOME], ['POSIX', POSIX_HOME]] as const) {
   test(`project creation: ok, warn and block (${label} address)`, async () => {
@@ -280,7 +279,7 @@ test('unknown workspace address: project creation is unchecked and proceeds', as
   assert.equal(project.pathBudget!.status, 'unchecked');
 });
 
-// ---- 3. design case and 4. recovery ----------------------------------------------------------
+// ---- 3. design case ----------------------------------------------------------
 
 async function projectWithRevision(file = 'Parts/Collar.SLDPRT') {
   const root = await freshWorkspace();
@@ -294,8 +293,6 @@ async function projectWithRevision(file = 'Parts/Collar.SLDPRT') {
 }
 const caseRest = (containerPath: string, folder: string, file: string) =>
   1 + containerPath.length + 1 + 'working'.length + 1 + folder.length + 1 + file.length + CRSWAP_CHARS;
-const recoveryRest = (containerPath: string, file: string) =>
-  1 + containerPath.length + 1 + 'recoveries'.length + 1 + COPY_FOLDER_LENGTH + 1 + file.length + CRSWAP_CHARS;
 
 for (const [label, base] of [['Windows', WIN_HOME], ['POSIX', POSIX_HOME]] as const) {
   test(`design case: ok, warn and block (${label} address)`, async () => {
@@ -362,32 +359,6 @@ test('design case checks the deepest file of the source revision', async () => {
   assert.deepEqual(await tree(root), before);
 });
 
-test('recovery copy: ok, warn and block; whole revision and selected files', async () => {
-  const { root, revisionId, containerPath, file } = await projectWithRevision();
-  const run = (target: number, selected?: string[]) =>
-    recoverManagedCopy(root, containerPath, revisionId, selected, {
-      budget: { workspaceAddress: addressFor(WIN_HOME, recoveryRest(containerPath, file), target) },
-    });
-  const ok = await run(150);
-  assert.equal(ok.pathBudget.status, 'ok');
-  assert.equal(ok.pathBudget.requiredLength, 150);
-  const warned = await run(230, [file]);
-  assert.equal(warned.pathBudget.status, 'warn');
-
-  const before = await tree(root);
-  await assert.rejects(run(BLOCK_PATH_CHARS + 1), (error) => {
-    assert.ok(error instanceof PathBudgetError);
-    assert.equal(error.shorten, 'project');
-    assert.equal(error.checkedName, 'Gripper');
-    assert.ok(/recoveries\\copy-[0-9a-f-]{36}\\Parts\\Collar\.SLDPRT\.crswap$/.test(error.worstPath));
-    return true;
-  });
-  assert.deepEqual(await tree(root), before);
-
-  const unchecked = await recoverManagedCopy(root, containerPath, revisionId, undefined);
-  assert.equal(unchecked.pathBudget.status, 'unchecked');
-});
-
 // ---- existing projects are never blocked -----------------------------------------------------
 
 test('an existing over-limit project still opens and saves', async () => {
@@ -419,7 +390,7 @@ test('an import whose deepest item is an empty folder blocks; folders get no .cr
   await source.writeFileText(['a.SLDPRT'], 'cad');
   const deepDir = `Deep/${'x'.repeat(110)}`;
   await source.getDirectory(deepDir.split('/'), { create: true });
-  const rest = 1 + 'projects'.length + 1 + 'Imported'.length + 1 + 'recoveries'.length + 1 + COPY_FOLDER_LENGTH + 1 + deepDir.length; // no .crswap
+  const rest = 1 + 'projects'.length + 1 + 'Imported'.length + 1 + 'working'.length + 1 + CASE_ALLOWANCE + 1 + deepDir.length; // no .crswap
   const atLimit = addressFor(WIN_HOME, rest, BLOCK_PATH_CHARS);
   const before = await tree(root);
   await assert.rejects(importProject(root, source, 'Imported', { budget: { workspaceAddress: `${atLimit}W` } }), (error) => {

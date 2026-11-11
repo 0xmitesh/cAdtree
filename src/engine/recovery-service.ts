@@ -23,10 +23,6 @@ export interface RestoreRevisionOptions {
   signal?: AbortSignal;
 }
 
-export interface RestoreSelectedFilesOptions extends RestoreRevisionOptions {
-  selectedPaths: string[];
-}
-
 const RECOVERY_MARKER_FILENAME = '_CADTREE_RECOVERY_INCOMPLETE.txt';
 
 /**
@@ -45,24 +41,20 @@ export function computeRequiredParentDirectories(filePaths: string[]): string[] 
 }
 
 async function executeVerifiedRecovery(params: {
-  kind: 'full_project' | 'selected_files';
   vaultDir: FileSystemDirectoryAdapter;
   destinationDir: FileSystemDirectoryAdapter;
   workingDir?: FileSystemDirectoryAdapter | null;
   workingFolders?: WorkingFolderBindings;
   revisionId: string;
-  selectedPaths?: string[];
   onProgress?: (progress: ProgressUpdate) => void;
   signal?: AbortSignal;
 }): Promise<RestoreResult> {
   const {
-    kind,
     vaultDir,
     destinationDir,
     workingDir,
     workingFolders,
     revisionId,
-    selectedPaths,
     onProgress,
     signal,
   } = params;
@@ -120,46 +112,8 @@ async function executeVerifiedRecovery(params: {
       throw new Error('Manifest checksum verification failed before recovery.');
     }
 
-    let filesToRestore: FileEntry[];
-    let directoriesToRestore: string[];
-    let normalizedSelectedPaths: string[] | undefined;
-
-    if (kind === 'selected_files') {
-      if (!selectedPaths || selectedPaths.length === 0) {
-        throw new Error('Select at least one file to restore.');
-      }
-      const uniqueSelected = Array.from(new Set(selectedPaths.map((p) => p.trim()))).filter(
-        Boolean
-      );
-      if (uniqueSelected.length === 0) {
-        throw new Error('Select at least one valid file path to restore.');
-      }
-
-      const manifestFileMap = new Map<string, FileEntry>();
-      for (const f of manifest.files) {
-        manifestFileMap.set(f.path, f);
-      }
-
-      filesToRestore = [];
-      for (const reqPath of uniqueSelected) {
-        splitAndValidatePath(reqPath);
-        const entry = manifestFileMap.get(reqPath);
-        if (!entry) {
-          throw new Error(
-            `Selected file "${reqPath}" does not exist in Rev ${String(
-              manifest.displayNumber
-            ).padStart(3, '0')}.`
-          );
-        }
-        filesToRestore.push(entry);
-      }
-      filesToRestore.sort((a, b) => a.path.localeCompare(b.path));
-      normalizedSelectedPaths = filesToRestore.map((f) => f.path);
-      directoriesToRestore = computeRequiredParentDirectories(normalizedSelectedPaths);
-    } else {
-      filesToRestore = [...manifest.files];
-      directoriesToRestore = [...manifest.directories];
-    }
+    const filesToRestore: FileEntry[] = [...manifest.files];
+    const directoriesToRestore: string[] = [...manifest.directories];
 
     // Validate all directory and file paths and check for case-insensitive collisions
     const allPaths = [...directoriesToRestore, ...filesToRestore.map((f) => f.path)];
@@ -363,10 +317,9 @@ async function executeVerifiedRecovery(params: {
       }
 
       return {
-        kind,
+        kind: 'full_project',
         revisionId: manifest.revisionId,
         displayNumber: manifest.displayNumber,
-        ...(normalizedSelectedPaths ? { selectedPaths: normalizedSelectedPaths } : {}),
         restoredFilesCount: filesToRestore.length,
         restoredDirectoriesCount: directoriesToRestore.length,
         verifiedBytes,
@@ -385,14 +338,12 @@ async function executeVerifiedRecovery(params: {
             const errorMsg = err instanceof Error ? err.message : String(err);
             await destinationDir.writeFileText(
               [RECOVERY_MARKER_FILENAME],
-              `WARNING: cAdtree ${
-                kind === 'selected_files' ? 'selected-files' : 'full-project'
-              } recovery of Revision ${manifest.displayNumber} (${
+              `WARNING: cAdtree restore of Revision ${manifest.displayNumber} (${
                 manifest.revisionId
               }) DID NOT COMPLETE.\n` +
                 `Timestamp: ${new Date().toISOString()}\n` +
                 `Reason: ${errorMsg}\n` +
-                `Do NOT open these files in SolidWorks. Delete this incomplete folder and retry recovery into a fresh folder.\n`,
+                `Do NOT open these files in SolidWorks. Delete this incomplete folder and retry into a fresh folder.\n`,
               { exclusive: true }
             );
           }
@@ -411,22 +362,5 @@ async function executeVerifiedRecovery(params: {
 export async function restoreRevisionToFolder(
   options: RestoreRevisionOptions
 ): Promise<RestoreResult> {
-  return executeVerifiedRecovery({
-    ...options,
-    kind: 'full_project',
-  });
+  return executeVerifiedRecovery(options);
 }
-
-/**
- * Restores only user-selected files (and their necessary parent directories) from a
- * committed revision into a fresh destination folder as a partial project copy.
- */
-export async function restoreSelectedFilesToFolder(
-  options: RestoreSelectedFilesOptions
-): Promise<RestoreResult> {
-  return executeVerifiedRecovery({
-    ...options,
-    kind: 'selected_files',
-  });
-}
-

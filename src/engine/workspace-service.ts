@@ -27,13 +27,12 @@ import {
 import { createDesignBranch } from "./branch-service";
 import {
   CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, caseWorstPath, checkWorstPath, joinAddress, longestOf, longestRelativePaths,
-  projectWorstPath, recoveryWorstPath, type PathBudgetInput, type PathBudgetReport,
+  projectWorstPath, type PathBudgetInput, type PathBudgetReport,
 } from "./path-budget";
 import { componentWriteBlock } from './component-identity';
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
 import {
   restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
 } from "./recovery-service";
 import { MAIN_BRANCH_ID, type BranchRecord, type VaultState } from "./types";
 
@@ -755,66 +754,6 @@ export async function createManagedBranch(
   };
 }
 
-export async function recoverManagedCopy(
-  root: FileSystemDirectoryAdapter,
-  containerPath: string,
-  revisionId: string,
-  selectedPaths: string[] | undefined,
-  options: WorkspaceCreateOptions = {},
-) {
-  const first = await resolveManagedProject(root, containerPath);
-  return withProjectWriterLock(first.record.projectId, async () => {
-    const project = await resolveManagedProject(root, containerPath);
-    assertWritable(project);
-    throwIfCancelled(options.signal);
-    const copyFolder = `copy-${crypto.randomUUID()}`;
-    const relativePath = `${containerPath}/recoveries/${copyFolder}`;
-    // Path budget: the folder name is final and nothing has been written yet.
-    let pathBudget: PathBudgetReport = UNCHECKED_PATH_BUDGET;
-    if (options.budget?.workspaceAddress) {
-      const manifest = project.vaultState.revisions.find((r) => r.manifest.revisionId === revisionId)?.manifest;
-      const files = selectedPaths ?? manifest?.files.map((f) => f.path) ?? [];
-      const dirs = selectedPaths ? [] : manifest?.directories ?? [];
-      pathBudget = checkWorstPath(
-        recoveryWorstPath(joinAddress(options.budget.workspaceAddress, containerPath), copyFolder, longestOf(files), longestOf(dirs)),
-        "project",
-        // The copy folder name is fixed; the project folder name is what the user can shorten.
-        containerPath.split("/").at(-1)!,
-      );
-    }
-    const recoveryParent = await resolve(
-      root,
-      `${containerPath}/recoveries`,
-      containerPath,
-    );
-    const destination = await recoveryParent.getDirectory(
-      [relativePath.split("/").at(-1)!],
-      { create: true, exclusiveCreate: true },
-    );
-    try {
-      const restoreOptions = {
-        ...options,
-        vaultDir: project.vaultDir,
-        workingFolders: project.workingFolders,
-        destinationDir: destination,
-        revisionId,
-      };
-      const result = selectedPaths
-        ? await restoreSelectedFilesToFolder({
-            ...restoreOptions,
-            selectedPaths,
-          })
-        : await restoreRevisionToFolder(restoreOptions);
-      return { result, relativePath, pathBudget };
-    } catch (error) {
-      throw new WorkspaceOperationError(
-        error instanceof Error ? error.message : String(error),
-        relativePath,
-      );
-    }
-  });
-}
-
 function assertWritable(project: ManagedProject) {
   if (!project.ready || project.issues.length)
     throw new Error(
@@ -871,7 +810,6 @@ async function allocateProject(
       { exclusive: true },
     );
     await container.getDirectory(["working"], { create: true });
-    await container.getDirectory(["recoveries"], { create: true });
     return { path, container, pathBudget };
   } catch (error) {
     throw new WorkspaceOperationError(

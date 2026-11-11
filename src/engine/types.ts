@@ -203,10 +203,9 @@ export interface CaptureRevisionInput {
 }
 
 export interface RestoreResult {
-  kind: 'full_project' | 'selected_files';
+  kind: 'full_project';
   revisionId: string;
   displayNumber: number;
-  selectedPaths?: string[];
   restoredFilesCount: number;
   restoredDirectoriesCount: number;
   verifiedBytes: number;

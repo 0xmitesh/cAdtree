@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from './fs-adapter';
 import { openExistingVault } from './vault-service';
 import { captureRevision } from './revision-service';
-import { createProject, createWorkspace, createManagedBranch, recoverManagedCopy } from './workspace-service';
+import { createProject, createWorkspace, createManagedBranch } from './workspace-service';
 import { prepareApplyPreview, buildApplyPreview, type PreviewChoice } from './apply-preview';
 import {
   applicationReview, prepareApplication, applyPreparedApplication, recoverApplication,
@@ -52,13 +52,13 @@ test('projectWorstCase for the example project path', () => {
   // No user files: the internal reserve decides.
   assert.equal(projectWorstCase({ projectPath: EXAMPLE }), 70 + 1 + reserve);
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 0 }), 70 + 1 + reserve);
-  // A very long CAD path: the recovery-copy prefix (54) is larger than working/<32>/ (42): 70 + 54 + 200 + 7 = 331.
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 54 + 200 + 7);
+  // A very long CAD path is under working/<32>/ (42): 70 + 42 + 200 + 7 = 319.
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 42 + 200 + 7);
   // A short one is dominated by the internal reserve.
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 40 }), 70 + 1 + reserve);
   // The case allowance is configurable, but never below 4 ("main").
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 10 }), 70 + 54 + 250 + 7);
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 0 }), 70 + 54 + 250 + 7);
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 10 }), 70 + 9 + 10 + 1 + 250 + 7);
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 250, caseAllowance: 0 }), 70 + 9 + 4 + 1 + 250 + 7);
   // Classification of the results.
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: EXAMPLE })), 'ok');
   assert.equal(classifyPathLength(projectWorstCase({ projectPath: 95 })), 'warn');
@@ -79,13 +79,20 @@ test('invalid numeric input throws instead of classifying as ok', () => {
   assert.equal(classifyPathLength(0), 'ok');
 });
 
-test('projectWorstCase covers user files restored into recoveries/copy-<uuid>', () => {
-  const recoveryPrefix = '/recoveries/copy-'.length + 36 + 1;
-  assert.equal(recoveryPrefix, 54);
-  // Beats the default working/<32>/ prefix (42).
-  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 54 + 200 + 7);
+test('projectWorstCase covers user files under working/<case>/', () => {
+  const workingPrefix = '/working/'.length + 32 + 1;
+  assert.equal(workingPrefix, 42);
+  assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200 }), 70 + 42 + 200 + 7);
   // A larger case allowance can still win.
   assert.equal(projectWorstCase({ projectPath: EXAMPLE, longestUserPath: 200, caseAllowance: 100 }), 70 + 9 + 100 + 1 + 200 + 7);
+});
+
+test('the incomplete marker of a failed design case is a covered internal path within the reserve', () => {
+  const marker = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'design case incomplete marker')!;
+  assert.equal(marker.segments.join('/'), `working/${'x'.repeat(32)}/_CADTREE_RECOVERY_INCOMPLETE.txt`);
+  assert.equal(marker.reserveLength, 'working/'.length + 32 + 1 + '_CADTREE_RECOVERY_INCOMPLETE.txt'.length + CRSWAP_CHARS);
+  assert.ok(marker.reserveLength <= internalReserve());
+  assert.ok(INTERNAL_PATH_TEMPLATES.every((t) => !/recoveries\//.test(t.shape)));
 });
 
 test('internal templates are self-consistent', () => {
@@ -117,6 +124,7 @@ test('drift: every path written by a full workflow is covered by a template and 
   const files = new Set<string>();
   const dirs = new Set<string>();
   let failEvent4 = false;
+  let failCaseFile = false;
   const rel = (full: string) => {
     const prefix = `Workspace/${containerPath}/`;
     return containerPath && full.startsWith(prefix) ? full.slice(prefix.length) : undefined;
@@ -125,6 +133,7 @@ test('drift: every path written by a full workflow is covered by a template and 
     onBeforeWrite: (full) => {
       const r = rel(full);
       if (r !== undefined) files.add(r);
+      if (failCaseFile && full.includes('/working/Failing case/') && full.endsWith('Bracket.SLDPRT')) throw new Error('disk full while restoring');
       if (failEvent4 && full.includes('/events/') && full.endsWith('000004.json')) throw new Error('lost final publication');
     },
   });
@@ -215,12 +224,16 @@ test('drift: every path written by a full workflow is covered by a template and 
   }, options);
   await snapshot();
 
-  // Step 9: a restored copy under recoveries/copy-<uuid>.
-  await recoverManagedCopy(root, containerPath, firstId, undefined);
+  // Step 9: a design case whose creation fails part-way keeps its folder and writes the incomplete marker.
+  failCaseFile = true;
+  await assert.rejects(
+    createManagedBranch(root, containerPath, { sourceRevisionId: firstId, name: 'Failing case', reason: 'Disk fills up' }),
+  );
+  failCaseFile = false;
   await snapshot();
 
   // Assertions.
-  const isUserContent = (p: string) => /^working\/[^/]+\/.+/.test(p) || /^recoveries\/copy-[^/]+\/.+/.test(p);
+  const isUserContent = (p: string) => /^working\/[^/]+\/.+/.test(p) && !/^working\/[^/]+\/_CADTREE_RECOVERY_INCOMPLETE\.txt$/.test(p);
   const internalFiles = [...files].filter((p) => !isUserContent(p));
   const internalDirs = [...dirs].filter((p) => !isUserContent(p));
   assert.ok(internalFiles.length > 40 && internalDirs.length > 10, 'the workflow must have written a realistic number of paths');
@@ -244,7 +257,7 @@ test('drift: every path written by a full workflow is covered by a template and 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
   // The deepest templates must actually be reached by this workflow.
-  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object']) {
+  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker']) {
     assert.ok(used.has(label), `workflow did not exercise: ${label}`);
   }
 });
