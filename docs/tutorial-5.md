@@ -159,7 +159,7 @@ Asset: [step-6-bring-back-action.png](../public/tutorials/compare-apply-recover/
 
 Visual 2 (cAdtree): **2. Review the pre-selected changes, give the reason and click Prepare bring-back.**
 
-Alt text: Real Bring back an earlier revision preview shows the pre-selected differences between Main and Rev 003 and the Engineering reason for bringing this back field.
+Alt text: Real Make Main match Rev 003 review shows Latest saved Rev 007 and Bring back Rev 003 cards, the count 1 file brought back, 2 replaced, 1 removed, the Engineering reason for bringing this back field and four pre-selected changes: Bracket and Mount replaced, Rib removed, Spacer brought back.
 
 Asset: [step-6-bring-back-review.png](../public/tutorials/compare-apply-recover/step-6-bring-back-review.png)
 
@@ -283,9 +283,9 @@ All paths below are under `public/tutorials/compare-apply-recover/`.
 | step-5-confirm-actions.png | Real cAdtree | `fc346c5222344ab46e1357931a733bb29f7c1720364c3b2414e95ec961cbf4c4` |
 | step-5-confirm-apply.png | Real cAdtree | `25125411e8892f257984b57a335896bc125c1fc452360f03ecf8d686aa21c123` |
 | step-5-saved-main.png | Real cAdtree | `fab4dc005a405415daa0bf8a8f24e80e5d9a10e844a5ca68a9f7b377ac8ed81e` |
-| step-6-bring-back-action.png | Real cAdtree | `3df72cf4e4c6293221fec77e277431f6a3799e3ff324215f0e7a4e44d59ae687` |
-| step-6-bring-back-review.png | Real cAdtree | `4d4b8e88ae9c20ea176c93424f610a48e249567346479de0cdaf37298e04e3f0` |
-| step-6-brought-back.png | Real cAdtree | `a0e568a34a05513c014a6dabf3235df4b510079311ec7ec48f6b0e4d7457627a` |
+| step-6-bring-back-action.png | Real cAdtree | `2e0866e80bc2744ce44536baadc453af48e3c98609f7e2ac7cc2d770e7f5151b` |
+| step-6-bring-back-review.png | Real cAdtree | `9c98cdaa3cafe04151ad8bbb253eb56b14674e38a3937be97c453b02dccedbe1` |
+| step-6-brought-back.png | Real cAdtree | `444c53045d3eb46864e94a441fcd7085befb19a62d485d408bdc7decb2cb5bc6` |
 | step-7-archive-action.png | Real cAdtree | `0622daba6096575418e6b0899b767fd6411bc40527bffa9a75f4aa6eed7442b0` |
 | step-7-archive-confirmation.png | Real cAdtree | `6429023f4287af052a24ea743511a19c10d1a787899c062b4cacaece222ce572` |
 | step-7-archived-case.png | Real cAdtree | `728115309712f28595495567a9c0762eb40b1607362e24a693082fbf0f160c23` |

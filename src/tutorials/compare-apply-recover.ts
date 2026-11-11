@@ -157,7 +157,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
         },
         {
           src: "/tutorials/compare-apply-recover/step-6-bring-back-review.png",
-          alt: "Real Bring back an earlier revision preview shows the pre-selected differences between Main and Rev 003 and the Engineering reason for bringing this back field.",
+          alt: "Real Make Main match Rev 003 review shows Latest saved Rev 007 and Bring back Rev 003 cards, the count 1 file brought back, 2 replaced, 1 removed, the Engineering reason for bringing this back field and four pre-selected changes: Bracket and Mount replaced, Rib removed, Spacer brought back.",
           caption: "2. Review the pre-selected changes, give the reason and click Prepare bring-back.",
           kind: "cadtree",
         },
