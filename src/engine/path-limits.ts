@@ -26,11 +26,13 @@ export function joinAddress(address: string, ...segments: string[]): string {
 }
 
 export type PathOperation = 'folder' | 'file';
+/** Which step failed: a folder create, a file create (getFileHandle), or a file write (createWritable/write/close). */
+export type PathStage = 'folder' | 'file-create' | 'file-write';
 
-/** Measured with Chrome (full absolute path, UTF-16 units). A file write adds the 7-char `.crswap` sibling. */
+/** FAILING lengths measured with Chrome (full absolute path, UTF-16 units; a write adds the 7-char `.crswap`). Used for detection only. */
 export const REAL_LIMITS = {
-  windows: { folder: 248, file: 252 },
-  posix: { folder: 1024, file: 1017 },
+  windows: { folder: 248, 'file-create': 252, 'file-write': 252 },
+  posix: { folder: 1024, 'file-create': 1024, 'file-write': 1017 },
 } as const;
 
 /** Thrown when a create or write failed opaquely and the real path is at or over the platform limit. */
@@ -38,12 +40,13 @@ export class PathTooLongError extends Error {
   constructor(
     readonly fullPath: string,
     readonly length: number,
-    readonly limit: number,
+    /** The longest path this computer allows for this operation (one less than the failing length). */
+    readonly maxAllowed: number,
     readonly operation: PathOperation,
     cause?: unknown,
   ) {
     super(
-      `Path too long: ${fullPath} (${length} characters; this computer's limit is ${limit}). ` +
+      `Path too long: ${fullPath} (${length} characters; this computer's limit is ${maxAllowed}). ` +
       `Shorten the folder or file names along this path, or move your Cadtree home closer to the drive ` +
       `(e.g. ${addressSeparator(fullPath) === '/' ? '/Users/<you>/Cadtree' : 'C:\\Cadtree'}).`,
       { cause },
@@ -71,10 +74,12 @@ function isOpaquePathFailure(error: unknown): boolean {
 export function diagnosePathFailure(
   error: unknown,
   fullPath: string | undefined,
-  operation: PathOperation,
+  stage: PathStage,
 ): unknown {
   if (!fullPath || !isOpaquePathFailure(error)) return error;
   const limits = addressSeparator(fullPath) === '\\' ? REAL_LIMITS.windows : REAL_LIMITS.posix;
-  const limit = limits[operation];
-  return fullPath.length >= limit ? new PathTooLongError(fullPath, fullPath.length, limit, operation, error) : error;
+  const failsAt = limits[stage];
+  return fullPath.length >= failsAt
+    ? new PathTooLongError(fullPath, fullPath.length, failsAt - 1, stage === 'folder' ? 'folder' : 'file', error)
+    : error;
 }

@@ -413,11 +413,16 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     }
     const fullPath = this.pathOf(pathSegments);
     let writable: FileSystemWritableFileStream;
+    let fileHandle: FileSystemFileHandle;
     try {
-      const fileHandle = await dir.getFileHandle(leafName, { create: true });
+      fileHandle = await dir.getFileHandle(leafName, { create: true });
+    } catch (err) {
+      throw diagnosePathFailure(err, fullPath, 'file-create');
+    }
+    try {
       writable = await fileHandle.createWritable();
     } catch (err) {
-      throw diagnosePathFailure(err, fullPath, 'file');
+      throw diagnosePathFailure(err, fullPath, 'file-write');
     }
     const reader = stream.getReader();
     let bytesWritten = 0;
@@ -443,7 +448,7 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
       } catch {
         // Ignore abort cleanup error
       }
-      throw diagnosePathFailure(err, fullPath, 'file');
+      throw diagnosePathFailure(err, fullPath, 'file-write');
     } finally {
       reader.releaseLock();
     }
@@ -460,11 +465,16 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     }
     const fullPath = this.pathOf(pathSegments);
     let writable: FileSystemWritableFileStream;
+    let fileHandle: FileSystemFileHandle;
     try {
-      const fileHandle = await dir.getFileHandle(leafName, { create: true });
+      fileHandle = await dir.getFileHandle(leafName, { create: true });
+    } catch (err) {
+      throw diagnosePathFailure(err, fullPath, 'file-create');
+    }
+    try {
       writable = await fileHandle.createWritable();
     } catch (err) {
-      throw diagnosePathFailure(err, fullPath, 'file');
+      throw diagnosePathFailure(err, fullPath, 'file-write');
     }
     try {
       await writable.write(data as unknown as BufferSource);
@@ -475,7 +485,7 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
       } catch {
         // Ignore
       }
-      throw diagnosePathFailure(err, fullPath, 'file');
+      throw diagnosePathFailure(err, fullPath, 'file-write');
     }
   }
 
@@ -582,7 +592,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     this.simulatedFailures.push({ path: fullPath, error });
   }
 
-  private maybeFail(fullPath: string | undefined, operation: 'folder' | 'file'): void {
+  private maybeFail(fullPath: string | undefined, operation: 'folder' | 'file-create' | 'file-write'): void {
     if (fullPath === undefined) return;
     const hit = this.simulatedFailures.find((f) => f.path === fullPath);
     if (hit) throw diagnosePathFailure(hit.error, fullPath, operation);
@@ -876,7 +886,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     const { signal, exclusive } = normalizeWriteOptions(signalOrOptions);
     const fullPath = this.getFullPath(pathSegments);
     await this.hooks.onBeforeWrite?.(fullPath);
-    this.maybeFail(this.pathOf(pathSegments), 'file');
+    this.maybeFail(this.pathOf(pathSegments), 'file-write');
 
     const { dir, leafName } = this.resolveParentNode(pathSegments, true);
     if (exclusive) {
@@ -940,7 +950,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     this.assertWritePermission();
     const fullPath = this.getFullPath(pathSegments);
     await this.hooks.onBeforeWrite?.(fullPath);
-    this.maybeFail(this.pathOf(pathSegments), 'file');
+    this.maybeFail(this.pathOf(pathSegments), 'file-write');
 
     const { dir, leafName } = this.resolveParentNode(pathSegments, true);
     if (options?.exclusive) {

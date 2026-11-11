@@ -71,7 +71,7 @@ test('PathTooLongError is exported from path-budget and carries the details', ()
   const cause = dom('InvalidStateError');
   const e = new PathTooLongError('C:\\x', 3, 2, 'folder', cause);
   assert.equal(e.cause, cause);
-  assert.deepEqual([e.fullPath, e.length, e.limit, e.operation], ['C:\\x', 3, 2, 'folder']);
+  assert.deepEqual([e.fullPath, e.length, e.maxAllowed, e.operation], ['C:\\x', 3, 2, 'folder']);
 });
 
 for (const errName of ['InvalidStateError', 'NotFoundError']) {
@@ -83,7 +83,7 @@ for (const errName of ['InvalidStateError', 'NotFoundError']) {
     await assert.rejects(root.getDirectory(['Acme', 'projects'], { create: true }), (error) => {
       assert.ok(error instanceof PathTooLongError);
       assert.equal(error.operation, 'folder');
-      assert.equal(error.limit, 248);
+      assert.equal(error.maxAllowed, 247);
       assert.equal(error.length, 248);
       assert.equal(error.fullPath, joinAddress(address, 'Acme', 'projects'));
       assert.ok((error.cause as DOMException).name === errName);
@@ -106,7 +106,7 @@ test('folder create just under the limit rethrows the original error (short path
 test('POSIX folder limit is 1024', async () => {
   const rule: Rule = (op) => (op === 'dir' ? dom('InvalidStateError') : undefined);
   const at = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'x', 1024) });
-  await assert.rejects(at.getDirectory(['x'], { create: true }), (e) => e instanceof PathTooLongError && e.limit === 1024 && e.fullPath.includes('/'));
+  await assert.rejects(at.getDirectory(['x'], { create: true }), (e) => e instanceof PathTooLongError && e.maxAllowed === 1023 && e.fullPath.includes('/'));
   const below = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'x', 1023) });
   await assert.rejects(below.getDirectory(['x'], { create: true }), (e) => e instanceof DOMException);
 });
@@ -114,13 +114,13 @@ test('POSIX folder limit is 1024', async () => {
 for (const op of ['file', 'writable', 'write', 'close'] as const) {
   test(`file ${op} failure at the real limit becomes PathTooLongError (Windows write and stream)`, async () => {
     const rule: Rule = (o) => (o === op ? dom('InvalidStateError') : undefined);
-    const address = addressFor(WIN, 'Parts/Collar.SLDPRT', REAL_LIMITS.windows.file);
+    const address = addressFor(WIN, 'Parts/Collar.SLDPRT', REAL_LIMITS.windows['file-write']);
     const root = new RealFileSystemAdapter(fakeHandle(rule), { address });
     const expected = joinAddress(address, 'Parts', 'Collar.SLDPRT');
     const check = (error: unknown) => {
       assert.ok(error instanceof PathTooLongError);
       assert.equal(error.operation, 'file');
-      assert.equal(error.limit, 252);
+      assert.equal(error.maxAllowed, 251);
       assert.equal(error.fullPath, expected);
       return true;
     };
@@ -135,7 +135,7 @@ for (const op of ['file', 'writable', 'write', 'close'] as const) {
 test('POSIX file write limit is 1017; below it the original error is kept; unknown address never guesses', async () => {
   const rule: Rule = (o) => (o === 'close' ? dom('InvalidStateError') : undefined);
   const at = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'f.bin', 1017) });
-  await assert.rejects(at.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof PathTooLongError && e.limit === 1017);
+  await assert.rejects(at.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof PathTooLongError && e.maxAllowed === 1016);
   const below = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'f.bin', 1016) });
   await assert.rejects(below.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof DOMException && e.name === 'InvalidStateError');
   const unknown = new RealFileSystemAdapter(fakeHandle(rule));
@@ -148,7 +148,7 @@ test('other errors are never converted, even on a long path', async () => {
     const root = new RealFileSystemAdapter(fakeHandle((o) => (o === 'write' ? dom(name) : undefined)), { address });
     await assert.rejects(root.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof DOMException && e.name === name);
   }
-  assert.equal(diagnosePathFailure(new Error('x'), address, 'file') instanceof PathTooLongError, false);
+  assert.equal(diagnosePathFailure(new Error('x'), address, 'file-write') instanceof PathTooLongError, false);
 });
 
 test('address is inherited by child adapters, including ones created before setAddress', async () => {
@@ -184,13 +184,13 @@ test('FileConflictError is unaffected by a long address', async () => {
 
 test('message helper words the failure for both platforms and keeps the cause', () => {
   const cause = dom('InvalidStateError');
-  const win = new PathTooLongError('C:\\a\\b', 300, 248, 'folder', cause);
+  const win = new PathTooLongError('C:\\a\\b', 300, 247, 'folder', cause);
   assert.equal(
     pathTooLongMessage(win),
-    "Path too long: C:\\a\\b (300 characters; this computer's limit is 248). Shorten the folder or file names along this path, or move your Cadtree home closer to the drive (e.g. C:\\Cadtree).",
+    "Path too long: C:\\a\\b (300 characters; this computer's limit is 247). Shorten the folder or file names along this path, or move your Cadtree home closer to the drive (e.g. C:\\Cadtree).",
   );
   assert.equal(pathTooLongMessage(win), win.message);
-  const posix = new PathTooLongError('/a/b', 1100, 1024, 'folder', cause);
+  const posix = new PathTooLongError('/a/b', 1100, 1023, 'folder', cause);
   assert.ok(pathTooLongMessage(posix).endsWith('(e.g. /Users/<you>/Cadtree).'));
   const shown = presentPathBudgetError(win) as Error;
   assert.equal(shown.message, pathTooLongMessage(win));
@@ -210,7 +210,7 @@ test('design case creation surfaces the real path when a deep user file cannot b
   });
   const containerPath = project.record.containerPath;
   const rest = `${containerPath}/working/Lighter collar/Parts/Collar.SLDPRT`;
-  const address = addressFor(WIN, rest, REAL_LIMITS.windows.file + 3);
+  const address = addressFor(WIN, rest, REAL_LIMITS.windows['file-write'] + 3);
   root.setAddress(address);
   const failing = joinAddress(address, ...rest.split('/'));
   root.simulateFailureAt(failing, dom('InvalidStateError'));
@@ -218,8 +218,16 @@ test('design case creation surfaces the real path when a deep user file cannot b
     createManagedBranch(root, containerPath, { sourceRevisionId: first.revision.manifest.revisionId, name: 'Lighter collar', reason: 'try' }),
     (error) => {
       assert.ok(error instanceof Error);
-      assert.ok(error.message.includes(`Path too long: ${failing} (${failing.length} characters; this computer's limit is 252)`), error.message);
+      assert.ok(error.message.includes(`Path too long: ${failing} (${failing.length} characters; this computer's limit is 251)`), error.message);
       return true;
     },
   );
+});
+
+test('POSIX file create fails at 1024, not 1017; the message shows the maximum allowed', async () => {
+  const rule: Rule = (o) => (o === 'file' ? dom('InvalidStateError') : undefined);
+  const at = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'f.bin', 1024) });
+  await assert.rejects(at.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof PathTooLongError && e.maxAllowed === 1023 && /limit is 1023\)/.test(e.message));
+  const mid = new RealFileSystemAdapter(fakeHandle(rule), { address: addressFor(POSIX, 'f.bin', 1020) });
+  await assert.rejects(mid.writeFileBytes(['f.bin'], new Uint8Array([1])), (e) => e instanceof DOMException);
 });

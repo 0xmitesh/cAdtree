@@ -71,9 +71,9 @@ export function presentPathBudgetError(error: unknown): unknown {
 }
 
 /** Text for a create/write that failed because the real path is too long (Item 2 P7). */
-export function pathTooLongMessage(error: Pick<PathTooLongError, "fullPath" | "length" | "limit">): string {
+export function pathTooLongMessage(error: Pick<PathTooLongError, "fullPath" | "length" | "maxAllowed">): string {
   return (
-    `Path too long: ${error.fullPath} (${error.length} characters; this computer's limit is ${error.limit}). ` +
+    `Path too long: ${error.fullPath} (${error.length} characters; this computer's limit is ${error.maxAllowed}). ` +
     `Shorten the folder or file names along this path, or move your Cadtree home closer to the drive (e.g. ${shortHomeExample(error.fullPath)}).`
   );
 }
