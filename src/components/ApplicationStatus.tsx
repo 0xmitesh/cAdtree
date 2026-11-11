@@ -62,7 +62,9 @@ export function ApplicationStatus({
           <Notice type={op.status === "applied" ? "info" : "error"}>
             <strong>
               {op.status === "applied"
-                ? "Applied to working files — revision not yet saved."
+                ? op.record?.plan.mode === "revert"
+                  ? "Brought back into working files — revision not yet saved."
+                  : "Applied to working files — revision not yet saved."
                 : op.status === "unresolved"
                   ? "Interrupted application — saving and another apply are blocked."
                   : "Application evidence unavailable — saving and another apply are blocked."}
@@ -227,24 +229,26 @@ export function AppliedFrom({
           (r) => r.manifest.revisionId === record.plan.sourceRevisionId,
         );
         const sourceName = caseLabel(state, record.sourceBranchId);
+        const reverted = record.plan.mode === "revert";
         const capture = op.events.find(
           (e) => e.kind === "capture" && e.revisionId === revisionId,
         )!;
         return (
           <details className="disclosure applied-from" key={op.operationId}>
             <summary>
-              Applied from{" "}
+              {reverted ? "Brought back from" : "Applied from"}{" "}
               {source
                 ? formatRevisionNumber(source.manifest.displayNumber)
                 : record.plan.sourceRevisionId}{" "}
-              · {sourceName}
+              {reverted ? null : <>· {sourceName}</>}
             </summary>
             <p>
               <strong>Engineering reason:</strong> {record.plan.reason}
             </p>
             <p className="small">
-              Selected file states were applied before this normal revision was
-              saved. CAD reference and rebuild checks remain the engineer's
+              {reverted
+                ? "Files were brought back from the earlier revision before this normal revision was saved."
+                : "Selected file states were applied before this normal revision was saved."} CAD reference and rebuild checks remain the engineer's
               responsibility. The revision keeps its ordinary destination
               parent.
             </p>
@@ -289,13 +293,16 @@ export function AppliedFrom({
             <details className="comparison-hash">
               <summary>Application record identities</summary>
               <p className="small file-path">
-                Operation: {op.operationId} · Base: {record.plan.baseRevisionId}{" "}
+                Operation: {op.operationId}
+                {reverted ? null : <> · Base: {record.plan.baseRevisionId}</>}{" "}
                 · Destination baseline: {record.plan.destinationRevisionId}
               </p>
-              <p className="small">
-                Selected file changes do not imply that the source branch was
-                merged.
-              </p>
+              {reverted ? null : (
+                <p className="small">
+                  Selected file changes do not imply that the source branch was
+                  merged.
+                </p>
+              )}
             </details>
           </details>
         );

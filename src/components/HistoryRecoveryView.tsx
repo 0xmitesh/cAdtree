@@ -28,6 +28,7 @@ import {
 } from "./ApplyPreviewDialog";
 import { AppliedFrom } from "./ApplicationStatus";
 import { caseLabel } from "../engine/case-lifecycle";
+import { applyModeFor, type ApplyMode } from "../engine/apply-preview";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
 import {
@@ -143,6 +144,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     initialPath: string;
   } | null>(null);
   const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<ApplyMode>("merge");
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [branchSource, setBranchSource] = useState<string | null>(null);
@@ -260,6 +262,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     restoreKind === "full"
       ? (rev?.manifest.files.length ?? 0)
       : selectedPaths.size;
+  const applyMode = rev
+    ? applyModeFor(vaultState, rev.manifest.revisionId, activeBranchId)
+    : "merge";
   const damaged =
     rev?.integrityStatus === "corrupted" ||
     selected?.warnings.some((w) => /Duplicate/.test(w));
@@ -520,12 +525,19 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 ) : null}
               </div>
               <div className="detail-preview-action">
-                <button
-                  className="button secondary revision-compare-action"
-                  onClick={() => setPreviewSourceId(rev.manifest.revisionId)}
-                >
-                  Review changes to apply
-                </button>
+                {applyMode === "latest" ? null : (
+                  <button
+                    className="button secondary revision-compare-action"
+                    onClick={() => {
+                      setPreviewMode(applyMode === "revert" ? "revert" : "merge");
+                      setPreviewSourceId(rev.manifest.revisionId);
+                    }}
+                  >
+                    {applyMode === "revert"
+                      ? `Bring back onto ${caseLabel(vaultState, activeBranchId)}…`
+                      : "Review changes to apply"}
+                  </button>
+                )}
               </div>
               <AppliedFrom
                 state={vaultState}
@@ -914,6 +926,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           application={props.application}
           state={vaultState}
           sourceId={previewSourceId}
+          mode={previewMode}
           destinationBranchId={activeBranchId}
           onClose={() => setPreviewSourceId(null)}
         />
