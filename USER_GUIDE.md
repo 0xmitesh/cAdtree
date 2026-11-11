@@ -317,11 +317,11 @@ Select the saved revision in **History**, then choose **Export for review**. The
 
 Project reference attachments are excluded from review exports in this stage. The dialog and readable export summary state this explicitly.
 
-- **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator_Alternative_R03`.
+- **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator - Alternative - R03`.
 - **Selected files** lists only files present in that snapshot. It preserves their relative paths and filenames by default and clearly marks the output as partial. CAD dependencies are not discovered or added automatically.
 - **Add branch and revision to filenames** is an explicit selected-files option for standalone review. For example, `Parts/Pin.SLDPRT` becomes `Parts/Pin_Alternative_R03.SLDPRT`. Extensions are retained. Other documents may require reference repair; native CAD references are not rewritten.
 
-Choose a destination parent and review the proposed child folder and every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator_Alternative_R03-2`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
+Choose a destination parent and review the proposed child folder and every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator - Alternative - R03 (2)`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
 
 Each output includes a readable `_CADTREE_REVIEW.txt` summary (or the proposed numbered summary name if that name already belongs to a saved file). It identifies the saved revision/date/notes, original-to-exported paths, available component IDs, file sizes and SHA-256 content hashes. Configured machine addresses, directory handles and destination absolute paths are not added to the summary. Saved notes remain user-authored content.
 
