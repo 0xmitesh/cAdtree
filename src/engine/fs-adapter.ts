@@ -1,3 +1,5 @@
+import { diagnosePathFailure, joinAddress } from './path-limits';
+
 export interface DirectoryEntryInfo {
   name: string;
   kind: 'file' | 'directory';
@@ -24,6 +26,10 @@ export class FileConflictError extends Error {
 export interface FileSystemDirectoryAdapter {
   readonly name: string;
   readonly kind: 'real' | 'memory';
+  /** Absolute address of this folder when known (Item 2 P7); used only to explain path-too-long failures. */
+  readonly address?: string;
+  /** Sets the absolute address of this (root) adapter; children derive theirs from it. */
+  setAddress?(address: string | undefined): void;
   queryPermission(mode: 'read' | 'readwrite'): Promise<'granted' | 'denied' | 'prompt'>;
   requestPermission(mode: 'read' | 'readwrite'): Promise<'granted' | 'denied' | 'prompt'>;
   isSameEntry(other: FileSystemDirectoryAdapter): Promise<boolean>;
@@ -195,9 +201,32 @@ function normalizeWriteOptions(signalOrOptions?: AbortSignal | WriteOptions): Wr
 export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
   readonly kind = 'real' as const;
   readonly handle: FileSystemDirectoryHandle;
+  private ownAddress: string | undefined;
+  private readonly origin: { parent: RealFileSystemAdapter; segments: string[] } | undefined;
 
-  constructor(handle: FileSystemDirectoryHandle) {
+  constructor(
+    handle: FileSystemDirectoryHandle,
+    options?: { address?: string; parent?: RealFileSystemAdapter; segments?: string[] },
+  ) {
     this.handle = handle;
+    this.ownAddress = options?.address;
+    this.origin = options?.parent ? { parent: options.parent, segments: options.segments ?? [] } : undefined;
+  }
+
+  /** Own address, else the parent's address plus the relative segments; undefined when unknown. */
+  get address(): string | undefined {
+    if (this.ownAddress !== undefined) return this.ownAddress;
+    const base = this.origin?.parent.address;
+    return base === undefined ? undefined : joinAddress(base, ...this.origin!.segments);
+  }
+
+  setAddress(address: string | undefined): void {
+    this.ownAddress = address || undefined;
+  }
+
+  private pathOf(segments: string[]): string | undefined {
+    const base = this.address;
+    return base === undefined ? undefined : joinAddress(base, ...segments);
   }
 
   get name(): string {
@@ -259,7 +288,11 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     splitAndValidatePath(pathSegments.join('/'));
     let curr = this.handle;
     for (let i = 0; i < pathSegments.length - 1; i++) {
-      curr = await curr.getDirectoryHandle(pathSegments[i], { create });
+      try {
+        curr = await curr.getDirectoryHandle(pathSegments[i], { create });
+      } catch (err) {
+        throw create ? diagnosePathFailure(err, this.pathOf(pathSegments.slice(0, i + 1)), 'folder') : err;
+      }
     }
     return { dir: curr, leafName: pathSegments[pathSegments.length - 1] };
   }
@@ -291,9 +324,13 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
           }
         }
       }
-      curr = await curr.getDirectoryHandle(seg, { create: Boolean(options?.create) });
+      try {
+        curr = await curr.getDirectoryHandle(seg, { create: Boolean(options?.create) });
+      } catch (err) {
+        throw options?.create ? diagnosePathFailure(err, this.pathOf(pathSegments.slice(0, i + 1)), 'folder') : err;
+      }
     }
-    return new RealFileSystemAdapter(curr);
+    return new RealFileSystemAdapter(curr, { parent: this, segments: pathSegments });
   }
 
   async hasDirectory(pathSegments: string[]): Promise<boolean> {
@@ -374,8 +411,19 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     if (exclusive) {
       await this.assertNoExistingEntry(dir, leafName, pathSegments.join('/'));
     }
-    const fileHandle = await dir.getFileHandle(leafName, { create: true });
-    const writable = await fileHandle.createWritable();
+    const fullPath = this.pathOf(pathSegments);
+    let writable: FileSystemWritableFileStream;
+    let fileHandle: FileSystemFileHandle;
+    try {
+      fileHandle = await dir.getFileHandle(leafName, { create: true });
+    } catch (err) {
+      throw diagnosePathFailure(err, fullPath, 'file-create');
+    }
+    try {
+      writable = await fileHandle.createWritable();
+    } catch (err) {
+      throw diagnosePathFailure(err, fullPath, 'file-write');
+    }
     const reader = stream.getReader();
     let bytesWritten = 0;
 
@@ -400,7 +448,7 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
       } catch {
         // Ignore abort cleanup error
       }
-      throw err;
+      throw diagnosePathFailure(err, fullPath, 'file-write');
     } finally {
       reader.releaseLock();
     }
@@ -415,8 +463,19 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
     if (options?.exclusive) {
       await this.assertNoExistingEntry(dir, leafName, pathSegments.join('/'));
     }
-    const fileHandle = await dir.getFileHandle(leafName, { create: true });
-    const writable = await fileHandle.createWritable();
+    const fullPath = this.pathOf(pathSegments);
+    let writable: FileSystemWritableFileStream;
+    let fileHandle: FileSystemFileHandle;
+    try {
+      fileHandle = await dir.getFileHandle(leafName, { create: true });
+    } catch (err) {
+      throw diagnosePathFailure(err, fullPath, 'file-create');
+    }
+    try {
+      writable = await fileHandle.createWritable();
+    } catch (err) {
+      throw diagnosePathFailure(err, fullPath, 'file-write');
+    }
     try {
       await writable.write(data as unknown as BufferSource);
       await writable.close();
@@ -426,7 +485,7 @@ export class RealFileSystemAdapter implements FileSystemDirectoryAdapter {
       } catch {
         // Ignore
       }
-      throw err;
+      throw diagnosePathFailure(err, fullPath, 'file-write');
     }
   }
 
@@ -480,13 +539,19 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
   readonly kind = 'memory' as const;
   private readonly node: MemoryDirNode;
   private readonly hooks: MemoryFaultHooks;
+  private ownAddress: string | undefined;
+  private readonly origin: { parent: InMemoryFileSystemAdapter; segments: string[] } | undefined;
+  private readonly simulatedFailures: { path: string; error: DOMException }[];
 
   constructor(
     name = 'root',
     parent: MemoryDirNode | null = null,
     hooks?: MemoryFaultHooks,
-    existingNode?: MemoryDirNode
+    existingNode?: MemoryDirNode,
+    link?: { parent: InMemoryFileSystemAdapter; segments: string[] },
   ) {
+    this.origin = link;
+    this.simulatedFailures = link ? link.parent.simulatedFailures : [];
     this.hooks = hooks ?? {};
     this.node =
       existingNode ?? {
@@ -500,6 +565,37 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
 
   get name(): string {
     return this.node.name;
+  }
+
+  /** Absolute address when set on this adapter or inherited from its parent plus relative segments. */
+  get address(): string | undefined {
+    if (this.ownAddress !== undefined) return this.ownAddress;
+    const base = this.origin?.parent.address;
+    return base === undefined ? undefined : joinAddress(base, ...this.origin!.segments);
+  }
+
+  setAddress(address: string | undefined): void {
+    this.ownAddress = address || undefined;
+  }
+
+  private pathOf(segments: string[]): string | undefined {
+    const base = this.address;
+    return base === undefined ? undefined : joinAddress(base, ...segments);
+  }
+
+  /**
+   * Test hook: every create/write of the item at this ABSOLUTE path (address + relative path)
+   * throws `error` (for example a DOMException named InvalidStateError), as Chrome does for a
+   * path that is too long. Shared with child adapters.
+   */
+  simulateFailureAt(fullPath: string, error: DOMException): void {
+    this.simulatedFailures.push({ path: fullPath, error });
+  }
+
+  private maybeFail(fullPath: string | undefined, operation: 'folder' | 'file-create' | 'file-write'): void {
+    if (fullPath === undefined) return;
+    const hit = this.simulatedFailures.find((f) => f.path === fullPath);
+    if (hit) throw diagnosePathFailure(hit.error, fullPath, operation);
   }
 
   setHooks(hooks: Partial<MemoryFaultHooks>): void {
@@ -673,6 +769,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
             }
           }
         }
+        this.maybeFail(this.pathOf(pathSegments.slice(0, i + 1)), 'folder');
         next = {
           kind: 'directory',
           id: `memdir-${memoryDirIdCounter++}`,
@@ -690,7 +787,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
       }
       curr = next;
     }
-    return new InMemoryFileSystemAdapter(curr.name, curr.parent, this.hooks, curr);
+    return new InMemoryFileSystemAdapter(curr.name, curr.parent, this.hooks, curr, { parent: this, segments: pathSegments });
   }
 
   async hasDirectory(pathSegments: string[]): Promise<boolean> {
@@ -789,6 +886,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     const { signal, exclusive } = normalizeWriteOptions(signalOrOptions);
     const fullPath = this.getFullPath(pathSegments);
     await this.hooks.onBeforeWrite?.(fullPath);
+    this.maybeFail(this.pathOf(pathSegments), 'file-write');
 
     const { dir, leafName } = this.resolveParentNode(pathSegments, true);
     if (exclusive) {
@@ -852,6 +950,7 @@ export class InMemoryFileSystemAdapter implements FileSystemDirectoryAdapter {
     this.assertWritePermission();
     const fullPath = this.getFullPath(pathSegments);
     await this.hooks.onBeforeWrite?.(fullPath);
+    this.maybeFail(this.pathOf(pathSegments), 'file-write');
 
     const { dir, leafName } = this.resolveParentNode(pathSegments, true);
     if (options?.exclusive) {

@@ -13,6 +13,7 @@ import {
   projectWorstPath,
   workspaceWorstPath,
   PathBudgetError,
+  PathTooLongError,
   type PathBudgetReport,
   type PathBudgetShorten,
 } from "../engine/path-budget";
@@ -62,9 +63,19 @@ export function pathBudgetBlockMessage(block: PathBudgetBlock): string {
   ].join("\n");
 }
 
-/** Rewrites a PathBudgetError into a plain Error with the full banner text; the original stays as `cause`. */
+/** Rewrites a PathBudgetError or PathTooLongError into a plain Error with the full banner text; the original stays as `cause`. */
 export function presentPathBudgetError(error: unknown): unknown {
-  return error instanceof PathBudgetError ? new Error(pathBudgetBlockMessage(error), { cause: error }) : error;
+  if (error instanceof PathBudgetError) return new Error(pathBudgetBlockMessage(error), { cause: error });
+  if (error instanceof PathTooLongError) return new Error(pathTooLongMessage(error), { cause: error });
+  return error;
+}
+
+/** Text for a create/write that failed because the real path is too long (Item 2 P7). */
+export function pathTooLongMessage(error: Pick<PathTooLongError, "fullPath" | "length" | "maxAllowed">): string {
+  return (
+    `Path too long: ${error.fullPath} (${error.length} characters; this computer's limit is ${error.maxAllowed}). ` +
+    `Shorten the folder or file names along this path, or move your Cadtree home closer to the drive (e.g. ${shortHomeExample(error.fullPath)}).`
+  );
 }
 
 /** One sentence appended to the success banner when status is 'warn'; "" otherwise. */

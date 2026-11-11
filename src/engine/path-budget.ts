@@ -239,24 +239,8 @@ export function projectWorstCase(input: { projectPath: string | number; longestU
 // Address-aware worst cases and the creation-time check (Item 2 P5)
 // ---------------------------------------------------------------------------
 
-export type PathSeparator = '\\' | '/';
-
-/** Windows drive (`C:\...`, `C:/...`) and UNC (`\\server\...`) addresses use `\`; everything else uses `/`. */
-export function addressSeparator(address: string): PathSeparator {
-  return address.includes('\\') || /^[A-Za-z]:/.test(address) ? '\\' : '/';
-}
-
-/**
- * Joins an absolute address and relative segments with the address's own separator, without
- * double separators. A segment may itself contain "/" (cAdtree's relative paths); it is split.
- */
-export function joinAddress(address: string, ...segments: string[]): string {
-  const sep = addressSeparator(address);
-  let base = address;
-  while (base.length > 0 && (base.endsWith('/') || base.endsWith('\\'))) base = base.slice(0, -1);
-  const parts = segments.flatMap((segment) => segment.split(/[\\/]+/)).filter((part) => part.length > 0);
-  return [base, ...parts].join(sep);
-}
+export { addressSeparator, joinAddress, PathTooLongError, type PathSeparator } from './path-limits';
+import { joinAddress, addressSeparator } from './path-limits';
 
 const withSwap = (path: string) => path + '.crswap';
 

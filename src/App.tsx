@@ -204,6 +204,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [homeAddress, setHomeAddress] = useState<HomeAddress | null>(null);
   const homeAddressCache = useRef<HomeAddress[]>([]);
   const cacheHomeAddress = (address: HomeAddress) => {
+    // Lets the adapter (and its workspace/project children) explain a path-too-long failure with the real path.
+    address.root.setAddress?.(address.path);
     homeAddressCache.current = [
       ...homeAddressCache.current.filter((item) => item.root !== address.root),
       address,
