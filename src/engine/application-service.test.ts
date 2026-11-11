@@ -1160,7 +1160,7 @@ test("revert preview: older revision gives replace/delete/add rows, all availabl
   );
   const merge = await f.prepareRows(f.ids.r1);
   assert.equal(merge.status, "unavailable");
-  assert.match((merge as any).reason, /older revision.*Bring back/);
+  assert.match((merge as any).reason, /earlier revision in this branch.s history.*Bring back/);
   for (const mode of ["merge", "revert"] as const) {
     const latest = await f.prepareRows(f.ids.r3, mode);
     assert.equal(latest.status, "unavailable");
@@ -1190,7 +1190,7 @@ test("revert is rejected for a revision that is not an ancestor (case revision)"
   const caseId = saved.revision.manifest.revisionId;
   const revert = await f.prepareRows(caseId, "revert");
   assert.equal(revert.status, "unavailable");
-  assert.match((revert as any).reason, /not an older revision/);
+  assert.match((revert as any).reason, /not an earlier revision in this branch.s history/);
   assert.equal((await f.prepareRows(caseId, "merge")).status, "available");
 });
 
@@ -1255,7 +1255,7 @@ test("tampered or missing mode: review/plan disagreement is rejected; records wi
   const review = await f.review(f.ids.r1);
   await assert.rejects(
     prepareApplication(f.vault, { ...review, mode: "merge" }, f.options),
-    /older revision|changed|Bring back/,
+    /earlier revision|changed|Bring back/,
   );
   const prepared = await prepareApplication(f.vault, review, f.options);
   const op = await applyPreparedApplication(f.vault, prepared, f.options);
@@ -1277,6 +1277,12 @@ test("tampered or missing mode: review/plan disagreement is rejected; records wi
     review: { ...body.review, mode: "merge" },
   });
   assert.equal(bad.record, undefined);
+  // a revert plan whose base is not the destination baseline is rejected.
+  const badBase = await plant("20990101-000004", {
+    ...body,
+    plan: { ...body.plan, baseRevisionId: body.plan.sourceRevisionId },
+  });
+  assert.equal(badBase.record, undefined);
   // plan says merge, review says revert: also rejected.
   const bad2 = await plant("20990101-000002", {
     ...body,
@@ -1358,4 +1364,18 @@ test("bringing back a deleted file then saving keeps its original componentId an
   assert.equal(after.components?.status, "available");
   assert.equal(idIn(after, saved.revision.manifest.revisionId, "D.txt"), original);
   assert.equal((await openExistingVault(f.vault)).applicationOperations!.at(-1)!.status, "captured");
+});
+
+test("revert row stays blocked when a different component now occupies the path; other rows still apply", async () => {
+  const f = await revertFixture();
+  await f.w("D.txt", "a brand new D");
+  await f.save("New D, new component");
+  const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
+  assert.match(rows["D.txt"].identityBlock ?? "", /Different components occupy this path/);
+  assert.equal(rows["A.txt"].identityBlock, undefined);
+  assert.equal(rows["A.txt"].kind, "available");
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["A.txt"]), f.options);
+  await applyPreparedApplication(f.vault, prepared, f.options);
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal(await f.main.readFileText(["D.txt"]), "a brand new D");
 });

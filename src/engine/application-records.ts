@@ -188,6 +188,8 @@ function validateRecord(
       plan.baseRevisionId,
       plan.destinationRevisionId,
     ].every(safeId) ||
+    ((plan.mode ?? "merge") === "revert" &&
+      plan.baseRevisionId !== plan.destinationRevisionId) ||
     !plan.reason?.trim() ||
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||

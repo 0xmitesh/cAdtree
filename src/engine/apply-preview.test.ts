@@ -357,7 +357,7 @@ test("older revision of the same branch: merge says use Bring back, revert uses 
   const { state } = fixture();
   const merge = prepareApplyPreview(state, "base", "branch-main");
   assert.equal(merge.status, "unavailable");
-  assert.match((merge as { reason: string }).reason, /older revision.*Bring back/);
+  assert.match((merge as { reason: string }).reason, /earlier revision in this branch.s history.*Bring back/);
   const r = prepareApplyPreview(state, "base", "branch-main", "revert");
   if (r.status !== "available") throw new Error(r.reason);
   assert.equal(r.context.mode, "revert");
@@ -371,5 +371,5 @@ test("older revision of the same branch: merge says use Bring back, revert uses 
   }
   const caseRevert = prepareApplyPreview(state, "source", "branch-main", "revert");
   assert.equal(caseRevert.status, "unavailable");
-  assert.match((caseRevert as { reason: string }).reason, /not an older revision/);
+  assert.match((caseRevert as { reason: string }).reason, /not an earlier revision in this branch.s history/);
 });

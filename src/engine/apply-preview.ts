@@ -121,11 +121,11 @@ export function prepareApplyPreview(
       );
     if (mode === "merge" && baseId === sourceId)
       throw new Error(
-        `${sourceId} is an older revision of this branch, so applying it would change nothing. Use "Bring back" to restore files from it.`,
+        `${sourceId} is an earlier revision in this branch's history, so applying it would change nothing. Use "Bring back" to restore files from it.`,
       );
     if (mode === "revert" && baseId !== sourceId)
       throw new Error(
-        `${sourceId} is not an older revision of this branch. Bringing back is only for earlier revisions of the same branch; use Apply changes instead.`,
+        `${sourceId} is not an earlier revision in this branch's history. Bringing back is only for earlier revisions in the same history; use Apply changes instead.`,
       );
     const parents = new Map(
       graph.edges.map((edge) => [edge.child, edge.parent]),
