@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { normalizeFolderPath } from "../utils/folder-path";
 import { saveWorkspacePath } from "../engine/idb-store";
 import { Modal, Notice } from "./ui";
-import { homeSetupWorstCase } from "../engine/path-budget";
+import { BLOCK_PATH_CHARS, homeSetupWorstCase } from "../engine/path-budget";
+import { shortHomeExample } from "../utils/path-budget-message";
 import type { HomeState } from "../engine/home-service";
 
 export interface HomeAddress {
@@ -58,16 +59,19 @@ export function FolderAddressDialog({
   const id = useId();
   // Non-blocking: saving still works. Measured from the normalized form of what is typed.
   const longHome = (() => {
-    if (!home) return 0;
+    if (!home) return null;
     let typed = "";
     try {
       typed = normalizeFolderPath(input);
     } catch {
-      return 0;
+      return null;
     }
-    if (!typed) return 0;
+    if (!typed) return null;
+    // Warn only when even the default workspace and project name allowances would not fit.
     const worst = homeSetupWorstCase(typed);
-    return worst.status === "ok" ? 0 : worst.requiredLength;
+    return worst.requiredLength > BLOCK_PATH_CHARS
+      ? { length: worst.requiredLength, example: shortHomeExample(typed) }
+      : null;
   })();
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -86,7 +90,7 @@ export function FolderAddressDialog({
       </p>
       <p>
         {intro ??
-          "The browser grants folder access but does not share its full absolute address. The address you enter is used for copying locations; cAdtree cannot compare it with the selected folder."}
+          "The browser grants folder access but does not share its full absolute address. The address you enter is used for copying locations and to keep paths within Windows' limit; cAdtree cannot compare it with the selected folder."}
       </p>
       {note ? <p>{note}</p> : null}
       <form
@@ -138,7 +142,7 @@ export function FolderAddressDialog({
           </details>
           {longHome ? (
             <Notice type="info">
-              This address is long: projects here would need {longHome} characters. A shorter home such as C:\Cadtree leaves more room.
+              This address is long: with typical workspace and project names, projects here would need {longHome.length} characters (limit {BLOCK_PATH_CHARS}). A shorter home such as {longHome.example} leaves more room.
             </Notice>
           ) : null}
           {error ? <Notice type="error">{error}</Notice> : null}

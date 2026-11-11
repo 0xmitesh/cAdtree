@@ -36,10 +36,15 @@ const SHORTEN_LABEL: Record<PathBudgetShorten, string> = {
 /** Windows drive and UNC paths (and unknown addresses) use `\`; a POSIX path uses `/`. */
 const isPosix = (worstPath: string) => addressSeparator(worstPath) === "/";
 
+/** Example short home for the user's platform: POSIX addresses get `/Users/<you>/Cadtree`, others `C:\\Cadtree`. */
+export function shortHomeExample(address: string): string {
+  return isPosix(address) ? "/Users/<you>/Cadtree" : "C:\\Cadtree";
+}
+
 /** The one-sentence block text, without the measured path. Used inline in dialogs. */
 export function pathBudgetBlockSentence(block: PathBudgetBlock): string {
   const posix = isPosix(block.worstPath);
-  const example = posix ? "/Users/<you>/Cadtree" : "C:\\Cadtree";
+  const example = shortHomeExample(block.worstPath);
   return (
     `This location would need a ${block.requiredLength}-character path; the limit is ${BLOCK_PATH_CHARS}. ` +
     `Shorten the ${SHORTEN_LABEL[block.shorten]} name by ${block.excess} ${block.excess === 1 ? "character" : "characters"}, ` +
