@@ -85,7 +85,7 @@ The first changed capture uses the selected source revision as its parent and re
 There are three ways to use an earlier saved revision. None of them rewrites history.
 
 - **Bring back onto Main…** (the button names the active branch). Select an earlier revision of the active branch in **History** and choose it. The dialog **Make Main match Rev NNN** lists every difference, all selected: **Bring back**, **Replace with Rev NNN's version** or **Remove (not in Rev NNN)**. Deselect files to bring back only some, enter the engineering reason, choose **Prepare bring-back** and confirm the counts. Only the working files change. Save a revision afterwards; History then shows **Brought back from Rev NNN**. Replaced and removed files are kept with the operation and the latest revision stays in history. Unsaved working changes block it, and renamed files cannot be brought back yet.
-- **Export.** Select a revision, or select files in its details, and export them into a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`). Use it to look at, share, or recover files, including files deleted later. See **Export a saved revision for review**.
+- **Export for review.** Select a revision, or select files in its details, and export them into a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`). Use it to look at, share, or recover files, including files deleted later. See **Export a saved revision for review**.
 - **Create design case.** Select a revision and choose **Create branch from here** to continue from it independently.
 
 Export creates neither a branch nor a revision. An export of selected files may omit CAD dependencies, and cAdtree does not rewrite CAD references.
