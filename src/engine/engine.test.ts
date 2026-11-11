@@ -6,6 +6,7 @@ import path from 'node:path';
 import { hashBytes, hashStream, hashString, Sha256Hasher } from './hash';
 import {
   checkCaseInsensitiveCollisions,
+  FileConflictError,
   InMemoryFileSystemAdapter,
   splitAndValidatePath,
   validateDirectoryIsolation,
@@ -469,6 +470,134 @@ test('Regression Fix 3: Destination file appearing after initial check is never 
     await destDirB.readFileBytes(['_CADTREE_RECOVERY_INCOMPLETE.txt']),
     existingMarkerBytes
   );
+});
+
+test('FileConflictError: a file appearing in the destination after the initial emptiness check is rejected as FileConflictError and writes no partial-recovery marker', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-a-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+  await workingDir.writeFileBytes(['Parts', 'Part1.SLDPRT'], generateDeterministicBinaryBytes('FCE_A', 2048));
+  await initializeProjectVault(workingDir, vaultDir, 'FCE A');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_A'], { create: true })) as InMemoryFileSystemAdapter;
+  const existing = new TextEncoder().encode('DO_NOT_OVERWRITE_ME');
+  // The initial emptiness check throws a plain "not empty" error, so inject the file at the
+  // second root listing (the pre-write recheck) to reach the Destination-conflict path.
+  let listings = 0;
+  dest.setHooks({
+    onBeforeListEntries: async () => {
+      listings++;
+      if (listings === 2) {
+        dest.setHooks({ onBeforeListEntries: undefined });
+        await dest.writeFileBytes(['Parts', 'Part1.SLDPRT'], existing);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof FileConflictError);
+      assert.match((err as Error).message, /Destination conflict/);
+      return true;
+    }
+  );
+  assert.deepEqual(await dest.readFileBytes(['Parts', 'Part1.SLDPRT']), existing);
+  assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), false);
+});
+
+test('FileConflictError: a file occupying a path that must become a directory is rejected as FileConflictError without a marker', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-b-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+  // A directory with an OS-clutter name: a same-named root file leaves the destination
+  // "effectively empty", so the failure is reached in the step-2 directory check.
+  await workingDir.writeFileBytes(['Thumbs.db', 'Part1.SLDPRT'], generateDeterministicBinaryBytes('FCE_B', 1024));
+  await initializeProjectVault(workingDir, vaultDir, 'FCE B');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_B'], { create: true })) as InMemoryFileSystemAdapter;
+  await dest.writeFileBytes(['Thumbs.db'], new TextEncoder().encode('I_AM_A_FILE'));
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof FileConflictError);
+      assert.match((err as Error).message, /a file already exists at directory path/);
+      return true;
+    }
+  );
+  assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), false);
+  assert.equal(await dest.hasDirectory(['Thumbs.db']), false);
+});
+
+test('FileConflictError: InMemoryFileSystemAdapter.getDirectory exclusiveCheck rejects a case-differing colliding file', async () => {
+  for (const [fileName, dirName] of [['X', 'x']]) {
+    const root = new InMemoryFileSystemAdapter('fce-c-disk');
+    await root.writeFileBytes([fileName], new Uint8Array([1]));
+    await assert.rejects(
+      () => root.getDirectory([dirName], { create: true, exclusiveCheck: true }),
+      (err: unknown) => err instanceof FileConflictError && /Destination conflict/.test(err.message)
+    );
+  }
+});
+
+test('FileConflictError: a write-time conflict from the adapter sets the conflict flag and still leaves the partial-recovery marker', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-d-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+  await workingDir.writeFileBytes(['Parts', 'Part1.SLDPRT'], generateDeterministicBinaryBytes('FCE_D', 2048));
+  await initializeProjectVault(workingDir, vaultDir, 'FCE D');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_D'], { create: true })) as InMemoryFileSystemAdapter;
+  const existing = new TextEncoder().encode('RACED_IN');
+  let injected = false;
+  dest.setHooks({
+    onBeforeWrite: async (fullPath) => {
+      if (!injected && fullPath.endsWith('Parts/Part1.SLDPRT')) {
+        injected = true;
+        await dest.writeFileBytes(['Parts', 'Part1.SLDPRT'], existing);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) => err instanceof FileConflictError && /Destination conflict/.test(err.message)
+  );
+  assert.ok(injected);
+  assert.deepEqual(await dest.readFileBytes(['Parts', 'Part1.SLDPRT']), existing);
+  // Something was written (the Parts directory) before the conflict, so the marker must exist.
+  assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), true);
 });
 
 test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency, and selected-file recovery', async () => {
