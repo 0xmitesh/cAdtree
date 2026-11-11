@@ -8,12 +8,11 @@ import { getBranchBaseline } from './branch-state';
 import { isRecordId, newRecordId } from './ids';
 import { compactHex } from './path-encoding';
 import { hashString } from './hash';
-import { writeAndVerifyObject } from './object-store';
 import { matchInternalPath, internalReserve, CRSWAP_CHARS } from './path-budget';
 import {
-  importReferenceAttachment, retrieveReferenceAttachment, verifyReferenceLibraryContent, createReferenceReview, referenceChecksum,
-  referenceEnrollmentRecordPath,  referenceCatalogPath, referenceCatalogMarkerPath,
-  MAX_REFERENCE_ID_ATTEMPTS, type ProjectReference,
+  importReferenceAttachment, retrieveReferenceAttachment, verifyReferenceLibraryContent, createReferenceReview,
+  referenceCatalogMarkerPath,
+  MAX_REFERENCE_ID_ATTEMPTS,
 } from './references';
 import { buildReferenceBrowser } from '../history/reference-browser';
 import { buildKnowledgeIndex } from '../knowledge';
@@ -23,7 +22,6 @@ const main = 'branch-main', notes = { problem: '', modification: '', observation
 const file = (name: string, text: string) => new File([text], name, { type: 'text/plain' });
 const meta = (title: string) => ({ title, description: '', tags: [] });
 const RECORD = /^\d{8}-\d{6}-[0-9a-z]{6}$/;
-const uuidN = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 async function fixture() {
   const working = new InMemoryFileSystemAdapter('Main'), vault = new InMemoryFileSystemAdapter('Vault');
@@ -37,39 +35,6 @@ const files = async (vault: FileSystemDirectoryAdapter) => {
   await walk(['references']);
   return out;
 };
-
-/** Builds exactly what pre-P3c code wrote: prefixed UUID IDs, compact marker for catalog 1, full-hex marker for catalog 2. */
-async function legacyVault() {
-  const f = await fixture();
-  const seal = <T extends object>(v: T) => ({ ...v, payloadSha256: referenceChecksum(v) });
-  const boundary = seal({ schemaVersion: 1, projectId: f.projectId, createdAt: '2025-01-01T00:00:00.000Z', legacy: [] as { revisionId: string; manifestSha256: string }[] });
-  const put = async (path: string[], value: object) => { const text = JSON.stringify(value, null, 2); await f.vault.writeFileText(path, text, { exclusive: true }); return hashString(text); };
-  const enrollId = `reference-enrollment-${uuidN(1)}`;
-  const enrollSha = await put(referenceEnrollmentRecordPath(enrollId), boundary);
-  await f.vault.getDirectory(['references', 'enrollment', `${enrollId}.${enrollSha}.done`], { create: true, exclusiveCreate: true }); // full-hex legacy enrollment marker
-  const store = async (name: string, text: string) => {
-    const bytes = new TextEncoder().encode(text), sha = hashString(text);
-    await writeAndVerifyObject(f.vault, 'legacy-session', sha, bytes.length, async () => new Blob([bytes]).stream());
-    return { sha256: sha, size: bytes.length, name };
-  };
-  const a = await store('A.txt', 'legacy A'), b = await store('B.txt', 'legacy B'), a2 = await store('A2.txt', 'legacy A v2');
-  const ver = (referenceId: string, n: number, o: { sha256: string; size: number; name: string }, at: string) => ({ referenceId, versionId: `reference-version-${uuidN(n)}`, originalFilename: o.name, fileType: 'text/plain', size: o.size, sha256: o.sha256, importedAt: at });
-  const refA = `reference-${uuidN(10)}`, refB = `reference-${uuidN(11)}`;
-  const lib1: ProjectReference[] = [
-    { referenceId: refA, title: 'Legacy A', description: '', tags: [], versions: [ver(refA, 20, a, '2025-01-02T00:00:00.000Z')], projectVersionId: null, removed: false },
-    { referenceId: refB, title: 'Legacy B', description: '', tags: [], versions: [ver(refB, 21, b, '2025-01-03T00:00:00.000Z')], projectVersionId: null, removed: false },
-  ];
-  const cat1Id = `reference-catalog-${uuidN(30)}`;
-  const cat1 = seal({ schemaVersion: 1, projectId: f.projectId, catalogId: cat1Id, parent: null, references: lib1 });
-  const cat1Sha = await put(referenceCatalogPath(cat1Id), cat1);
-  await f.vault.getDirectory(referenceCatalogMarkerPath(cat1Id, cat1Sha), { create: true, exclusiveCreate: true }); // compact legacy marker
-  const lib2 = structuredClone(lib1); lib2[0].versions.push(ver(refA, 22, a2, '2025-01-04T00:00:00.000Z'));
-  const cat2Id = `reference-catalog-${uuidN(31)}`;
-  const cat2 = seal({ schemaVersion: 1, projectId: f.projectId, catalogId: cat2Id, parent: { catalogId: cat1Id, sha256: cat1Sha }, references: lib2 });
-  const cat2Sha = await put(referenceCatalogPath(cat2Id), cat2);
-  await f.vault.getDirectory(['references', 'completed', `${cat2Id}.${cat2Sha}.done`], { create: true, exclusiveCreate: true }); // full-hex legacy marker
-  return { ...f, refA, refB, cat1Id, cat2Id, order: lib2.map(r => r.referenceId) };
-}
 
 test('a new reference and a new version use record IDs and new-format markers; every consumer works', async () => {
   const f = await fixture();
@@ -122,54 +87,7 @@ test('a new reference and a new version use record IDs and new-format markers; e
   if (relationship.target.kind === 'reference-version') assert.equal(relationship.target.referenceId, ref.referenceId);
 });
 
-test('a vault with OLD references (compact and full-hex markers) loads unchanged; new and new-version imports append in order', async () => {
-  const f = await legacyVault();
-  const before = await openExistingVault(f.vault);
-  assert.equal(before.references!.status, 'available', before.references!.reason);
-  assert.deepEqual(before.references!.library.map(r => r.referenceId), f.order);
-  assert.equal(before.references!.catalogId, f.cat2Id);
-  await verifyReferenceLibraryContent(f.vault, before);
-  const oldBrowser = buildReferenceBrowser(before).entries.map(e => e.version.versionId);
-  assert.equal(oldBrowser.length, 3);
-  const snapshot = await files(f.vault);
-
-  // New version of an OLD reference.
-  let state = await importReferenceAttachment(f.vault, f.projectId, file('A3.txt', 'legacy A v3'), meta('Legacy A'), f.refA);
-  const refA = state.references!.library[0];
-  assert.equal(refA.referenceId, f.refA);
-  assert.equal(refA.versions.length, 3);
-  assert.match(refA.versions[0].versionId, /^reference-version-/);
-  assert.ok(isRecordId(refA.versions[2].versionId));
-  // A brand-new reference is appended.
-  state = await importReferenceAttachment(f.vault, f.projectId, file('N.txt', 'new one'), meta('New one'));
-  assert.deepEqual(state.references!.library.map(r => r.referenceId).slice(0, 2), f.order);
-  assert.ok(isRecordId(state.references!.library[2].referenceId));
-  assert.equal(state.references!.status, 'available');
-  assert.ok(isRecordId(state.references!.catalogId));
-  await verifyReferenceLibraryContent(f.vault, state);
-  // Browser order of the old entries is unchanged by adding new-format entries.
-  const after = buildReferenceBrowser(state).entries.map(e => e.version.versionId);
-  assert.deepEqual(after.filter(id => oldBrowser.includes(id)), oldBrowser.slice().sort((x, y) => after.indexOf(x) - after.indexOf(y)));
-  // Old files are untouched; the old chain is still readable from the new head.
-  const now = await files(f.vault);
-  for (const [path, text] of Object.entries(snapshot)) assert.equal(now[path], text, path);
-  assert.ok((await names(f.vault, ['references', 'completed'])).some(n => n.startsWith(`${f.cat2Id}.`) && n.length > 71));
-  // Reopening from scratch gives the same library.
-  assert.deepEqual((await openExistingVault(f.vault)).references!.library, state.references!.library);
-  // The legacy reference's first (legacy) version is still retrievable byte-for-byte after the mixed imports.
-  const legacyVersion = state.references!.library[0].versions[0];
-  assert.match(legacyVersion.versionId, /^reference-version-/);
-  const retrieved = await retrieveReferenceAttachment(f.vault, f.projectId, f.refA, legacyVersion.versionId);
-  assert.equal(new TextDecoder().decode(retrieved.bytes as Uint8Array), 'legacy A');
-});
-
-test('legacy compact UUID markers can never be mistaken for record IDs (v4 byte 6 property), and new markers round-trip', () => {
-  for (let i = 0; i < 50000; i++) {
-    const compact = compactHex(crypto.randomUUID().replace(/-/g, ''));
-    assert.equal(compact.length, 22);
-    assert.ok(!RECORD.test(compact), compact);
-    assert.ok('QRST'.includes(compact[8]), compact);
-  }
+test('new publication markers are `<recordId>.<compact sha>.done` and 71 characters', () => {
   const sha = hashString('x');
   for (let i = 0; i < 200; i++) {
     const id = newRecordId();
@@ -177,6 +95,7 @@ test('legacy compact UUID markers can never be mistaken for record IDs (v4 byte 
     assert.equal(marker, `${id}.${compactHex(sha)}.done`);
     assert.equal(marker.length, 71);
   }
+  assert.throws(() => referenceCatalogMarkerPath('reference-catalog-00000000-0000-4000-8000-000000000000', sha), /Invalid reference record ID/);
 });
 
 test('a clashing catalog ID draws a new ID and never touches the existing reference; exhaustion writes nothing new', async () => {
@@ -230,10 +149,12 @@ test('new-code reference paths fit internalReserve() and hit no legacy template'
   assert.equal(checked.length, 4); // enrollment record + marker, catalog record + marker
 });
 
-test('a record ID with a full-hex checksum marker never existed and is rejected as unexpected', async () => {
+test('an old-format (compact UUID) publication directory is rejected, not misread: reference evidence becomes unavailable', async () => {
   const f = await fixture();
   await importReferenceAttachment(f.vault, f.projectId, file('One.txt', 'one'), meta('One'));
-  await f.vault.getDirectory(['references', 'completed', `${newRecordId()}.${hashString('y')}.done`], { create: true, exclusiveCreate: true });
+  const oldMarker = `${compactHex(crypto.randomUUID().replace(/-/g, ''))}.${compactHex(hashString('y'))}.done`;
+  assert.equal(oldMarker.split('.')[0].length, 22);
+  await f.vault.getDirectory(['references', 'completed', oldMarker], { create: true, exclusiveCreate: true });
   const state = await openExistingVault(f.vault);
   assert.notEqual(state.references!.status, 'available');
   assert.match(state.references!.reason!, /Unexpected reference publication directory/);

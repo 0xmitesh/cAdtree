@@ -5,6 +5,7 @@ import { nativeDirectory } from '../../tests/native-fs';
 import { initializeProjectVault, openExistingVault } from './vault-service';
 import { captureRevision } from './revision-service';
 import { hashString } from './hash';
+import { newRecordId } from './ids';
 import { importReferenceAttachment, retrieveReferenceAttachment, updateProjectReference, referenceChecksum } from './references';
 
 const notes = { problem: '', modification: '', observations: '' };
@@ -59,7 +60,7 @@ test('baseline capture and reference publication fit the Windows directory limit
   const f = await fixture();
   f.fault.absoluteRoot = 'C:\\Users\\1\\Documents\\cadtree home 8.11\\solidworks-59ab5028-797d-47b5-b011-d99fcdfd14e6\\projects\\shaft-56c180be-4c6b-4fac-868f-16f05de36aa9\\vault';
   for (let attempt = 0; attempt < 3; attempt++) {
-    await f.disk.writeFileText(['references', 'enrollment', `reference-enrollment-${crypto.randomUUID()}.json`], '{"interrupted":');
+    await f.disk.writeFileText(['references', 'enrollment', `${newRecordId()}.json`], '{"interrupted":');
   }
   await f.working.writeFileText(['bush.SLDPRT'], 'bush geometry');
   await f.working.writeFileText(['shaft.SLDPRT'], 'shaft geometry');

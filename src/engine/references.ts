@@ -30,11 +30,11 @@ const DATA = ['references'];
 /** Bounded retries when a freshly drawn record ID is already taken on disk. */
 export const MAX_REFERENCE_ID_ATTEMPTS = 20;
 /**
- * New reference records (enrollment, catalog, reference, version, import session) use the short record ID.
- * Existing ones keep `<prefix>-<uuid>`. Which KIND an ID is follows from where it appears (field or folder),
- * never from its text, because new IDs carry no prefix.
+ * Reference records (enrollment, catalog, reference, version, import session) use the short record ID.
+ * Which KIND an ID is follows from where it appears (field or folder), never from its text, because
+ * record IDs carry no prefix.
  */
-const safeId = (value: unknown, prefix: string) => typeof value === 'string' && (isRecordId(value) || new RegExp(`^${prefix}-[0-9a-f-]{36}$`).test(value));
+const safeId = (value: unknown) => typeof value === 'string' && isRecordId(value);
 /** A record ID not already used by a reference or version of this library (or by this batch). */
 function freshLibraryId(taken: Set<string>, draw: () => string = newRecordId) {
   for (let attempt = 1; attempt <= MAX_REFERENCE_ID_ATTEMPTS; attempt++) {
@@ -62,16 +62,16 @@ function validateLibrary(library: ProjectReference[], previous: ProjectReference
   if (!Array.isArray(library)) throw new Error('Invalid reference library.');
   const refs = new Set<string>(), versions = new Set<string>();
   for (const ref of library) {
-    if (!safeId(ref.referenceId, 'reference') || refs.has(ref.referenceId)) throw new Error('Duplicate or invalid reference identity.');
+    if (!safeId(ref.referenceId) || refs.has(ref.referenceId)) throw new Error('Duplicate or invalid reference identity.');
     refs.add(ref.referenceId); text(ref.title, 1000); text(ref.description);
     if (!ref.title.trim() || !Array.isArray(ref.tags) || ref.tags.length > 50 || new Set(ref.tags).size !== ref.tags.length || typeof ref.removed !== 'boolean') throw new Error('Invalid reference metadata.');
     ref.tags.forEach(tag => text(tag, 128));
     if (!Array.isArray(ref.versions) || !ref.versions.length) throw new Error('A reference must preserve its versions.');
     for (const v of ref.versions) {
-      // New IDs carry no kind prefix, so the old prefix can no longer reveal a swapped ID. The kind is fixed by
-      // where the ID sits (field/folder) and swaps are caught by the sealed checksum and project binding; this
-      // check additionally rejects a version ID that equals any reference ID.
-      if (v.referenceId !== ref.referenceId || !safeId(v.versionId, 'reference-version') || versions.has(v.versionId) || library.some(r => r.referenceId === v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
+      // Record IDs carry no kind prefix. The kind is fixed by where the ID sits (field/folder) and swaps are
+      // caught by the sealed checksum and project binding; this check additionally rejects a version ID that
+      // equals any reference ID.
+      if (v.referenceId !== ref.referenceId || !safeId(v.versionId) || versions.has(v.versionId) || library.some(r => r.referenceId === v.versionId) || !Number.isSafeInteger(v.size) || v.size < 0 || !checksum.test(v.sha256) || !Number.isFinite(Date.parse(v.importedAt))) throw new Error('Invalid attachment version metadata.');
       text(v.originalFilename, 1024); text(v.fileType, 256);
       if (v.savedBy !== undefined) validateReferenceAuthor(v.savedBy);
       if (!v.originalFilename || /[\x00-\x1f\x7f]/.test(v.originalFilename)) throw new Error('Invalid original attachment filename.');
@@ -96,37 +96,20 @@ async function commitDirectory(vault: FileSystemDirectoryAdapter, path: string[]
   const marker = await vault.getDirectory(path, { create: true, exclusiveCreate: true });
   if ((await marker.listEntries()).length) throw new Error('Reference publication directory is not empty.');
 }
-const isNewRecordId = (value: string): boolean => isRecordId(value);
 function publicationDirectoryName(id: string, sha256: string) {
-  // New record IDs are 22 characters and already short: `<recordId>.<compact sha>.done`.
-  if (isNewRecordId(id)) return `${id}.${compactHex(sha256)}.done`;
-  // Preserve every UUID/checksum bit, but omit the redundant record prefix and
-  // encode the bytes as base64url. The old enrollment marker made
-  // ordinary managed Windows project paths exceed the directory creation limit.
-  const uuid = id.slice(-36).replace(/-/g, '');
-  return `${compactHex(uuid)}.${compactHex(sha256)}.done`;
+  // Record IDs are 22 characters and already short: `<recordId>.<compact sha>.done`.
+  if (!isRecordId(id)) throw new Error('Invalid reference record ID for publication marker.');
+  return `${id}.${compactHex(sha256)}.done`;
 }
 export const referenceEnrollmentRecordPath = (id: string): string[] => [...DATA, 'enrollment', `${id}.json`];
 export const referenceEnrollmentMarkerPath = (id: string, sha256: string): string[] => [...DATA, 'enrollment', publicationDirectoryName(id, sha256)];
 export const referenceCatalogPath = (catalogId: string): string[] => [...DATA, 'catalogs', `${catalogId}.json`];
 export const referenceCatalogMarkerPath = (catalogId: string, sha256: string): string[] => [...DATA, 'completed', publicationDirectoryName(catalogId, sha256)];
 export const referenceContextPath = (revisionId: string): string[] => [...DATA, 'contexts', `${revisionId}.json`];
-function directoryPublication(name: string, prefix: string) {
-  // A new record ID and a legacy compact UUID are both 22 characters. Legacy IDs come from
-  // crypto.randomUUID() (v4): byte 6 is 0x4_, so base64url character 8 (bits 48-53) is one of Q/R/S/T and
-  // can never be '-'. A record ID always has '-' at index 8, so this test cleanly separates the two.
+function directoryPublication(name: string) {
   const fresh = /^(\d{8}-\d{6}-[0-9a-z]{6})\.([A-Za-z0-9_-]{43})\.done$/.exec(name);
-  if (fresh && isRecordId(fresh[1])) return { id: fresh[1], sha256: expandHex(fresh[2]) };
-  const compact = /^([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{43})\.done$/.exec(name);
-  if (compact) {
-    const uuid = expandHex(compact[1]).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
-    return { id: `${prefix}-${uuid}`, sha256: expandHex(compact[2]) };
-  }
-  // Retain the original directory format for already-published vaults.
-  const match = /^(.+)\.([a-f0-9]{64})\.done$/.exec(name);
-  // Legacy-only: a record ID with a full-hex checksum is a shape that never existed and must be rejected.
-  if (!match || !new RegExp(`^${prefix}-[0-9a-f-]{36}$`).test(match[1])) throw new Error('Unexpected reference publication directory.');
-  return { id: match[1], sha256: match[2] };
+  if (!fresh || !isRecordId(fresh[1])) throw new Error('Unexpected reference publication directory.');
+  return { id: fresh[1], sha256: expandHex(fresh[2]) };
 }
 async function readDirectoryPublication(vault: FileSystemDirectoryAdapter, markerPath: string[], recordPath: string[], sha256: string) {
   if ((await (await vault.getDirectory(markerPath)).listEntries()).length) throw new Error('Reference publication directory was modified.');
@@ -139,9 +122,9 @@ async function readEnrollment(vault: FileSystemDirectoryAdapter, state: VaultSta
   const published: Boundary[] = [], prepared: string[] = [], completed = new Set<string>();
   const pending = await vault.hasDirectory(path);
   if (pending) for (const entry of await (await vault.getDirectory(path)).listEntries()) {
-    if (entry.kind === 'file' && entry.name.endsWith('.json') && safeId(entry.name.slice(0, -5), 'reference-enrollment')) prepared.push(entry.name);
+    if (entry.kind === 'file' && entry.name.endsWith('.json') && safeId(entry.name.slice(0, -5))) prepared.push(entry.name);
     else {
-      const marker = directoryPublication(entry.name, 'reference-enrollment');
+      const marker = directoryPublication(entry.name);
       if (entry.kind !== 'directory' || completed.has(marker.id)) throw new Error('Invalid or competing reference enrollment publication.');
       completed.add(marker.id);
       published.push(await readDirectoryPublication(vault, [...path, entry.name], [...path, `${marker.id}.json`], marker.sha256));
@@ -216,7 +199,7 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     const catalogs: { record: ReferenceCatalog; sha256: string }[] = [];
     if (await vault.hasDirectory([...DATA, 'completed'])) for (const entry of await (await vault.getDirectory([...DATA, 'completed'])).listEntries()) {
       if (entry.kind === 'directory') {
-        const marker = directoryPublication(entry.name, 'reference-catalog');
+        const marker = directoryPublication(entry.name);
         const record: ReferenceCatalog = await readDirectoryPublication(vault, [...DATA, 'completed', entry.name], [...DATA, 'catalogs', `${marker.id}.json`], marker.sha256);
         validateSeal(record, state.project.projectId);
         if (record.catalogId !== marker.id) throw new Error('Reference catalog publication mismatch.');
@@ -226,7 +209,7 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
       // Existing file markers remain strict: malformed committed evidence is
       // not reclassified as an interrupted attempt or silently discarded.
       const catalogId = entry.name.replace(/\.done\.json$/, '');
-      if (entry.kind !== 'file' || !safeId(catalogId, 'reference-catalog') || entry.name !== `${catalogId}.done.json`) throw new Error('Unexpected reference catalog publication.');
+      if (entry.kind !== 'file' || !safeId(catalogId) || entry.name !== `${catalogId}.done.json`) throw new Error('Unexpected reference catalog publication.');
       const marker = JSON.parse(await vault.readFileText([...DATA, 'completed', entry.name])); validateSeal(marker, state.project.projectId);
       const content = await vault.readFileText([...DATA, 'catalogs', `${catalogId}.json`]);
       const record: ReferenceCatalog = JSON.parse(content); validateSeal(record, state.project.projectId);
@@ -243,7 +226,7 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     if (current) { result.library = current.record.references; result.catalogId = current.record.catalogId; result.catalogSha256 = current.sha256; }
     if (await vault.hasDirectory([...DATA, 'catalogs'])) for (const entry of await (await vault.getDirectory([...DATA, 'catalogs'])).listEntries()) {
       const id = entry.name.replace(/\.json$/, '');
-      if (entry.kind !== 'file' || !safeId(id, 'reference-catalog')) throw new Error('Unexpected reference catalog evidence.');
+      if (entry.kind !== 'file' || !safeId(id)) throw new Error('Unexpected reference catalog evidence.');
       if (!result.catalogs[id]) state.incompleteAttempts.push({ id, kind: 'uncompleted_reference', path: `references/catalogs/${entry.name}`, detail: 'Reference import/edit has no verified publication marker.' });
     }
     let contextError = '';
