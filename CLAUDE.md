@@ -61,7 +61,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 
 **IDs** (`src/engine/ids.ts`, the generators and validators):
 - Record ID `YYYYMMDD-HHMMSS-xxxxxx`: UTC time plus 6 random lowercase `[0-9a-z]`. Used for design cases (branch IDs), revisions, references and Knowledge Lab records.
-- Event ID `YYYYMMDD-HHMMSS`, with `-2`…`-999` on a clash. Used for Apply operations.
+- Event ID `YYYYMMDD-HHMMSS`, with `-2`…`-999` on a clash. Used for Apply operations and for recovery attempts of an interrupted Apply (`applications/<case>/<apply>/unexpected/<recovery>/`).
 - Main stays `branch-main`. No type prefixes. Branch and project names never go into IDs. Order never comes from an ID.
 - Vault objects stay content-addressed: `objects/<2>/<sha256>.bin`.
 - Clashes are detected with `FileConflictError` (`src/engine/fs-adapter.ts`) and then redrawn or counted, never overwritten.
