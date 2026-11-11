@@ -8,7 +8,8 @@ import { createIdentityReview } from './component-identity';
 import { scanBranchChanges } from './scanner';
 import { inventorySignature, readVerifiedInventory } from './copy-service';
 import { getObjectPathSegments } from './object-store';
-import { prepareReviewExport, exportFolderBaseName, exportRevisionForReview, suggestReviewExportFolder, ReviewExportError } from './review-export';
+import { isReservedFolderName, withCounter } from './folder-names';
+import { prepareReviewExport, exportFolderBaseName, acceptsExportFolderName, exportRevisionForReview, suggestReviewExportFolder, ReviewExportError } from './review-export';
 
 const notes = { problem: 'Check fit', modification: 'Initial geometry', observations: 'For review' };
 const complete = { kind: 'complete' as const, selectedPaths: [], labelFilenames: false };
@@ -226,4 +227,27 @@ test('the standard clash counter is proposed case-insensitively and only that sh
     await assert.rejects(f.run(f.plan, { folderName: f.plan.folderName + bad }), /destination name/, bad);
   }
   await assert.rejects(f.run(f.plan, { folderName: 'Other' }), /destination name/);
+});
+
+test('a reserved device-name base gets the standard counter, stays within 64 and round-trips through clashes', async () => {
+  for (const [project, branch] of [['CON.x', 'Main'], ['nul.txt', 'Main'], ['Gripper', 'CON.x'], ['Gripper', 'nul.txt'], ['com1.' + 'y'.repeat(40), 'Main']]) {
+    const base = exportFolderBaseName(project, branch, 'R01');
+    assert.ok(!isReservedFolderName(base), base);
+    assert.ok(base.length <= 64, base);
+  }
+  assert.equal(exportFolderBaseName('CON.x', 'Main', 'R01'), 'CON (2).x - Main - R01');
+  const f = await fixture();
+  const base = exportFolderBaseName('CON.x', 'Main', 'R01');
+  assert.ok(acceptsExportFolderName(base, base) && acceptsExportFolderName(base, base + ' (3)') && !acceptsExportFolderName(base, base + '-2'));
+  await f.parent.getDirectory([base], { create: true });
+  const next = await suggestReviewExportFolder(f.parent, base);
+  assert.equal(next, base + ' (2)');
+  assert.equal(withCounter(base, 2), next);
+  await f.parent.getDirectory([next], { create: true });
+  assert.equal(await suggestReviewExportFolder(f.parent, base), base + ' (3)');
+});
+
+test('truncation of project and branch parts strips a trailing space or dot', () => {
+  const project = 'A'.repeat(27) + ' . tail', branch = 'B'.repeat(23) + ' . tail';
+  assert.equal(exportFolderBaseName(project, branch, 'R01'), 'A'.repeat(27) + ' - ' + 'B'.repeat(23) + ' - R01');
 });

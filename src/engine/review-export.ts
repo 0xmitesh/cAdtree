@@ -8,7 +8,7 @@ import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
 import { computeManifestPayloadChecksum, openExistingVault } from './vault-service';
 import { validateWindowsSegments } from '../utils/folder-path';
-import { folderNameFor, pickFreeName, withCounter } from './folder-names';
+import { folderNameFor, isReservedFolderName, pickFreeName, withCounter } from './folder-names';
 import type { FileEntry, VaultState } from './types';
 
 export interface ReviewExportRequest {
@@ -49,11 +49,19 @@ function capUnits(text: string, limit: number): string {
 }
 /** Readable export folder base: `Project - Branch - R03`, at most 64 UTF-16 units. */
 export function exportFolderBaseName(projectName: string, branchName: string, revisionLabel: string): string {
-  const project = capUnits(folderNameFor(projectName, 'Project'), 28) || 'Project';
   const branch = capUnits(folderNameFor(branchName, 'Branch'), 24) || 'Branch';
-  return folderNameFor(`${project} - ${branch} - ${revisionLabel}`, 'Export');
+  const build = (projectLimit: number) => {
+    const project = capUnits(folderNameFor(projectName, 'Project'), projectLimit) || 'Project';
+    return folderNameFor(`${project} - ${branch} - ${revisionLabel}`, 'Export');
+  };
+  const base = build(28);
+  if (!isReservedFolderName(base)) return base;
+  // "CON.x - …" is a reserved device name: the standard counter goes before the first dot.
+  // The project part gives up 4 units so " (2)" keeps the whole base within 64.
+  const shorter = build(24);
+  return isReservedFolderName(shorter) ? withCounter(shorter, 2) : shorter;
 }
-function acceptsExportFolderName(base: string, name: string): boolean {
+export function acceptsExportFolderName(base: string, name: string): boolean {
   if (name === base) return true;
   for (const prefix of [base + ' (']) {
     if (!name.startsWith(prefix) || !name.endsWith(')')) continue;
