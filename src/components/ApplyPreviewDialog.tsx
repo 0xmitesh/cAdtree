@@ -33,6 +33,29 @@ export interface ApplicationController {
   refresh?: () => Promise<void>;
 }
 
+const plural = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
+function countsLine(
+  add: number,
+  replace: number,
+  remove: number,
+  revert: boolean,
+): string {
+  if (revert)
+    return [
+      add ? `${plural(add, "file", "files")} brought back` : "",
+      replace ? `${replace} replaced` : "",
+      remove ? `${remove} removed` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  return [
+    plural(add, "addition", "additions"),
+    plural(replace, "replacement", "replacements"),
+    plural(remove, "deletion", "deletions"),
+  ].join(" · ");
+}
+
 export function ApplyPreviewDialog({
   state,
   sourceId,
@@ -134,6 +157,12 @@ function ApplyPreviewBody({
   );
   const branchName = (revision: ReconstructedRevision) =>
     caseLabel(state, revision.manifest.branchId);
+  const endpointCards = revert
+    ? [
+        { key: "now", title: `Now · ${caseLabel(state, context.destinationBranchId)}`, revision: context.destination },
+        { key: "back", title: `Bring back · ${formatRevisionNumber(context.source.manifest.displayNumber)}`, revision: context.source },
+      ]
+    : null;
   const endpoints = [
     { side: "Base", revision: context.base },
     { side: "Source", revision: context.source },
@@ -274,9 +303,16 @@ function ApplyPreviewBody({
         <p>
           Open the destination in CAD, check references and rebuild, and make
           any necessary adjustments. Use the normal Changes → Save revision flow
-          to preserve the final complete snapshot and application provenance.
+          to preserve the final complete snapshot and{" "}
+          {revert
+            ? "keep this bring-back in the revision's history."
+            : "application provenance."}
         </p>
-        <p>The source Design Case and its saved history remain available.</p>
+        <p>
+          {revert
+            ? `${sourceLabel} and ${destinationName}'s latest saved revision both stay in history.`
+            : "The source Design Case and its saved history remain available."}
+        </p>
         <div className="modal-actions">
           <button
             ref={completionFocus}
@@ -326,20 +362,16 @@ function ApplyPreviewBody({
           The destination matched its saved baseline during preparation. It will
           be rechecked under the project writer lock before application.
         </p>
-        <h3>Confirmed additions, replacements and deletions</h3>
+        <h3>{revert ? "Confirmed changes" : "Confirmed additions, replacements and deletions"}</h3>
         {revert ? (
           <p>
             <strong>
-              {[
-                [prepared.plan.actions.filter((a) => a.operation === "add").length, "brought back"],
-                [prepared.plan.actions.filter((a) => a.operation === "replace").length, "replaced"],
-                [prepared.plan.actions.filter((a) => a.operation === "delete").length, "removed"],
-              ]
-                .filter(([n]) => n)
-                .map(([n, w], i) =>
-                  i === 0 ? `${n} ${n === 1 ? "file" : "files"} ${w}` : `${n} ${w}`,
-                )
-                .join(" · ")}
+              {countsLine(
+                prepared.plan.actions.filter((a) => a.operation === "add").length,
+                prepared.plan.actions.filter((a) => a.operation === "replace").length,
+                prepared.plan.actions.filter((a) => a.operation === "delete").length,
+                true,
+              )}
             </strong>
           </p>
         ) : null}
@@ -423,12 +455,27 @@ function ApplyPreviewBody({
         <Notice>
           {application
             ? "Saved-state review — no files change until preparation and final confirmation. Preparation rejects uncaptured destination edits."
-            : "Preview only — no files will be applied. This uses saved states."}
+            : "Preview only — no files will be applied. This uses saved states."}{" "}
           Current uncaptured working edits are not included and are not
           authorized for replacement.
         </Notice>
-        <div className="preview-endpoints preview-three-columns">
-          {endpoints.map(({ side, revision }) => (
+        <div className={revert ? "preview-endpoints" : "preview-endpoints preview-three-columns"}>
+          {endpointCards ? endpointCards.map(({ key, title, revision }) => (
+            <section key={key} aria-label={title}>
+              <h3>{title}</h3>
+              <strong>
+                {formatRevisionNumber(revision.manifest.displayNumber)} ·{" "}
+                {branchName(revision)}
+              </strong>
+              <p>{revision.manifest.summary}</p>
+              <span className="muted small">
+                {revision.manifest.files.length} files ·{" "}
+                {revision.integrityStatus === "objects_verified"
+                  ? "Metadata and file contents previously verified"
+                  : "Metadata verified · contents not checked"}
+              </span>
+            </section>
+          )) : endpoints.map(({ side, revision }) => (
             <section key={side} aria-label={`${side} saved revision`}>
               <h3>
                 {side}
@@ -451,9 +498,9 @@ function ApplyPreviewBody({
           ))}
         </div>
         <p className="muted small">
-          Base is the nearest shared ancestor established from validated parent
-          relationships. This preview compares byte hashes; it does not merge
-          geometry or verify CAD compatibility.
+          {revert
+            ? "Compares saved byte hashes of the two revisions; it does not merge geometry or verify CAD compatibility."
+            : "Base is the nearest shared ancestor established from validated parent relationships. This preview compares byte hashes; it does not merge geometry or verify CAD compatibility."}
         </p>
         <div
           className="comparison-scope"
@@ -462,18 +509,12 @@ function ApplyPreviewBody({
         >
           <strong>Proposed result: {plan.resultFiles.length} files</strong>
           <span>
-            {operations.filter((action) => action.operation === "add").length}{" "}
-            additions ·{" "}
-            {
-              operations.filter((action) => action.operation === "replace")
-                .length
-            }{" "}
-            replacements ·{" "}
-            {
-              operations.filter((action) => action.operation === "delete")
-                .length
-            }{" "}
-            deletions
+            {countsLine(
+              operations.filter((action) => action.operation === "add").length,
+              operations.filter((action) => action.operation === "replace").length,
+              operations.filter((action) => action.operation === "delete").length,
+              revert,
+            )}
           </span>
         </div>
         <div
@@ -496,7 +537,9 @@ function ApplyPreviewBody({
             <p>
               Nothing has been written.{" "}
               {application
-                ? "Prepare application to check the destination, then review and confirm the working-file changes."
+                ? revert
+                  ? "Prepare bring-back to check the working folder, then review and confirm the working-file changes."
+                  : "Prepare application to check the destination, then review and confirm the working-file changes."
                 : "Working edits and actual application require a later, separate step."}
             </p>
           )}
@@ -560,10 +603,10 @@ function ApplyPreviewBody({
           </div>
         </details>
         <section
-          aria-label="Source changes to review"
+          aria-label={revert ? "Changes to review" : "Source changes to review"}
           className="preview-candidates"
         >
-          <h3>Source changes to review ({candidates.length})</h3>
+          <h3>{revert ? "Changes to review" : "Source changes to review"} ({candidates.length})</h3>
           <p className="muted small">
             {revert
               ? `All changes are selected. Nothing is lost: ${destinationName}'s latest saved revision stays in history, and the files you replace are kept with this operation. Save a revision afterwards.`

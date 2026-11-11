@@ -226,3 +226,74 @@ test("AppliedFrom: a revert says Brought back from <rev> without Base; a merge k
   assert.match(merge.container.textContent!, /Applied from Rev 008 · Prototype/);
   assert.match(merge.container.textContent!, /Base:/);
 });
+
+test("revert dialog: two endpoint cards, revert note and counts, Changes to review heading, no merge-only leftovers", () => {
+  const ui = render(
+    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
+  );
+  assert.ok(ui.getByRole("region", { name: "Now · Main" }).textContent!.includes("Rev 006"));
+  assert.ok(ui.getByRole("region", { name: "Bring back · Rev 003" }).textContent!.includes("Rev 003"));
+  assert.equal(ui.queryByRole("region", { name: "Base saved revision" }), null);
+  assert.ok(ui.getByText("Compares saved byte hashes of the two revisions; it does not merge geometry or verify CAD compatibility."));
+  assert.doesNotMatch(ui.container.textContent!, /nearest shared ancestor/);
+  assert.match(
+    ui.getByRole("status", { name: "Proposed result summary" }).textContent!,
+    /1 file brought back · 1 replaced · 1 removed/,
+  );
+  assert.ok(ui.getByRole("region", { name: "Changes to review" }));
+  assert.ok(ui.getByText("Changes to review (3)"));
+  assert.match(ui.container.textContent!, /saved states\. Current uncaptured/);
+});
+
+test("merge dialog keeps three cards and singular/plural counts", () => {
+  const state = scenarioState("branches");
+  state.revisions[7].manifest.files.push({ path: "New/Part.SLDPRT", sha256: "new", size: 3, lastModified: 0 });
+  const ui = render(
+    <ApplyPreviewDialog state={state} sourceId="p2" destinationBranchId="branch-main" onClose={() => {}} />,
+  );
+  for (const side of ["Base", "Source", "Destination"])
+    assert.ok(ui.getByRole("region", { name: `${side} saved revision` }));
+  assert.ok(ui.getByRole("region", { name: "Source changes to review" }));
+  const summary = () => ui.getByRole("status", { name: "Proposed result summary" }).textContent!;
+  assert.match(summary(), /^Proposed result: \d+ files0 additions · 0 replacements · 0 deletions$/);
+  fireEvent.click(ui.getByRole("checkbox", { name: "Select source addition: New/Part.SLDPRT" }));
+  assert.match(summary(), /1 addition · 0 replacements · 0 deletions/);
+});
+
+test("revert completion names both revisions; merge completion keeps its wording", async () => {
+  const run = async (mode: "revert" | "merge", sourceId: string, checkboxName: string) => {
+    const state = fixture();
+    if (mode === "merge") state.revisions[7].manifest.files.push({ path: "New.txt", sha256: "new", size: 3, lastModified: 0 });
+    const controller: ApplicationController = {
+      progress: null,
+      cancel: () => {},
+      prepare: async (review) => {
+        const prep = prepareApplyPreview(state, sourceId, "branch-main", mode);
+        if (prep.status !== "available") throw new Error(prep.reason);
+        return { review, plan: buildApplyPreview(prep.context, review.choices, review.reason), destinationName: "main", branchName: "Main", connection: new InMemoryFileSystemAdapter("main") };
+      },
+      apply: async () => {},
+    };
+    const ui = render(<ApplyPreviewDialog state={state} sourceId={sourceId} destinationBranchId="branch-main" mode={mode} application={controller} onClose={() => {}} />);
+    if (mode === "merge") fireEvent.click(ui.getByRole("checkbox", { name: checkboxName }));
+    const label = mode === "revert" ? "Engineering reason for bringing this back" : "Engineering reason for proposed application";
+    fireEvent.change(ui.getByRole("textbox", { name: label }), { target: { value: "why" } });
+    if (mode === "revert") assert.match(ui.container.textContent!, /Prepare bring-back to check the working folder, then review and confirm/);
+    fireEvent.click(ui.getByRole("button", { name: mode === "revert" ? "Prepare bring-back" : "Prepare application" }));
+    const confirm = await waitFor(() => ui.getByRole("dialog", { name: /^Confirm/ }));
+    fireEvent.click(within(confirm).getByRole("checkbox"));
+    fireEvent.click(within(confirm).getByRole("button", { name: /confirmed changes$/ }));
+    return { ui, confirm };
+  };
+  const rv = await run("revert", "r3", "");
+  assert.ok(within(rv.confirm).getByText("Confirmed changes"));
+  const done = await waitFor(() => rv.ui.getByRole("dialog", { name: "Bring back completed" }));
+  assert.match(done.textContent!, /Rev 003 and Main's latest saved revision both stay in history\./);
+  assert.match(done.textContent!, /keep this bring-back in the revision's history/);
+  assert.doesNotMatch(done.textContent!, /Design Case|provenance/);
+  cleanup();
+  const mg = await run("merge", "p2", "Select source addition: New.txt");
+  const doneM = await waitFor(() => mg.ui.getByRole("dialog", { name: "Application completed" }));
+  assert.match(doneM.textContent!, /The source Design Case and its saved history remain available\./);
+  assert.match(doneM.textContent!, /application provenance/);
+});
