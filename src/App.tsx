@@ -130,6 +130,7 @@ import {
   importProject,
   resolveManagedProject,
   createManagedBranch,
+  DUPLICATE_PROJECT_REASON,
   type WorkspaceState,
   type ManagedProject,
   type WorkspaceProjectEntry,
@@ -152,6 +153,41 @@ type PendingAuthAction =
 
 const PROJECT_NEEDS_ATTENTION =
   "This project location needs attention. Open the workspace to inspect it.";
+const PROJECT_NOT_FOUND =
+  "This project's folder can't be found in the workspace any more.";
+/** Info-level stop: the open project was re-found at a new folder and nothing was written. */
+class ProjectRenamedNotice extends Error {}
+const renamedNotice = (project: ManagedProject) =>
+  `This project's folder was renamed to '${project.record.containerPath.split("/").pop()}'. cAdtree found it by its project ID.`;
+type OpenProjectLookup =
+  | { kind: "ok"; workspace: WorkspaceState; project: ManagedProject; renamed: boolean }
+  | { kind: "unavailable"; workspace: WorkspaceState; reason: string };
+/** Identity is the project ID alone: never the folder name or a stored path. */
+const locateProjectById = (
+  current: WorkspaceState,
+  projectId: string,
+  storedPath: string,
+): OpenProjectLookup => {
+  const matches = current.projects.filter((entry) => entry.projectId === projectId);
+  if (matches.length > 1 || matches[0]?.status === "duplicate")
+    return { kind: "unavailable", workspace: current, reason: DUPLICATE_PROJECT_REASON };
+  const entry = matches[0];
+  if (!entry?.project) {
+    // A damaged or incomplete folder at the stored location is not "gone": it needs a look.
+    const stillThere = current.projects.some((e) => !e.projectId && e.containerPath === storedPath);
+    return {
+      kind: "unavailable",
+      workspace: current,
+      reason: stillThere ? PROJECT_NEEDS_ATTENTION : PROJECT_NOT_FOUND,
+    };
+  }
+  return {
+    kind: "ok",
+    workspace: current,
+    project: entry.project,
+    renamed: entry.containerPath !== storedPath,
+  };
+};
 
 export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const sidebar = useSidebarWidth();
@@ -239,6 +275,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     "workspace",
   );
   const [projectSession, setProjectSession] = useState(0);
+  // Set when the open project can't be re-found by its ID (gone, or copied so the ID is shared): read-only.
+  const [projectUnavailable, setProjectUnavailable] = useState<string | null>(null);
+  // A rename found in the middle of a read operation, shown once that operation reports.
+  const renameNoticeRef = useRef<string | null>(null);
   const [vaultDir, setVaultDir] = useState<FileSystemDirectoryAdapter | null>(
     null,
   );
@@ -265,6 +305,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     contextVersion.current++;
     setLearningOpen(false);
     setManagedProject(null);
+    setProjectUnavailable(null);
     setVaultState(null);
     setVaultDir(null);
     setWorkingFolders({});
@@ -397,7 +438,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       if (current())
         setStatusBanner({
           type:
-            error instanceof DOMException && error.name === "AbortError"
+            (error instanceof DOMException && error.name === "AbortError") ||
+            error instanceof ProjectRenamedNotice
               ? "info"
               : "error",
           message: error instanceof Error ? error.message : String(error),
@@ -540,6 +582,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     contextVersion.current++;
     setLearningOpen(false);
     setManagedProject(null);
+    setProjectUnavailable(null);
     setVaultState(null);
     setVaultDir(null);
     setWorkingFolders({});
@@ -1019,6 +1062,59 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
+  // Re-find the open project by its ID (a rename in Explorer or Finder changes only its location).
+  // A rename is rebound in memory; none, several or duplicate copies make the project read-only. Never writes.
+  const refindOpenProject = async (
+    context: Context,
+    prescanned?: WorkspaceState,
+  ): Promise<OpenProjectLookup | null> => {
+    if (!managedProject || !workspace) return null;
+    const current = prescanned ?? (await openWorkspace(workspace.root));
+    const found = locateProjectById(
+      current,
+      managedProject.record.projectId,
+      managedProject.record.containerPath,
+    );
+    if (!context.current()) return found;
+    setWorkspace(current);
+    if (found.kind === "unavailable") {
+      setProjectUnavailable(found.reason);
+      return found;
+    }
+    setProjectUnavailable(null);
+    if (found.renamed) {
+      const project = found.project;
+      setManagedProject(project);
+      setVaultDir(project.vaultDir);
+      setVaultState(project.vaultState);
+      setWorkingFolders(project.workingFolders);
+      setWorkingDir(project.workingFolders[activeBranchId] ?? null);
+      setScanResult(null);
+      void persistWorkspace(
+        current,
+        { path: project.record.containerPath, id: project.record.projectId },
+        activeBranchId,
+      );
+    }
+    return found;
+  };
+  // Run before every write: a project that was renamed, removed or duplicated while open must not be written to.
+  // A rename is rebound, then the operation stops so nothing lands in a location the user didn't see.
+  const assertProjectWritable = async (
+    context: Context,
+    readOnlyOperation = false,
+  ): Promise<ManagedProject | null> => {
+    const found = await refindOpenProject(context);
+    if (!found) return null;
+    if (found.kind === "unavailable") throw new Error(found.reason);
+    if (found.renamed)
+      throw new ProjectRenamedNotice(
+        readOnlyOperation
+          ? renamedNotice(found.project)
+          : `${renamedNotice(found.project)} Nothing was written. Try again to continue at the new location.`,
+      );
+    return found.project;
+  };
   const refreshWorkspace = async () => {
     if (!workspace) return;
     await perform("connect", async (context) => {
@@ -1027,16 +1123,15 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       const current = await openWorkspace(workspace.root);
       if (context.current()) setWorkspace(current);
       if (managedProject) {
-        const managed = await resolveManagedProject(
-          workspace.root,
-          managedProject.record.containerPath,
-        );
-        if (context.current()) {
-          setManagedProject(managed);
-          setVaultState(managed.vaultState);
-          setWorkingFolders(managed.workingFolders);
-          setWorkingDir(managed.workingFolders[activeBranchId] ?? null);
+        const found = await refindOpenProject(context, current);
+        if (found?.kind === "ok" && context.current()) {
+          setManagedProject(found.project);
+          setVaultState(found.project.vaultState);
+          setWorkingFolders(found.project.workingFolders);
+          setWorkingDir(found.project.workingFolders[activeBranchId] ?? null);
           setScanResult(null);
+          if (found.renamed)
+            setStatusBanner({ type: "info", message: renamedNotice(found.project) });
         }
       }
     });
@@ -1078,6 +1173,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       ? preferred!
       : MAIN_BRANCH_ID;
     setManagedProject(project);
+    setProjectUnavailable(null);
     setBannerScope("project");
     await installProject(
       project.vaultState,
@@ -1355,20 +1451,41 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     folders: WorkingFolderBindings,
     branchId: string,
     context: Context,
-    managedContext: {
+    explicitContext?: {
       root: FileSystemDirectoryAdapter;
       path: string;
-    } | null = managedProject && workspace
-      ? { root: workspace.root, path: managedProject.record.containerPath }
-      : null,
+    } | null,
   ) => {
     let folder = folders[branchId];
     let state: VaultState;
+    // Without an explicit location, the open project's stored path is used, and re-found by ID if it moved.
+    const managedContext =
+      explicitContext !== undefined
+        ? explicitContext
+        : managedProject && workspace
+          ? { root: workspace.root, path: managedProject.record.containerPath }
+          : null;
     if (managedContext) {
-      const current = await resolveManagedProject(
-        managedContext.root,
-        managedContext.path,
-      );
+      let current: ManagedProject;
+      try {
+        current = await resolveManagedProject(
+          managedContext.root,
+          managedContext.path,
+        );
+        if (
+          explicitContext === undefined &&
+          current.record.projectId !== managedProject?.record.projectId
+        )
+          throw new Error("The project at the stored location changed.");
+      } catch (error) {
+        if (explicitContext !== undefined) throw error;
+        const found = await refindOpenProject(context);
+        if (!found) throw error;
+        if (found.kind === "unavailable") throw new Error(found.reason);
+        current = found.project;
+        vault = current.vaultDir;
+        if (found.renamed) renameNoticeRef.current = renamedNotice(found.project);
+      }
       if (context.current()) {
         setManagedProject(current);
         setWorkingFolders(current.workingFolders);
@@ -1438,6 +1555,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setScanResult(null);
     setStatusBanner(null);
     await perform("scan", async (context) => {
+      await assertProjectWritable(context, true);
       const state = await openExistingVault(vaultDir);
       if (!context.current()) return;
       applyVaultState(state);
@@ -1495,12 +1613,16 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         activeBranchId,
         context,
       );
+      const renamed = renameNoticeRef.current;
+      renameNoticeRef.current = null;
       if (result && context.current())
         setStatusBanner({
           type: "info",
-          message: result.hasChanges
-            ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
-            : "This working folder matches its branch’s saved revision.",
+          message: `${renamed ? `${renamed} ` : ""}${
+            result.hasChanges
+              ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
+              : "This working folder matches its branch’s saved revision."
+          }`,
         });
     });
   };
@@ -1525,6 +1647,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       "capture",
       async (context) => {
         try {
+          await assertProjectWritable(context);
           const result = await captureRevision(workingDir, vaultDir, {
             ...params,
             referenceAuthor: authStateRef.current.user ? { id: authStateRef.current.user.uid, displayName: authStateRef.current.user.displayName || authStateRef.current.user.email || 'User' } : undefined,
@@ -1602,6 +1725,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       "scan",
       async (context) => {
         try {
+          await assertProjectWritable(context);
           if (
             (await vaultDir.queryPermission("readwrite")) !== "granted" &&
             (await vaultDir.requestPermission("readwrite")) !== "granted"
@@ -1646,6 +1770,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     const result = await perform(
       "apply",
       async (context) => {
+        await assertProjectWritable(context);
         await requestApplicationWriteAccess(vaultDir, workingDir);
         return prepareApplication(
           vaultDir,
@@ -1688,6 +1813,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       "apply",
       async (context) => {
         try {
+          await assertProjectWritable(context);
           await applyPreparedApplication(
             vaultDir,
             prepared,
@@ -1714,6 +1840,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       "apply",
       async (context) => {
         try {
+          await assertProjectWritable(context);
           await requestApplicationWriteAccess(vaultDir, workingDir);
           const result = await recoverApplication(
             vaultDir,
@@ -1745,6 +1872,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       "apply",
       async (context) => {
         try {
+          await assertProjectWritable(context);
           await abandonApplication(
             vaultDir,
             vaultState.project.projectId,
@@ -1768,6 +1896,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     await perform(
       "branch",
       async (context) => {
+        await assertProjectWritable(context);
         if (managedProject && workspace) {
           const current = await createManagedBranch(
             workspace.root,
@@ -1816,7 +1945,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const handleExportForReview: ExportReviewAction = async (plan, parent, folderName) => {
     if (!vaultDir || !vaultState) throw new Error('Open the saved project before exporting.');
-    const result = await perform('export', async context => exportRevisionForReview({
+    const result = await perform('export', async context => {
+      await assertProjectWritable(context);
+      return exportRevisionForReview({
       vaultDir, parent, plan, folderName, workingFolders,
       signal: context.signal, onProgress: context.progress,
       resolveWorkingFolders: managedProject && workspace ? async () => {
@@ -1824,7 +1955,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         if (current.record.projectId !== plan.projectId || !current.ready || current.issues.length) throw new Error('Reconnect the project to validate its working-folder isolation before exporting.');
         return current.workingFolders;
       } : undefined,
-    }), true);
+    });
+    }, true);
     if (!result) throw new Error('Export did not complete.');
     return result;
   };
@@ -1910,10 +2042,19 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setRememberedHome(null);
     if (workspace && managedProject) {
       const current = await openWorkspace(workspace.root);
-      const managed = await resolveManagedProject(
-        workspace.root,
+      const found = locateProjectById(
+        current,
+        managedProject.record.projectId,
         managedProject.record.containerPath,
       );
+      if (found.kind === "unavailable") {
+        setWorkspace(current);
+        setProjectUnavailable(found.reason);
+        setStatusBanner({ type: "error", message: found.reason });
+        return;
+      }
+      setProjectUnavailable(null);
+      const managed = found.project;
       setWorkspace(current);
       setManagedProject(managed);
       setVaultState(managed.vaultState);
@@ -1971,8 +2112,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     vaultState?.branches
       .filter((b) => !workingFolders[b.branchId])
       .map((b) => b.name) ?? [];
-  const managedBlockReason =
-    managedProject && (!managedProject.ready || managedProject.issues.length)
+  const managedBlockReason = managedProject && projectUnavailable
+    ? `Managed project is read-only. ${projectUnavailable}`
+    : managedProject && (!managedProject.ready || managedProject.issues.length)
       ? `Managed project is read-only. ${managedProject.issues.join(" ")}`
       : undefined;
   const projectView =
@@ -2421,6 +2563,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                       onEnableComponentTracking={async () => {
                         if (!vaultDir || !workingDir) return;
                         await perform('capture', async (context) => {
+                          await assertProjectWritable(context);
                           await requestApplicationWriteAccess(vaultDir, workingDir);
                           const updated = await enableComponentTracking(vaultDir);
                           if (context.current()) {
@@ -2503,6 +2646,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                             await perform(
                               "connect",
                               async (context) => {
+                                await assertProjectWritable(context);
                                 const current = await resolveManagedProject(
                                   workspace.root,
                                   managedProject.record.containerPath,

@@ -1,3 +1,4 @@
+import { DUPLICATE_PROJECT_REASON } from "../engine/workspace-service";
 import { pickDirectory } from "../utils/folder-access";
 import { useRef, useState } from "react";
 import { FolderOpen, Plus, RefreshCw } from "lucide-react";
@@ -139,7 +140,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
                   <p className="small">
                     {locations.length > 1
-                      ? "This project's ID exists at more than one location, so every copy stays read-only. Keep one location in the workspace and move the other copies out; histories are never combined."
+                      ? DUPLICATE_PROJECT_REASON
                       : locations[0].status === "ready"
                         ? "Managed project · One shared vault, independent working folders"
                         : locations[0].status === "incomplete"

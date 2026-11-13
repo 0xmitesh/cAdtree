@@ -380,6 +380,9 @@ export async function resolveManagedProject(
     ready,
   };
 }
+/** Shown wherever copies that share a project ID are kept read-only. */
+export const DUPLICATE_PROJECT_REASON =
+  "This project's ID exists at more than one location, so every copy stays read-only. Keep one location in the workspace and move the other copies out; histories are never combined.";
 export async function openWorkspace(
   root: FileSystemDirectoryAdapter,
 ): Promise<WorkspaceState> {
@@ -442,9 +445,7 @@ export async function openWorkspace(
   for (const entry of projects)
     if (entry.projectId && counts.get(entry.projectId)! > 1) {
       entry.status = "duplicate";
-      entry.issues.push(
-        "This project's ID exists at more than one location, so every copy stays read-only. Keep one location in the workspace and move the other copies out; histories are never combined.",
-      );
+      entry.issues.push(DUPLICATE_PROJECT_REASON);
     }
   if ((await workspaceIdentity(root)).workspaceId !== identity.workspaceId)
     throw new Error("Workspace identity changed during discovery.");
