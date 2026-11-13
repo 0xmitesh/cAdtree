@@ -197,7 +197,14 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                       </p>
                       <button
                         className="button secondary"
-                        disabled={busy || !entry.project}
+                        disabled={
+                          busy || !entry.project || entry.status === "duplicate"
+                        }
+                        title={
+                          entry.status === "duplicate"
+                            ? entry.issues.join(" ")
+                            : undefined
+                        }
                         onClick={() => run(() => props.onOpenProject(entry))}
                       >
                         Use this location
