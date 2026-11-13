@@ -26,7 +26,7 @@ Note: `docs/M1B-1-examples.json` predates the 11 Nov 2026 ID format change and u
 | Field | Meaning |
 | --- | --- |
 | `formatVersion: 1` | Storage envelope version; independent of payload schema version |
-| `recordId` | Permanent `knowledge-<UUID>` identity; allocated by default, optionally supplied for a controlled import |
+| `recordId` | Permanent record ID `YYYYMMDD-HHMMSS-xxxxxx` (`src/engine/ids.ts`); allocated by default, optionally supplied for a controlled import |
 | `recordType`, `schemaVersion` | Validator key, e.g. `cad.design-change` + `1` represents `cad.design-change.v1` |
 | `projectId` | Owning cAdtree project |
 | `createdAt` | Current recording time assigned inside the writer lock; never copied from a historical revision |
