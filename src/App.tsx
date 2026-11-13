@@ -488,7 +488,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const persistWorkspace = async (
     current: WorkspaceState,
-    projectPath?: string,
+    project?: { path: string; id: string },
     branchId?: string,
     currentHome = home,
   ) => {
@@ -497,13 +497,15 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       workspaceId: current.identity.workspaceId,
       name: current.identity.name,
       rootHandle: current.root.handle,
-      projectPath,
+      // The path is informational; the project is recognised by its ID.
+      projectPath: project?.path,
+      projectId: project?.id,
       activeBranchId: branchId,
     };
     setRememberedWorkspace(value);
-    if (projectPath && branchId)
+    if (project && branchId)
       branchContexts.current.set(
-        `${current.identity.workspaceId}:${projectPath}`,
+        `${current.identity.workspaceId}:${project.id}`,
         branchId,
       );
     try {
@@ -522,7 +524,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           name: currentHome.identity.name,
           rootHandle: currentHome.root.handle,
           workspaceId: current.identity.workspaceId,
-          projectPath,
+          projectPath: project?.path,
+          projectId: project?.id,
           activeBranchId: branchId,
         };
         await rememberHome(binding);
@@ -578,6 +581,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       rootHandle: root.handle,
       workspaceId: saved?.workspaceId,
       projectPath: saved?.projectPath,
+      projectId: saved?.projectId,
       activeBranchId: saved?.activeBranchId,
     };
     setRememberedHome(binding);
@@ -1059,13 +1063,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     const preferred =
       requestedBranchId ??
       branchContexts.current.get(
-        `${current.identity.workspaceId}:${project.record.containerPath}`,
+        `${current.identity.workspaceId}:${project.record.projectId}`,
       ) ??
       (rememberedWorkspace?.workspaceId === current.identity.workspaceId &&
-      rememberedWorkspace.projectPath === project.record.containerPath
+      rememberedWorkspace.projectId === project.record.projectId
         ? rememberedWorkspace.activeBranchId
         : rememberedHome?.workspaceId === current.identity.workspaceId &&
-            rememberedHome.projectPath === project.record.containerPath
+            rememberedHome.projectId === project.record.projectId
           ? rememberedHome.activeBranchId
           : MAIN_BRANCH_ID);
     const branchId = project.vaultState.branches.some(
@@ -1083,7 +1087,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     );
     const warning = await persistWorkspace(
       current,
-      project.record.containerPath,
+      { path: project.record.containerPath, id: project.record.projectId },
       branchId,
     );
     if (project.ready && !project.issues.length) {
@@ -1463,7 +1467,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         });
       }
       const warning = workspace && managedProject
-        ? await persistWorkspace(workspace, managedProject.record.containerPath, branchId)
+        ? await persistWorkspace(
+            workspace,
+            { path: managedProject.record.containerPath, id: managedProject.record.projectId },
+            branchId,
+          )
         : "";
       if (context.current())
         setStatusBanner(
@@ -1782,7 +1790,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           setScanResult(null);
           const warning = await persistWorkspace(
             workspace,
-            current.record.containerPath,
+            { path: current.record.containerPath, id: current.record.projectId },
             current.createdBranchId,
           );
           try {
@@ -1976,7 +1984,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         workspaceId: workspace.identity.workspaceId,
         workspaceKey: managedWorkspaceKey,
         ...(projectView && managedProject && vaultState
-          ? { view: "project", projectId: vaultState.project.projectId, projectPath: managedProject.record.containerPath, tab: activeTab as ProjectView }
+          ? { view: "project", projectId: vaultState.project.projectId, tab: activeTab as ProjectView }
           : { view: "workspace" }),
       } : { view: "intro" };
   useViewHistory({
@@ -2002,7 +2010,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         setActiveTab("connect");
         return true;
       }
-      if (target.view === "project" && sameWorkspace && target.projectId === managedProject?.record.projectId && target.projectPath === managedProject?.record.containerPath && vaultState) {
+      if (target.view === "project" && sameWorkspace && target.projectId === managedProject?.record.projectId && vaultState) {
         setHomeView(false);
         setActiveTab(target.tab);
         return true;
@@ -2013,7 +2021,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         await openHomeEntry(entry);
       } else {
         const available = entry?.workspace ?? (sameWorkspace ? workspace : null);
-        const project = available?.projects.find(p => p.projectId === target.projectId && p.containerPath === target.projectPath);
+        // Identity is the project ID alone. The folder may have been renamed since this entry was recorded.
+        const matches = available?.projects.filter(p => p.projectId === target.projectId) ?? [];
+        const project = matches.length === 1 ? matches[0] : undefined;
         if (!project?.project || project.status === "duplicate") return false;
         // Reopen other project locations through existing permission and identity validation.
         await openTreeProject(entry, project);
@@ -2050,7 +2060,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     home,
     workspace: homeView ? null : workspace,
     managedWorkspaceKey: homeView ? null : managedWorkspaceKey,
-    projectPath: managedProject?.record.containerPath,
+    projectId: managedProject?.record.projectId,
     activeVault: vaultState,
     activeBranchId,
     projectView,
@@ -2385,7 +2395,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                     <ChangesCaptureView
                       vaultState={vaultState}
                       draftCache={draftCache.current}
-                      draftKey={`${managedWorkspaceKey ?? workspace?.root.name ?? "external"}:${workspace?.identity.workspaceId ?? "external"}:${managedProject?.record.containerPath ?? vaultDir.name}:${vaultState.project.projectId}:${branch.branchId}`}
+                      draftKey={`${managedWorkspaceKey ?? workspace?.root.name ?? "external"}:${workspace?.identity.workspaceId ?? "external"}:${vaultState.project.projectId}:${branch.branchId}`}
                       activeBranchId={branch.branchId}
                       workingFolderName={
                         branch.branchId === activeBranchId

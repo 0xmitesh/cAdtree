@@ -30,7 +30,8 @@ export interface WorkspaceTreeProps {
   home: HomeState | null;
   workspace: WorkspaceState | null;
   managedWorkspaceKey: string | null;
-  projectPath?: string;
+  /** ID of the open project; rows are recognised by ID, so a folder rename keeps their state. */
+  projectId?: string;
   activeVault: VaultState | null;
   activeBranchId: string;
   projectView: boolean;
@@ -54,6 +55,16 @@ interface TreeNode {
   count?: number;
   readOnly?: boolean;
 }
+/**
+ * Expanded and focus state is keyed by project ID so it survives a folder rename.
+ * Copies sharing an ID (duplicates) and entries without a readable ID are never
+ * recognised by ID; their rows keep a location-based key, so they cannot collide.
+ */
+const projectNodeKey = (workspaceKey: string, entry: WorkspaceProjectEntry) =>
+  entry.projectId && entry.status !== "duplicate"
+    ? `${workspaceKey}/project:${entry.projectId}`
+    : `${workspaceKey}/unidentified:${entry.containerPath}`;
+
 interface VisibleNode extends TreeNode {
   depth: number;
   parent?: string;
@@ -75,8 +86,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       `external:${props.workspace.identity.workspaceId}`)
     : undefined;
   const projectKey =
-    workspaceKey && props.projectPath
-      ? `${workspaceKey}/project:${props.projectPath}`
+    workspaceKey && props.projectId
+      ? `${workspaceKey}/project:${props.projectId}`
       : undefined;
   const selectedKey =
     props.projectView && projectKey
@@ -92,9 +103,12 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     homeEntry?: HomeWorkspaceEntry,
   ): TreeNode[] =>
     workspace.projects.map((entry) => {
-      const keyForProject = `${key}/project:${entry.containerPath}`;
+      const keyForProject = projectNodeKey(key, entry);
       const active =
-        key === workspaceKey && entry.containerPath === props.projectPath;
+        key === workspaceKey &&
+        entry.status !== "duplicate" &&
+        entry.projectId !== undefined &&
+        entry.projectId === props.projectId;
       const vault = active
         ? (props.activeVault ?? entry.project?.vaultState)
         : entry.project?.vaultState;
