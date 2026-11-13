@@ -1,8 +1,8 @@
 import "../../tests/dom";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
-import { ApplyPreviewDialog } from "./ApplyPreviewDialog";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import { ApplyPreviewDialog, type ApplicationController } from "./ApplyPreviewDialog";
 import {
   HistoryRecoveryView,
   type HistoryRecoveryViewProps,
@@ -219,6 +219,34 @@ test("source, destination baseline and project changes reset selections, decisio
     />,
   );
   assert.equal((ui.getByRole("textbox") as HTMLTextAreaElement).value, "");
+});
+test("Refresh saved states keeps a conflict decision and the typed reason when the revisions are unchanged", async () => {
+  const state = fixture();
+  let ui!: ReturnType<typeof render>;
+  const dialog = (s: typeof state) => (
+    <ApplyPreviewDialog state={s} sourceId="p2" destinationBranchId="branch-main" application={controller} onClose={() => {}} />
+  );
+  const controller: ApplicationController = {
+    progress: null,
+    cancel: () => {},
+    prepare: async () => { throw new Error("not used"); },
+    apply: async () => {},
+    refresh: async () => { ui.rerender(dialog(structuredClone(state))); },
+  };
+  ui = render(dialog(state));
+  const decision = () => ui.getByRole("combobox", { name: `Conflict decision: ${path}` }) as HTMLSelectElement;
+  const reason = () => ui.getByRole("textbox", { name: "Engineering reason for proposed application" }) as HTMLTextAreaElement;
+  fireEvent.click(ui.getByRole("checkbox", { name: `Select source modification: ${path}` }));
+  fireEvent.change(decision(), { target: { value: "keep-destination" } });
+  fireEvent.change(reason(), { target: { value: "Keep the reviewed housing" } });
+  fireEvent.click(ui.getByRole("button", { name: "Refresh saved states" }));
+  await waitFor(() => assert.equal((ui.getByRole("button", { name: "Refresh saved states" }) as HTMLButtonElement).disabled, false));
+  assert.equal(
+    (ui.getByRole("checkbox", { name: `Select source modification: ${path}` }) as HTMLInputElement).checked,
+    true,
+  );
+  assert.equal(decision().value, "keep-destination");
+  assert.equal(reason().value, "Keep the reviewed housing");
 });
 test("unavailable shared ancestry stays explicit while ordinary Compare keeps its endpoint-only rules", () => {
   const state = fixture();

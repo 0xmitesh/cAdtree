@@ -56,6 +56,37 @@ function countsLine(
   ].join(" · ");
 }
 
+const isSelectable = (row: PreviewFileRow) =>
+  (row.kind === "available" || row.kind === "conflict") && !row.identityBlock;
+
+/** Carries the user's choices across a refresh of the saved states. A choice
+ * survives only while its row still exists, with the same kind, and can still
+ * be selected. In revert mode a newly selectable row is pre-selected, as on
+ * first open; so is a row whose choice was dropped while it was blocked, once
+ * it becomes selectable again. Returns `previous` itself when nothing changed. */
+export function reconcileChoices(
+  previous: Record<string, PreviewChoice>,
+  previousRows: PreviewFileRow[],
+  rows: PreviewFileRow[],
+  revert: boolean,
+): Record<string, PreviewChoice> {
+  const before = new Map(previousRows.map((row) => [row.path, row.kind]));
+  const next: Record<string, PreviewChoice> = {};
+  for (const row of rows) {
+    if (!isSelectable(row)) continue;
+    const kept =
+      before.get(row.path) === row.kind ? previous[row.path] : undefined;
+    if (kept) next[row.path] = kept;
+    else if (revert && row.kind === "available")
+      next[row.path] = { selected: true, decision: "use-source" };
+  }
+  const keys = Object.keys(next);
+  return keys.length === Object.keys(previous).length &&
+    keys.every((key) => next[key] === previous[key])
+    ? previous
+    : next;
+}
+
 export function ApplyPreviewDialog({
   state,
   sourceId,
@@ -124,7 +155,7 @@ function ApplyPreviewBody({
     revert
       ? Object.fromEntries(
           context.rows
-            .filter((row) => row.kind === "available" && !row.identityBlock)
+            .filter((row) => row.kind === "available" && isSelectable(row))
             .map((row) => [
               row.path,
               { selected: true, decision: "use-source" as ConflictDecision },
@@ -135,6 +166,15 @@ function ApplyPreviewBody({
     initialChoices,
   );
   const [reason, setReason] = useState("");
+  const previousRows = useRef(context.rows);
+  useEffect(() => {
+    const before = previousRows.current;
+    if (before === context.rows) return;
+    previousRows.current = context.rows;
+    setChoices((previous) =>
+      reconcileChoices(previous, before, context.rows, revert),
+    );
+  }, [context.rows, revert]);
   const [prepared, setPrepared] = useState<PreparedApplication | null>(null);
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
@@ -812,8 +852,6 @@ function ApplyPreviewBody({
                 setApplicationError("");
                 try {
                   await application.refresh!();
-                  setChoices(initialChoices());
-                  setReason("");
                 } catch (error) {
                   setApplicationError(
                     error instanceof Error ? error.message : String(error),
