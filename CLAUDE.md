@@ -140,13 +140,13 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Haiku:** only mechanical tasks, never engine code.
 
 **Git and PRs**
-- **Branches:** `cadtree-knowledge-lab` is the most up-to-date line, with all features plus the Knowledge Lab. `main` is merged later, only by the founder's decision.
+- **Branches:** `main` is the development line for everything, including the Knowledge Lab (since 2026-11-13). `cadtree-knowledge-lab` is frozen at `3fc4fdf`, the same tree as `main` when development moved; nothing new goes there.
 - **One PR per reviewed piece:**
-  - Use stacked branches named `item<N>/p<k>-…`, based on `cadtree-knowledge-lab` (`housekeeping/p<k>-…` or `docs/p<k>-…` for work outside an item).
+  - Use stacked branches named `item<N>/p<k>-…`, based on `main` (`housekeeping/p<k>-…` or `docs/p<k>-…` for work outside an item).
   - Merge with **merge commits, not squash**.
   - Each commit must pass lint and tests on its own.
 - **Before every merge:**
-  1. Fast-forward the local `knowledge-lab` checkout to the current GitHub `cadtree-knowledge-lab`. Never test against a stale copy.
+  1. Fast-forward the local `main` checkout to the current GitHub `main`. Never test against a stale copy.
   2. Test the piece on top of it.
   3. After merging, confirm the GitHub tree equals the tested tree.
   4. Fast-forward the local checkout again.
@@ -182,16 +182,16 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 **Local checkouts**
 | Machine | Location |
 |---|---|
-| Windows | `C:\Users\1\Documents\cAdtree\{main,knowledge-lab,_test-home}` |
-| Mac | `~/Documents/cadtree/{main,knowledge-lab}` |
+| Windows | `C:\Users\1\Documents\cAdtree\{main,_test-home}` |
+| Mac | `~/Documents/cadtree/main` (an old `knowledge-lab` checkout there is retired and can be removed) |
 
 On Windows, `_test-home` has a deliberately deep path for reproducing path-budget problems.
 
 **Agent environment** (Claude sessions with a connected folder):
 - **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
-- **Running tests:** run them in the cloud session's own clone of GitHub `cadtree-knowledge-lab`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
-- **Updating the local checkouts:** after each merge, fast-forward the matching checkout (`knowledge-lab` after a merge into `cadtree-knowledge-lab`, `main` after a merge into `main`) with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards.
+- **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
+- **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards.
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
 - **Git writes need delete permission:** git has to delete its own lock files and replace files in the connected folder. Request delete permission at the first git write of each session **and again after the desktop app reconnects** (the grant doesn't survive a reconnect). Before any git write, check that a test delete works and **stop if it fails**: without permission a fast-forward half-applies, leaving `.git/index.lock` and partly written files.
 
@@ -238,6 +238,6 @@ These are decided. Build on them; don't redesign around them. The full decision 
 
 **How we work**
 - One stable `CLAUDE.md` in the repo plus one living status doc in the Project; no new handoff documents (2026-11-10).
-- Every item: read the code, write a design note, get the founder's approval, then deliver in small reviewed PRs into `cadtree-knowledge-lab` with merge commits, each tested on top of the current GitHub head (2026-11-10).
-- `main` is merged only by the founder's decision (the status doc records the last merge).
+- Every item: read the code, write a design note, get the founder's approval, then deliver in small reviewed PRs into `main` with merge commits, each tested on top of the current GitHub head (2026-11-10).
+- All development, including the Knowledge Lab, happens on `main`; `cadtree-knowledge-lab` is frozen (2026-11-13).
 - Cost-aware orchestration: Opus orchestrates and reviews; Sonnet executes and gives the independent review (§4); Haiku only for mechanical chores, never engine code.
