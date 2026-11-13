@@ -179,7 +179,9 @@ export interface RememberedWorkspace {
   workspaceId: string;
   name: string;
   rootHandle: FileSystemDirectoryHandle;
+  /** Informational only; the project is recognised by `projectId`. */
   projectPath?: string;
+  projectId?: string;
   activeBranchId?: string;
 }
 export async function rememberWorkspace(binding: RememberedWorkspace): Promise<void> {
@@ -207,7 +209,9 @@ export interface RememberedHome {
   name: string;
   rootHandle: FileSystemDirectoryHandle;
   workspaceId?: string;
+  /** Informational only; the project is recognised by `projectId`. */
   projectPath?: string;
+  projectId?: string;
   activeBranchId?: string;
 }
 export async function rememberHome(binding: RememberedHome): Promise<void> {

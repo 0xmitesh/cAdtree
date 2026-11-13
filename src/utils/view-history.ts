@@ -6,7 +6,7 @@ export type AppView =
   | { view: "intro" }
   | { view: "workspaces"; homeId: string }
   | ({ view: "workspace" } & WorkspaceLocation)
-  | ({ view: "project"; projectId: string; projectPath: string; tab: ProjectView } & WorkspaceLocation);
+  | ({ view: "project"; projectId: string; tab: ProjectView } & WorkspaceLocation);
 
 const STATE_KEY = "cadtreeView";
 const key = (view: AppView) => JSON.stringify(view);
