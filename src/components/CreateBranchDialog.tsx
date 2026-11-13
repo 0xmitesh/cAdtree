@@ -1,12 +1,7 @@
 import { useState } from "react";
-import {
-  RealFileSystemAdapter,
-  type FileSystemDirectoryAdapter,
-} from "../engine/fs-adapter";
 import type { ProgressUpdate, RevisionManifest } from "../engine/types";
 import { branchNameKey } from "../engine/branch-state";
 import { formatRevisionNumber } from "../engine/vault-service";
-import { pickDirectory } from "../utils/folder-access";
 import { MessageLines, Modal, Notice, OperationProgress } from "./ui";
 import { caseNameHint, pathBudgetBlockSentence } from "../utils/path-budget-message";
 
@@ -14,7 +9,6 @@ export interface CreateBranchParams {
   sourceRevisionId: string;
   name: string;
   reason: string;
-  destinationParent?: FileSystemDirectoryAdapter;
 }
 export function CreateBranchDialog({
   source,
@@ -36,15 +30,15 @@ export function CreateBranchDialog({
   onCreate: (params: CreateBranchParams) => Promise<void>;
   onClose: () => void;
   onCancel: () => void;
-  managedDestination?: string;
+  /** Managed-project working folder shown as the destination; design cases are only created inside a managed project. */
+  managedDestination: string;
   /** Absolute address of the managed project folder, when known (drives the name hint). */
   projectAddress?: string;
 }) {
   const [name, setName] = useState("");
   const [reason, setReason] = useState("");
-  const [parent, setParent] = useState<FileSystemDirectoryAdapter | null>(null);
   const [error, setError] = useState("");
-  const nameHint = managedDestination ? caseNameHint(projectAddress, name, source) : undefined;
+  const nameHint = caseNameHint(projectAddress, name, source);
   return (
     <Modal title="Create design case" onClose={onClose} busy={busy}>
       <p>
@@ -79,16 +73,11 @@ export function CreateBranchDialog({
             setError("Add a short engineering reason.");
             return;
           }
-          if (!parent && !managedDestination) {
-            setError("Choose a destination parent folder.");
-            return;
-          }
           try {
             await onCreate({
               sourceRevisionId: source.revisionId,
               name,
               reason,
-              destinationParent: parent ?? undefined,
             });
             onClose();
           } catch (error) {
@@ -121,50 +110,11 @@ export function CreateBranchDialog({
               placeholder="What design question will this case explore?"
             />
           </label>
-          {managedDestination ? (
-            <p className="managed-destination">
-              Destination: {managedDestination}/&lt;new case&gt;
-              <br />A fresh working folder is created and verified
-              automatically.
-            </p>
-          ) : (
-            <div className="folder-field">
-              <div>
-                <strong>Destination parent folder</strong>
-                <p>
-                  {parent?.name ??
-                    "A fresh, uniquely named subfolder will be created here."}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={async () => {
-                  setError("");
-                  try {
-                    setParent(
-                      new RealFileSystemAdapter(
-                        await pickDirectory("readwrite"),
-                      ),
-                    );
-                  } catch (error) {
-                    if (
-                      !(
-                        error instanceof DOMException &&
-                        error.name === "AbortError"
-                      )
-                    )
-                      setError(
-                        error instanceof Error ? error.message : String(error),
-                      );
-                    else setError('Folder selection was cancelled. Choose a parent folder when you are ready.');
-                  }
-                }}
-              >
-                {parent ? "Change parent folder" : "Choose parent folder"}
-              </button>
-            </div>
-          )}
+          <p className="managed-destination">
+            Destination: {managedDestination}/&lt;new case&gt;
+            <br />A fresh working folder is created and verified
+            automatically.
+          </p>
           <p className="muted small">
             After creation, open the new Design Case folder manually in SolidWorks.
             cAdtree does not change which CAD documents are open.

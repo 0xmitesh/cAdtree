@@ -54,6 +54,7 @@ export interface HistoryRecoveryViewProps {
   onGoToChanges?: () => void;
   onCreateBranch?: (params: CreateBranchParams) => Promise<void>;
   isCreatingBranch?: boolean;
+  /** Managed project folder; design cases can only be created in a managed project, so the create-case button and dialog need it. */
   managedDestination?: string;
   /** Absolute address of the managed project folder, when known (name hint in the create-case dialog). */
   projectAddress?: string;
@@ -754,7 +755,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 )}
               </div>
               <div className="recovery-bar">
-                {props.onCreateBranch ? (
+                {props.onCreateBranch && props.managedDestination ? (
                   <button
                     className="button secondary"
                     disabled={
@@ -804,7 +805,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           onClose={() => setComparison(null)}
         />
       ) : null}
-      {source && props.onCreateBranch ? (
+      {source && props.onCreateBranch && props.managedDestination ? (
         <CreateBranchDialog
           source={source.manifest}
           sourceBranchName={
@@ -818,11 +819,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           onCreate={props.onCreateBranch}
           onClose={() => setBranchSource(null)}
           onCancel={onCancelOperation}
-          managedDestination={
-            props.managedDestination
-              ? `${props.managedDestination}/working`
-              : undefined
-          }
+          managedDestination={`${props.managedDestination}/working`}
           projectAddress={props.projectAddress}
         />
       ) : null}
