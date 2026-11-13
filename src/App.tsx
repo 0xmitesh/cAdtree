@@ -150,6 +150,9 @@ type PendingAuthAction =
   | { kind: "my-workspaces" }
   | { kind: "callback"; run: () => Promise<void> | void };
 
+const PROJECT_NEEDS_ATTENTION =
+  "This project location needs attention. Open the workspace to inspect it.";
+
 export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const sidebar = useSidebarWidth();
   const authAdapterRef = useRef<AuthAdapter | null>(null);
@@ -1120,9 +1123,19 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       async (context) => {
         const current = await openWorkspace(workspace.root);
         if (context.current()) setWorkspace(current);
+        // Copies that share a project identity are read-only and never opened (same rule as the tree).
+        const fresh = current.projects.find(
+          (project) => project.containerPath === entry.containerPath,
+        );
+        if (
+          !fresh?.project ||
+          fresh.status === "duplicate" ||
+          fresh.projectId !== entry.projectId
+        )
+          throw new Error(PROJECT_NEEDS_ATTENTION);
         await activateManaged(
           current,
-          await resolveManagedProject(workspace.root, entry.containerPath),
+          await resolveManagedProject(workspace.root, fresh.containerPath),
           context,
         );
       },
@@ -1185,9 +1198,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           fresh.status === "duplicate" ||
           fresh.projectId !== entry.projectId
         )
-          throw new Error(
-            "This project location needs attention. Open the workspace to inspect it.",
-          );
+          throw new Error(PROJECT_NEEDS_ATTENTION);
         const project = await resolveManagedProject(
           current.root,
           fresh.containerPath,

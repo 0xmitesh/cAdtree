@@ -139,7 +139,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
                   <p className="small">
                     {locations.length > 1
-                      ? "Choose one location explicitly. Histories are never combined."
+                      ? "This project's ID exists at more than one location, so every copy stays read-only. Keep one location in the workspace and move the other copies out; histories are never combined."
                       : locations[0].status === "ready"
                         ? "Managed project · One shared vault, independent working folders"
                         : locations[0].status === "incomplete"
@@ -197,7 +197,9 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                       </p>
                       <button
                         className="button secondary"
-                        disabled={busy || !entry.project}
+                        disabled={
+                          busy || !entry.project || entry.status === "duplicate"
+                        }
                         onClick={() => run(() => props.onOpenProject(entry))}
                       >
                         Use this location
