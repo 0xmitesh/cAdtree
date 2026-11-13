@@ -162,7 +162,10 @@ const renamedNotice = (project: ManagedProject) =>
 type OpenProjectLookup =
   | { kind: "ok"; workspace: WorkspaceState; project: ManagedProject; renamed: boolean }
   | { kind: "unavailable"; workspace: WorkspaceState; reason: string };
-/** Identity is the project ID alone: never the folder name or a stored path. */
+/**
+ * Identity is the project ID alone: never the folder name or a stored path. This checks identity only;
+ * a damaged or incomplete entry that is still found stays blocked by the project's own issues (managedBlockReason).
+ */
 const locateProjectById = (
   current: WorkspaceState,
   projectId: string,
@@ -277,8 +280,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [projectSession, setProjectSession] = useState(0);
   // Set when the open project can't be re-found by its ID (gone, or copied so the ID is shared): read-only.
   const [projectUnavailable, setProjectUnavailable] = useState<string | null>(null);
-  // A rename found in the middle of a read operation, shown once that operation reports.
-  const renameNoticeRef = useRef<string | null>(null);
   const [vaultDir, setVaultDir] = useState<FileSystemDirectoryAdapter | null>(
     null,
   );
@@ -1100,6 +1101,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   // Run before every write: a project that was renamed, removed or duplicated while open must not be written to.
   // A rename is rebound, then the operation stops so nothing lands in a location the user didn't see.
+  // This is a check before the write, not a lock: it can't stop a rename or copy made in Finder or Explorer
+  // during the write itself. The stale browser handle failing is the backstop for that.
   const assertProjectWritable = async (
     context: Context,
     readOnlyOperation = false,
@@ -1455,6 +1458,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       root: FileSystemDirectoryAdapter;
       path: string;
     } | null,
+    // Called when the open project was re-found at a new folder during this scan (the banner is already set).
+    onRebound?: (notice: string) => void,
   ) => {
     let folder = folders[branchId];
     let state: VaultState;
@@ -1484,7 +1489,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         if (found.kind === "unavailable") throw new Error(found.reason);
         current = found.project;
         vault = current.vaultDir;
-        if (found.renamed) renameNoticeRef.current = renamedNotice(found.project);
+        if (found.renamed) {
+          const notice = renamedNotice(found.project);
+          if (context.current()) setStatusBanner({ type: "info", message: notice });
+          onRebound?.(notice);
+        }
       }
       if (context.current()) {
         setManagedProject(current);
@@ -1607,14 +1616,17 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     if (!vaultDir) return;
     await perform("scan", async (context) => {
       setScanResult(null);
+      let renamed: string | null = null;
       const result = await scan(
         vaultDir,
         workingFolders,
         activeBranchId,
         context,
+        undefined,
+        (notice) => {
+          renamed = notice;
+        },
       );
-      const renamed = renameNoticeRef.current;
-      renameNoticeRef.current = null;
       if (result && context.current())
         setStatusBanner({
           type: "info",

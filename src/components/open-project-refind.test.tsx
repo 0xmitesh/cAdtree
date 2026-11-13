@@ -7,7 +7,9 @@ import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
 import { appBusy, currentBranchId, openHomeWorkspace } from "../../tests/app-controls";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
-import { copyVerifiedTree } from "../engine/copy-service";
+import { copyVerifiedTree, inventorySignature, readVerifiedInventory } from "../engine/copy-service";
+import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
+import { nativeDirectory } from "../../tests/native-fs";
 import { openWorkspace } from "../engine/workspace-service";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 
@@ -15,6 +17,7 @@ Object.assign(globalThis, { indexedDB });
 afterEach(async () => {
   cleanup();
   await clearAllConvenienceMetadata();
+  Reflect.deleteProperty(window, "showDirectoryPicker");
 });
 
 const OLD = "projects/Bracket Assembly";
@@ -160,4 +163,68 @@ test("Unchanged path: Refresh and a scan show no rename notice", async () => {
   assert.ok(ui.getByText("Plain.txt"));
   assert.equal(ui.queryByText(/was renamed to/), null);
   assert.equal(ui.container.textContent!.includes("read-only. This project"), false);
+});
+
+const RENAMED_RE = new RegExp(RENAMED.replace(/[()']/g, "\\$&"));
+const fingerprint = async (dir: FileSystemDirectoryAdapter) => inventorySignature(await readVerifiedInventory(dir));
+
+test("Apply prepare after a rename is refused with the notice and writes nothing at the old or new path", async () => {
+  const { sample, ui } = await setup();
+  const root = sample.workspace.root;
+  nav(ui, "History");
+  fireEvent.click(ui.getByRole("button", { name: /Reinforced mounting rib/ }));
+  fireEvent.click(ui.getByRole("button", { name: "Review changes to apply" }));
+  const dialog = within(ui.getByRole("dialog", { name: "Review changes to apply — preview" }));
+  fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason for proposed application" }), { target: { value: "Reuse the rib" } });
+  fireEvent.click(dialog.getAllByRole("checkbox").find((box) => /^Select source/.test(box.getAttribute("aria-label") ?? ""))!);
+  await renameFolder(root, OLD, NEW);
+  const before = await fingerprint(sample.home);
+  fireEvent.click(dialog.getByRole("button", { name: "Prepare application" }));
+  await idle(ui);
+  assert.match(ui.container.textContent! + document.body.textContent!, RENAMED_RE);
+  assert.equal(ui.queryByRole("dialog", { name: "Confirm working-file application" }), null);
+  assert.equal(await exists(root, OLD), false, "nothing was recreated at the old path");
+  assert.equal(await fingerprint(sample.home), before, "nothing was written at the new path");
+});
+
+test("Export after a rename is refused with the notice and writes nothing to the destination, the old path or the new path", async () => {
+  const { sample, ui } = await setup();
+  const root = sample.workspace.root;
+  const parent = new InMemoryFileSystemAdapter("Review destination");
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(parent) });
+  nav(ui, "History");
+  fireEvent.click(ui.getByRole("button", { name: /Mounting detail refined/ }));
+  fireEvent.click(ui.getByRole("button", { name: "Export for review" }));
+  const dialog = within(ui.getByRole("dialog", { name: "Export revision for review" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Choose destination parent" }));
+  await waitFor(() => assert.ok(dialog.getByText("Review destination")));
+  await renameFolder(root, OLD, NEW);
+  const before = await fingerprint(sample.home);
+  fireEvent.click(dialog.getByRole("button", { name: "Export for review" }));
+  await idle(ui);
+  assert.match(document.body.textContent!, RENAMED_RE);
+  assert.equal((await parent.listEntries()).length, 0, "no export folder was created");
+  assert.equal(await exists(root, OLD), false);
+  assert.equal(await fingerprint(sample.home), before);
+});
+
+test("A read-only state clears: after the copy is removed, Refresh lifts it and a save succeeds", async () => {
+  const { sample, ui } = await setup();
+  const root = sample.workspace.root;
+  const before = await revisionCount(root, OLD);
+  await copyFolder(root, OLD, NEW);
+  toWorkspacePage(ui);
+  await refresh(ui);
+  nav(ui, "Changes");
+  assert.match(ui.container.textContent!, /Managed project is read-only\. This project's ID exists at more than one location/);
+  toWorkspacePage(ui);
+  await root.removeEntry(NEW.split("/"), { recursive: true });
+  await refresh(ui);
+  nav(ui, "Changes");
+  assert.equal(ui.container.textContent!.includes("Managed project is read-only"), false);
+  await sample.main.writeFileText(["Pending.txt"], "work in progress");
+  await scanAndDraft(ui, "Saved after the copy was removed");
+  fireEvent.click(ui.getByRole("button", { name: "Save revision" }));
+  await idle(ui);
+  assert.equal(await revisionCount(root, OLD), before + 1);
 });
