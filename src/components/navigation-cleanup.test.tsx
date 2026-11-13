@@ -76,7 +76,9 @@ test("Archive controls appear only when needed and disappear after reopening the
   fireEvent.click(within(ui.getByRole("dialog", { name: "Reopen design case" })).getByRole("button", { name: "Reopen case" }));
   await waitFor(() => assert.ok(ui.queryByRole("checkbox", { name: "Show archived cases" }) === null));
   assert.ok(ui.getByText("No archived cases."));
-  assert.equal(document.activeElement, ui.getByRole("button", { name: "Archive case Lightweight bracket" }));
+  // Focus moves in a later effect than the one that removes the archived controls, so wait for it. Compare with `===` inside
+  // `assert.ok`: a failed `assert.equal` on two jsdom elements spends ~15 s inspecting the DOM and reports only "test failed".
+  await waitFor(() => assert.ok(document.activeElement === ui.getByRole("button", { name: "Archive case Lightweight bracket" }), "focus returns to the Archive case button"));
   assert.equal(inventorySignature(await readVerifiedInventory(sample.main)), beforeMain);
   assert.equal(inventorySignature(await readVerifiedInventory(sample.caseFolder)), beforeCase);
 });
