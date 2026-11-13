@@ -1,5 +1,6 @@
 /**
- * Path budget foundation (pure; nothing in the app calls it yet).
+ * Path budget (pure). Used by the engine checks before the first write
+ * (workspace-service, home-service) and by the UI hints (src/utils/path-budget-message.ts).
  *
  * One standard on every platform: warn from 200 and block above 240 characters
  * of full absolute path (JavaScript string length, i.e. UTF-16 units). A single

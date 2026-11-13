@@ -4,6 +4,8 @@ This is the stable guide for anyone working on this repo: vision, architecture, 
 
 The live status lives elsewhere: what's done, what's next, open decisions and the decision log are in the claude.ai Project doc **"cAdtree — Current state & next steps"**. Read both before starting. If the code and these docs disagree, trust the code and point out the difference. Never silently rewrite an earlier decision.
 
+**Settled decisions are listed in §7 and the architecture is in §2.** Read both before proposing a change. A change that reverses or weakens a §7 decision, an invariant in §3 or the architecture in §2 needs the founder's explicit approval first: name the decision and say why in the design note.
+
 ## 1. Vision
 
 **cAdtree is a local-first, software-agnostic, Git-inspired history and experimentation system for CAD work. It runs fully in the browser.** Engineers keep using SolidWorks, AutoCAD and other tools, and they keep control of their files. cAdtree saves recoverable project revisions, lets them branch into design alternatives, compares and applies changes deliberately, and records *why* decisions were made. It's free for individual users.
@@ -79,6 +81,18 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - Firebase Auth for sign-in. Sign-in doesn't upload files.
 - The user's filesystem is authoritative. IndexedDB holds only convenience state: remembered handles and preferences.
 
+**Code map** (`src/engine` unless noted). Put new code in the layer that owns the concern; don't duplicate an owner.
+- **Filesystem and integrity primitives:** `fs-adapter` (adapter interface, `FileConflictError`, real and in-memory adapters), `object-store` (content-addressed objects, verified write/read), `copy-service` (bounded, verified tree copy), `scanner` (working-folder scan, OS clutter), `locks` (single-writer Web Locks), `hash` / `hash.worker` (SHA-256), `path-encoding`, `idb-store` (convenience state only), `types`.
+- **Naming and IDs:** `folder-names` (the only folder-name allocator), `ids` (record and event IDs).
+- **Path budget:** `path-budget` (limits, templates, reserve, worst-case paths), `path-limits` (measured real limits, "Path too long" safety net), `src/utils/path-budget-message.ts` (UI wording).
+- **Home, workspace, project:** `home-service`, `workspace-service`, `vault-service` (vault initialisation, validation, loading).
+- **History:** `revision-service` (capture), `branch-service` (create a design case), `branch-state`, `case-lifecycle` / `case-lifecycle-service` (archive), `case-activity`, `snapshot-comparison`; views in `src/history/` (`layout` graph from parent edges, `file-history`, `reference-browser`).
+- **Apply (merge and Bring back):** `apply-preview` (read-only plan, both modes), `application-service` (prepare, write, recover, abandon), `application-records` (sealed records).
+- **Restore primitive and Export:** `recovery-service` (`restoreRevisionToFolder`, used by design-case creation; the name is historical), `review-export` (Export for review).
+- **Identity and references:** `component-identity`, `references`.
+- **Knowledge Lab:** `src/knowledge/` (index, retrieval, persisted `records/`), test vault and Explorer under `tests/knowledge-lab`.
+- **UI shell:** `src/App.tsx` (app state and wiring), `src/components/`.
+
 ## 3. Invariants (never weaken)
 
 1. **Writes are integrity-checked.**
@@ -113,6 +127,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 
 **Approval and scope**
 - **One feature or fix at a time.** If anything is uncertain, ask or counter-question before executing.
+- **Name work by its title or problem** (e.g. "Remove Restore copy"), not by a bare item number, in reports, briefs and PR titles.
 - **For each item:**
   1. Read the actual code.
   2. Write a short design note.
@@ -127,7 +142,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 **Git and PRs**
 - **Branches:** `cadtree-knowledge-lab` is the most up-to-date line, with all features plus the Knowledge Lab. `main` is merged later, only by the founder's decision.
 - **One PR per reviewed piece:**
-  - Use stacked branches named `item<N>/p<k>-…`, based on `cadtree-knowledge-lab`.
+  - Use stacked branches named `item<N>/p<k>-…`, based on `cadtree-knowledge-lab` (`housekeeping/p<k>-…` or `docs/p<k>-…` for work outside an item).
   - Merge with **merge commits, not squash**.
   - Each commit must pass lint and tests on its own.
 - **Before every merge:**
@@ -151,7 +166,7 @@ npm run dev                  # app, http://127.0.0.1:2500 (real Firebase sign-in
 npm run dev:synthetic        # synthetic preview, :2517 (fake "Test Engineer" sign-in; seeds 4 workspaces/9 projects)
 npm run dev:knowledge-lab    # :2727, Knowledge Explorer at /tests/knowledge-lab.html
 npm run lint                 # tsc --noEmit
-npm test                     # engine/history/knowledge/components (~548 tests)
+npm test                     # engine/history/knowledge/components (~580 tests)
 npm run test:knowledge-lab   # 27 tests
 npm run build
 npm run test:ui              # Playwright; needs `npx playwright install chromium` or CADTREE_BROWSER_CHANNEL=chrome
@@ -175,10 +190,10 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 **Agent environment** (Claude sessions with a connected folder):
 - **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
-- **Running tests:** run them in the cloud session's own clone of GitHub `cadtree-knowledge-lab`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked).
-- **Updating the Mac checkout:** fast-forward it after each merge with a git bundle through a temporary `_transfer` folder, and delete that folder afterwards.
+- **Running tests:** run them in the cloud session's own clone of GitHub `cadtree-knowledge-lab`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
+- **Updating the local checkouts:** after each merge, fast-forward the matching checkout (`knowledge-lab` after a merge into `cadtree-knowledge-lab`, `main` after a merge into `main`) with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards.
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
-- **Git writes need delete permission:** git has to delete its own lock files in the connected folder. Request delete permission again at the first git write of each session.
+- **Git writes need delete permission:** git has to delete its own lock files and replace files in the connected folder. Request delete permission at the first git write of each session **and again after the desktop app reconnects** (the grant doesn't survive a reconnect). Before any git write, check that a test delete works and **stop if it fails**: without permission a fast-forward half-applies, leaving `.git/index.lock` and partly written files.
 
 ## 6. Key docs
 
@@ -187,3 +202,42 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 - `docs/KNOWLEDGE_M1B1.md`, `docs/KNOWLEDGE_M2_1.md` and `tests/knowledge-lab/README.md`: the Knowledge Lab.
 - `docs/signup-integration.md`: authentication.
 - `docs/tutorial-*.md`: the tutorials.
+- Design notes for each item live in the claude.ai Project (e.g. `cAdtree_Item1_Readable_Folder_Names_Design_Note_2026-11-10`, `cAdtree_Item2_Path_Budget_Design_Note_2026-11-10`, `cAdtree_Remove_Restore_Copy_Design_Note_2026-11-11`).
+- **Historical, not current:** `IMPLEMENTATION.md`, `MILESTONE2.md`, `MILESTONE3.md`, `USABILITY_REFINEMENTS.md` and `docs/navigation-r*.md` record earlier milestones (they still describe Restore copy, old IDs and old counts). Don't treat them as the current design.
+
+## 7. Settled decisions (reopen only with the founder)
+
+These are decided. Build on them; don't redesign around them. The full decision log, with the reasoning, is in the status doc and the Project's design notes. Grouped by topic.
+
+**Product and scope**
+- The Knowledge Lab is an evidence-and-decision memory, not CAD intelligence. Native SolidWorks and ANSYS parsing were rejected (2026-11-09).
+- Local-first and browser-only: the user's filesystem is the source of truth; no backend, database or required install without a demonstrated need (§1).
+- We are in a building phase with no active users: old on-disk formats don't need to stay readable, and compatibility code may be removed (2026-11-11; legacy reference readers removed in #61).
+
+**Storage, names and IDs**
+- Folders carry the readable names users chose; identity comes from metadata IDs, never folder locations. `folder-names.ts` is the only allocator: illegal characters → `-`, case-insensitive clash → `(2)`, reserved names → `CON (2)`, 255-byte cap (Item 1, 2026-11-10).
+- A Finder or Explorer rename changes a folder's location, not its display name (kept for now; open decision on adopting or showing both).
+- One ID standard: record ID `YYYYMMDD-HHMMSS-xxxxxx` for cases, revisions, references and Knowledge Lab records; event ID `YYYYMMDD-HHMMSS` + counter for Apply and recovery; no type prefixes; no branch or project names in IDs; vault objects stay content-addressed by SHA-256 (2026-11-10/11).
+- Clashes are detected with `FileConflictError` and redrawn or counted, never overwritten, and never detected by matching error text (2026-11-11, #60).
+- OS clutter files are ignored only when untracked, and the same rule applies to every verify-after-write check (2026-11-10).
+
+**Path limits**
+- One standard on every platform, so projects stay portable to Windows: warn from 200, block above 240 characters of full path, +7 for `.crswap`; cAdtree's own IDs were shortened first so its naming never causes path errors (Item 2, 2026-11-10).
+- Allowances: 32 for a case name, 24 for a project name and 24 for a workspace name; internal reserve computed from the real path builders and guarded by the drift test (110 today).
+- The home address is asked for before the next create or import when it's unknown; the home-setup warning appears only when the address leaves less room than the default name allowances (2026-11-10/11).
+- Existing projects are never blocked from opening or saving; an unknown home address means unchecked, never "ok"; the safety net reports this computer's measured real limit, not the 240 budget (2026-11-11).
+
+**History and recovery**
+- Every intent for an older version has one feature (2026-11-11, "Remove Restore copy", #62–#67):
+  - look at or share it → **Export for review** (folder `<Project> - <Branch> - R<nn>`, `(2)` on a clash, cAdtree's part ≤ 64 characters);
+  - make a branch match it again → **Bring back onto <branch>…** (Apply's revert mode, only for earlier revisions in that branch's history; every difference reviewed and pre-selected; reason required; renamed files blocked for now);
+  - keep working from it → **Create design case**.
+- "Restore copy" and `recoveries/` are gone and must not come back as a parallel path. Existing `recoveries/` folders are left untouched; cAdtree never deletes user data.
+- Apply (merge or Bring back) only changes working files; the user saves a revision afterwards. Nothing creates a revision automatically.
+- Design cases are archived, never auto-deleted. Duplicated IDs become read-only, never merged.
+
+**How we work**
+- One stable `CLAUDE.md` in the repo plus one living status doc in the Project; no new handoff documents (2026-11-10).
+- Every item: read the code, write a design note, get the founder's approval, then deliver in small reviewed PRs into `cadtree-knowledge-lab` with merge commits, each tested on top of the current GitHub head (2026-11-10).
+- `main` is merged only by the founder's decision (the status doc records the last merge).
+- Cost-aware orchestration: Opus orchestrates and reviews; Sonnet executes and gives the independent review (§4); Haiku only for mechanical chores, never engine code.
