@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import {
   ApplyPreviewDialog,
+  reconcileChoices,
   type ApplicationController,
 } from "./ApplyPreviewDialog";
 import { AppliedFrom } from "./ApplicationStatus";
@@ -317,4 +318,112 @@ test("revert counts pluralise", () => {
     ui.getByRole("status", { name: "Proposed result summary" }).textContent!,
     /2 files brought back · 1 replaced · 1 removed/,
   );
+});
+
+const renamedBlock = (state: ReturnType<typeof fixture>) => {
+  const cf = (path: string) => ({ path, componentId: "component-1" }) as any;
+  state.components = {
+    status: "available",
+    revisions: {
+      r3: { files: [cf("Old.txt")], payloadSha256: "x", renames: [] },
+      r6: { files: [cf("Parts/Renamed.SLDPRT")], payloadSha256: "x", renames: [] },
+    },
+  } as any;
+  return state;
+};
+
+test("Refresh saved states keeps deselected rows and the typed reason when the revisions are unchanged", async () => {
+  let ui!: ReturnType<typeof render>;
+  const dialog = (state: ReturnType<typeof fixture>, controller: ApplicationController) => (
+    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => {}} />
+  );
+  const controller: ApplicationController = {
+    progress: null,
+    cancel: () => {},
+    prepare: async () => { throw new Error("not used"); },
+    apply: async () => {},
+    refresh: async () => { ui.rerender(dialog(fixture(), controller)); },
+  };
+  ui = render(dialog(fixture(), controller));
+  const extra = () => ui.getByRole("checkbox", { name: "Select Remove (not in Rev 003): Extra.txt" }) as HTMLInputElement;
+  const reason = () => ui.getByRole("textbox", { name: "Engineering reason for bringing this back" }) as HTMLTextAreaElement;
+  fireEvent.click(extra());
+  fireEvent.change(reason(), { target: { value: "Housing change was wrong" } });
+  assert.equal(extra().checked, false);
+  fireEvent.click(ui.getByRole("button", { name: "Refresh saved states" }));
+  await waitFor(() => assert.equal((ui.getByRole("button", { name: "Refresh saved states" }) as HTMLButtonElement).disabled, false));
+  assert.equal(extra().checked, false, "deselected row stays deselected");
+  assert.equal(reason().value, "Housing change was wrong");
+  assert.equal((ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement).checked, true);
+});
+
+test("Refresh saved states drops the choice of a row that became blocked, and the plan leaves it out", async () => {
+  const sent: any[] = [];
+  let ui!: ReturnType<typeof render>;
+  const dialog = (state: ReturnType<typeof fixture>, controller: ApplicationController) => (
+    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => {}} />
+  );
+  const controller: ApplicationController = {
+    progress: null,
+    cancel: () => {},
+    prepare: async (review) => {
+      sent.push(review);
+      const state = renamedBlock(fixture());
+      const prep = prepareApplyPreview(state, "r3", "branch-main", review.mode);
+      if (prep.status !== "available") throw new Error(prep.reason);
+      return { review, plan: buildApplyPreview(prep.context, review.choices, review.reason), destinationName: "main", branchName: "Main", connection: new InMemoryFileSystemAdapter("main") };
+    },
+    apply: async () => {},
+    refresh: async () => { ui.rerender(dialog(renamedBlock(fixture()), controller)); },
+  };
+  ui = render(dialog(fixture(), controller));
+  fireEvent.change(ui.getByRole("textbox", { name: "Engineering reason for bringing this back" }), { target: { value: "Because" } });
+  fireEvent.click(ui.getByRole("button", { name: "Refresh saved states" }));
+  await waitFor(() => assert.equal((ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement).disabled, true));
+  assert.equal((ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement).checked, false);
+  fireEvent.click(ui.getByRole("button", { name: "Prepare bring-back" }));
+  await waitFor(() => ui.getByRole("dialog", { name: "Confirm bringing back into working files" }));
+  assert.equal("Old.txt" in sent[0].choices, false);
+  assert.deepEqual(
+    Object.entries(sent[0].choices).filter(([, c]: any) => c.selected).map(([p]) => p).sort(),
+    ["Extra.txt", "Parts/Housing.SLDPRT"],
+  );
+});
+
+test("reconcileChoices: new available rows are pre-selected in revert only; vanished, blocked or re-kinded rows are dropped; unchanged returns the same object", () => {
+  const rowsOf = (state: ReturnType<typeof fixture>, source: string, mode: "revert" | "merge") => {
+    const prep = prepareApplyPreview(state, source, "branch-main", mode);
+    if (prep.status !== "available") throw new Error(prep.reason);
+    return prep.context.rows;
+  };
+  const full = rowsOf(fixture(), "r3", "revert");
+  const without = (path: string) => full.filter((row) => row.path !== path);
+  const chosen = { selected: false, decision: "use-source" as const };
+  // revert: Old.txt newly appeared and was never chosen -> pre-selected; the user's other choice is kept
+  const kept = { "Extra.txt": chosen };
+  const added = reconcileChoices(kept, without("Old.txt"), full, true);
+  assert.equal(added["Extra.txt"], chosen);
+  assert.deepEqual(added["Old.txt"], { selected: true, decision: "use-source" });
+  // merge: a newly available row is not pre-selected
+  const mergeRows = rowsOf(fixture(), "p2", "merge");
+  assert.deepEqual(reconcileChoices({}, [], mergeRows, false), {});
+  // unchanged -> same object
+  const same = { "Extra.txt": chosen, "Old.txt": chosen, "Parts/Housing.SLDPRT": chosen };
+  assert.equal(reconcileChoices(same, full, full, true), same);
+  // vanished row -> dropped
+  const gone = reconcileChoices({ "Old.txt": chosen, "Extra.txt": chosen, "Parts/Housing.SLDPRT": chosen }, full, without("Old.txt"), true);
+  assert.deepEqual(Object.keys(gone).sort(), ["Extra.txt", "Parts/Housing.SLDPRT"]);
+  // re-kinded row: Old.txt was already-matches, is now available -> old choice replaced by the pre-selection
+  const rekinded = reconcileChoices(
+    { "Old.txt": chosen },
+    full.map((row) => (row.path === "Old.txt" ? { ...row, kind: "already-matches" as const } : row)),
+    full,
+    true,
+  );
+  assert.notEqual(rekinded["Old.txt"], chosen);
+  assert.deepEqual(rekinded["Old.txt"], { selected: true, decision: "use-source" });
+  // blocked row -> dropped and not re-selected
+  const blocked = rowsOf(renamedBlock(fixture()), "r3", "revert");
+  const afterBlock = reconcileChoices({ "Old.txt": chosen }, full, blocked, true);
+  assert.equal("Old.txt" in afterBlock, false);
 });
