@@ -22,6 +22,7 @@ import {
 import { getObjectPathSegments, getStagingObjectPathSegments, getStagingSessionPathSegments } from './object-store';
 import { lifecyclePath } from './case-lifecycle';
 import { branchAttemptPath, branchReadyPath, branchRecordPath } from './branch-service';
+import { RECOVERY_MARKER_FILENAME as CASE_INCOMPLETE_MARKER } from './recovery-service';
 import { revisionCompletionPath, revisionManifestPath } from './revision-service';
 import { componentRecordPath } from './component-identity';
 import {
@@ -103,9 +104,6 @@ function template(label: string, kind: 'file' | 'dir', segments: string[], shape
   return { label, kind, segments, shape, relativeLength, reserveLength: relativeLength + (kind === 'file' ? CRSWAP_CHARS : 0) };
 }
 
-/** Written into the case folder when creation fails (same name as RECOVERY_MARKER_FILENAME in recovery-service). */
-const CASE_INCOMPLETE_MARKER = '_CADTREE_RECOVERY_INCOMPLETE.txt';
-
 const stagingSession = getStagingSessionPathSegments('sample-session');
 
 /**
@@ -120,7 +118,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
   // Incomplete marker written into a design-case working folder when case creation fails.
-  template('design case incomplete marker', 'file', ['working', 'x'.repeat(CASE_ALLOWANCE), CASE_INCOMPLETE_MARKER], 'working/{leaf}/_CADTREE_RECOVERY_INCOMPLETE.txt'),
+  template('design case incomplete marker', 'file', ['working', 'x'.repeat(CASE_ALLOWANCE), CASE_INCOMPLETE_MARKER], `working/{leaf}/${CASE_INCOMPLETE_MARKER}`),
   // Vault core.
   template('vault project record', 'file', [V, 'project.json'], 'vault/project.json'),
   template('vault main branch record', 'file', [V, 'branches', 'branch-main.json'], 'vault/branches/branch-main.json'),
