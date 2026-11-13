@@ -1,0 +1,179 @@
+{
+  "note": "Actual API results generated using a disposable in-memory vault. Pretty printed for review; checksums refer to canonical envelope JSON, not this containing document. No real CAD or document evidence.",
+  "cadDesignChange": {
+    "record": {
+      "createdAt": "2026-11-08T09:56:32.286Z",
+      "formatVersion": 1,
+      "integrity": {
+        "algorithm": "sha256",
+        "bodySha256": "8ca74dc74968823d980ee11636bf8c68d3263094cf7aa1f830dceced12e8143b",
+        "publication": "directory-marker-v1"
+      },
+      "payload": {
+        "assumptions": [
+          "Load is axial."
+        ],
+        "change": {
+          "description": "Increase thickness from 6 mm to 8 mm.",
+          "status": "proposed"
+        },
+        "observations": [
+          "No engineering validation recorded."
+        ],
+        "problem": "  Collar bends under axial load.\n",
+        "propertyChanges": [
+          {
+            "after": 8,
+            "before": 6,
+            "property": "plate thickness",
+            "unit": "mm"
+          }
+        ],
+        "rationale": "Reduce bending. Prototype validation is pending."
+      },
+      "projectId": "proj-c11b080a-8ab7-42d4-8116-e1d1a394e95e",
+      "provenance": {
+        "kind": "user-entered"
+      },
+      "recordId": "knowledge-7ad66aff-05ec-4ece-b640-bdee5f582e9c",
+      "recordType": "cad.design-change",
+      "relationships": [
+        {
+          "binding": {
+            "branchId": "branch-main",
+            "kind": "revision",
+            "source": {
+              "jsonPointer": "",
+              "manifestPayloadSha256": "55acd894864bc755280c3ccd584ef1278572f95b10165e7341722a519efc5f9a",
+              "manifestSha256": "2922148cfa9ae7cbffa710d1f33824d382a53c1afaa279619190f72f015569ce",
+              "recordPath": "revisions/rev-0d2acc22-4f44-49af-a7c3-c4494ca74fed.manifest.json"
+            }
+          },
+          "relation": "context",
+          "target": {
+            "kind": "revision",
+            "projectId": "proj-c11b080a-8ab7-42d4-8116-e1d1a394e95e",
+            "revisionId": "rev-0d2acc22-4f44-49af-a7c3-c4494ca74fed"
+          }
+        },
+        {
+          "binding": {
+            "branchId": "branch-main",
+            "historicalPath": "collar.SLDPRT",
+            "kind": "component",
+            "mappingPayloadSha256": "a4b97d2f2c6cfe8e8d266f4759506cb46a65b94ec92934db3d9a02b3e8f3014d",
+            "source": {
+              "jsonPointer": "/files/0",
+              "manifestPayloadSha256": "55acd894864bc755280c3ccd584ef1278572f95b10165e7341722a519efc5f9a",
+              "manifestSha256": "2922148cfa9ae7cbffa710d1f33824d382a53c1afaa279619190f72f015569ce",
+              "recordPath": "revisions/rev-0d2acc22-4f44-49af-a7c3-c4494ca74fed.manifest.json"
+            }
+          },
+          "relation": "related",
+          "target": {
+            "componentId": "component-2dfc6292-99ef-4ca2-b49d-113003556be7",
+            "kind": "component",
+            "projectId": "proj-c11b080a-8ab7-42d4-8116-e1d1a394e95e",
+            "revisionId": "rev-0d2acc22-4f44-49af-a7c3-c4494ca74fed"
+          }
+        },
+        {
+          "binding": {
+            "association": {
+              "componentId": "component-2dfc6292-99ef-4ca2-b49d-113003556be7",
+              "componentPath": "collar.SLDPRT",
+              "explanation": "Requirement context; not validation.",
+              "fileType": "text/plain",
+              "locator": "Section 2, figure 3",
+              "origin": "revision",
+              "originalFilename": "synthetic-load-note.txt",
+              "referenceId": "reference-738675db-901f-4f71-9c53-fe32d1fd1834",
+              "sha256": "2a97516c354b68848cdbd8f54a226a0a55b21ed138e207ad6c5cbb9c00aa5aea",
+              "size": 4,
+              "source": {
+                "boundarySha256": "ee67e928ff0584dbb36fa37cb88bfa1a002ef942e9e867f14862c0e84c6601ed",
+                "catalogId": "reference-catalog-6882e6ac-3d78-436c-bb4c-d1344b4d5a5c",
+                "catalogSha256": "fca334ea6dc72f3e27a5bf1e312aba9119ca7a765974e3f502dd2fd88bbea7b2",
+                "contextPayloadSha256": "960d59e254c7038912a603cc184aba6ab88aeda0c9373d516e1dbbca15ffe4cd",
+                "contextSha256": "883f2ba766d2a8967f2e4fc1138e1e1a1d5962c6d0e692bf5c125ebe01dc6363",
+                "jsonPointer": "/links/0",
+                "recordPath": "references/contexts/rev-0d2acc22-4f44-49af-a7c3-c4494ca74fed.json"
+              },
+              "versionId": "reference-version-73c4a94b-5ef2-467a-b479-85d43df1208e"
+            },
+            "kind": "reference-version"
+          },
+          "relation": "evidence",
+          "target": {
+            "associationPointer": "/links/0",
+            "kind": "reference-version",
+            "projectId": "proj-c11b080a-8ab7-42d4-8116-e1d1a394e95e",
+            "referenceId": "reference-738675db-901f-4f71-9c53-fe32d1fd1834",
+            "revisionId": "rev-0d2acc22-4f44-49af-a7c3-c4494ca74fed",
+            "versionId": "reference-version-73c4a94b-5ef2-467a-b479-85d43df1208e"
+          }
+        }
+      ],
+      "schemaVersion": 1
+    },
+    "source": {
+      "recordPath": "knowledge/records/knowledge-7ad66aff-05ec-4ece-b640-bdee5f582e9c.json",
+      "jsonPointer": "",
+      "recordSha256": "7574157b96cd97b3a70c14a2674a6181109b05aab73615d417456e2329780f78",
+      "bodySha256": "8ca74dc74968823d980ee11636bf8c68d3263094cf7aa1f830dceced12e8143b",
+      "publicationPath": "knowledge/completed/knowledge-7ad66aff-05ec-4ece-b640-bdee5f582e9c.7574157b96cd97b3a70c14a2674a6181109b05aab73615d417456e2329780f78.done",
+      "formatVersion": 1,
+      "recordType": "cad.design-change",
+      "schemaVersion": 1
+    },
+    "verification": {
+      "metadata": "checksum_verified",
+      "attachmentBytes": "not_checked",
+      "claims": "not_verified"
+    }
+  },
+  "genericObservation": {
+    "record": {
+      "createdAt": "2026-11-08T09:56:32.292Z",
+      "formatVersion": 1,
+      "integrity": {
+        "algorithm": "sha256",
+        "bodySha256": "0f1d9e256b3585e9d46419c52cf2391315aa167c1048b134076c6dc35eb06d9c",
+        "publication": "directory-marker-v1"
+      },
+      "payload": {
+        "attributes": {
+          "damaged": 0,
+          "location": "Bench A",
+          "sampleCount": 12
+        },
+        "description": "  Packaging inspection notes.\n"
+      },
+      "projectId": "proj-c11b080a-8ab7-42d4-8116-e1d1a394e95e",
+      "provenance": {
+        "kind": "imported",
+        "locator": "Page 2",
+        "source": "Synthetic inspection notebook"
+      },
+      "recordId": "knowledge-c644b7c5-abf6-49c4-8330-6057faf14be1",
+      "recordType": "generic.observation",
+      "relationships": [],
+      "schemaVersion": 1
+    },
+    "source": {
+      "recordPath": "knowledge/records/knowledge-c644b7c5-abf6-49c4-8330-6057faf14be1.json",
+      "jsonPointer": "",
+      "recordSha256": "c84c06749ada25eb886f713afbe91badf82d2f3360aec173b87df1c1e1b419e2",
+      "bodySha256": "0f1d9e256b3585e9d46419c52cf2391315aa167c1048b134076c6dc35eb06d9c",
+      "publicationPath": "knowledge/completed/knowledge-c644b7c5-abf6-49c4-8330-6057faf14be1.c84c06749ada25eb886f713afbe91badf82d2f3360aec173b87df1c1e1b419e2.done",
+      "formatVersion": 1,
+      "recordType": "generic.observation",
+      "schemaVersion": 1
+    },
+    "verification": {
+      "metadata": "checksum_verified",
+      "attachmentBytes": "not_checked",
+      "claims": "not_verified"
+    }
+  }
+}

@@ -8,7 +8,8 @@ import { createIdentityReview } from './component-identity';
 import { scanBranchChanges } from './scanner';
 import { inventorySignature, readVerifiedInventory } from './copy-service';
 import { getObjectPathSegments } from './object-store';
-import { prepareReviewExport, exportRevisionForReview, suggestReviewExportFolder, ReviewExportError } from './review-export';
+import { isReservedFolderName, withCounter } from './folder-names';
+import { prepareReviewExport, exportFolderBaseName, acceptsExportFolderName, exportRevisionForReview, suggestReviewExportFolder, ReviewExportError } from './review-export';
 
 const notes = { problem: 'Check fit', modification: 'Initial geometry', observations: 'For review' };
 const complete = { kind: 'complete' as const, selectedPaths: [], labelFilenames: false };
@@ -37,7 +38,7 @@ test('an older complete snapshot exports exact saved bytes and empty directories
   const result = await f.run();
   prohibitWorkingReads = false;
   assert.equal(workingReads, 0);
-  assert.equal(result.folderName, 'Actuator_Main_R01');
+  assert.equal(result.folderName, 'Actuator - Main - R01');
   const output = await f.parent.getDirectory([result.folderName]);
   assert.deepEqual(await output.readFileBytes(['Parts', 'Part1.SLDPRT']), f.bytes);
   assert.equal(await output.readFileText(['Assembly.SLDASM']), 'native reference: Parts/Part1.SLDPRT');
@@ -72,7 +73,7 @@ test('labels use the selected revision’s recorded branch and project-wide numb
   await branch.workingDir.writeFileText(['Parts', 'Part1.SLDPRT'], 'alternative saved bytes');
   const saved = await captureRevision(branch.workingDir, f.vault, { branchId: branch.branch.branchId, summary: 'Alternative R3', notes, workingFolders: bindings });
   const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'selected', selectedPaths: ['Parts/Part1.SLDPRT'], labelFilenames: true });
-  assert.equal(plan.folderName, 'Actuator_Alternative_R03');
+  assert.equal(plan.folderName, 'Actuator - Alternative - R03');
   assert.equal(plan.files[0].exportedPath, 'Parts/Part1_Alternative_R03.SLDPRT');
   const result = await f.run(plan, { workingFolders: bindings });
   const output = await f.parent.getDirectory([result.folderName]);
@@ -132,7 +133,9 @@ test('existing destinations are untouched, numbered retries are proposed, and pr
   await occupied.writeFileText(['Keep.txt'], 'do not overwrite');
   await assert.rejects(f.run(), /already exists/);
   assert.equal(await occupied.readFileText(['Keep.txt']), 'do not overwrite');
-  assert.equal(await suggestReviewExportFolder(f.parent, f.plan.folderName), f.plan.folderName + '-2');
+  assert.equal(await suggestReviewExportFolder(f.parent, f.plan.folderName), f.plan.folderName + ' (2)');
+  await f.parent.getDirectory([f.plan.folderName + ' (2)'], { create: true });
+  assert.equal(await suggestReviewExportFolder(f.parent, f.plan.folderName), f.plan.folderName + ' (3)');
   for (const parent of [f.vault, f.working, await f.working.getDirectory(['Nested'], { create: true })]) {
     const before = await fingerprint(parent);
     await assert.rejects(f.run(f.plan, { parent }), /outside the vault and every working folder/);
@@ -181,7 +184,7 @@ for (const failure of ['write', 'cancel', 'verification'] as const) test(`${fail
   armed = false;
   assert.ok(await (await f.parent.getDirectory([f.plan.folderName])).hasFile([f.plan.markerName]));
   const name = await suggestReviewExportFolder(f.parent, f.plan.folderName);
-  assert.equal(name, f.plan.folderName + '-2');
+  assert.equal(name, f.plan.folderName + ' (2)');
   const result = await f.run(f.plan, { folderName: name });
   assert.equal(result.filesCount, f.plan.files.length);
   assert.equal(await fingerprint(f.vault), before);
@@ -201,4 +204,59 @@ test('cancelling before verification creates nothing and legacy snapshots export
   await f.run(plan);
   assert.equal(await fingerprint(f.vault), before);
   assert.match(plan.summaryText, /component ID: unavailable for this snapshot/);
+});
+
+test('export folder names keep spaces, replace illegal characters and cap the base at 64 characters', async () => {
+  assert.equal(exportFolderBaseName('Packaging Gripper', 'Main', 'R03'), 'Packaging Gripper - Main - R03');
+  assert.equal(exportFolderBaseName('A:B/C', 'x*y', 'R01'), 'A-B-C - x-y - R01');
+  assert.equal(exportFolderBaseName('', '', 'R01'), 'Project - Branch - R01');
+  for (const unit of ['P', '设', '😀', 'é ']) {
+    const name = exportFolderBaseName(unit.repeat(200), unit.repeat(200), 'R12');
+    assert.ok(name.length <= 64, `${unit} ${name.length}`);
+    assert.doesNotMatch(name, /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
+    assert.ok(name.endsWith(' - R12'));
+  }
+});
+
+test('the standard clash counter is proposed case-insensitively and only that shape is accepted at export', async () => {
+  const f = await fixture();
+  await f.parent.getDirectory(['actuator - main - r01'], { create: true });
+  assert.equal(await suggestReviewExportFolder(f.parent, f.plan.folderName), 'Actuator - Main - R01 (2)');
+  await f.run(f.plan, { folderName: f.plan.folderName + ' (2)' });
+  for (const bad of ['-2', ' (0)', ' (1)', ' (02)', ' (2)x', ' (2) ', '_2']) {
+    await assert.rejects(f.run(f.plan, { folderName: f.plan.folderName + bad }), /destination name/, bad);
+  }
+  await assert.rejects(f.run(f.plan, { folderName: 'Other' }), /destination name/);
+});
+
+test('a reserved device-name base gets the standard counter, stays within 64 and round-trips through clashes', async () => {
+  for (const [project, branch] of [['CON.x', 'Main'], ['nul.txt', 'Main'], ['Gripper', 'CON.x'], ['Gripper', 'nul.txt'], ['com1.' + 'y'.repeat(40), 'Main']]) {
+    const base = exportFolderBaseName(project, branch, 'R01');
+    assert.ok(!isReservedFolderName(base), base);
+    assert.ok(base.length <= 64, base);
+  }
+  assert.equal(exportFolderBaseName('CON.x', 'Main', 'R01'), 'CON (2).x - Main - R01');
+  const f = await fixture();
+  const base = exportFolderBaseName('CON.x', 'Main', 'R01');
+  assert.ok(acceptsExportFolderName(base, base) && acceptsExportFolderName(base, base + ' (3)') && !acceptsExportFolderName(base, base + '-2'));
+  await f.parent.getDirectory([base], { create: true });
+  const next = await suggestReviewExportFolder(f.parent, base);
+  assert.equal(next, base + ' (2)');
+  assert.equal(withCounter(base, 2), next);
+  await f.parent.getDirectory([next], { create: true });
+  assert.equal(await suggestReviewExportFolder(f.parent, base), base + ' (3)');
+});
+
+test('truncation of project and branch parts strips a trailing space or dot', () => {
+  const project = 'A'.repeat(27) + ' . tail', branch = 'B'.repeat(23) + ' . tail';
+  assert.equal(exportFolderBaseName(project, branch, 'R01'), 'A'.repeat(27) + ' - ' + 'B'.repeat(23) + ' - R01');
+});
+
+test('prepareReviewExport succeeds for a reserved-looking project name and uses the counter base', async () => {
+  const f = await fixture();
+  const state = { ...f.saved.vaultState, project: { ...f.saved.vaultState.project, name: 'CON.x' } };
+  const plan = prepareReviewExport(state, f.plan.revisionId, complete);
+  assert.equal(plan.folderName, 'CON (2).x - Main - R01');
+  assert.ok(!isReservedFolderName(plan.folderName));
+  assert.ok(plan.folderName.length <= 64);
 });

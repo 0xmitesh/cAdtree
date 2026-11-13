@@ -1,12 +1,14 @@
 import { checkCaseInsensitiveCollisions, splitAndValidatePath, validateDirectoryIsolation, type FileSystemDirectoryAdapter } from './fs-adapter';
 import { validateWorkingFolderBindings, type WorkingFolderBindings } from './branch-state';
 import { computeRequiredParentDirectories } from './recovery-service';
+import { partitionSystemFiles } from './scanner';
 import { readVerifiedInventory, throwIfCancelled, type CopyOptions } from './copy-service';
 import { getObjectPathSegments, verifyStoredObject } from './object-store';
 import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
 import { computeManifestPayloadChecksum, openExistingVault } from './vault-service';
 import { validateWindowsSegments } from '../utils/folder-path';
+import { folderNameFor, isReservedFolderName, pickFreeName, withCounter } from './folder-names';
 import type { FileEntry, VaultState } from './types';
 
 export interface ReviewExportRequest {
@@ -35,6 +37,40 @@ function portableLabel(input: string, fallback: string, limit = 60): string {
   output = output.replace(/[ .]+$/, '') || fallback;
   try { validateWindowsSegments([output]); } catch { output = '_' + output; }
   return output;
+}
+/** Cuts to at most `limit` UTF-16 units on a code-point boundary, then strips trailing spaces/dots. */
+function capUnits(text: string, limit: number): string {
+  let out = '';
+  for (const char of text) {
+    if (out.length + char.length > limit) break;
+    out += char;
+  }
+  return out.replace(/[ .]+$/, '');
+}
+/** Readable export folder base: `Project - Branch - R03`, at most 64 UTF-16 units. */
+export function exportFolderBaseName(projectName: string, branchName: string, revisionLabel: string): string {
+  const branch = capUnits(folderNameFor(branchName, 'Branch'), 24) || 'Branch';
+  const build = (projectLimit: number) => {
+    const project = capUnits(folderNameFor(projectName, 'Project'), projectLimit) || 'Project';
+    return folderNameFor(`${project} - ${branch} - ${revisionLabel}`, 'Export');
+  };
+  const base = build(28);
+  if (!isReservedFolderName(base)) return base;
+  // "CON.x - …" is a reserved device name: the standard counter goes before the first dot.
+  // The project part gives up 4 units so " (2)" keeps the whole base within 64.
+  const shorter = build(24);
+  return isReservedFolderName(shorter) ? withCounter(shorter, 2) : shorter;
+}
+export function acceptsExportFolderName(base: string, name: string): boolean {
+  if (name === base) return true;
+  for (const prefix of [base + ' (']) {
+    if (!name.startsWith(prefix) || !name.endsWith(')')) continue;
+    const digits = name.slice(prefix.length, -1);
+    if (!/^[1-9]\d*$/.test(digits)) continue;
+    const n = Number(digits);
+    if (Number.isSafeInteger(n) && n >= 2 && withCounter(base, n) === name) return true;
+  }
+  return false;
 }
 function portablePath(path: string) {
   const parts = splitAndValidatePath(path);
@@ -68,7 +104,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
   });
   const revisionLabel = `R${String(manifest.displayNumber).padStart(2, '0')}`;
   const branchLabel = portableLabel(branch.name, 'Branch');
-  const folderName = `${portableLabel(state.project.name, 'Project')}_${branchLabel}_${revisionLabel}`;
+  const folderName = exportFolderBaseName(state.project.name, branch.name, revisionLabel);
   const evidence = state.components?.status === 'available' ? state.components.revisions[revisionId] : undefined;
   const files = selected.map(file => {
     let exportedPath = file.path;
@@ -120,12 +156,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
 export async function suggestReviewExportFolder(parent: FileSystemDirectoryAdapter, folderName: string): Promise<string> {
   portablePath(folderName);
   if (splitAndValidatePath(folderName).length !== 1) throw new Error('Expected one review-folder name.');
-  const occupied = new Set((await parent.listEntries()).map(e => e.name.toLowerCase()));
-  for (let n = 1; n <= 10000; n++) {
-    const candidate = folderName + (n === 1 ? '' : '-' + n);
-    if (!occupied.has(candidate.toLowerCase())) return candidate;
-  }
-  throw new Error('No fresh labelled folder is available. Choose another destination.');
+  return pickFreeName(parent, folderName, { maxAttempts: 10000 });
 }
 
 export class ReviewExportError extends Error {
@@ -149,7 +180,7 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       const state = await openExistingVault(vaultDir);
       const current = prepareReviewExport(state, plan.revisionId, plan.request);
       if (JSON.stringify(current) !== JSON.stringify(plan)) throw new Error('The saved revision or export preview changed. Reopen the review dialog.');
-      if (folderName !== plan.folderName && !(/^\d+$/.test(folderName.slice(plan.folderName.length + 1)) && folderName.startsWith(plan.folderName + '-') && Number(folderName.slice(plan.folderName.length + 1)) >= 2)) throw new Error('The destination name no longer matches the labelled preview.');
+      if (!acceptsExportFolderName(plan.folderName, folderName)) throw new Error('The destination name no longer matches the labelled preview.');
       portablePath(folderName);
       if (splitAndValidatePath(folderName).length !== 1) throw new Error('The export must be one fresh child folder.');
       const bindings = options.resolveWorkingFolders ? await options.resolveWorkingFolders(state) : options.workingFolders;
@@ -194,12 +225,13 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       throwIfCancelled(signal);
       await destination.writeFileText([plan.summaryName], plan.summaryText, { exclusive: true });
       progress('verifying_restored_files', 'Verifying exported bytes, summary and complete directory structure.', plan.files.length, writtenBytes);
-      const inventory = await readVerifiedInventory(destination, { signal });
+      const rawInventory = await readVerifiedInventory(destination, { signal });
       const expected = new Map([
         ...plan.files.map(f => [f.exportedPath, { sha256: f.sha256, size: f.size }] as const),
         [plan.summaryName, { sha256: hashString(plan.summaryText), size: new TextEncoder().encode(plan.summaryText).length }] as const,
         [plan.markerName, { sha256: hashString(markerText), size: new TextEncoder().encode(markerText).length }] as const,
       ]);
+      const inventory = { ...rawInventory, files: partitionSystemFiles(rawInventory.files, new Set(expected.keys())).files };
       if (inventory.files.length !== expected.size || inventory.files.some(f => expected.get(f.path)?.sha256 !== f.sha256 || expected.get(f.path)?.size !== f.size) || JSON.stringify([...inventory.directories].sort()) !== JSON.stringify([...plan.directories].sort())) throw new Error('Export verification failed: output does not match the reviewed files and directories.');
       throwIfCancelled(signal);
       await destination.removeEntry([plan.markerName]);

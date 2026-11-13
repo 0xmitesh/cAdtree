@@ -106,7 +106,7 @@ function TutorialPreview({ kind }: { kind: Preview }) {
       <rect x="22" y="15" width="70" height="38" rx="6" /><rect x="188" y="15" width="70" height="38" rx="6" />
       <path d="M105 28H175L169 22M175 40H105L111 46" />
       <text x="42" y="39">R01</text><text x="208" y="39">R03</text>
-      <text x="66" y="85">Compare · Recover a copy</text>
+      <text x="66" y="85">Compare · Bring back</text>
     </svg>
   );
 }

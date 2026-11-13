@@ -25,12 +25,12 @@ export const SAVE_FIRST_REVISION_TUTORIAL: TutorialDefinition = {
       summary: "Your live CAD files belong in Main's working/main folder.",
       points: [
         "For an empty project, open Settings. Working folder shows the location relative to your workspace; place your CAD files there.",
-        "Copy folder path copies a listed file's containing folder. The Windows illustration shortens generated folder names; paste your own copied address.",
+        "Copy folder path copies a listed file's containing folder. Paste it into File Explorer's address bar.",
       ],
       visuals: [
         {
           src: "/tutorials/save-first-revision/step-2-working-folder.png",
-          alt: "Real cAdtree Settings, Folder connections: Working folder ends in projects/Bracket-Assembly with its generated suffix, then working/main.",
+          alt: "Real cAdtree Settings, Folder connections: Working folder ends in projects/Bracket Assembly, then working/main.",
           caption: "1. Open Settings and find Working folder; place your CAD files in this working/main folder.",
           kind: "cadtree",
         },

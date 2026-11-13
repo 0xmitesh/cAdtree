@@ -11,8 +11,8 @@ import {
   importProject,
   resolveManagedProject,
   createManagedBranch,
-  recoverManagedCopy,
   adoptProject,
+  WorkspaceOperationError,
   managementChecksum,
   type ManagedProject,
 } from "./workspace-service";
@@ -73,7 +73,7 @@ test("name-only project creation reopens an empty Main, then captures CAD files 
   const reopened = (await openWorkspace(root)).projects[0].project!;
   assert.equal(reopened.record.projectId, project.record.projectId);
   assert.deepEqual(await reopened.workingFolders["branch-main"]!.listEntries(), []);
-  assert.ok(await root.hasDirectory([...project.record.containerPath.split("/"), "recoveries"]));
+  assert.equal(await root.hasDirectory([...project.record.containerPath.split("/"), "recoveries"]), false);
   await reopened.workingFolders["branch-main"]!.writeFileBytes(["Part.SLDPRT"], new Uint8Array([0, 255, 42]));
   const saved = await captureRevision(reopened.workingFolders["branch-main"]!, reopened.vaultDir, {
     branchId: "branch-main", summary: "First design", notes,
@@ -97,7 +97,8 @@ test("new-project cancellation retains an incomplete folder and creation/import 
   const incomplete = (await openWorkspace(root)).projects[0];
   assert.equal(incomplete.status, "incomplete");
   const retry = await createProject(root, "New design");
-  assert.notEqual(retry.record.containerPath, incomplete.containerPath);
+  assert.equal(incomplete.containerPath, "projects/New design");
+  assert.equal(retry.record.containerPath, "projects/New design (2)");
   await assert.rejects(importProject(root, await cadSource(), " new DESIGN "), /already present/);
   const race = await Promise.allSettled([
     createProject(root, "Other design"),
@@ -105,6 +106,31 @@ test("new-project cancellation retains an incomplete folder and creation/import 
   ]);
   assert.equal(race.filter((result) => result.status === "fulfilled").length, 1);
   assert.equal((await openWorkspace(root)).projects.length, 3);
+});
+
+test("project folders are readable and clashing names get a counter", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const a = await createProject(root, "Packaging Gripper");
+  assert.equal(a.record.containerPath, "projects/Packaging Gripper");
+  const b = await createProject(root, "Packaging/Gripper");
+  assert.equal(b.record.containerPath, "projects/Packaging-Gripper");
+  const c = await createProject(root, "Packaging-Gripper ");
+  assert.equal(c.record.containerPath, "projects/Packaging-Gripper (2)");
+  const d = await importProject(root, await cadSource(), "Packaging Gripper.");
+  assert.equal(d.record.containerPath, "projects/Packaging Gripper (2)");
+  assert.ok(a.ready && b.ready && c.ready && d.ready);
+});
+
+test("a missing projects folder fails as a plain error, not a retained destination", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  await root.removeEntry(["projects"], { recursive: true });
+  await assert.rejects(createProject(root, "Anything"), (error: Error) => {
+    assert.ok(!(error instanceof WorkspaceOperationError));
+    assert.doesNotMatch(error.message, /Destination retained/);
+    return true;
+  });
 });
 
 test("two projects import and reopen from one root with exact independent leaves and no artificial revisions", async () => {
@@ -143,7 +169,7 @@ test("two projects import and reopen from one root with exact independent leaves
   }
 });
 
-test("managed Main and three cases diverge with automatic branch/recovery destinations and branch-only inventories", async () => {
+test("managed Main and three cases diverge with automatic branch destinations and branch-only inventories", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   let project = await importProject(root, await cadSource(), "Actuator");
@@ -194,26 +220,6 @@ test("managed Main and three cases diverge with automatic branch/recovery destin
   assert.equal(
     await snapshot(project.workingFolders["branch-main"]!),
     mainBefore,
-  );
-  const full = await recoverManagedCopy(
-    root,
-    project.record.containerPath,
-    first.revision.manifest.revisionId,
-    undefined,
-  );
-  const selected = await recoverManagedCopy(
-    root,
-    project.record.containerPath,
-    first.revision.manifest.revisionId,
-    ["Parts/Pärt.SLDPRT"],
-  );
-  assert.notEqual(full.relativePath, selected.relativePath);
-  const destination = await root.getDirectory(full.relativePath.split("/"));
-  assert.equal(await snapshot(destination), await snapshot(await cadSource()));
-  const selectedDir = await root.getDirectory(selected.relativePath.split("/"));
-  assert.deepEqual(
-    (await readVerifiedInventory(selectedDir)).files.map((file) => file.path),
-    ["Parts/Pärt.SLDPRT"],
   );
   assert.equal((await openExistingVault(project.vaultDir)).revisions.length, 6);
   assert.equal((await openExistingVault(project.vaultDir)).branches.length, 4);
@@ -316,6 +322,12 @@ test("import failures and source instability remain incomplete; retry uses anoth
       retry.record.containerPath,
       failed.projects[0]?.containerPath,
     );
+    // "read" fails during source classification, before any destination exists,
+    // so nothing is left behind and the retry gets the plain name.
+    assert.equal(
+      retry.record.containerPath,
+      failure === "read" ? "projects/Retry project" : "projects/Retry project (2)",
+    );
     assert.equal(
       (await root.getDirectory(["projects"])).listEntries instanceof Function,
       true,
@@ -385,6 +397,18 @@ test("adoption preserves exact vault records and uncaptured working edits while 
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   const adopted = await adoptProject(root, vault, folders);
+  assert.equal(
+    adopted.record.containerPath,
+    "projects/Legacy actuator",
+  );
+  assert.equal(
+    adopted.workingPaths["branch-main"],
+    "projects/Legacy actuator/working/main",
+  );
+  assert.equal(
+    adopted.workingPaths[branch.branch.branchId],
+    "projects/Legacy actuator/working/Case A",
+  );
   assert.equal(adopted.record.projectId, first.vaultState.project.projectId);
   assert.equal(await snapshot(adopted.vaultDir), originals[0]);
   assert.equal(
@@ -479,15 +503,6 @@ test("malformed mappings, unknown schemas, permission loss, and overlapping bran
       }),
       /read-only/,
     );
-    await assert.rejects(
-      recoverManagedCopy(
-        root,
-        project.record.containerPath,
-        first.revision.manifest.revisionId,
-        undefined,
-      ),
-      /read-only/,
-    );
   }
   await container.writeFileText(mappingPath, original);
   const workspaceRecord = JSON.parse(
@@ -519,32 +534,8 @@ test("duplicate project identities are discovered as alternative locations, not 
     create: true,
   });
   await copyVerifiedTree(oldContainer, duplicate);
-  const record = {
-    ...project.record,
-    containerPath: newPath,
-    vaultPath: `${newPath}/vault`,
-  };
-  record.payloadSha256 = managementChecksum(record);
-  const text = JSON.stringify(record);
-  await duplicate.writeFileText([".cadtree", "project.json"], text);
-  const mapping = JSON.parse(
-    await duplicate.readFileText([".cadtree", "branches", "branch-main.json"]),
-  );
-  mapping.workingPath = `${newPath}/working/main`;
-  mapping.payloadSha256 = managementChecksum(mapping);
-  await duplicate.writeFileText(
-    [".cadtree", "branches", "branch-main.json"],
-    JSON.stringify(mapping),
-  );
-  await duplicate.writeFileText(
-    [".cadtree", "ready.json"],
-    JSON.stringify({
-      schemaVersion: 1,
-      workspaceId: record.workspaceId,
-      projectId: record.projectId,
-      recordSha256: hashString(text),
-    }),
-  );
+  // An exact copy keeps the same project identity. Under location-independent identity
+  // no record rewriting is needed (or trusted): both locations are duplicates, never merged.
   const state = await openWorkspace(root);
   assert.equal(state.projects.length, 2);
   assert.ok(state.projects.every((entry) => entry.status === "duplicate"));
@@ -555,6 +546,10 @@ test("duplicate project identities are discovered as alternative locations, not 
         issue.includes("Choose one location explicitly"),
       ),
     ),
+  );
+  assert.deepEqual(
+    state.projects.map((entry) => entry.containerPath).sort(),
+    [project.record.containerPath, newPath].sort(),
   );
 });
 
@@ -614,7 +609,7 @@ test("interruption at project publication and branch mapping leaves no ready alt
       root.setHooks({
         onBeforeWrite: (path) => {
           if (
-            path.includes("/.cadtree/branches/branch-") &&
+            path.includes("/.cadtree/branches/") &&
             !path.endsWith("branch-main.json")
           )
             throw new Error("Mapping publication failed");
@@ -781,4 +776,262 @@ test("adoption rejects corrupt stored content even when its raw copied bytes mat
     ),
   );
   assert.equal(await snapshot(vault), before);
+});
+
+test("managed cases get readable working folders; 'main.' never takes working/main; adoption keeps readable names", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  let project = await importProject(root, await cadSource(), "Actuator");
+  const first = await captureRevision(
+    project.workingFolders["branch-main"]!,
+    project.vaultDir,
+    { branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders },
+  );
+  const made: Record<string, string> = {};
+  for (const name of ["Lighter collar", "Lighter/collar", "Lighter-collar", "main.", "CON"]) {
+    const created = await createManagedBranch(root, project.record.containerPath, {
+      sourceRevisionId: first.revision.manifest.revisionId,
+      name,
+      reason: "Explore",
+    });
+    project = created;
+    made[name] = created.workingPaths[created.createdBranchId];
+  }
+  const base = project.record.containerPath + "/working/";
+  assert.equal(project.workingPaths["branch-main"], base + "main");
+  assert.deepEqual(made, {
+    "Lighter collar": base + "Lighter collar",
+    "Lighter/collar": base + "Lighter-collar",
+    "Lighter-collar": base + "Lighter-collar (2)",
+    "main.": base + "main (2)",
+    CON: base + "CON (2)",
+  });
+  // Importing the complete managed project into another workspace re-adopts it.
+  const other = new InMemoryFileSystemAdapter("Other workspace");
+  await createWorkspace(other);
+  const source = await root.getDirectory(project.record.containerPath.split("/"));
+  const imported = await importProject(other, source, "ignored");
+  const leaves = Object.values(imported.workingPaths)
+    .map((path) => path.split("/").pop())
+    .sort();
+  assert.deepEqual(
+    leaves,
+    ["CON (2)", "Lighter-collar", "Lighter-collar (2)", "Lighter collar", "main", "main (2)"].sort(),
+  );
+});
+
+test("a Unicode case name is bound at its exact working path and reopens ready", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const project = await importProject(root, await cadSource(), "Actuator");
+  const first = await captureRevision(
+    project.workingFolders["branch-main"]!,
+    project.vaultDir,
+    { branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders },
+  );
+  const created = await createManagedBranch(root, project.record.containerPath, {
+    sourceRevisionId: first.revision.manifest.revisionId,
+    name: "Ünïcode 設計 案",
+    reason: "Explore",
+  });
+  const expected = `${project.record.containerPath}/working/Ünïcode 設計 案`;
+  assert.equal(created.workingPaths[created.createdBranchId], expected);
+  const reopened = await resolveManagedProject(root, project.record.containerPath);
+  assert.ok(reopened.ready);
+  assert.equal(reopened.issues.length, 0);
+  assert.equal(reopened.workingPaths[created.createdBranchId], expected);
+  assert.ok(reopened.workingFolders[created.createdBranchId]);
+  const listed = (await openWorkspace(root)).projects[0].project!;
+  assert.ok(listed.ready);
+  assert.ok(listed.workingFolders[created.createdBranchId]);
+});
+
+test("renaming a project folder in the file explorer keeps the project ready and writable", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  let project = await createProject(root, "Packaging Gripper");
+  await project.workingFolders["branch-main"]!.writeFileBytes(["Part.SLDPRT"], new Uint8Array([1, 2, 3]));
+  const first = await captureRevision(project.workingFolders["branch-main"]!, project.vaultDir, {
+    branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders,
+  });
+  project = await createManagedBranch(root, project.record.containerPath, {
+    sourceRevisionId: first.revision.manifest.revisionId, name: "Lighter collar", reason: "Explore",
+  });
+  const projectId = project.record.projectId;
+  const oldPath = project.record.containerPath;
+  // The in-memory adapter has no move: recreate the tree under the new name, then remove the original.
+  const renamed = "projects/Renamed gripper";
+  const target = await root.getDirectory(renamed.split("/"), { create: true });
+  await copyVerifiedTree(await root.getDirectory(oldPath.split("/")), target);
+  await root.removeEntry(oldPath.split("/"), { recursive: true });
+
+  const state = await openWorkspace(root);
+  assert.equal(state.projects.length, 1);
+  assert.equal(state.projects[0].status, "ready");
+  assert.equal(state.projects[0].projectId, projectId);
+  assert.equal(state.projects[0].containerPath, renamed);
+  const resolved = await resolveManagedProject(root, renamed);
+  assert.deepEqual(resolved.issues, []);
+  assert.equal(resolved.record.containerPath, renamed);
+  assert.equal(resolved.record.vaultPath, renamed + "/vault");
+  assert.equal(resolved.record.projectId, projectId);
+  assert.equal(resolved.vaultState.project.projectId, projectId);
+  assert.equal(Object.keys(resolved.workingPaths).length, 2);
+  for (const path of Object.values(resolved.workingPaths))
+    assert.ok(path.startsWith(renamed + "/working/"), path);
+  // The stored record on disk is untouched (the ready marker covers it).
+  const stored = JSON.parse(await target.readFileText([".cadtree", "project.json"]));
+  assert.equal(stored.containerPath, oldPath);
+
+  const another = await createManagedBranch(root, resolved.record.containerPath, {
+    sourceRevisionId: first.revision.manifest.revisionId, name: "Case B", reason: "More",
+  });
+  assert.ok(another.workingPaths[another.createdBranchId].startsWith(renamed + "/working/"));
+  await save(another, "branch-main", 77);
+  const reopened = await openWorkspace(root);
+  assert.equal(reopened.projects[0].status, "ready");
+  assert.equal(reopened.projects[0].project!.vaultState.branches.length, 3);
+});
+
+test("renamed incomplete folders are still labelled from attempt.json", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const dir = await root.getDirectory(["projects", "Hand renamed"], { create: true });
+  await dir.writeFileText([".cadtree", "attempt.json"], JSON.stringify({
+    operation: "create", name: "Half made", containerPath: "projects/Half made",
+  }));
+  const entry = (await openWorkspace(root)).projects[0];
+  assert.equal(entry.status, "incomplete");
+  assert.equal(entry.name, "Half made");
+});
+
+test("tampering is still rejected under location-independent project identity", async () => {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  const project = await importProject(root, await cadSource(), "Actuator");
+  const first = await captureRevision(project.workingFolders["branch-main"]!, project.vaultDir, {
+    branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders,
+  });
+  const withCase = await createManagedBranch(root, project.record.containerPath, {
+    sourceRevisionId: first.revision.manifest.revisionId, name: "Case A", reason: "Alt",
+  });
+  const containerPath = project.record.containerPath;
+  const container = await root.getDirectory(containerPath.split("/"));
+  const recordPath = [".cadtree", "project.json"];
+  const originalRecord = await container.readFileText(recordPath);
+
+  // Another workspaceId in project.json (even with a valid checksum) is not this workspace's project.
+  const foreign = { ...JSON.parse(originalRecord), workspaceId: "other-workspace" };
+  foreign.payloadSha256 = managementChecksum(foreign);
+  await container.writeFileText(recordPath, JSON.stringify(foreign));
+  await assert.rejects(resolveManagedProject(root, containerPath), /does not match this workspace/);
+  assert.equal((await openWorkspace(root)).projects[0].status, "damaged");
+
+  // A changed record no longer matches the ready marker hash: not ready, never silently accepted.
+  const edited = { ...JSON.parse(originalRecord), name: "Edited" };
+  edited.payloadSha256 = managementChecksum(edited);
+  await container.writeFileText(recordPath, JSON.stringify(edited));
+  const unready = await resolveManagedProject(root, containerPath);
+  assert.equal(unready.ready, false);
+  assert.equal((await openWorkspace(root)).projects[0].status, "incomplete");
+  await container.writeFileText(recordPath, originalRecord);
+  assert.equal((await resolveManagedProject(root, containerPath)).issues.length, 0);
+
+  const caseId = withCase.createdBranchId;
+  const caseLeaf = withCase.workingPaths[caseId].split("/").pop()!;
+  const mainPath = [".cadtree", "branches", "branch-main.json"];
+  const casePath = [".cadtree", "branches", `${caseId}.json`];
+  const mainOriginal = await container.readFileText(mainPath);
+  const caseOriginal = await container.readFileText(casePath);
+  const write = async (path: string[], base: string, workingPath: string) => {
+    const modified = { ...JSON.parse(base), workingPath };
+    modified.payloadSha256 = managementChecksum(modified);
+    await container.writeFileText(path, JSON.stringify(modified));
+  };
+  const working = await container.getDirectory(["working"]);
+  const foldersBefore = (await working.listEntries()).map((e) => e.name).sort();
+  for (const bad of [
+    "projects/x/main",
+    "projects/x/vault/main",
+    "projects/x/working/main/deeper",
+    "other/x/working/main",
+    "projects/x/working/ma:in",
+    "projects/x/working/..",
+    "projects/x/working",
+  ]) {
+    await write(mainPath, mainOriginal, bad);
+    const state = await resolveManagedProject(root, containerPath);
+    assert.ok(state.issues.length, bad);
+    assert.equal(state.workingFolders["branch-main"], undefined, bad);
+  }
+  // Leaves differing only by case collide.
+  await write(mainPath, mainOriginal, `projects/anything/working/${caseLeaf.toUpperCase()}`);
+  await write(casePath, caseOriginal, `projects/other/working/${caseLeaf.toLowerCase()}`);
+  const collided = await resolveManagedProject(root, containerPath);
+  assert.ok(collided.issues.some((issue) => /collision|Case-insensitive/i.test(issue)));
+  // A leaf whose folder is missing is reported and never created.
+  await write(mainPath, mainOriginal, "projects/anything/working/Missing leaf");
+  await write(casePath, caseOriginal, withCase.workingPaths[caseId]);
+  const missing = await resolveManagedProject(root, containerPath);
+  assert.ok(missing.issues.some((issue) => issue.includes("No folder was recreated")));
+  assert.equal(missing.workingFolders["branch-main"], undefined);
+  assert.deepEqual((await working.listEntries()).map((e) => e.name).sort(), foldersBefore);
+});
+
+async function renamedProjectWithCase() {
+  const root = new InMemoryFileSystemAdapter("Workspace");
+  await createWorkspace(root);
+  let project = await createProject(root, "Alpha");
+  await project.workingFolders["branch-main"]!.writeFileBytes(["Part.SLDPRT"], new Uint8Array([9, 8, 7]));
+  const first = await captureRevision(project.workingFolders["branch-main"]!, project.vaultDir, {
+    branchId: "branch-main", summary: "Baseline", notes, workingFolders: project.workingFolders,
+  });
+  const oldPath = project.record.containerPath;
+  const renamed = "projects/Renamed alpha";
+  const target = await root.getDirectory(renamed.split("/"), { create: true });
+  await copyVerifiedTree(await root.getDirectory(oldPath.split("/")), target);
+  await root.removeEntry(oldPath.split("/"), { recursive: true });
+  project = await resolveManagedProject(root, renamed);
+  return { root, project, first, renamed, target };
+}
+
+test("a renamed project with a new case imports into another workspace as a ready project with readable leaves", async () => {
+  const { root, project, first, renamed } = await renamedProjectWithCase();
+  const withCase = await createManagedBranch(root, renamed, {
+    sourceRevisionId: first.revision.manifest.revisionId, name: "Lighter collar", reason: "Explore",
+  });
+  const other = new InMemoryFileSystemAdapter("Other workspace");
+  await createWorkspace(other);
+  const imported = await importProject(other, await root.getDirectory(renamed.split("/")), "ignored");
+  assert.equal(imported.ready, true);
+  assert.deepEqual(imported.issues, []);
+  assert.equal(imported.record.projectId, project.record.projectId);
+  assert.equal(Object.keys(imported.workingPaths).length, 2);
+  assert.deepEqual(
+    Object.values(imported.workingPaths).map((path) => path.split("/").pop()).sort(),
+    ["Lighter collar", "main"],
+  );
+  assert.ok(withCase.workingPaths[withCase.createdBranchId].startsWith(renamed + "/working/"));
+  const reopened = (await openWorkspace(other)).projects;
+  assert.equal(reopened.length, 1);
+  assert.equal(reopened[0].status, "ready");
+});
+
+test("import rejects a source whose branch locations share a leaf case-insensitively and writes nothing", async () => {
+  const { root, first, renamed, target } = await renamedProjectWithCase();
+  const withCase = await createManagedBranch(root, renamed, {
+    sourceRevisionId: first.revision.manifest.revisionId, name: "Case A", reason: "Alt",
+  });
+  const caseId = withCase.createdBranchId;
+  const casePath = [".cadtree", "branches", `${caseId}.json`];
+  const mapping = JSON.parse(await target.readFileText(casePath));
+  mapping.workingPath = "projects/Renamed alpha/working/MAIN";
+  mapping.payloadSha256 = managementChecksum(mapping);
+  await target.writeFileText(casePath, JSON.stringify(mapping));
+  const other = new InMemoryFileSystemAdapter("Other workspace");
+  await createWorkspace(other);
+  await assert.rejects(importProject(other, target, "ignored"), /collide/);
+  const projects = (await openWorkspace(other)).projects;
+  assert.equal(projects.filter((entry) => entry.status === "ready").length, 0);
+  assert.equal(projects.length, 0);
 });

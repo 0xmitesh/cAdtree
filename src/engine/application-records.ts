@@ -1,10 +1,12 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
 import { splitAndValidatePath } from "./fs-adapter";
 import { hashString } from "./hash";
-import type { ApplyPreviewPlan, PreviewChoice } from "./apply-preview";
+import type { ApplyMode, ApplyPreviewPlan, PreviewChoice } from "./apply-preview";
 import type { FileEntry, RevisionManifest, VaultState } from "./types";
 
 export interface ApplicationReview {
+  /** Absent only in older records, which read as "merge". */
+  mode?: ApplyMode;
   projectId: string;
   sourceRevisionId: string;
   destinationBranchId: string;
@@ -19,7 +21,10 @@ export interface ApplicationRecord {
   createdAt: string;
   sourceBranchId: string;
   review: ApplicationReview;
-  plan: Pick<
+  plan: {
+    /** Absent only in older records, which read as "merge". */
+    mode?: ApplyMode;
+  } & Pick<
     ApplyPreviewPlan,
     | "projectId"
     | "sourceRevisionId"
@@ -107,6 +112,54 @@ export function applicationPath(
     throw new Error("Unsafe application identity.");
   return ["applications", branchId, operationId];
 }
+const sixDigits = (n: number) => String(n).padStart(6, "0");
+export function applicationPlanPath(
+  branchId: string,
+  operationId: string,
+): string[] {
+  return [...applicationPath(branchId, operationId), "plan.json"];
+}
+export function applicationEventPath(
+  branchId: string,
+  operationId: string,
+  sequence: number,
+): string[] {
+  return [
+    ...applicationPath(branchId, operationId),
+    "events",
+    `${sixDigits(sequence)}.json`,
+  ];
+}
+export function applicationStagedPath(
+  branchId: string,
+  operationId: string,
+  side: "before" | "source",
+  index: number,
+): string[] {
+  return [
+    ...applicationPath(branchId, operationId),
+    side,
+    `${sixDigits(index)}.bin`,
+  ];
+}
+export function applicationUnexpectedFolder(
+  branchId: string,
+  operationId: string,
+  recoveryId: string,
+): string[] {
+  return [...applicationPath(branchId, operationId), "unexpected", recoveryId];
+}
+export function applicationUnexpectedPath(
+  branchId: string,
+  operationId: string,
+  recoveryId: string,
+  index: number,
+): string[] {
+  return [
+    ...applicationUnexpectedFolder(branchId, operationId, recoveryId),
+    `${sixDigits(index)}.bin`,
+  ];
+}
 function validateRecord(
   record: ApplicationRecord,
   state: VaultState,
@@ -127,11 +180,16 @@ function validateRecord(
     plan.destinationBranchId !== branchId ||
     review.destinationBranchId !== branchId ||
     review.sourceRevisionId !== plan.sourceRevisionId ||
+    !["merge", "revert"].includes(review.mode ?? "merge") ||
+    !["merge", "revert"].includes(plan.mode ?? "merge") ||
+    (review.mode ?? "merge") !== (plan.mode ?? "merge") ||
     ![
       plan.sourceRevisionId,
       plan.baseRevisionId,
       plan.destinationRevisionId,
     ].every(safeId) ||
+    ((plan.mode ?? "merge") === "revert" &&
+      plan.baseRevisionId !== plan.destinationRevisionId) ||
     !plan.reason?.trim() ||
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||
@@ -494,11 +552,11 @@ export async function appendApplicationEvent(
     at: new Date().toISOString(),
     ...fields,
   });
-  const path = [
-    ...applicationPath(operation.destinationBranchId, operation.operationId),
-    "events",
-    `${String(event.sequence).padStart(6, "0")}.json`,
-  ];
+  const path = applicationEventPath(
+    operation.destinationBranchId,
+    operation.operationId,
+    event.sequence,
+  );
   const text = JSON.stringify(event, null, 2);
   await vault.writeFileText(path, text, { exclusive: true });
   if ((await vault.readFileText(path)) !== text)

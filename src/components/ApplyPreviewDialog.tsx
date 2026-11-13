@@ -13,6 +13,7 @@ import { caseLabel } from "../engine/case-lifecycle";
 import {
   buildApplyPreview,
   prepareApplyPreview,
+  type ApplyMode,
   type ApplyPreviewContext,
   type ConflictDecision,
   type PreviewChoice,
@@ -32,26 +33,58 @@ export interface ApplicationController {
   refresh?: () => Promise<void>;
 }
 
+const plural = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
+function countsLine(
+  add: number,
+  replace: number,
+  remove: number,
+  revert: boolean,
+): string {
+  if (revert)
+    return [
+      add ? `${plural(add, "file", "files")} brought back` : "",
+      replace ? `${replace} replaced` : "",
+      remove ? `${remove} removed` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  return [
+    plural(add, "addition", "additions"),
+    plural(replace, "replacement", "replacements"),
+    plural(remove, "deletion", "deletions"),
+  ].join(" · ");
+}
+
 export function ApplyPreviewDialog({
   state,
   sourceId,
   destinationBranchId,
+  mode = "merge",
   onClose,
   application,
 }: {
   state: VaultState;
   sourceId: string;
   destinationBranchId: string;
+  mode?: ApplyMode;
   onClose: () => void;
   application?: ApplicationController;
 }) {
   const preparation = useMemo(
-    () => prepareApplyPreview(state, sourceId, destinationBranchId),
-    [state, sourceId, destinationBranchId],
+    () => prepareApplyPreview(state, sourceId, destinationBranchId, mode),
+    [state, sourceId, destinationBranchId, mode],
   );
   if (preparation.status === "unavailable")
     return (
-      <Modal title="Review changes to apply — preview" onClose={onClose}>
+      <Modal
+        title={
+          mode === "revert"
+            ? "Bring back an earlier revision — preview"
+            : "Review changes to apply — preview"
+        }
+        onClose={onClose}
+      >
         <Notice type="error">Preview unavailable. {preparation.reason}</Notice>
         <p>
           Ordinary Compare remains available for healthy saved endpoints under
@@ -86,7 +119,21 @@ function ApplyPreviewBody({
   onClose: () => void;
   application?: ApplicationController;
 }) {
-  const [choices, setChoices] = useState<Record<string, PreviewChoice>>({});
+  const revert = context.mode === "revert";
+  const initialChoices = (): Record<string, PreviewChoice> =>
+    revert
+      ? Object.fromEntries(
+          context.rows
+            .filter((row) => row.kind === "available" && !row.identityBlock)
+            .map((row) => [
+              row.path,
+              { selected: true, decision: "use-source" as ConflictDecision },
+            ]),
+        )
+      : {};
+  const [choices, setChoices] = useState<Record<string, PreviewChoice>>(
+    initialChoices,
+  );
   const [reason, setReason] = useState("");
   const [prepared, setPrepared] = useState<PreparedApplication | null>(null);
   const [running, setRunning] = useState(false);
@@ -110,11 +157,22 @@ function ApplyPreviewBody({
   );
   const branchName = (revision: ReconstructedRevision) =>
     caseLabel(state, revision.manifest.branchId);
-  const endpoints = [
-    { side: "Base", revision: context.base },
-    { side: "Source", revision: context.source },
-    { side: "Destination", revision: context.destination },
-  ];
+  const endpointCards = revert
+    ? [
+        { key: "now", title: `Latest saved · ${caseLabel(state, context.destinationBranchId)}`, revision: context.destination },
+        { key: "back", title: `Bring back · ${formatRevisionNumber(context.source.manifest.displayNumber)}`, revision: context.source },
+      ]
+    : null;
+  const endpoints = revert
+    ? [
+        { side: "Latest saved", revision: context.destination },
+        { side: "Bring back", revision: context.source },
+      ]
+    : [
+        { side: "Base", revision: context.base },
+        { side: "Source", revision: context.source },
+        { side: "Destination", revision: context.destination },
+      ];
   const candidates = context.rows.filter(
     (row) => row.kind === "available" || row.kind === "conflict",
   );
@@ -122,6 +180,19 @@ function ApplyPreviewBody({
   const retained = context.rows.filter(
     (row) => row.kind === "no-source-change",
   );
+  const reasonLabel = revert
+    ? "Engineering reason for bringing this back"
+    : "Engineering reason for proposed application";
+  const sourceLabel = formatRevisionNumber(
+    context.source.manifest.displayNumber,
+  );
+  const destinationName = caseLabel(state, context.destinationBranchId);
+  const revertChange = (row: PreviewFileRow) =>
+    row.sourceChange === "deleted"
+      ? `Remove (not in ${sourceLabel})`
+      : row.sourceChange === "added"
+        ? "Bring back"
+        : `Replace with ${sourceLabel}'s version`;
   const sourceWord = (row: PreviewFileRow) =>
     row.sourceChange === "deleted"
       ? "deletion"
@@ -139,12 +210,12 @@ function ApplyPreviewBody({
   const stateAndNotes = (row: PreviewFileRow) => (
     <details className="disclosure preview-file-evidence">
       <summary>Saved file states and notes</summary>
-      <div className="comparison-file-endpoints preview-three-columns">
+      <div className={revert ? "comparison-file-endpoints" : "comparison-file-endpoints preview-three-columns"}>
         {endpoints.map(({ side, revision }) => {
           const file =
             side === "Base"
               ? row.base
-              : side === "Source"
+              : side === "Source" || side === "Bring back"
                 ? row.source
                 : row.destination;
           const notes =
@@ -225,16 +296,28 @@ function ApplyPreviewBody({
   };
   if (applied)
     return (
-      <Modal title="Application completed" onClose={onClose}>
+      <Modal
+        title={revert ? "Bring back completed" : "Application completed"}
+        onClose={onClose}
+      >
         <Notice type="success">
-          Applied to working files — revision not yet saved.
+          {revert
+            ? "Brought back into working files — revision not yet saved."
+            : "Applied to working files — revision not yet saved."}
         </Notice>
         <p>
           Open the destination in CAD, check references and rebuild, and make
           any necessary adjustments. Use the normal Changes → Save revision flow
-          to preserve the final complete snapshot and application provenance.
+          to preserve the final complete snapshot and{" "}
+          {revert
+            ? "keep this bring-back in the revision's history."
+            : "application provenance."}
         </p>
-        <p>The source Design Case and its saved history remain available.</p>
+        <p>
+          {revert
+            ? `${sourceLabel} and ${destinationName}'s latest saved revision both stay in history.`
+            : "The source Design Case and its saved history remain available."}
+        </p>
         <div className="modal-actions">
           <button
             ref={completionFocus}
@@ -249,7 +332,11 @@ function ApplyPreviewBody({
   if (prepared)
     return (
       <Modal
-        title="Confirm working-file application"
+        title={
+          revert
+            ? "Confirm bringing back into working files"
+            : "Confirm working-file application"
+        }
         onClose={onClose}
         busy={running}
       >
@@ -280,17 +367,35 @@ function ApplyPreviewBody({
           The destination matched its saved baseline during preparation. It will
           be rechecked under the project writer lock before application.
         </p>
-        <h3>Confirmed additions, replacements and deletions</h3>
+        <h3>{revert ? "Confirmed changes" : "Confirmed additions, replacements and deletions"}</h3>
+        {revert ? (
+          <p>
+            <strong>
+              {countsLine(
+                prepared.plan.actions.filter((a) => a.operation === "add").length,
+                prepared.plan.actions.filter((a) => a.operation === "replace").length,
+                prepared.plan.actions.filter((a) => a.operation === "delete").length,
+                true,
+              )}
+            </strong>
+          </p>
+        ) : null}
         <ul className="application-actions">
           {prepared.plan.actions.map((action) => (
             <li key={action.path}>
               <strong>
                 {action.operation === "delete"
-                  ? "DELETE destination file"
+                  ? revert
+                    ? `Remove (not in ${sourceLabel})`
+                    : "DELETE destination file"
                   : action.operation === "replace"
-                    ? "Replace with Source"
+                    ? revert
+                      ? `Replace with ${sourceLabel}'s version`
+                      : "Replace with Source"
                     : action.operation === "add"
-                      ? "Add Source file"
+                      ? revert
+                        ? `Bring back from ${sourceLabel}`
+                        : "Add Source file"
                       : "Keep Destination"}
               </strong>{" "}
               · <span className="file-path">{action.path}</span>
@@ -327,14 +432,18 @@ function ApplyPreviewBody({
             disabled={running || !cadClosed}
             onClick={() => void apply()}
           >
-            Apply confirmed changes
+            {revert ? "Bring back confirmed changes" : "Apply confirmed changes"}
           </button>
         </div>
       </Modal>
     );
   return (
     <Modal
-      title="Review changes to apply — preview"
+      title={
+        revert
+          ? `Make ${destinationName} match ${sourceLabel}`
+          : "Review changes to apply — preview"
+      }
       onClose={onClose}
       busy={running}
     >
@@ -351,12 +460,27 @@ function ApplyPreviewBody({
         <Notice>
           {application
             ? "Saved-state review — no files change until preparation and final confirmation. Preparation rejects uncaptured destination edits."
-            : "Preview only — no files will be applied. This uses saved states."}
+            : "Preview only — no files will be applied. This uses saved states."}{" "}
           Current uncaptured working edits are not included and are not
           authorized for replacement.
         </Notice>
-        <div className="preview-endpoints preview-three-columns">
-          {endpoints.map(({ side, revision }) => (
+        <div className={revert ? "preview-endpoints" : "preview-endpoints preview-three-columns"}>
+          {endpointCards ? endpointCards.map(({ key, title, revision }) => (
+            <section key={key} aria-label={title}>
+              <h3>{title}</h3>
+              <strong>
+                {formatRevisionNumber(revision.manifest.displayNumber)} ·{" "}
+                {branchName(revision)}
+              </strong>
+              <p>{revision.manifest.summary}</p>
+              <span className="muted small">
+                {revision.manifest.files.length} files ·{" "}
+                {revision.integrityStatus === "objects_verified"
+                  ? "Metadata and file contents previously verified"
+                  : "Metadata verified · contents not checked"}
+              </span>
+            </section>
+          )) : endpoints.map(({ side, revision }) => (
             <section key={side} aria-label={`${side} saved revision`}>
               <h3>
                 {side}
@@ -379,9 +503,9 @@ function ApplyPreviewBody({
           ))}
         </div>
         <p className="muted small">
-          Base is the nearest shared ancestor established from validated parent
-          relationships. This preview compares byte hashes; it does not merge
-          geometry or verify CAD compatibility.
+          {revert
+            ? "Compares saved byte hashes of the two revisions; it does not merge geometry or verify CAD compatibility."
+            : "Base is the nearest shared ancestor established from validated parent relationships. This preview compares byte hashes; it does not merge geometry or verify CAD compatibility."}
         </p>
         <div
           className="comparison-scope"
@@ -390,18 +514,12 @@ function ApplyPreviewBody({
         >
           <strong>Proposed result: {plan.resultFiles.length} files</strong>
           <span>
-            {operations.filter((action) => action.operation === "add").length}{" "}
-            additions ·{" "}
-            {
-              operations.filter((action) => action.operation === "replace")
-                .length
-            }{" "}
-            replacements ·{" "}
-            {
-              operations.filter((action) => action.operation === "delete")
-                .length
-            }{" "}
-            deletions
+            {countsLine(
+              operations.filter((action) => action.operation === "add").length,
+              operations.filter((action) => action.operation === "replace").length,
+              operations.filter((action) => action.operation === "delete").length,
+              revert,
+            )}
           </span>
         </div>
         <div
@@ -424,7 +542,9 @@ function ApplyPreviewBody({
             <p>
               Nothing has been written.{" "}
               {application
-                ? "Prepare application to check the destination, then review and confirm the working-file changes."
+                ? revert
+                  ? "Prepare bring-back to check the working folder, then review and confirm the working-file changes."
+                  : "Prepare application to check the destination, then review and confirm the working-file changes."
                 : "Working edits and actual application require a later, separate step."}
             </p>
           )}
@@ -440,27 +560,33 @@ function ApplyPreviewBody({
           </Notice>
         ) : null}
         <label className="field preview-reason">
-          <span>Engineering reason for proposed application</span>
+          <span>{reasonLabel}</span>
           <textarea
             ref={reasonFocus}
-            aria-label="Engineering reason for proposed application"
+            aria-label={reasonLabel}
             aria-required="true"
             rows={2}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Explain which design changes you want to reuse and why."
+            placeholder={
+              revert
+                ? "Explain why you are bringing this earlier version back."
+                : "Explain which design changes you want to reuse and why."
+            }
             disabled={running}
           />
         </label>
         <details className="disclosure">
           <summary>
-            Overall engineering notes · Base, Source and Destination
+            {revert
+              ? "Overall engineering notes · Latest saved and Bring back"
+              : "Overall engineering notes · Base, Source and Destination"}
           </summary>
           <p className="muted small">
             Notes describe these saved revisions only, not every intervening
             change.
           </p>
-          <div className="comparison-file-endpoints preview-three-columns">
+          <div className={revert ? "comparison-file-endpoints" : "comparison-file-endpoints preview-three-columns"}>
             {endpoints.map(({ side, revision }) => (
               <section
                 key={side}
@@ -484,13 +610,14 @@ function ApplyPreviewBody({
           </div>
         </details>
         <section
-          aria-label="Source changes to review"
+          aria-label={revert ? "Changes to review" : "Source changes to review"}
           className="preview-candidates"
         >
-          <h3>Source changes to review ({candidates.length})</h3>
+          <h3>{revert ? "Changes to review" : "Source changes to review"} ({candidates.length})</h3>
           <p className="muted small">
-            Start with nothing selected. Destination-only files and
-            source-unchanged files are retained, not offered as deletions.
+            {revert
+              ? `All changes are selected. Nothing is lost: ${destinationName}'s latest saved revision stays in history, and the files you replace are kept with this operation. Save a revision afterwards.`
+              : "Start with nothing selected. Destination-only files and source-unchanged files are retained, not offered as deletions."}
           </p>
           {!candidates.length ? (
             <Notice>
@@ -509,7 +636,11 @@ function ApplyPreviewBody({
                   <label className="file-choice">
                     <input
                       type="checkbox"
-                      aria-label={`Select source ${sourceWord(row)}: ${row.path}`}
+                      aria-label={
+                        revert
+                          ? `Select ${revertChange(row)}: ${row.path}`
+                          : `Select source ${sourceWord(row)}: ${row.path}`
+                      }
                       checked={selected}
                       disabled={running || Boolean(row.identityBlock)}
                       onChange={(event) =>
@@ -522,15 +653,18 @@ function ApplyPreviewBody({
                     status={
                       row.kind === "conflict"
                         ? "Conflict"
-                        : `Source ${sourceWord(row)}`
+                        : revert
+                          ? revertChange(row)
+                          : `Source ${sourceWord(row)}`
                     }
                   />
                 </div>
                 {row.identityBlock ? <Notice type="error">{row.identityBlock}</Notice> : null}
                 {row.source === null ? (
                   <p className="preview-deletion">
-                    Source deletes this file. Choosing source state would DELETE
-                    it from the proposed destination.
+                    {revert
+                      ? `This file is not in ${sourceLabel}. It would be removed from the working files; it stays in saved history.`
+                      : "Source deletes this file. Choosing source state would DELETE it from the proposed destination."}
                   </p>
                 ) : null}
                 {row.kind === "conflict" ? (
@@ -575,8 +709,9 @@ function ApplyPreviewBody({
                   </>
                 ) : (
                   <p className="muted small">
-                    Destination matches Base. Select to include this source{" "}
-                    {sourceWord(row)}.
+                    {revert
+                      ? `Selected to make this file match ${sourceLabel}.`
+                      : `Destination matches Base. Select to include this source ${sourceWord(row)}.`}
                   </p>
                 )}
                 {stateAndNotes(row)}
@@ -677,7 +812,7 @@ function ApplyPreviewBody({
                 setApplicationError("");
                 try {
                   await application.refresh!();
-                  setChoices({});
+                  setChoices(initialChoices());
                   setReason("");
                 } catch (error) {
                   setApplicationError(
@@ -703,7 +838,9 @@ function ApplyPreviewBody({
             onClick={() => void prepare()}
           >
             {application
-              ? "Prepare application"
+              ? revert
+                ? "Prepare bring-back"
+                : "Prepare application"
               : "Apply — unavailable in preview"}
           </button>
         </div>

@@ -1,8 +1,8 @@
+import { isEffectivelyEmpty } from "./engine/scanner";
 import { useEffect, useRef, useState } from "react";
 import {
   type FileSystemDirectoryAdapter,
   RealFileSystemAdapter,
-  validateDirectoryIsolation,
 } from "./engine/fs-adapter";
 import {
   clearAllConvenienceMetadata,
@@ -30,8 +30,8 @@ import {
 } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
-  resolveRecoveredFilePath,
 } from "./engine/path-shortcuts";
+import { presentPathBudgetError, pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
   FolderAddressDialog,
   rememberFolderAddress,
@@ -40,10 +40,7 @@ import {
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import { exportRevisionForReview } from './engine/review-export';
 import type { ExportReviewAction } from './components/ReviewExportDialog';
-import {
-  restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
-} from "./engine/recovery-service";
+import { joinAddress } from "./engine/path-budget";
 import { captureRevision, ReviewStaleError } from "./engine/revision-service";
 import { componentWriteBlock, enableComponentTracking, type IdentityReview } from './engine/component-identity';
 import {
@@ -73,7 +70,6 @@ import {
   type FileSpecificNote,
   MAIN_BRANCH_ID,
   type ProgressUpdate,
-  type RestoreResult,
   type ScanResult,
   type VaultState,
 } from "./engine/types";
@@ -107,6 +103,7 @@ import {
 import {
   IntegrityNotice,
   Notice,
+  MessageLines,
   OperationProgress,
   Modal,
 } from "./components/ui";
@@ -133,7 +130,6 @@ import {
   importProject,
   resolveManagedProject,
   createManagedBranch,
-  recoverManagedCopy,
   type WorkspaceState,
   type ManagedProject,
   type WorkspaceProjectEntry,
@@ -141,7 +137,7 @@ import {
 
 type ActiveTab = "connect" | "changes" | "history" | "references" | "diagnostics";
 type Operation =
-  "scan" | "capture" | "restore" | "verify" | "branch" | "connect" | "apply" | "export" | "references";
+  "scan" | "capture" | "verify" | "branch" | "connect" | "apply" | "export" | "references";
 type Context = {
   version: number;
   signal: AbortSignal;
@@ -200,6 +196,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [homeAddress, setHomeAddress] = useState<HomeAddress | null>(null);
   const homeAddressCache = useRef<HomeAddress[]>([]);
   const cacheHomeAddress = (address: HomeAddress) => {
+    // Lets the adapter (and its workspace/project children) explain a path-too-long failure with the real path.
+    address.root.setAddress?.(address.path);
     homeAddressCache.current = [
       ...homeAddressCache.current.filter((item) => item.root !== address.root),
       address,
@@ -256,11 +254,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
-  const [lastRestoreReport, setLastRestoreReport] = useState<{
-    result: RestoreResult;
-    destinationPath?: string;
-    recoveredFiles?: { relativeDirectory: string; paths: string[] };
-  } | null>(null);
   // Synchronous guards also cover rapid double clicks before React renders disabled controls.
   const operationRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
@@ -274,7 +267,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    setLastRestoreReport(null);
     setActiveBranchId(MAIN_BRANCH_ID);
     setActiveTab("connect");
     setStatusBanner(null);
@@ -397,6 +389,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return await action(context);
     } catch (error) {
       error = folderPermissionError(error);
+      // Over the path limit: the same wording in the banner and in any dialog that shows the rethrown error.
+      error = presentPathBudgetError(error);
       if (current())
         setStatusBanner({
           type:
@@ -545,7 +539,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    setLastRestoreReport(null);
     setActiveBranchId(MAIN_BRANCH_ID);
     setActiveTab("connect");
     setStatusBanner(null);
@@ -619,7 +612,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             if (error instanceof DOMException && error.name === "AbortError")
               throw new Error(
                 create
-                  ? "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home."
+                  ? "Folder selection was cancelled. Choose an empty dedicated folder, suggested name Cadtree, to create your Cadtree home."
                   : "Folder selection was cancelled. Choose your existing Cadtree home folder to continue.",
               );
             throw error;
@@ -628,7 +621,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         if ((await root.requestPermission("readwrite")) !== "granted")
           throw new Error("Read/write folder access was denied. Allow local folder access in your browser site settings, then reconnect your Cadtree home.");
         if (create) {
-          if ((await root.listEntries()).length)
+          if (!isEffectivelyEmpty(await root.listEntries()))
             throw new Error(
               "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.",
             );
@@ -955,6 +948,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     }
     if (!home) throw new Error("Choose a Cadtree home first.");
+    // Only await when the prompt is needed: the folder picker below must still start inside the click.
+    if (!budgetHomeAddress()) await ensureHomeAddress("home");
     await perform(
       "connect",
       async (context) => {
@@ -971,11 +966,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 expectedHomeId: home.identity.homeId,
                 signal: context.signal,
                 onProgress: context.progress,
+                budget: { homeAddress: budgetHomeAddress() },
               })
             : await createHomeWorkspace(home.root, name!, {
                 expectedHomeId: home.identity.homeId,
                 signal: context.signal,
                 onProgress: context.progress,
+                budget: { homeAddress: budgetHomeAddress() },
               });
           const next = await openHome(home.root);
           if (!context.current()) return;
@@ -999,7 +996,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           );
           setStatusBanner({
             type: "success",
-            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "Original workspace retained unchanged; continue editing only in this managed copy." : ""}`,
+            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "Original workspace retained unchanged; continue editing only in this managed copy." : ""} ${pathBudgetWarnSentence(result.pathBudget)}`.trim(),
           });
           await persistWorkspace(result.workspace, undefined, undefined, next);
         } catch (error) {
@@ -1213,6 +1210,79 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
+  // Absolute addresses for the engine's path budget check. Unknown (undefined) means "unchecked".
+  // Read the cache ref (not render state) so an address saved a moment ago by the prompt below is seen.
+  const cachedHomeAddress = (): HomeAddress | undefined =>
+    home
+      ? [...homeAddressCache.current].reverse().find((a) => a.homeId === home.identity.homeId)
+      : undefined;
+  const budgetHomeAddress = (): string | undefined => cachedHomeAddress()?.path || undefined;
+  const budgetWorkspaceAddress = async (): Promise<string | undefined> => {
+    const base = budgetHomeAddress();
+    const address = cachedHomeAddress();
+    if (!base || !home || !workspace || !address) return undefined;
+    const relative = await address.root.resolveRelativePath(workspace.root);
+    return relative && relative.length === 1 ? joinAddress(base, relative[0]) : undefined;
+  };
+  // Live addresses for the name hints in the create dialogs (nothing is written; undefined = unknown).
+  const [workspaceBudgetAddress, setWorkspaceBudgetAddress] = useState<string | undefined>();
+  useEffect(() => {
+    let cancelled = false;
+    budgetWorkspaceAddress().then(
+      (address) => { if (!cancelled) setWorkspaceBudgetAddress(address); },
+      () => { if (!cancelled) setWorkspaceBudgetAddress(undefined); },
+    );
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [home, homeAddress, workspace]);
+  // Required prompt: a home with no saved address is asked once before the next create/import.
+  const [addressPrompt, setAddressPrompt] = useState<{ resolve: (saved: boolean) => void } | null>(null);
+  const addressPromptRef = useRef<{ resolve: (saved: boolean) => void } | null>(null);
+  const settleAddressPrompt = (saved: boolean) => {
+    const pending = addressPromptRef.current;
+    addressPromptRef.current = null;
+    setAddressPrompt(null);
+    pending?.resolve(saved);
+  };
+  // Home changed, signed out or unmounted: a pending prompt is cancelled and nothing is written.
+  const settlePromptRef = useRef(settleAddressPrompt);
+  settlePromptRef.current = settleAddressPrompt;
+  useEffect(() => {
+    settlePromptRef.current(false);
+  }, [home?.identity.homeId]);
+  useEffect(() => () => settlePromptRef.current(false), []);
+  const ensureHomeAddress = async (scope: "home" | "workspace") => {
+    if (!home || budgetHomeAddress()) return;
+    // A workspace that is not directly under the home cannot be measured, so it never prompts.
+    if (scope === "workspace") {
+      if (!workspace) return;
+      const relative = await home.root.resolveRelativePath(workspace.root);
+      if (!relative || relative.length !== 1) return;
+    }
+    // A newer prompt replaces an older one: settle the old one as cancelled so nothing hangs.
+    settleAddressPrompt(false);
+    const saved = await new Promise<boolean>((resolve) => {
+      const entry = { resolve };
+      addressPromptRef.current = entry;
+      setAddressPrompt(entry);
+    });
+    if (!saved)
+      throw new Error("Nothing was created. cAdtree needs your Cadtree home address to keep paths within Windows' limit.");
+  };
+  const saveHomeAddressFromPrompt = async (path: string) => {
+    if (!home || !addressPrompt) return;
+    const warning = await rememberFolderAddress(
+      home.identity.homeId,
+      path,
+      home.root instanceof RealFileSystemAdapter ? home.root.handle : undefined,
+    );
+    cacheHomeAddress({ homeId: home.identity.homeId, root: home.root, path });
+    if (warning) {
+      setBannerScope("workspace");
+      setStatusBanner({ type: "info", message: warning });
+    }
+    settleAddressPrompt(true);
+  };
   const addManagedProject = async (
     name: string,
     source?: FileSystemDirectoryAdapter,
@@ -1225,12 +1295,14 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     }
     if (!workspace) throw new Error("Choose a workspace first.");
+    await ensureHomeAddress("workspace");
     await perform(
       "connect",
       async (context) => {
         const options = {
           signal: context.signal,
           onProgress: context.progress,
+          budget: { workspaceAddress: await budgetWorkspaceAddress() },
         };
         const project = source
           ? await importProject(workspace.root, source, name, options)
@@ -1255,9 +1327,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           current,
           project,
           context,
-          source
-            ? `Continue working in this copy: ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
-            : `Created project "${project.record.name}". Save your CAD files in ${current.identity.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`,
+          (source
+            ? `Continue working in this copy: ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
+            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`) + (pathBudgetWarnSentence(project.pathBudget) ? ` ${pathBudgetWarnSentence(project.pathBudget)}` : ""),
         );
       },
       true,
@@ -1337,7 +1409,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setActiveBranchId(branchId);
     setWorkingDir(folders[branchId] ?? null);
     setScanResult(null);
-    setLastRestoreReport(null);
     setActiveTab(state.revisions.length ? "history" : "changes");
   };
   const handleSelectBranch = async (branchId: string) => {
@@ -1350,7 +1421,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       return;
     contextVersion.current++;
     setScanResult(null);
-    setLastRestoreReport(null);
     setStatusBanner(null);
     await perform("scan", async (context) => {
       const state = await openExistingVault(vaultDir);
@@ -1607,7 +1677,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: "Applied to working files — revision not yet saved.",
+              message:
+                prepared.plan.mode === "revert"
+                  ? "Brought back into working files — revision not yet saved."
+                  : "Applied to working files — revision not yet saved.",
             });
         } finally {
           if (context.current()) await refreshApplicationState();
@@ -1672,6 +1745,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const handleCreateBranch = async (params: CreateBranchParams) => {
     if (!vaultDir || !vaultState || !managedProject || !workspace)
       throw new Error("Open a project in a Cadtree workspace first.");
+    await ensureHomeAddress("workspace");
     await perform(
       "branch",
       async (context) => {
@@ -1685,6 +1759,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               reason: params.reason,
               signal: context.signal,
               onProgress: context.progress,
+              budget: { workspaceAddress: await budgetWorkspaceAddress() },
             },
           );
           if (!context.current()) return;
@@ -1694,7 +1769,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           setWorkingDir(current.workingFolders[current.createdBranchId]!);
           setActiveBranchId(current.createdBranchId);
           setScanResult(null);
-          setLastRestoreReport(null);
           const warning = await persistWorkspace(
             workspace,
             current.record.containerPath,
@@ -1713,87 +1787,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: `Created and verified "${params.name}". Open ${workspace.identity.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}`,
+              message: `Created and verified "${params.name}". Open ${workspace.root.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}${pathBudgetWarnSentence(current.pathBudget) ? ` ${pathBudgetWarnSentence(current.pathBudget)}` : ""}`,
             });
           return;
         }
       },
       true,
     );
-  };
-  const restore = async (
-    revisionId: string,
-    selectedPaths?: string[],
-    external = false,
-  ) => {
-    if (!vaultDir || !vaultState) return;
-    await perform("restore", async (context) => {
-      setLastRestoreReport(null);
-      if (managedProject && workspace && !external) {
-        const recovered = await recoverManagedCopy(
-          workspace.root,
-          managedProject.record.containerPath,
-          revisionId,
-          selectedPaths,
-          { signal: context.signal, onProgress: context.progress },
-        );
-        if (context.current())
-          setLastRestoreReport({
-            result: recovered.result,
-            destinationPath: `${workspace.identity.name}/${recovered.relativePath}`,
-            recoveredFiles: {
-              relativeDirectory: recovered.relativePath,
-              paths:
-                selectedPaths ??
-                managedProject.vaultState.revisions
-                  .find(
-                    (revision) => revision.manifest.revisionId === revisionId,
-                  )!
-                  .manifest.files.map((file) => file.path),
-            },
-          });
-        return;
-      }
-      const destinationDir = await pickFolder("readwrite");
-      const state = await openExistingVault(vaultDir);
-      await validateWorkingFolderBindings(state, vaultDir, workingFolders);
-      // Plain recovery must also remain isolated from every branch working folder.
-      for (const branch of state.branches)
-        await validateDirectoryIsolation(
-          destinationDir,
-          workingFolders[branch.branchId]!,
-          "Recovery destination",
-          `"${branch.name}" working folder`,
-        );
-      const options = {
-        vaultDir,
-        destinationDir,
-        workingDir,
-        workingFolders,
-        revisionId,
-        signal: context.signal,
-        onProgress: context.progress,
-      };
-      const result = selectedPaths
-        ? await restoreSelectedFilesToFolder({ ...options, selectedPaths })
-        : await restoreRevisionToFolder(options);
-      if (context.current()) {
-        setLastRestoreReport({ result });
-        if (!selectedPaths)
-          setVaultState((previous) =>
-            previous
-              ? {
-                  ...previous,
-                  revisions: previous.revisions.map((revision) =>
-                    revision.manifest.revisionId === revisionId
-                      ? { ...revision, integrityStatus: "objects_verified" }
-                      : revision,
-                  ),
-                }
-              : previous,
-          );
-      }
-    });
   };
   const handleExportForReview: ExportReviewAction = async (plan, parent, folderName) => {
     if (!vaultDir || !vaultState) throw new Error('Open the saved project before exporting.');
@@ -1809,13 +1809,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     if (!result) throw new Error('Export did not complete.');
     return result;
   };
-  const handleRestoreFullProject = (revisionId: string, external?: boolean) =>
-    restore(revisionId, undefined, external);
-  const handleRestoreSelectedFiles = (
-    revisionId: string,
-    selectedPaths: string[],
-    external?: boolean,
-  ) => restore(revisionId, selectedPaths, external);
   const handleVerifyObjects = async (ids: string[]) => {
     if (!vaultDir || !vaultState) return;
     await perform("verify", async (context) => {
@@ -1908,7 +1901,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setWorkingFolders(managed.workingFolders);
       setWorkingDir(managed.workingFolders[activeBranchId] ?? null);
       setScanResult(null);
-      setLastRestoreReport(null);
       setActiveTab("history");
       setStatusBanner({
         type: "info",
@@ -1920,7 +1912,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders({});
     setWorkingDir(null);
     setScanResult(null);
-    setLastRestoreReport(null);
     if (vaultDir) {
       setVaultState(await openExistingVault(vaultDir));
       setActiveTab("history");
@@ -1950,7 +1941,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const busy = operation !== null || signOutPending;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
-  const isRestoring = operation === "restore";
   const isVerifyingAll = operation === "verify";
   const isCreatingBranch = operation === "branch";
   const navigate = (tab: ActiveTab) => {
@@ -2244,7 +2234,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   type={statusBanner.type}
                   onDismiss={() => setStatusBanner(null)}
                 >
-                  {statusBanner.message}
+                  <MessageLines text={statusBanner.message} />
                   {statusBanner.type === "error" &&
                   /permission|reconnect|access|notallowed/i.test(
                     statusBanner.message,
@@ -2309,6 +2299,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             {homeView ? (
               <HomeWorkspacesView
                 home={authState.ready && authState.user ? home : null}
+                homeAddress={budgetHomeAddress()}
                 intro={introView}
                 remembered={
                   authState.ready && authState.user ? rememberedHome : null
@@ -2341,6 +2332,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               <WorkspaceProjectsView
                 onAllWorkspaces={allWorkspaces}
                 workspace={workspace}
+                workspaceAddress={workspaceBudgetAddress}
                 busy={busy}
                 progress={progress}
                 onRefresh={refreshWorkspace}
@@ -2475,14 +2467,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                     }}
                     vaultState={vaultState}
                     activeBranchId={activeBranchId}
-                    isRestoring={isRestoring}
                     progress={progress}
-                    lastRestoreReport={lastRestoreReport}
                     statusBanner={null}
-                    onRestoreFullProject={handleRestoreFullProject}
                     onExportForReview={handleExportForReview}
                     isExporting={operation === 'export'}
-                    onRestoreSelectedFiles={handleRestoreSelectedFiles}
                     onVerifySingleRevisionObjects={
                       handleVerifySingleRevisionObjects
                     }
@@ -2517,39 +2505,21 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                         : undefined
                     }
                     managedDestination={managedProject?.record.containerPath}
+                    projectAddress={
+                      managedProject && workspaceBudgetAddress
+                        ? joinAddress(workspaceBudgetAddress, managedProject.record.containerPath)
+                        : undefined
+                    }
                     operationsBlockedReason={
                       managedBlockReason ??
                       (managedProject && missingConnections.length
-                        ? "Reconnect workspace before creating branches or recovering copies."
+                        ? "Reconnect workspace before creating branches."
                         : undefined)
                     }
                     onCreateBranch={handleCreateBranch}
                     isCreatingBranch={isCreatingBranch}
                     resolveWorkingFilePath={(branchId, path) =>
                       workingFileResolver(branchId, path)()
-                    }
-                    resolveRecoveredFilePath={
-                      lastRestoreReport?.recoveredFiles &&
-                      workspace &&
-                      managedProject
-                        ? async (path) => {
-                            const location = await resolveRecoveredFilePath(
-                              workspace.root,
-                              workspace.identity.workspaceId,
-                              managedProject.record.containerPath,
-                              lastRestoreReport.recoveredFiles!
-                                .relativeDirectory,
-                              path,
-                            );
-                            return shortcutHome && homeEntry?.directory
-                              ? resolveHomeFilePath(
-                                  shortcutHome,
-                                  homeEntry,
-                                  location,
-                                )
-                              : location;
-                          }
-                        : undefined
                     }
                   />
                 </div>
@@ -2588,6 +2558,18 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   setBannerScope("workspace");
                   setStatusBanner({ type: "error", message: String(error) });
                 });
+              }}
+            />
+          ) : null}
+          {addressPrompt && home ? (
+            <FolderAddressDialog
+              home
+              folderName={home.root.name}
+              title="Add your Cadtree home address"
+              intro="cAdtree needs the full address to keep paths within Windows' limit; the browser can't read it."
+              onSave={saveHomeAddressFromPrompt}
+              onCancel={() => {
+                settleAddressPrompt(false);
               }}
             />
           ) : null}

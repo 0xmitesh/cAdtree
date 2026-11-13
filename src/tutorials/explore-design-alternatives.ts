@@ -62,20 +62,20 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
       title: "A separate working location",
       summary: "Main and the Design Case have separate working locations inside the same managed project.",
       points: [
-        "Main uses working/main. Lightweight bracket uses its own uniquely named child of working. Editing that case's files does not directly modify Main.",
+        "Main uses working/main. Lightweight bracket uses its own folder named after the case, working/Lightweight bracket. Editing that case's files does not directly modify Main.",
         "Settings → Working folder shows the active direction's exact location. In Changes, reveal unchanged files if needed and use a file's Copy folder path; paste it into your file manager to reach that folder.",
         "Open the CAD files from that location. Keep managed folders where cAdtree creates them.",
       ],
       visuals: [
         {
           src: "/tutorials/explore-design-alternatives/step-4-working-locations.svg",
-          alt: "Bracket Assembly has two separate children under working: main for Main, and a unique case folder allocated by cAdtree for Lightweight bracket. Saved history is shared in the project's separate vault. Settings shows exact generated locations.",
+          alt: "Bracket Assembly has two separate children under working: main for Main, and a folder named after the case for Lightweight bracket. Saved history is shared in the project's separate vault. Settings shows exact locations.",
           caption: "Two working folders, one project: edit the folder for your chosen direction.",
           kind: "concept",
         },
         {
           src: "/tutorials/explore-design-alternatives/step-4-case-location.png",
-          alt: "Real shared project header shows Working case Lightweight bracket; Settings shows Working folder ending in working slash the uniquely generated cAdtree-Lightweight-bracket folder.",
+          alt: "Real shared project header shows Working case Lightweight bracket; Settings shows Working folder ending in working slash Lightweight bracket.",
           caption: "1. In Settings, check Working folder for the active case's exact location.",
           kind: "cadtree",
         },
@@ -105,7 +105,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
         },
         {
           src: "/tutorials/explore-design-alternatives/step-5-case-active.png",
-          alt: "Real shared Working case selector has Lightweight bracket selected; Settings shows its separate generated Working folder.",
+          alt: "Real shared Working case selector has Lightweight bracket selected; Settings shows its separate Working folder.",
           caption: "2. Choose Lightweight bracket in Working case to work on the alternative.",
           kind: "cadtree",
         },

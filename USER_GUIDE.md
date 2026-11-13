@@ -66,10 +66,11 @@ projects/<project-name-unique-id>/
   vault/                     shared immutable revision history and objects
   working/main/              Main's editable CAD files
   working/<case-name-id>/    a case's independent editable CAD files
-  recoveries/copy-<id>/      untracked recovered copies
 ```
 
-Scan/capture starts at the active `working/.../` leaf. The enclosing project container, other cases, vault, management records, and recovery folders are not scanned as part of that leaf.
+Scan/capture starts at the active `working/.../` leaf. The enclosing project container, other cases, vault, and management records are not scanned as part of that leaf.
+
+cAdtree skips untracked OS-generated files when scanning a working folder: `.DS_Store`, `Thumbs.db`, `desktop.ini`, and macOS `._name` companion files that sit beside `name`. The Changes view lists them as skipped and never saves them in a revision. A file that is already part of a revision is tracked normally, even with one of these names.
 
 ## Work with cases
 
@@ -79,11 +80,15 @@ Use **Active branch** in the header to select the working context. Open that cas
 
 The first changed capture uses the selected source revision as its parent and receives the next project-wide revision number. Each project's branch selection and each branch's draft summary, overall notes, and file notes are preserved during same-session project/workspace switching. Drafts are session convenience state and are not saved revisions; a page reload discards them. Inspecting old revisions and clicking graph ancestry labels are independent of the active branch selector.
 
-## Recover historical files
+## Return to or copy historical files
 
-Choose **Restore project copy** or select files and choose **Copy selected files**. Confirm the revision and file count. A managed project defaults to a fresh folder under its own `recoveries/` directory; **Choose an external destination instead** retains the explicit empty-folder option.
+There are three ways to use an earlier saved revision. None of them rewrites history.
 
-Copies are verified and their locations are reported. Recovery creates neither a branch nor a revision. A selected-file copy may omit CAD dependencies. Full project copying also does not rewrite CAD references.
+- **Bring back onto Main…** (the button names the active branch). Select an earlier revision of the active branch in **History** and choose it. The dialog **Make Main match Rev NNN** lists every difference, all selected: **Bring back**, **Replace with Rev NNN's version** or **Remove (not in Rev NNN)**. Deselect files to bring back only some, enter the engineering reason, choose **Prepare bring-back** and confirm the counts. Only the working files change. Save a revision afterwards; History then shows **Brought back from Rev NNN**. Replaced and removed files are kept with the operation and the latest revision stays in history. Unsaved working changes block it, and renamed files cannot be brought back yet.
+- **Export for review.** Select a revision, or select files in its details, and export them into a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`). Use it to look at, share, or recover files, including files deleted later. See **Export a saved revision for review**.
+- **Create design case.** Select a revision and choose **Create branch from here** to continue from it independently.
+
+Export creates neither a branch nor a revision. An export of selected files may omit CAD dependencies, and cAdtree does not rewrite CAD references.
 
 ## Reopen and reconnect
 
@@ -108,6 +113,18 @@ Cancellation, read failures, unstable source files, and failed writes leave iden
 
 An established branch with a broken publication marker remains visible as damaged, keeps its identity/name reserved, and remains part of folder-isolation checks. Its historical records are not repaired or rewritten automatically. Settings explains integrity failures and interrupted attempts.
 
+## Path length limits
+
+Windows, and the browser's folder access on top of it, cannot open very long paths. cAdtree keeps every folder and file it creates under **240 characters** of full path, counted from the drive (for example `C:\Cadtree\Client ABC\projects\Packaging Gripper\...`). It measures the longest path that could appear later in that location: its own deepest internal files, and your longest CAD file path when it is known.
+
+- **Keep your Cadtree home short.** A home such as `C:\Cadtree` leaves the most room. On macOS or Linux something like `/Users/<you>/Cadtree` works the same way; the limit still applies because the same folders may be opened on Windows.
+- **Name hints.** When you create a workspace, project or design case, the name field shows "{n} characters left" once fewer than 30 remain. If the name would go over, the message appears under the field and the create button is disabled. Names that get a counter, such as `Name (2)`, need four more characters; cAdtree checks again when you create.
+- **Warnings.** From 200 characters the action still works, and the confirmation adds a note such as "This location uses 212 of 240 characters." Shorter names leave room for design cases and deeper folders.
+- **If an action is blocked,** nothing is created. The message says how many characters over the limit you are, shows the deepest path it measured, and tells you which name to shorten. Either shorten that name, or move your Cadtree home closer to the drive. If you moved the home folder, update its address in **Home options > Edit home folder address**.
+- **Home address prompt.** The browser cannot tell cAdtree where the home folder is, so cAdtree asks you to paste its full address. If the address is missing, the next time you create or bring in a workspace, create or import a project, or create a design case, cAdtree asks for it once ("Add your Cadtree home address"). Save continues what you were doing; Cancel stops it without creating anything. Workspaces that are not directly inside your Cadtree home cannot be measured, so they are not checked and do not ask.
+- **Long home address during setup.** If the address you enter for a new home is long, setup shows a warning but you can still save it.
+- **"Path too long" after a create or save.** If a folder or file still cannot be written because its real path is too long (for example a CAD file nested deeper than cAdtree could measure, or a home address that is out of date), cAdtree shows "Path too long: {full path} ({n} characters; this computer's limit is {max})". Shorten the folder or file names along that path, or move your Cadtree home closer to the drive. Nothing is silently changed; retry after shortening.
+
 ## Copy folder and file paths
 
 Home setup uses the native folder picker followed by a required absolute address entry. Windows drive addresses, Windows UNC addresses and absolute POSIX addresses are supported. The entered root determines separators; platform detection does not rewrite it. Quotes around pasted addresses, spaces, Unicode and drive/filesystem roots are accepted. POSIX case, Unicode spelling and literal backslashes are preserved. Use the expanded absolute address: `~`, `$HOME`, `${HOME}` and `%USERPROFILE%` shorthand are not expanded. Once configured, managed workspaces, projects and branches use that home root automatically. Edit a moved or mistaken root under **My workspaces → Home options → Edit home folder address**. This is the canonical local setting for managed descendants.
@@ -120,7 +137,7 @@ Without a saved root, the **Set up folder-path copying** dialog offers **Cancel*
 
 Revision details identify **Current file on [branch]** beside the folder-copy action. This refers to the revision's recorded branch, even if another branch is active, and locates its current working copy rather than historical bytes. The secondary full-file action uses that same branch. Missing/inaccessible files or folders produce an unavailable message; cAdtree does not guess another branch or recreate missing folders.
 
-For exact historical bytes, restore a full or selected-file copy. After a managed recovery succeeds, expand **Restored files — copy paths** for shortcuts to those restored files. External recovery folders have no known full local location, so cAdtree explains that limit instead of inventing a path. Vault objects are never presented as editable CAD-file locations.
+For exact historical bytes, export the revision or selected files. Vault objects are never presented as editable CAD-file locations.
 
 Shortcuts copy plain text only. They do not open a file manager, launch SolidWorks, switch branches, save revisions, or change CAD files.
 
@@ -162,7 +179,7 @@ In file history, the existing branch buttons filter the selected branch's record
 
 The graph follows actual parents and skips unchanged snapshots. Dashed **Inherited state** or **Inherited absence** nodes preserve branch origins and are counted separately from change events. An unchanged parent opened through a deleted file's **View in parent revision** shortcut is also context only. Revision numbers remain project-wide, so gaps are expected. Branch labels identify where the recorded revision belongs; file-state labels may point to an earlier revision when a case has not changed the file since then.
 
-The details panel keeps the project summary, revision number and branch, and adds the selected file's status and any notes recorded for it at that revision. Recovery still copies from a complete saved project snapshot into a fresh destination. Deleted files must be recovered from an earlier snapshot, never from their deletion event. Missing, damaged, cyclic, or ambiguous parent evidence is labelled **History unavailable**, rather than inferred as deletion or unchanged content. Byte changes do not necessarily indicate geometry changes. No CAD parsing, new records, or storage changes are involved.
+The details panel keeps the project summary, revision number and branch, and adds the selected file's status and any notes recorded for it at that revision. Export and bring-back work from a complete saved project snapshot. Deleted files must be taken from an earlier snapshot, never from their deletion event. Missing, damaged, cyclic, or ambiguous parent evidence is labelled **History unavailable**, rather than inferred as deletion or unchanged content. Byte changes do not necessarily indicate geometry changes. No CAD parsing, new records, or storage changes are involved.
 
 Development regression: `npm run test:ui -- tests/browser/file-history.spec.ts` runs the actual App against isolated browser-storage fixtures created by `tests/file-history-seed.ts` through the existing engine. The fixture covers ten Main snapshots with four pin events, an older fork, unchanged captures, a revert, deleted historical paths, and deletion/reintroduction. It is development-only and is not included in production. The existing `npm run dev:synthetic` preview also exposes File history with its multi-workspace samples; `tests/preview.tsx` remains an isolated component harness.
 
@@ -176,7 +193,7 @@ If opened from File history, comparison initially focuses on that selected path.
 
 **Overall engineering notes** shows the complete project notes for both endpoints in labelled From/To panels and remains available in file scope. It starts expanded and can be collapsed. Each file's From/To panels also show presence, saved size, optional content hashes, and per-file notes recorded at that endpoint, labelled by revision. Missing overall or per-file notes are stated explicitly. These notes do not summarize intervening changes. Comparison reads saved manifests and hashes only; it does not scan working folders, verify all stored binary contents, analyze geometry, or assess CAD compatibility. Previously verified contents are labelled separately from verified metadata. Missing, damaged or ambiguous selected endpoints show an explicit unavailable result. Two healthy endpoints can still be compared when intervening ancestry is unavailable.
 
-Comparison is read-only: it cannot apply, merge or recover files. Close it to use the existing recovery controls if needed. Complete project snapshots, portable records and storage formats remain unchanged.
+Comparison is read-only: it cannot apply, merge or bring back files. Close it to use the existing History controls if needed. Complete project snapshots, portable records and storage formats remain unchanged.
 
 Development regression: `npm run test:ui -- tests/browser/comparison.spec.ts` loads the actual App using `tests/comparison-seed.ts`. The isolated browser-storage fixture contains an older five-file case and a twenty-file Main revision, endpoint notes, equal basenames, deleted historical files and empty folders. The test fingerprints the managed home before and after comparison interactions. The fixture is development-only and is not included in production. `npm run dev:synthetic` also provides Compare in the existing populated preview.
 
@@ -248,7 +265,7 @@ In **Changes → Component identity**, review a missing path and choose its new 
 
 **Save As** or duplication gives the new file a distinct ID when the original remains, even with identical bytes. If an unrelated document replaced a tracked file at its existing path, expand **Replace a component identity**, choose **Treat as new component**, and confirm. Its next successful revision gets a new ID; the previous history remains available. This can save an identity-only revision with unchanged bytes. Deletion never erases component history. A file reappearing after a saved deletion receives a new ID; linking a reappearance to an older deleted component is not offered in this release.
 
-Use **History → File history → Components (confirmed identity)** to follow a document across confirmed names and branches, including deleted/replaced components. Short IDs are display labels only. Each historical revision shows its original path and existing notes. Selecting a component never switches your working branch. **Path history (no identity inferred)** remains available separately. Recovery always uses the selected snapshot's historical filenames: before a rename, caliper.SLDPRT; afterward, cliper.SLDPRT. A recovered copy is not a registered branch.
+Use **History → File history → Components (confirmed identity)** to follow a document across confirmed names and branches, including deleted/replaced components. Short IDs are display labels only. Each historical revision shows its original path and existing notes. Selecting a component never switches your working branch. **Path history (no identity inferred)** remains available separately. Export always uses the selected snapshot's historical filenames: before a rename, caliper.SLDPRT; afterward, cliper.SLDPRT. An exported copy is not a registered branch.
 
 For an older project, choose **Enable component tracking** and confirm the boundary. Opening or viewing a legacy project never upgrades it automatically. Current trustworthy saved branch baselines receive IDs; distinct pre-upgrade baselines are registered independently because their historical equivalence is unknown. A shared exact baseline shares its mapping. Earlier revisions remain path history; historical renames and deletion gaps are not backfilled. Branching from an older revision without identity evidence establishes new identities at the next save. An interrupted valid enrollment can be retried explicitly without reallocating its recorded IDs. Damaged or newer evidence is reported rather than replaced.
 
@@ -262,7 +279,7 @@ Keep the complete project when copying or moving it. Do not remove or edit vault
 
 1. Create a test project, add caliper.SLDPRT to Main, and save a revision.
 2. Rename it to cliper.SLDPRT in Explorer or your application, scan, choose the new path, and confirm the rename. Save another revision.
-3. Select the component in History. Verify both filenames and the rename event, then recover each revision into a separate fresh destination and check its original filename.
+3. Select the component in History. Verify both filenames and the rename event, then export each revision into a separate folder and check its original filename.
 4. Make a Save As copy while retaining the original. Save and verify two distinct component entries. Try an explicit same-path replacement and verify the older component remains selectable.
 5. Close/reopen the project or import its complete container into a different disposable workspace; verify the IDs/history persist. Inspect CAD references/rebuilds separately in the native application.
 
@@ -293,7 +310,7 @@ Manual walkthrough (disposable project, supported desktop browser):
 2. Select a branch and part/file together, then search by filename or revision description. Confirm results match both dropdowns and clear search to restore all references within that selection. Check that the working branch has not changed.
 3. In a project containing multiple attachment versions, download the older saved file and compare it with the original. Confirm removed defaults remain available through their historical associations and no editing/removal controls appear on References.
 4. Confirm a CAD rename, capture and compare the component ID across revisions, retaining old filenames. Make a branch from the older revision and verify its explicit links carry forward without changing the older revision.
-5. Reopen after clearing browser convenience data. Copy/import/adopt the complete project or workspace and check IDs, exact versions, old context and retrieved hashes in the copy. Recover an older CAD snapshot and check its original filenames.
+5. Reopen after clearing browser convenience data. Copy/import/adopt the complete project or workspace and check IDs, exact versions, old context and retrieved hashes in the copy. Export an older CAD snapshot and check its original filenames.
 6. On disposable copies only, remove/corrupt an attachment or context sidecar, revoke permission, and interrupt an import/capture. Verify clear errors, no dangling committed context, unchanged revision count on pre-completion rejection, usable independent CAD recovery, and a fresh retry after restoring evidence.
 7. Export a saved CAD revision for review. Check the dialog/summary explicitly exclude reference attachments and the output contains only snapshot design files and its review summary.
 
@@ -303,11 +320,11 @@ Select the saved revision in **History**, then choose **Export for review**. The
 
 Project reference attachments are excluded from review exports in this stage. The dialog and readable export summary state this explicitly.
 
-- **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator_Alternative_R03`.
+- **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator - Alternative - R03`.
 - **Selected files** lists only files present in that snapshot. It preserves their relative paths and filenames by default and clearly marks the output as partial. CAD dependencies are not discovered or added automatically.
 - **Add branch and revision to filenames** is an explicit selected-files option for standalone review. For example, `Parts/Pin.SLDPRT` becomes `Parts/Pin_Alternative_R03.SLDPRT`. Extensions are retained. Other documents may require reference repair; native CAD references are not rewritten.
 
-Choose a destination parent and review the proposed child folder and every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator_Alternative_R03-2`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
+Choose a destination parent and review the proposed child folder and every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator - Alternative - R03 (2)`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
 
 Each output includes a readable `_CADTREE_REVIEW.txt` summary (or the proposed numbered summary name if that name already belongs to a saved file). It identifies the saved revision/date/notes, original-to-exported paths, available component IDs, file sizes and SHA-256 content hashes. Configured machine addresses, directory handles and destination absolute paths are not added to the summary. Saved notes remain user-authored content.
 
@@ -323,7 +340,7 @@ Run separately on a real Mac and a real Linux desktop with current Chrome or Edg
 2. Create a workspace and project. Add a small CAD/document set with nested folders, spaces, mixed case and Unicode names. Close the files, scan and capture. Confirm no absolute address enters portable metadata and collision protections still reject conflicting names.
 3. Create a design branch from that revision. Check the actual branch folder, independent bytes and inherited component IDs. Save a branch edit and verify Main is unchanged.
 4. Rename a file externally, confirm its association in Changes, capture and reopen. Verify one component history across old/new names. Confirm the UI does not rename files or repair CAD references itself.
-5. Recover old and new snapshots into fresh destinations. Check historical filenames, bytes and counts. Managed recovery shortcuts must point to the recovered folder; an external destination with no configured root must explain that a full path is unavailable.
+5. Export old and new snapshots into fresh folders. Check historical filenames, bytes and counts.
 6. Fully quit/reopen the browser, reconnect the same home and renew permissions. Revoke permission and retry: writes must remain blocked until explicit reconnection. Open a second physical copy with the same home/project IDs; it must request its own address. After moving the original, update its address explicitly.
 7. Use **Copy folder path** in Changes, History (including a different inspected branch), and recovery. Paste into Finder's Go to Folder / the Linux location bar and check the exact containing directory opens. Test a file directly in a branch folder and a nested file. **Copy full file path** must additionally include the filename. Test manual copy when clipboard permission is denied.
 

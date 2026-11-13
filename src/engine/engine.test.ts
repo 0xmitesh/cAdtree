@@ -6,6 +6,7 @@ import path from 'node:path';
 import { hashBytes, hashStream, hashString, Sha256Hasher } from './hash';
 import {
   checkCaseInsensitiveCollisions,
+  FileConflictError,
   InMemoryFileSystemAdapter,
   splitAndValidatePath,
   validateDirectoryIsolation,
@@ -24,11 +25,16 @@ import {
   UnsupportedSchemaVersionError,
   verifyRevisionObjects,
 } from './vault-service';
-import { enumerateWorkingFolder, scanBranchChanges } from './scanner';
+import {
+  enumerateWorkingFolder,
+  isEffectivelyEmpty,
+  isSystemClutterName,
+  partitionSystemFiles,
+  scanBranchChanges,
+} from './scanner';
 import { captureRevision, ReviewStaleError } from './revision-service';
 import {
   restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
 } from './recovery-service';
 import { CADTREE_SCHEMA_VERSION, MAIN_BRANCH_ID, RevisionManifest } from './types';
 import { getObjectPathSegments } from './object-store';
@@ -376,7 +382,7 @@ test('Regression Fix 2: Same-count directory rename/replacement during capture a
   assert.equal(state.revisions.length, 0);
 });
 
-test('Regression Fix 3: Destination file appearing after initial check is never overwritten during full or selected-file recovery', async () => {
+test('Regression Fix 3: Destination file appearing after initial check is never overwritten during full-revision restore', async () => {
   const root = new InMemoryFileSystemAdapter('fix3-disk');
   const workingDir = await root.getDirectory(['Working'], { create: true });
   const vaultDir = await root.getDirectory(['Vault'], { create: true });
@@ -423,8 +429,8 @@ test('Regression Fix 3: Destination file appearing after initial check is never 
   const survivingBytesA = await destDirA.readFileBytes(['Parts', 'Part1.SLDPRT']);
   assert.deepEqual(survivingBytesA, preciousExistingBytes);
 
-  // Scenario B: Same race during selected-file recovery, plus pre-existing _CADTREE_RECOVERY_INCOMPLETE.txt must not be overwritten
-  const destDirB = (await root.getDirectory(['Dest_Race_Selected'], {
+  // Scenario B: Same race during a second full restore, plus pre-existing _CADTREE_RECOVERY_INCOMPLETE.txt must not be overwritten
+  const destDirB = (await root.getDirectory(['Dest_Race_Second'], {
     create: true,
   })) as InMemoryFileSystemAdapter;
   const existingMarkerBytes = new TextEncoder().encode('USER_EXISTING_MARKER_CONTENT');
@@ -446,11 +452,10 @@ test('Regression Fix 3: Destination file appearing after initial check is never 
 
   await assert.rejects(
     () =>
-      restoreSelectedFilesToFolder({
+      restoreRevisionToFolder({
         vaultDir,
         destinationDir: destDirB,
         revisionId: cap.revision.manifest.revisionId,
-        selectedPaths: ['Parts/Part1.SLDPRT'],
       }),
     /Destination conflict/
   );
@@ -465,7 +470,191 @@ test('Regression Fix 3: Destination file appearing after initial check is never 
   );
 });
 
-test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency, and selected-file recovery', async () => {
+test('FileConflictError: a file appearing in the destination after the initial emptiness check is rejected as FileConflictError and writes no partial-recovery marker', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-a-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+  await workingDir.writeFileBytes(['Parts', 'Part1.SLDPRT'], generateDeterministicBinaryBytes('FCE_A', 2048));
+  await initializeProjectVault(workingDir, vaultDir, 'FCE A');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_A'], { create: true })) as InMemoryFileSystemAdapter;
+  const existing = new TextEncoder().encode('DO_NOT_OVERWRITE_ME');
+  // The initial emptiness check throws a plain "not empty" error, so inject the file at the
+  // second root listing (the pre-write recheck) to reach the Destination-conflict path.
+  let listings = 0;
+  dest.setHooks({
+    onBeforeListEntries: async () => {
+      listings++;
+      if (listings === 2) {
+        dest.setHooks({ onBeforeListEntries: undefined });
+        await dest.writeFileBytes(['Parts', 'Part1.SLDPRT'], existing);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof FileConflictError);
+      assert.match((err as Error).message, /Destination conflict/);
+      return true;
+    }
+  );
+  assert.deepEqual(await dest.readFileBytes(['Parts', 'Part1.SLDPRT']), existing);
+  assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), false);
+});
+
+test('FileConflictError: a file occupying a path that must become a directory is rejected as FileConflictError without a marker', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-b-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+  // A directory with an OS-clutter name: a same-named root file leaves the destination
+  // "effectively empty", so the failure is reached in the step-2 directory check.
+  await workingDir.writeFileBytes(['Thumbs.db', 'Part1.SLDPRT'], generateDeterministicBinaryBytes('FCE_B', 1024));
+  await initializeProjectVault(workingDir, vaultDir, 'FCE B');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_B'], { create: true })) as InMemoryFileSystemAdapter;
+  await dest.writeFileBytes(['Thumbs.db'], new TextEncoder().encode('I_AM_A_FILE'));
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof FileConflictError);
+      assert.match((err as Error).message, /a file already exists at directory path/);
+      return true;
+    }
+  );
+  assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), false);
+  assert.equal(await dest.hasDirectory(['Thumbs.db']), false);
+});
+
+test('FileConflictError: InMemoryFileSystemAdapter.getDirectory exclusiveCheck rejects an exact-case or case-differing colliding file', async () => {
+  for (const [fileName, dirName] of [['x', 'x'], ['X', 'x']]) {
+    const root = new InMemoryFileSystemAdapter('fce-c-disk');
+    await root.writeFileBytes([fileName], new Uint8Array([1]));
+    await assert.rejects(
+      () => root.getDirectory([dirName], { create: true, exclusiveCheck: true }),
+      (err: unknown) => err instanceof FileConflictError && /Destination conflict/.test(err.message)
+    );
+  }
+});
+
+test('FileConflictError: a write-time adapter conflict surfaces as FileConflictError and the partial-recovery marker is written because a destination entry was already counted as written', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-d-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = await root.getDirectory(['Vault'], { create: true });
+  await workingDir.writeFileBytes(['Parts', 'Part1.SLDPRT'], generateDeterministicBinaryBytes('FCE_D', 2048));
+  await initializeProjectVault(workingDir, vaultDir, 'FCE D');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_D'], { create: true })) as InMemoryFileSystemAdapter;
+  const existing = new TextEncoder().encode('RACED_IN');
+  let injected = false;
+  dest.setHooks({
+    onBeforeWrite: async (fullPath) => {
+      if (!injected && fullPath.endsWith('Parts/Part1.SLDPRT')) {
+        injected = true;
+        await dest.writeFileBytes(['Parts', 'Part1.SLDPRT'], existing);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) => err instanceof FileConflictError && /Destination conflict/.test(err.message)
+  );
+  assert.ok(injected);
+  assert.deepEqual(await dest.readFileBytes(['Parts', 'Part1.SLDPRT']), existing);
+  // The marker is written regardless of the conflict flag: wroteAnyDestinationEntry is set before
+  // writeFileStream (and the Parts directory was created), so the marker rule alone explains it.
+  assert.equal(await dest.hasFile(['_CADTREE_RECOVERY_INCOMPLETE.txt']), true);
+});
+
+test('In-memory getDirectory without exclusiveCheck keeps the plain Error for a file in the way', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-c2-disk');
+  await root.writeFileBytes(['x'], new Uint8Array([1]));
+  for (const options of [{ create: true }, { exclusiveCheck: true }, undefined]) {
+    await assert.rejects(
+      () => root.getDirectory(['x'], options),
+      (err: unknown) =>
+        err instanceof Error && !(err instanceof FileConflictError) && /is a file, not a directory/.test(err.message)
+    );
+  }
+});
+
+test('FileConflictError: per-file precheck catches a file that appears after the root recheck and never overwrites it', async () => {
+  const root = new InMemoryFileSystemAdapter('fce-e-disk');
+  const workingDir = await root.getDirectory(['Working'], { create: true });
+  const vaultDir = (await root.getDirectory(['Vault'], { create: true })) as InMemoryFileSystemAdapter;
+  await workingDir.writeFileBytes(['A.bin'], generateDeterministicBinaryBytes('FCE_E_A', 1024));
+  await workingDir.writeFileBytes(['B.bin'], generateDeterministicBinaryBytes('FCE_E_B', 1024));
+  await workingDir.getDirectory(['D'], { create: true });
+  await initializeProjectVault(workingDir, vaultDir, 'FCE E');
+  const cap = await captureRevision(workingDir, vaultDir, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'Rev 1',
+    notes: { problem: '', modification: '', observations: '' },
+  });
+
+  const dest = (await root.getDirectory(['Dest_E'], { create: true })) as InMemoryFileSystemAdapter;
+  const existing = new TextEncoder().encode('APPEARED_LATE');
+  // Step 2 creates directory "D" in the destination only after the root recheck, so the first
+  // vault read that sees "D" is file A's object read in step 3: after A's precheck and before
+  // B's precheck.
+  let injected = false;
+  vaultDir.setHooks({
+    onBeforeRead: async () => {
+      if (!injected && (await dest.hasDirectory(['D']))) {
+        injected = true;
+        await dest.writeFileBytes(['B.bin'], existing);
+      }
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      restoreRevisionToFolder({
+        vaultDir,
+        destinationDir: dest,
+        revisionId: cap.revision.manifest.revisionId,
+      }),
+    (err: unknown) =>
+      err instanceof FileConflictError && /"B\.bin" already exists in destination folder/.test(err.message)
+  );
+  assert.ok(injected);
+  assert.deepEqual(await dest.readFileBytes(['B.bin']), existing);
+});
+
+test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unchanged), file-specific notes, directory-count consistency', async () => {
   const root = new InMemoryFileSystemAdapter('refinement-disk');
   const workingDir = await root.getDirectory(['SolidWorks_Project'], { create: true });
   const vaultDir = await root.getDirectory(['SolidWorks_Vault'], { create: true });
@@ -589,53 +778,6 @@ test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unch
   assert.equal(diff3.deleted.length, 1);
   assert.equal(diff3.deleted[0].path, 'Part5.SLDPRT');
   assert.deepEqual(diff3.deletedDirectories, ['Empty_Reference_Folder']);
-
-  // Selected-file recovery: recover ONLY Part1.SLDPRT from Revision 001 into a fresh folder
-  const singleFileDest = await root.getDirectory(['Recover_Single_Part1_Rev001'], {
-    create: true,
-  });
-  const singleRes = await restoreSelectedFilesToFolder({
-    vaultDir,
-    destinationDir: singleFileDest,
-    workingDir,
-    revisionId: cap1.revision.manifest.revisionId,
-    selectedPaths: ['Part1.SLDPRT'],
-  });
-
-  assert.equal(singleRes.kind, 'selected_files');
-  assert.equal(singleRes.restoredFilesCount, 1);
-  assert.equal(singleRes.restoredDirectoriesCount, 0);
-  assert.deepEqual(singleRes.selectedPaths, ['Part1.SLDPRT']);
-
-  const enumSingle = await enumerateWorkingFolder(singleFileDest);
-  assert.equal(enumSingle.files.length, 1);
-  assert.equal(enumSingle.files[0].path, 'Part1.SLDPRT');
-  assert.equal(enumSingle.directories.length, 0); // Empty_Reference_Folder & Subparts were NOT created
-  assert.deepEqual(await singleFileDest.readFileBytes(['Part1.SLDPRT']), part1V1);
-
-  // Multi-file recovery with nested paths: recover Subparts/Part3.SLDPRT and Part5.SLDPRT from Rev 002
-  const multiFileDest = await root.getDirectory(['Recover_Multi_Nested_Rev002'], {
-    create: true,
-  });
-  const multiRes = await restoreSelectedFilesToFolder({
-    vaultDir,
-    destinationDir: multiFileDest,
-    workingDir,
-    revisionId: cap2.revision.manifest.revisionId,
-    selectedPaths: ['Subparts/Part3.SLDPRT', 'Part5.SLDPRT'],
-  });
-
-  assert.equal(multiRes.kind, 'selected_files');
-  assert.equal(multiRes.restoredFilesCount, 2);
-  assert.equal(multiRes.restoredDirectoriesCount, 1); // Only 'Subparts' directory created!
-  const enumMulti = await enumerateWorkingFolder(multiFileDest);
-  assert.deepEqual(
-    enumMulti.files.map((f) => f.path),
-    ['Part5.SLDPRT', 'Subparts/Part3.SLDPRT']
-  );
-  assert.deepEqual(enumMulti.directories, ['Subparts']);
-  assert.deepEqual(await multiFileDest.readFileBytes(['Subparts', 'Part3.SLDPRT']), part3);
-  assert.deepEqual(await multiFileDest.readFileBytes(['Part5.SLDPRT']), part5);
 });
 
 test('Backward compatibility: existing vault manifests without fileNotes open and verify without rewriting history, while tampered fileNotes fail checksum', async () => {
@@ -758,4 +900,118 @@ test('Production UI files do not import fixture generators, InMemoryFileSystemAd
       `${rel} must not expose Launch Fixture Lab button`
     );
   }
+});
+
+test('untracked OS clutter is skipped in scans and never captured, but listed as skipped', async () => {
+  const root = new InMemoryFileSystemAdapter('clutter');
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'Clutter');
+  const b = new Uint8Array([1, 2, 3]);
+  for (const p of [
+    ['bracket.SLDPRT'],
+    ['sub', 'frame.SLDASM'],
+    ['.DS_Store'],
+    ['sub', '.DS_Store'],
+    ['._bracket.SLDPRT'],
+    ['THUMBS.DB'],
+    ['Desktop.ini'],
+    ['._config.json'],
+  ])
+    await working.writeFileBytes(p, b);
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(
+    scan.added.map((f) => f.path).sort(),
+    ['._config.json', 'bracket.SLDPRT', 'sub/frame.SLDASM'],
+    '._config.json has no config.json companion, so it is kept'
+  );
+  assert.deepEqual((scan.skippedSystemFiles ?? []).sort(), [
+    '.DS_Store',
+    '._bracket.SLDPRT',
+    'Desktop.ini',
+    'THUMBS.DB',
+    'sub/.DS_Store',
+  ]);
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'clutter',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(
+    cap.revision.manifest.files.map((f) => f.path).sort(),
+    ['._config.json', 'bracket.SLDPRT', 'sub/frame.SLDASM']
+  );
+});
+
+test('enumerateWorkingFolder still returns every file; partitionSystemFiles never hides expected paths', async () => {
+  const root = new InMemoryFileSystemAdapter('clutter2');
+  const dir = await root.getDirectory(['w'], { create: true });
+  await dir.writeFileBytes(['.DS_Store'], new Uint8Array([9]));
+  await dir.writeFileBytes(['sub', '._x.txt'], new Uint8Array([9]));
+  const res = await enumerateWorkingFolder(dir);
+  assert.deepEqual(res.files.map((f) => f.path), ['.DS_Store', 'sub/._x.txt']);
+  assert.deepEqual(partitionSystemFiles(res.files, new Set(['.DS_Store'])).skipped, []);
+  // ._x.txt without a sibling x.txt is kept; with the sibling expected it is a companion.
+  assert.deepEqual(partitionSystemFiles(res.files, new Set()).skipped, ['.DS_Store']);
+  assert.deepEqual(partitionSystemFiles(res.files, new Set(['sub/x.txt'])).skipped, ['.DS_Store', 'sub/._x.txt']);
+  assert.equal(isSystemClutterName('desktop.INI'), true);
+  assert.equal(isSystemClutterName('._x'), false);
+});
+
+test('a tracked .DS_Store deleted from the working folder is reported as deleted', async () => {
+  const root = new InMemoryFileSystemAdapter('clutter3');
+  const dir = await root.getDirectory(['w'], { create: true });
+  const bytes = new Uint8Array([1, 2, 3]);
+  await dir.writeFileBytes(['.DS_Store'], bytes);
+  const entry = (await enumerateWorkingFolder(dir)).files[0];
+  const manifest = { revisionId: 'r', displayNumber: 1, files: [entry], directories: [] } as unknown as RevisionManifest;
+  const same = await scanBranchChanges(dir, MAIN_BRANCH_ID, manifest);
+  assert.equal(same.unchanged.length, 1);
+  assert.deepEqual(same.skippedSystemFiles, []);
+  await dir.removeEntry(['.DS_Store']);
+  const gone = await scanBranchChanges(dir, MAIN_BRANCH_ID, manifest);
+  assert.deepEqual(gone.deleted.map((f) => f.path), ['.DS_Store']);
+});
+
+test('isEffectivelyEmpty accepts only clutter files', () => {
+  assert.equal(isEffectivelyEmpty([]), true);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'file' }]), true);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'directory' }]), false);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'file' }, { name: 'a.txt', kind: 'file' }]), false);
+  assert.equal(isEffectivelyEmpty([{ name: '._x', kind: 'file' }]), false);
+});
+
+test('read failures on untracked clutter never block capture; the same failure on tracked clutter does', async () => {
+  let failClutter = false;
+  const root = new InMemoryFileSystemAdapter('clutter-err', null, {
+    onBeforeRead: (p) => {
+      if (failClutter && p.endsWith('/.DS_Store')) throw new Error('locked by Finder');
+    },
+  });
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'ClutterErr');
+  await working.writeFileBytes(['bracket.SLDPRT'], new Uint8Array([1]));
+  await working.writeFileBytes(['.DS_Store'], new Uint8Array([2]));
+  failClutter = true;
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(scan.errors, []);
+  assert.equal(scan.canCapture, true);
+  assert.deepEqual(scan.skippedSystemFiles, ['.DS_Store']);
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'despite locked clutter',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(cap.revision.manifest.files.map((f) => f.path), ['bracket.SLDPRT']);
+  // Tracked: the baseline contains .DS_Store, so its read failure must still block.
+  const tracked = {
+    revisionId: 'r', displayNumber: 1, directories: [],
+    files: [{ path: '.DS_Store', size: 1, sha256: 'x', lastModified: 0 }],
+  } as unknown as RevisionManifest;
+  const blocked = await scanBranchChanges(working, MAIN_BRANCH_ID, tracked);
+  assert.equal(blocked.errors.length, 1);
+  assert.equal(blocked.canCapture, false);
 });

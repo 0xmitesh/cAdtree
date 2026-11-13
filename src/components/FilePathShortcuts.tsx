@@ -110,7 +110,7 @@ export function FilePathShortcutsProvider({
     const location = await request.resolve();
     if (!workspaceId || location.workspaceId !== workspaceId)
       throw new Error(
-        "File path unavailable. Open the relevant managed workspace first. Absolute locations for external project or recovery folders are not known to the browser.",
+        "File path unavailable. Open the relevant managed workspace first. Absolute locations for external project folders are not known to the browser.",
       );
     if (currentVersion !== version.current) return;
     // A click can arrive before the initial preference read finishes.
@@ -210,6 +210,11 @@ export function FilePathShortcutsProvider({
           required={Boolean(home || pending)}
           title={home && !pending ? "Edit home folder address" : undefined}
           submitLabel={pending ? "Save and copy" : "Save"}
+          note={
+            home && !pending && input
+              ? "Is this still where your Cadtree home is? Update it if you moved the folder."
+              : undefined
+          }
           onCancel={() => {
             setEditing(false);
             setPending(null);
@@ -341,17 +346,15 @@ export function FilePathActions({
   filePath,
   resolve,
   historicalBranch,
-  restored = false,
 }: {
   filePath: string;
   resolve: ResolveFilePath;
   historicalBranch?: string;
-  restored?: boolean;
 }) {
   const context = useContext(Shortcuts);
   if (!context) return null;
   const label = "Copy folder path";
-  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : restored ? "Restored copy · " : ""}${filePath}`;
+  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : ""}${filePath}`;
   return (
     <div
       className={`file-path-actions${historicalBranch ? " historical" : ""}`}

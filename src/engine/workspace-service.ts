@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty } from "./scanner";
 import {
   type FileSystemDirectoryAdapter,
   splitAndValidatePath,
@@ -5,6 +6,7 @@ import {
 } from "./fs-adapter";
 import { hashString } from "./hash";
 import { withProjectWriterLock } from "./locks";
+import { folderNameFor, pickFreeName } from "./folder-names";
 import {
   branchNameKey,
   validateWorkingFolderBindings,
@@ -23,12 +25,12 @@ import {
   verifyRevisionObjects,
 } from "./vault-service";
 import { createDesignBranch } from "./branch-service";
+import {
+  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, caseWorstPath, checkWorstPath, joinAddress, longestOf, longestRelativePaths,
+  projectWorstPath, type PathBudgetInput, type PathBudgetReport,
+} from "./path-budget";
 import { componentWriteBlock } from './component-identity';
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
-import {
-  restoreRevisionToFolder,
-  restoreSelectedFilesToFolder,
-} from "./recovery-service";
 import { MAIN_BRANCH_ID, type BranchRecord, type VaultState } from "./types";
 
 const WORKSPACE_FILE = ".cadtree-workspace.json";
@@ -144,6 +146,19 @@ export function managedPath(path: string, prefix?: string): string[] {
     throw new Error(`Managed path must be a descendant of ${prefix}.`);
   return segments;
 }
+/** Leaf folder name of a stored branch location (`projects/<any>/working/<leaf>`). */
+function workingLeaf(storedPath: string): string {
+  const stored = managedPath(storedPath);
+  if (
+    stored.length !== 4 ||
+    stored[0] !== "projects" ||
+    stored[2] !== "working"
+  )
+    throw new Error(
+      "Working location must identify a branch leaf, not a shared container.",
+    );
+  return stored[3];
+}
 async function resolve(
   root: FileSystemDirectoryAdapter,
   path: string,
@@ -195,7 +210,7 @@ export async function createWorkspace(
     if (!name.trim()) throw new Error("Workspace name is required.");
     if ((await root.queryPermission("readwrite")) !== "granted")
       throw new Error("Grant write access to the selected workspace folder.");
-    if ((await root.listEntries()).length)
+    if (!isEffectivelyEmpty(await root.listEntries()))
       throw new Error(
         "Create a workspace only in an empty folder. Use Open workspace for an existing one.",
       );
@@ -239,15 +254,23 @@ async function readProjectRecord(
   );
   if (
     record.workspaceId !== workspace.workspaceId ||
-    record.containerPath !== containerPath ||
-    record.vaultPath !== `${containerPath}/vault` ||
     !["create", "import", "adoption"].includes(String(record.origin))
   )
     throw new Error(
-      "Managed project identity or location does not match this workspace.",
+      "Managed project identity does not match this workspace.",
     );
   idSegment(String(record.projectId));
-  return { container, record: record as unknown as ManagedProjectRecord };
+  // Identity comes from the metadata IDs, not the folder name: the stored
+  // containerPath/vaultPath are only the creation-time location. Callers get the
+  // actual current location in memory; the file on disk (covered by ready.json) is untouched.
+  return {
+    container,
+    record: {
+      ...record,
+      containerPath,
+      vaultPath: `${containerPath}/vault`,
+    } as unknown as ManagedProjectRecord,
+  };
 }
 export async function resolveManagedProject(
   root: FileSystemDirectoryAdapter,
@@ -311,12 +334,10 @@ export async function resolveManagedProject(
         raw.branchId !== branch.branchId
       )
         throw new Error("Branch location identity mismatch.");
-      const path = String(raw.workingPath);
-      const segments = managedPath(path, `${containerPath}/working`);
-      if (segments.length !== 4)
-        throw new Error(
-          "Working location must identify a branch leaf, not a shared container.",
-        );
+      // The stored path records where the leaf was created; only its shape and leaf
+      // name matter. The actual location is always under this project's working/.
+      const path = `${containerPath}/working/${workingLeaf(String(raw.workingPath))}`;
+      managedPath(path, `${containerPath}/working`);
       if (
         Object.values(workingPaths).some(
           (other) => other.toLowerCase() === path.toLowerCase(),
@@ -395,7 +416,7 @@ export async function openWorkspace(
           await container.readFileText([".cadtree", "attempt.json"]),
         );
         if (
-          attempt.containerPath === containerPath &&
+          typeof attempt.containerPath === "string" &&
           ["create", "import", "adoption"].includes(attempt.operation) &&
           typeof attempt.name === "string" &&
           !(await container.hasFile([".cadtree", "ready.json"]))
@@ -430,12 +451,19 @@ export async function openWorkspace(
   return { root, identity, projects };
 }
 
+/** Options of the workspace-level creation entry points. */
+export interface WorkspaceCreateOptions extends CopyOptions {
+  /** Absolute workspace address (`workspaceAddress`) for the path budget; without it the check is 'unchecked'. */
+  budget?: Pick<PathBudgetInput, "workspaceAddress">;
+}
+export type WithPathBudget<T> = T & { pathBudget?: PathBudgetReport };
+
 export async function adoptProject(
   root: FileSystemDirectoryAdapter,
   sourceVault: FileSystemDirectoryAdapter,
   sourceFolders: WorkingFolderBindings,
-  options: CopyOptions = {},
-): Promise<ManagedProject> {
+  options: WorkspaceCreateOptions = {},
+): Promise<WithPathBudget<ManagedProject>> {
   const workspace = await workspaceIdentity(root);
   const initial = await openExistingVault(sourceVault);
   await validateDirectoryIsolation(
@@ -457,6 +485,15 @@ export async function adoptProject(
       "cAdtree workspace",
     );
   }
+  // Names only (no hashing), before any lock or write: the longest file across the working folders.
+  let longestUserFile = "";
+  let longestUserDir = "";
+  if (options.budget?.workspaceAddress)
+    for (const branch of initial.branches) {
+      const found = await longestRelativePaths(sourceFolders[branch.branchId]!);
+      longestUserFile = longestOf([longestUserFile, found.file]);
+      longestUserDir = longestOf([longestUserDir, found.dir]);
+    }
   // Always workspace registration first, then project lock; managed branch/capture only need the project lock.
   return withProjectWriterLock(`workspace:${workspace.workspaceId}`, () =>
     withProjectWriterLock(initial.project.projectId, async () => {
@@ -491,10 +528,20 @@ export async function adoptProject(
       await validateWorkingFolderBindings(state, sourceVault, sourceFolders);
       await verifyReferenceLibraryContent(sourceVault, state, options.signal);
       throwIfCancelled(options.signal);
-      const { path, container } = await allocateProject(
+      const { path, container, pathBudget } = await allocateProject(
         root,
         state.project.name,
         "adoption",
+        {
+          workspaceAddress: options.budget?.workspaceAddress,
+          longestUserFile,
+          longestUserDir,
+          // Readable case folder names are chosen on copy; leave room for a counter.
+          caseAllowance: Math.max(
+            CASE_ALLOWANCE,
+            ...state.branches.map((b) => folderNameFor(b.name, "Design case").length + " (2)".length),
+          ),
+        },
       );
       try {
         const vault = await container.getDirectory(["vault"], {
@@ -510,11 +557,20 @@ export async function adoptProject(
           source: sourceVault,
           signature: inventorySignature(copiedVault),
         });
+        // allocateProject always creates "working".
+        const workingRoot = await container.getDirectory(["working"]);
         const folders: WorkingFolderBindings = {};
         for (const branch of state.branches) {
+          // Main stays "main"; design cases get readable names. Each pick lists
+          // the folder again so it sees the cases created before it. The
+          // workspace and project locks are held, and creation stays exclusive.
           const leaf = branch.isMain
             ? "main"
-            : `${slug(branch.name)}-${idSegment(branch.branchId)}`;
+            : await pickFreeName(
+                workingRoot,
+                folderNameFor(branch.name, "Design case"),
+                { extraTaken: ["main"] },
+              );
           const destination = await container.getDirectory(["working", leaf], {
             create: true,
             exclusiveCreate: true,
@@ -570,7 +626,7 @@ export async function adoptProject(
               `Copied vault has corrupt stored objects: ${verified.integrityErrors.join("; ")}`,
             );
         }
-        return await publishProject(
+        const published = await publishProject(
           root,
           workspace,
           path,
@@ -608,6 +664,7 @@ export async function adoptProject(
                 );
           },
         );
+        return { ...published, pathBudget };
       } catch (error) {
         if (error instanceof WorkspaceOperationError) throw error;
         throw new WorkspaceOperationError(
@@ -626,9 +683,11 @@ export async function createManagedBranch(
     sourceRevisionId: string;
     name: string;
     reason: string;
-  } & CopyOptions,
+    /** Test seam: supplies each candidate case ID (see createDesignBranch). */
+    newBranchId?: () => string;
+  } & WorkspaceCreateOptions,
 ): Promise<
-  ManagedProject & { createdBranchId: string; publicationWarning?: string }
+  ManagedProject & { createdBranchId: string; publicationWarning?: string; pathBudget: PathBudgetReport }
 > {
   const workspace = await workspaceIdentity(root);
   const project = await resolveManagedProject(root, containerPath);
@@ -637,11 +696,28 @@ export async function createManagedBranch(
   let bindingPath = "";
   let latestFolders = project.workingFolders;
   let latestPaths = project.workingPaths;
+  let pathBudget: PathBudgetReport = UNCHECKED_PATH_BUDGET;
+  const { budget: _budget, ...branchInput } = input;
   const result = await createDesignBranch({
-    ...input,
+    ...branchInput,
+    // Path budget: only the new case's own paths, checked with the final folder name before any write.
+    beforeFirstWrite: async ({ folderName, sourceFiles, sourceDirectories }) => {
+      const workspaceAddress = input.budget?.workspaceAddress;
+      if (!workspaceAddress) return;
+      pathBudget = checkWorstPath(
+        caseWorstPath(joinAddress(workspaceAddress, containerPath), folderName, longestOf(sourceFiles), longestOf(sourceDirectories)),
+        "case",
+        folderName,
+      );
+    },
     vaultDir: project.vaultDir,
     workingFolders: project.workingFolders,
     destinationParent: parent,
+    // A leftover breadcrumb with the same ID (no matching vault record) also counts as a clash.
+    isBranchIdTaken: async (branchId) => {
+      const container = await resolve(root, containerPath, "projects");
+      return container.hasFile([".cadtree", "branches", `${idSegment(branchId)}.json`]);
+    },
     resolveWorkingFolders: async (state) => {
       const current = await resolveManagedProject(root, containerPath, state);
       assertWritable(current);
@@ -671,53 +747,8 @@ export async function createManagedBranch(
     workingPaths: { ...latestPaths, [result.branch.branchId]: bindingPath },
     createdBranchId: result.branch.branchId,
     publicationWarning: result.publicationWarning,
+    pathBudget,
   };
-}
-
-export async function recoverManagedCopy(
-  root: FileSystemDirectoryAdapter,
-  containerPath: string,
-  revisionId: string,
-  selectedPaths: string[] | undefined,
-  options: CopyOptions = {},
-) {
-  const first = await resolveManagedProject(root, containerPath);
-  return withProjectWriterLock(first.record.projectId, async () => {
-    const project = await resolveManagedProject(root, containerPath);
-    assertWritable(project);
-    throwIfCancelled(options.signal);
-    const relativePath = `${containerPath}/recoveries/copy-${crypto.randomUUID()}`;
-    const recoveryParent = await resolve(
-      root,
-      `${containerPath}/recoveries`,
-      containerPath,
-    );
-    const destination = await recoveryParent.getDirectory(
-      [relativePath.split("/").at(-1)!],
-      { create: true, exclusiveCreate: true },
-    );
-    try {
-      const restoreOptions = {
-        ...options,
-        vaultDir: project.vaultDir,
-        workingFolders: project.workingFolders,
-        destinationDir: destination,
-        revisionId,
-      };
-      const result = selectedPaths
-        ? await restoreSelectedFilesToFolder({
-            ...restoreOptions,
-            selectedPaths,
-          })
-        : await restoreRevisionToFolder(restoreOptions);
-      return { result, relativePath };
-    } catch (error) {
-      throw new WorkspaceOperationError(
-        error instanceof Error ? error.message : String(error),
-        relativePath,
-      );
-    }
-  });
 }
 
 function assertWritable(project: ManagedProject) {
@@ -726,22 +757,39 @@ function assertWritable(project: ManagedProject) {
       `Managed project is read-only until its workspace connections and records are valid. ${project.issues.join(" ")}`,
     );
 }
-function slug(name: string) {
-  return (
-    name
-      .normalize("NFKD")
-      .replace(/[^a-zA-Z0-9 -]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .slice(0, 35) || "project"
-  );
+/** What allocateProject needs to measure the future worst case of the new project folder. */
+interface ProjectBudget {
+  workspaceAddress?: string;
+  /** Longest relative file path the project will hold (import/adoption); '' for an empty project. */
+  longestUserFile?: string;
+  /** Longest relative folder path (no `.crswap`). */
+  longestUserDir?: string;
+  caseAllowance?: number;
 }
 async function allocateProject(
   root: FileSystemDirectoryAdapter,
   name: string,
   operation: string,
-) {
-  const path = `projects/${slug(name)}-${crypto.randomUUID()}`;
+  budget: ProjectBudget = {},
+): Promise<{ path: string; container: FileSystemDirectoryAdapter; pathBudget: PathBudgetReport }> {
+  // Lookup and name choice create nothing, so their failures are plain errors,
+  // not retained destinations.
+  const projectsDir = await root.getDirectory(["projects"], { create: false });
+  const leaf = await pickFreeName(projectsDir, folderNameFor(name, "Project"));
+  const path = `projects/${leaf}`;
+  // Path budget: the final folder name is chosen and nothing has been written yet.
+  const pathBudget = budget.workspaceAddress
+    ? checkWorstPath(
+        projectWorstPath({
+          projectAddress: joinAddress(budget.workspaceAddress, path),
+          longestUserFile: budget.longestUserFile,
+          longestUserDir: budget.longestUserDir,
+          caseAllowance: budget.caseAllowance,
+        }),
+        "project",
+        leaf,
+      )
+    : UNCHECKED_PATH_BUDGET;
   try {
     const container = await root.getDirectory(managedPath(path), {
       create: true,
@@ -759,8 +807,7 @@ async function allocateProject(
       { exclusive: true },
     );
     await container.getDirectory(["working"], { create: true });
-    await container.getDirectory(["recoveries"], { create: true });
-    return { path, container };
+    return { path, container, pathBudget };
   } catch (error) {
     throw new WorkspaceOperationError(
       error instanceof Error ? error.message : String(error),
@@ -867,8 +914,8 @@ export async function importProject(
   root: FileSystemDirectoryAdapter,
   source: FileSystemDirectoryAdapter,
   name: string,
-  options: CopyOptions = {},
-): Promise<ManagedProject> {
+  options: WorkspaceCreateOptions = {},
+): Promise<WithPathBudget<ManagedProject>> {
   // Complete managed projects are history-bearing imports, never raw CAD sources.
   await validateDirectoryIsolation(source, root, 'Original project', 'cAdtree workspace');
   const entries = await source.listEntries();
@@ -880,19 +927,21 @@ export async function importProject(
     checkRecord(record, 'imported managed project');
     requireStrings(record, ['projectId', 'workspaceId', 'containerPath', 'vaultPath'], 'Imported project');
     const ready = JSON.parse(await source.readFileText(['.cadtree', 'ready.json']));
-    if (ready.schemaVersion !== VERSION || ready.projectId !== record.projectId || ready.workspaceId !== record.workspaceId || ready.recordSha256 !== hashString(text) || record.vaultPath !== `${record.containerPath}/vault`) throw new Error('Imported project publication does not match its location records.');
+    if (ready.schemaVersion !== VERSION || ready.projectId !== record.projectId || ready.workspaceId !== record.workspaceId || ready.recordSha256 !== hashString(text)) throw new Error('Imported project publication does not match its location records.');
     const vault = await source.getDirectory(['vault']);
     const state = await openExistingVault(vault);
     if (state.project.projectId !== record.projectId || componentWriteBlock(state) || referenceWriteBlock(state)) throw new Error(componentWriteBlock(state) ?? referenceWriteBlock(state) ?? 'Imported project identity mismatch.');
     const folders: WorkingFolderBindings = {};
+    const leaves = new Set<string>();
     for (const branch of state.branches) {
       const location = JSON.parse(await source.readFileText(['.cadtree', 'branches', `${idSegment(branch.branchId)}.json`]));
       checkRecord(location, 'imported branch location');
       requireStrings(location, ['workingPath'], 'Imported branch');
       if (location.projectId !== record.projectId || location.workspaceId !== record.workspaceId || location.branchId !== branch.branchId) throw new Error('Imported branch location identity mismatch.');
-      const segments = managedPath(String(location.workingPath), `${record.containerPath}/working`);
-      if (segments.length !== 4 || managedPath(String(record.containerPath), 'projects').length !== 2) throw new Error('Imported branch is not an independent working leaf.');
-      folders[branch.branchId] = await source.getDirectory(segments.slice(2));
+      const leaf = workingLeaf(String(location.workingPath));
+      if (leaves.has(leaf.toLowerCase())) throw new Error('Imported branch locations collide (case-insensitive).');
+      leaves.add(leaf.toLowerCase());
+      folders[branch.branchId] = await source.getDirectory(['working', leaf]);
     }
     return adoptProject(root, vault, folders, options);
   }
@@ -904,17 +953,17 @@ export async function importProject(
 export async function createProject(
   root: FileSystemDirectoryAdapter,
   name: string,
-  options: CopyOptions = {},
-): Promise<ManagedProject> {
+  options: WorkspaceCreateOptions = {},
+): Promise<WithPathBudget<ManagedProject>> {
   return initializeManagedProject(root, name, options);
 }
 
 async function initializeManagedProject(
   root: FileSystemDirectoryAdapter,
   name: string,
-  options: CopyOptions,
+  options: WorkspaceCreateOptions,
   source?: FileSystemDirectoryAdapter,
-): Promise<ManagedProject> {
+): Promise<WithPathBudget<ManagedProject>> {
   if (!name.trim()) throw new Error("Project name is required.");
   if (source)
     await validateDirectoryIsolation(
@@ -924,6 +973,9 @@ async function initializeManagedProject(
       "cAdtree workspace",
     );
   const workspace = await workspaceIdentity(root);
+  // Names only (no hashing), before the lock or any write: the longest file of an import source.
+  const longestUser =
+    source && options.budget?.workspaceAddress ? await longestRelativePaths(source) : { file: "", dir: "" };
   return withProjectWriterLock(
     `workspace:${workspace.workspaceId}`,
     async () => {
@@ -944,7 +996,11 @@ async function initializeManagedProject(
         );
       throwIfCancelled(options.signal);
       const origin = source ? "import" : "create";
-      const { path, container } = await allocateProject(root, name, origin);
+      const { path, container, pathBudget } = await allocateProject(root, name, origin, {
+        workspaceAddress: options.budget?.workspaceAddress,
+        longestUserFile: longestUser.file,
+        longestUserDir: longestUser.dir,
+      });
       try {
         const main = await container.getDirectory(["working", "main"], {
           create: true,
@@ -958,7 +1014,7 @@ async function initializeManagedProject(
           exclusiveCreate: true,
         });
         const state = await initializeProjectVault(main, vault, name.trim());
-        return await publishProject(
+        const published = await publishProject(
           root,
           workspace,
           path,
@@ -980,6 +1036,7 @@ async function initializeManagedProject(
               );
           },
         );
+        return { ...published, pathBudget };
       } catch (error) {
         if (error instanceof WorkspaceOperationError) throw error;
         throw new WorkspaceOperationError(

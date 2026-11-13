@@ -1,0 +1,54 @@
+import { test, expect } from '@playwright/test';
+
+test('standalone knowledge explorer loads, filters, and inspects source provenance', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/tests/knowledge-lab.html');
+  await expect(page.getByRole('heading', { name: 'Knowledge Explorer.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Load synthetic project' }).click();
+  await page.getByRole('combobox', { name: 'Component', exact: true }).selectOption('component-00000000-0000-4000-8000-000000000001');
+  await page.getByRole('combobox', { name: 'Branch', exact: true }).selectOption('branch-thicker');
+  const revision = page.getByRole('article', { name: 'Revision r03', exact: true });
+  await expect(revision.getByRole('heading', { name: 'Revision-level reference associations (1)' })).toBeVisible();
+  await expect(revision.getByRole('heading', { name: 'Engineering note records (0)' })).toBeVisible();
+  await revision.getByText('Inspect exact metadata source').click();
+  await expect(revision.locator('.kl-source pre')).toContainText('"jsonPointer": "/links/0"');
+  await expect(revision.locator('p').filter({ hasText: 'Attachment bytes are not verified by VaultState' })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('retrieval timeline keeps Main ownership and exact alternative-branch citation origins', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/tests/knowledge-lab.html');
+  await page.getByRole('button', { name: 'Load synthetic project' }).click();
+  const retrieval = page.getByRole('region', { name: 'Knowledge retrieval' });
+  await expect(retrieval.getByText(/SYNTHETIC.*simulated/)).toBeVisible();
+  await retrieval.getByRole('combobox', { name: 'Component', exact: true }).selectOption('component-00000000-0000-4000-8000-000000000001');
+  await retrieval.getByRole('combobox', { name: 'Branch', exact: true }).selectOption('branch-main');
+  await retrieval.getByRole('combobox', { name: 'Revision', exact: true }).selectOption('r02');
+  await retrieval.getByRole('combobox', { name: 'Record source', exact: true }).selectOption('m1b-persisted');
+  await retrieval.getByRole('combobox', { name: 'Record type', exact: true }).selectOption('cad.design-change');
+  const event = retrieval.getByRole('article', { name: 'Snapshot r02', exact: true });
+  const card = event.getByRole('article', { name: 'Retrieved record 20260101-000000-000001' });
+  await expect(card.getByText('Explore an 8 mm collar.', { exact: true })).toBeVisible();
+  const eventCitation = event.locator(':scope > .kl-citation').filter({ hasText: 'evidence' });
+  await expect(eventCitation.locator(':scope > summary')).toContainText('Thicker collar');
+  await eventCitation.locator(':scope > summary').click();
+  await eventCitation.getByText('Exact citation source, IDs and hashes').click();
+  const exact = JSON.parse((await eventCitation.locator('pre').textContent())!);
+  expect(exact.revisionId).toBe('r03');
+  expect(exact.branchId).toBe('branch-thicker');
+  expect(exact.attachment.versionId).toBe('reference-version-synthetic-v1');
+  expect(exact.attachment.source.jsonPointer).toBe('/links/0');
+  expect(exact.relation).toBe('evidence');
+  expect(exact.verification.attachmentBytes).toBe('not_checked');
+  await retrieval.getByRole('searchbox', { name: 'Literal text', exact: true }).fill('absent literal');
+  await expect(retrieval.getByText(/No matching recorded knowledge/)).toBeVisible();
+  await expect(retrieval.getByRole('status')).toContainText('incomplete');
+  await page.getByRole('button', { name: 'Close project' }).click();
+  await expect(retrieval).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

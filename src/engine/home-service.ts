@@ -1,3 +1,4 @@
+import { isEffectivelyEmpty } from "./scanner";
 import {
   type FileSystemDirectoryAdapter,
   validateDirectoryIsolation,
@@ -19,14 +20,21 @@ import {
   type CopyOptions,
 } from "./copy-service";
 import { withProjectWriterLock } from "./locks";
+import { folderNameFor, pickFreeName } from "./folder-names";
 import { hashString } from "./hash";
 import { verifyRevisionObjects } from "./vault-service";
 import { referenceWriteBlock, verifyReferenceLibraryContent } from './references';
+import {
+  CASE_ALLOWANCE, UNCHECKED_PATH_BUDGET, checkWorstPath, joinAddress, longestPath, longestOf, longestRelativePaths,
+  projectWorstPath, workspaceWorstPath, type PathBudgetInput, type PathBudgetReport,
+} from './path-budget';
 
 const IDENTITY = ".cadtree-home.json";
 const RECORDS = [".cadtree-home", "workspaces"];
 export interface HomeOperationOptions extends CopyOptions {
   expectedHomeId?: string;
+  /** Absolute home address for the path budget check; without it the check is reported as 'unchecked'. */
+  budget?: Pick<PathBudgetInput, "homeAddress">;
 }
 export interface HomeIdentity {
   schemaVersion: number;
@@ -50,6 +58,8 @@ export interface HomeWorkspaceEntry {
   key: string;
   name: string;
   directory?: string;
+  /** Directory written in the registration; differs from `directory` when the folder was renamed. */
+  recordedDirectory?: string;
   workspaceId?: string;
   status: "ready" | "damaged" | "incomplete" | "duplicate";
   issues: string[];
@@ -130,7 +140,7 @@ export async function createHome(
   return withProjectWriterLock("home-initialization", async () => {
     if ((await root.queryPermission("readwrite")) !== "granted")
       throw new Error("Grant write access to the Cadtree home.");
-    if ((await root.listEntries()).length)
+    if (!isEffectivelyEmpty(await root.listEntries()))
       throw new Error(
         "Choose an empty dedicated folder, suggested name Cadtree. Use Open Cadtree home for a recognized existing home.",
       );
@@ -156,6 +166,8 @@ export async function openHome(
   const workspaces: HomeWorkspaceEntry[] = [];
   const records = await root.getDirectory(RECORDS, { create: false });
   const reserved = new Set<string>();
+  const recordedIds = new Map<string, string[]>();
+  const pending: { entry: HomeWorkspaceEntry; r: HomeWorkspaceRecord }[] = [];
   for (const file of await records.listEntries()) {
     if (
       file.kind !== "file" ||
@@ -201,9 +213,14 @@ export async function openHome(
       Object.assign(entry, {
         name: r.name,
         directory: r.directory,
+        recordedDirectory: r.directory,
         workspaceId: r.workspaceId,
       });
       reserved.add(r.directory.toLowerCase());
+      recordedIds.set(r.directory.toLowerCase(), [
+        ...(recordedIds.get(r.directory.toLowerCase()) ?? []),
+        r.workspaceId,
+      ]);
       if (!(await records.hasFile([`${r.registrationId}.ready.json`]))) {
         entry.status = "incomplete";
         throw new Error(
@@ -225,12 +242,58 @@ export async function openHome(
         throw new Error(
           "Workspace publication does not match its registration.",
         );
-      const workspace = await resolveHomeWorkspace(
-        root,
-        home.homeId,
-        r.workspaceId,
-        r.directory,
-      );
+      pending.push({ entry, r });
+    } catch (error) {
+      entry.issues.push(error instanceof Error ? error.message : String(error));
+    }
+    workspaces.push(entry);
+  }
+  // Second pass: all recorded directories are known, so a renamed folder can be found by identity.
+  let folderIds: Map<string, string[]> | undefined;
+  for (const { entry, r } of pending) {
+    try {
+      let workspace: WorkspaceState;
+      try {
+        workspace = await resolveHomeWorkspace(
+          root,
+          home.homeId,
+          r.workspaceId,
+          r.directory,
+        );
+      } catch (error) {
+        folderIds ??= await workspaceFolderIds(root);
+        // Fall back only when the recorded folder is missing, unreadable as a workspace, or holds another identity.
+        // A recorded folder that still carries this identity but fails to open keeps its error; a copy is never bound instead.
+        if (
+          (folderIds.get(r.workspaceId) ?? []).some(
+            (name) => name === r.directory,
+          )
+        )
+          throw error;
+        const matches = (folderIds.get(r.workspaceId) ?? []).filter((name) => {
+          const lower = name.toLowerCase();
+          // Names are compared exactly, so a case-only rename still binds by id. A folder recorded by another registration is only claimable when that registration's own workspace lives elsewhere (a swap).
+          return (
+            name !== r.directory &&
+            (recordedIds.get(lower) ?? []).every(
+              (id) => id === r.workspaceId || folderIds!.has(id),
+            )
+          );
+        });
+        if (!matches.length) throw error;
+        if (matches.length > 1)
+          throw new Error(
+            `Workspace folder not found at "${r.directory}"; it was found in more than one folder (${matches.join(", ")}). No folder was chosen.`,
+          );
+        workspace = await resolveHomeWorkspace(
+          root,
+          home.homeId,
+          r.workspaceId,
+          matches[0],
+        );
+        entry.directory = matches[0];
+        reserved.add(matches[0].toLowerCase());
+      }
       entry.workspace = workspace;
       entry.status = workspace.projects.every((p) => p.status === "ready")
         ? "ready"
@@ -242,7 +305,6 @@ export async function openHome(
     } catch (error) {
       entry.issues.push(error instanceof Error ? error.message : String(error));
     }
-    workspaces.push(entry);
   }
   // Retain identifiable orphan destinations even if a registration was damaged or interrupted.
   for (const child of await root.listEntries()) {
@@ -290,6 +352,25 @@ export async function openHome(
     throw new Error("Cadtree home identity changed during discovery.");
   return { root, identity: home, workspaces };
 }
+/** Read-only map of workspace identity to the child folders whose metadata carries it. */
+async function workspaceFolderIds(root: FileSystemDirectoryAdapter) {
+  const found = new Map<string, string[]>();
+  for (const child of await root.listEntries()) {
+    if (child.kind !== "directory" || child.name.startsWith(".")) continue;
+    try {
+      const dir = await root.getDirectory([child.name], { create: false });
+      const value: unknown = JSON.parse(
+        await dir.readFileText([".cadtree-workspace.json"]),
+      );
+      const id = (value as { workspaceId?: unknown } | null)?.workspaceId;
+      if (typeof id === "string")
+        found.set(id, [...(found.get(id) ?? []), child.name].sort());
+    } catch {
+      /* not a readable workspace folder */
+    }
+  }
+  return found;
+}
 export async function resolveHomeWorkspace(
   root: FileSystemDirectoryAdapter,
   homeId: string,
@@ -309,16 +390,49 @@ export async function resolveHomeWorkspace(
     );
   return workspace;
 }
-function readableName(name: string) {
-  return (
-    name
-      .normalize("NFKC")
-      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
-      .replace(/^[ .]+/g, "")
-      .replace(/[ .]+$/g, "")
-      .trim()
-      .slice(0, 65) || "Workspace"
-  );
+/**
+ * Worst case for a workspace folder `directory` in the home at `homeAddress`: a future project plus
+ * the project worst case (nothing for the user's files). When bringing a workspace in, each of its
+ * projects is also measured with its real folder name, longest file and working-folder names.
+ * Read-only. Unknown address: reported as unchecked.
+ */
+async function checkWorkspaceBudget(
+  homeAddress: string | undefined,
+  directory: string,
+  source: FileSystemDirectoryAdapter | undefined,
+): Promise<PathBudgetReport> {
+  if (!homeAddress) return UNCHECKED_PATH_BUDGET;
+  const workspaceAddress = joinAddress(homeAddress, directory);
+  const candidates: { path: string }[] = [{ path: workspaceWorstPath(workspaceAddress) }];
+  if (source) {
+    for (const entry of (await openWorkspace(source)).projects) {
+      if (!entry.project) continue;
+      let longestFile = "";
+      let longestDir = "";
+      let allowance = CASE_ALLOWANCE;
+      for (const branch of entry.project.vaultState.branches) {
+        const folder = entry.project.workingFolders[branch.branchId];
+        if (folder) {
+          const found = await longestRelativePaths(folder);
+          longestFile = longestOf([longestFile, found.file]);
+          longestDir = longestOf([longestDir, found.dir]);
+        }
+        // The readable case folder name used on copy, with room for a counter.
+        allowance = Math.max(allowance, folderNameFor(branch.name, "Design case").length + " (2)".length);
+      }
+      candidates.push({
+        path: projectWorstPath({
+          projectAddress: joinAddress(workspaceAddress, entry.containerPath),
+          longestUserFile: longestFile,
+          longestUserDir: longestDir,
+          caseAllowance: allowance,
+        }),
+      });
+    }
+  }
+  const worst = longestPath(candidates.map((c) => c.path))!;
+  // The name the user can shorten is always the workspace folder name.
+  return checkWorstPath(worst, "workspace", directory);
 }
 async function register(
   root: FileSystemDirectoryAdapter,
@@ -369,7 +483,13 @@ async function register(
     const run = async () => {
       throwIfCancelled(options.signal);
       const registrationId = `registration-${crypto.randomUUID()}`;
-      const directory = `${readableName(name)}-${crypto.randomUUID()}`;
+      const directory = await pickFreeName(root, folderNameFor(name, "Workspace"), {
+        extraTaken: home.workspaces.flatMap((e) =>
+          [e.directory, e.recordedDirectory].filter((d): d is string => !!d),
+        ),
+      });
+      // Path budget: the final folder name is known and nothing has been written yet.
+      const pathBudget = await checkWorkspaceBudget(options.budget?.homeAddress, directory, source);
       const record = seal({
         schemaVersion: 1,
         homeId: first.homeId,
@@ -469,7 +589,7 @@ async function register(
             recordSha256: hashString(recordText),
           }),
         );
-        return { workspace: verified, directory };
+        return { workspace: verified, directory, pathBudget };
       } catch (error) {
         throw new WorkspaceOperationError(
           error instanceof Error ? error.message : String(error),

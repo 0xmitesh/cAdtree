@@ -8,7 +8,7 @@ test("The final tutorial ships accessible real captures and precise concepts for
   assert.equal(new Set(tutorial.steps.map(s => s.id)).size, 7);
   const visuals = tutorial.steps.flatMap(s => s.visuals ?? []);
   assert.equal(visuals.filter(v => v.kind === "cadtree").length, 17);
-  assert.equal(visuals.filter(v => v.kind === "concept").length, 3);
+  assert.equal(visuals.filter(v => v.kind === "concept").length, 2);
   assert.equal(visuals.filter(v => v.kind === "os").length, 0);
   assert.equal(new Set(visuals.map(v => v.src)).size, visuals.length);
   for (const visual of visuals) {

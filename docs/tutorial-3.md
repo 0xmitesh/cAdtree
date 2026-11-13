@@ -4,8 +4,8 @@ Six steps in the existing TutorialViewerModal, with 12 visuals: seven real cAdtr
 
 ## Import behavior used as the source of truth
 
-- Workspace: My workspaces → Home options → Import existing workspace → Choose workspace folder → native folder picker. The chosen folder must already be a cAdtree workspace. The engine allocates a fresh uniquely named child inside the connected Cadtree Home, copies and verifies the complete tree, preserves workspace/project identities, records the home registration and publishes its ready marker only after verification. Existing projects, history, reference evidence and uncaptured working files are included. The source is read, not moved or modified. The imported workspace opens automatically.
-- Project: inside the workspace → Import existing project → Choose project folder → native folder picker. An ordinary CAD folder supplies the project name. The engine allocates projects/<name>-<generated id>, copies and verifies original files/directories into working/main, creates project/Main records and the vault, then publishes readiness. It creates no saved revision. The imported project opens automatically and is scanned. A complete cAdtree project is also supported with preserved identity/history, as the real dialog states; this tutorial teaches the ordinary CAD-folder path.
+- Workspace: My workspaces → Home options → Import existing workspace → Choose workspace folder → native folder picker. The chosen folder must already be a cAdtree workspace. The engine creates a child folder named after the workspace inside the connected Cadtree Home (with a counter on a clash), copies and verifies the complete tree, preserves workspace/project identities, records the home registration and publishes its ready marker only after verification. Existing projects, history, reference evidence and uncaptured working files are included. The source is read, not moved or modified. The imported workspace opens automatically.
+- Project: inside the workspace → Import existing project → Choose project folder → native folder picker. An ordinary CAD folder supplies the project name. The engine allocates projects/<name>, copies and verifies original files/directories into working/main, creates project/Main records and the vault, then publishes readiness. It creates no saved revision. The imported project opens automatically and is scanned. A complete cAdtree project is also supported with preserved identity/history, as the real dialog states; this tutorial teaches the ordinary CAD-folder path.
 - Both dialogs precede the picker. Neither path has a post-selection name form. Copy isolation rejects equal/nested locations, ready-name/identity conflicts reject duplicate enrollment, and no existing destination is overwritten. Source folders need not be empty; new destinations are fresh. These protections are preserved, not changed for the tutorial.
 - After success, the managed copy no longer depends on the source location and is not synchronized with it. Edit managed Main. Native CAD references are not rewritten; save/close before importing and check references in the copied assembly afterward.
 - Implementation inspected: src/components/HomeWorkspacesView.tsx, WorkspaceProjectsView.tsx, src/App.tsx, src/engine/home-service.ts (bringWorkspaceIntoHome/register), workspace-service.ts (importProject/initializeManagedProject), copy-service.ts and fs-adapter.ts (isolation), vault-service.ts (initial empty history).
@@ -85,7 +85,7 @@ Notice: Check CAD references in the managed copy after import. cAdtree does not 
 
 Visual 1 (Concept): **Work in the managed working/main copy. The original is a separate copy, not a live connection.**
 
-Alt text: Original Bracket Assembly CAD folder remains unchanged. The new managed project inside Cadtree Home and Client A contains working/main for editing and a separate vault for saved history. Display names simplify generated folder suffixes.
+Alt text: Original Bracket Assembly CAD folder remains unchanged. The new managed project inside Cadtree Home and Client A contains working/main for editing and a separate vault for saved history.
 
 ### Step 6 of 6 — Imported and ready
 
@@ -104,7 +104,7 @@ Alt text: Real Client A workspace lists the managed Bracket Assembly project wit
 
 Visual 3 (cAdtree): **3. Open Settings and find Working folder: this managed working/main is where you work.**
 
-Alt text: Real Bracket Assembly Settings shows Working folder ending in working/main under the generated managed project folder, with a separate revision vault.
+Alt text: Real Bracket Assembly Settings shows Working folder ending in working/main under the managed project folder, with a separate revision vault.
 
 Closing hint: **Next: explore another design direction.**
 
@@ -116,7 +116,7 @@ Sample state: Cadtree home, an existing empty cAdtree workspace named Client A a
 
 Capture assertions passed: exactly three picker-facade calls (open home, import workspace, import project), source workspace unchanged, source CAD folder unchanged, managed Main inventory matches the source byte hashes/sizes/paths, reopened home finds Client A/Bracket Assembly, zero saved revisions, no browser page errors.
 
-The two Windows images are synthetic instructional illustrations, with generic Engineering folders, the selected source folder in both the list and Folder field, and a standard arrow cursor on Select Folder. They are not native screenshots and contain no private machine paths. Concept SVGs show exact relationships; display names simplify the generated physical folder suffixes.
+The two Windows images are synthetic instructional illustrations, with generic Engineering folders, the selected source folder in both the list and Folder field, and a standard arrow cursor on Select Folder. They are not native screenshots and contain no private machine paths. Concept SVGs show exact relationships.
 
 | Asset | Source | SHA-256 |
 | --- | --- | --- |

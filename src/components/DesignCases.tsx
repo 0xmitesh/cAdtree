@@ -244,7 +244,7 @@ export function DesignCases({
       <p className="case-lifecycle-help small">
         Main cannot be archived. Archiving preserves the working folder and all saved
         history. Archived revisions remain available in History, Compare and
-        recovery.
+        Export.
       </p>
       {cases
         .filter(

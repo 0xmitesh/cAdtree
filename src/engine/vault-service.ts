@@ -9,6 +9,8 @@ import { readApplicationOperations } from './application-records';
 import { readCaseLifecycles } from './case-lifecycle';
 import { readComponentEvidence, writeComponentBoundary } from './component-identity';
 import { readReferenceEvidence } from './references';
+import { reconstructKnowledgeRecords } from '../knowledge/records/store';
+import type { KnowledgeSchemaRegistry } from '../knowledge/records/registry';
 import { branchNameKey, getBranchBaseline } from './branch-state';
 import {
   BranchRecord,
@@ -351,7 +353,8 @@ export async function initializeProjectVault(
  * history is never silently omitted or overwritten.
  */
 export async function openExistingVault(
-  vaultDir: FileSystemDirectoryAdapter
+  vaultDir: FileSystemDirectoryAdapter,
+  options: { knowledgeSchemas?: KnowledgeSchemaRegistry } = {},
 ): Promise<VaultState> {
   const hasProject = await vaultDir.hasFile(['project.json']);
   if (!hasProject) {
@@ -857,6 +860,7 @@ export async function openExistingVault(
   state.caseLifecycles = await readCaseLifecycles(vaultDir, state);
   state.components = await readComponentEvidence(vaultDir, state);
   state.references = await readReferenceEvidence(vaultDir, state);
+  state.knowledge = await reconstructKnowledgeRecords(vaultDir, state, options.knowledgeSchemas);
   return state;
 }
 

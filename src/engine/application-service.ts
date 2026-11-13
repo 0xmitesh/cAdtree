@@ -1,5 +1,5 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { splitAndValidatePath } from "./fs-adapter";
+import { FileConflictError, splitAndValidatePath } from "./fs-adapter";
 import {
   prepareApplyPreview,
   buildApplyPreview,
@@ -8,6 +8,10 @@ import {
 import {
   appendApplicationEvent,
   applicationPath,
+  applicationPlanPath,
+  applicationStagedPath,
+  applicationUnexpectedFolder,
+  applicationUnexpectedPath,
   branchApplications,
   changedActions,
   sealApplication,
@@ -22,7 +26,8 @@ import {
 import { getObjectPathSegments, verifyStoredObject } from "./object-store";
 import { hashStream, hashString } from "./hash";
 import { withProjectWriterLock } from "./locks";
-import { scanBranchChanges } from "./scanner";
+import { eventIdBase, eventIdCandidate } from "./ids";
+import { partitionSystemFiles, scanBranchChanges } from "./scanner";
 import {
   inventorySignature,
   readVerifiedInventory,
@@ -34,6 +39,8 @@ import { assertCaseWritable } from "./case-lifecycle";
 import type { FileEntry, VaultState } from "./types";
 
 export interface ApplicationOptions extends CopyOptions {
+  /** Clock for new event IDs; defaults to the current time. Tests inject a fixed one. */
+  now?: () => Date;
   workingFolders: WorkingFolderBindings;
   resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
 }
@@ -71,6 +78,7 @@ export function applicationReview(
   choices: ApplicationReview["choices"],
 ): ApplicationReview {
   return {
+    mode: plan.mode,
     projectId: plan.projectId,
     sourceRevisionId: plan.sourceRevisionId,
     destinationBranchId: plan.destinationBranchId,
@@ -87,6 +95,7 @@ function recompute(state: VaultState, review: ApplicationReview) {
     state,
     review.sourceRevisionId,
     review.destinationBranchId,
+    review.mode ?? "merge",
   );
   if (preparation.status !== "available") throw new Error(preparation.reason);
   const plan = buildApplyPreview(
@@ -138,7 +147,7 @@ async function cleanDestination(
   review: ApplicationReview,
   options: CopyOptions,
 ) {
-  const { context } = recompute(state, review);
+  const { context, plan } = recompute(state, review);
   const scan = await scanBranchChanges(
     working,
     review.destinationBranchId,
@@ -160,6 +169,15 @@ async function cleanDestination(
   if (scan.errors.length)
     throw new Error(
       `Destination scan unavailable: ${scan.errors.map((e) => `${e.path}: ${e.error}`).join("; ")}`,
+    );
+  const blocked = plan.actions
+    .filter((a) => a.operation !== "keep")
+    .filter((a) =>
+    scan.skippedSystemFiles?.includes(a.path),
+  );
+  if (blocked.length)
+    throw new Error(
+      `An untracked system file ${blocked.map((a) => a.path).join(", ")} exists at this path in the destination; remove it or save it first. No working files were changed.`,
     );
   if (scan.hasChanges)
     throw new Error(
@@ -239,11 +257,12 @@ function stagedPath(
   side: "before" | "source",
   index: number,
 ) {
-  return [
-    ...applicationPath(op.destinationBranchId, op.operationId),
+  return applicationStagedPath(
+    op.destinationBranchId,
+    op.operationId,
     side,
-    `${String(index).padStart(6, "0")}.bin`,
-  ];
+    index,
+  );
 }
 async function verifiedFile(
   dir: FileSystemDirectoryAdapter,
@@ -292,6 +311,35 @@ function progress(
     message: `${phase === "restoring_files" ? "Applying" : "Verifying"} ${path}…`,
   });
 }
+const MAX_EVENT_ATTEMPTS = 999;
+/**
+ * Creates a new folder named by a fresh event ID (YYYYMMDD-HHMMSS, then -2, -3, ...) with
+ * exclusiveCreate. Only an "already exists" clash moves to the next candidate; any other
+ * error is rethrown unchanged. Nothing existing is ever reused or overwritten.
+ */
+export async function createEventFolder(
+  vault: FileSystemDirectoryAdapter,
+  now: (() => Date) | undefined,
+  folderFor: (eventId: string) => string[],
+  what: string,
+): Promise<string> {
+  const base = eventIdBase(now ? now() : new Date());
+  for (let attempt = 1; attempt <= MAX_EVENT_ATTEMPTS; attempt++) {
+    const candidate = eventIdCandidate(base, attempt);
+    try {
+      await vault.getDirectory(folderFor(candidate), {
+        create: true,
+        exclusiveCreate: true,
+      });
+      return candidate;
+    } catch (error) {
+      if (!(error instanceof FileConflictError)) throw error;
+    }
+  }
+  throw new Error(
+    `No free ${what} ID for ${base}: all ${MAX_EVENT_ATTEMPTS} candidates are taken. Nothing was written.`,
+  );
+}
 export async function applyPreparedApplication(
   vault: FileSystemDirectoryAdapter,
   prepared: PreparedApplication,
@@ -316,9 +364,12 @@ export async function applyPreparedApplication(
     await cleanDestination(working, state, review, options);
     // A fresh operation ID is never reused. A durable plan precedes staging; a
     // durable attempt precedes each write. Any uncertain outcome remains discoverable.
-    const operationId = `apply-${crypto.randomUUID()}`;
-    const path = applicationPath(review.destinationBranchId, operationId);
-    await vault.getDirectory(path, { create: true, exclusiveCreate: true });
+    const operationId = await createEventFolder(
+      vault,
+      options.now,
+      (id) => applicationPath(review.destinationBranchId, id),
+      "application",
+    );
     const record: ApplicationRecord = sealApplication({
       schemaVersion: 1 as const,
       kind: "cadtree-file-application" as const,
@@ -327,6 +378,7 @@ export async function applyPreparedApplication(
       sourceBranchId: context.source.manifest.branchId,
       review: structuredClone(review),
       plan: {
+        mode: plan.mode,
         projectId: plan.projectId,
         sourceRevisionId: plan.sourceRevisionId,
         destinationRevisionId: plan.destinationRevisionId,
@@ -337,17 +389,18 @@ export async function applyPreparedApplication(
       },
     });
     const text = JSON.stringify(record, null, 2);
-    await vault.writeFileText([...path, "plan.json"], text, {
+    const planPath = applicationPlanPath(review.destinationBranchId, operationId);
+    await vault.writeFileText(planPath, text, {
       exclusive: true,
     });
-    if ((await vault.readFileText([...path, "plan.json"])) !== text)
+    if ((await vault.readFileText(planPath)) !== text)
       throw new Error(
         "Application plan readback failed. Reopen and inspect retained operation storage.",
       );
     const op: ApplicationOperation = {
       operationId,
       destinationBranchId: review.destinationBranchId,
-      relativePath: path.join("/"),
+      relativePath: applicationPath(review.destinationBranchId, operationId).join("/"),
       status: "unresolved",
       record,
       events: [],
@@ -470,7 +523,14 @@ export async function applyPreparedApplication(
         path: action.path,
       });
     }
-    const result = await readVerifiedInventory(working, options);
+    const rawResult = await readVerifiedInventory(working, options);
+    const result = {
+      ...rawResult,
+      files: partitionSystemFiles(
+        rawResult.files,
+        new Set(plan.resultFiles.map((f) => f.path)),
+      ).files,
+    };
     if (
       inventorySignature(result) !==
       inventorySignature({
@@ -512,7 +572,8 @@ export async function recoverApplication(
       op.events.filter((e) => e.kind === "attempt").map((e) => e.path),
     );
     const manualPaths: string[] = [];
-    const recoveryId = `recovery-${crypto.randomUUID()}`;
+    // The recovery ID is allocated lazily, when the first unexpected file is staged.
+    let recoveryId: string | undefined;
     for (const [index, action] of changedActions(op.record).entries()) {
       throwIfCancelled(options.signal);
       let current: FileEntry | null;
@@ -527,20 +588,22 @@ export async function recoverApplication(
       if (!touched.has(action.path) || !same(current, action.after)) {
         // Retain a verified copy of unexpected bytes as well as leaving the live
         // file untouched. No blind rollback of truncated writes or later CAD edits.
-        if (current)
+        if (current) {
+          recoveryId ??= await createEventFolder(
+            vault,
+            options.now,
+            (id) => applicationUnexpectedFolder(branchId, operationId, id),
+            "recovery",
+          );
           await stageFile(
             vault,
-            [
-              ...applicationPath(branchId, operationId),
-              "unexpected",
-              recoveryId,
-              `${String(index).padStart(6, "0")}.bin`,
-            ],
+            applicationUnexpectedPath(branchId, operationId, recoveryId, index),
             working,
             splitAndValidatePath(action.path),
             current,
             options.signal,
           );
+        }
         manualPaths.push(action.path);
         continue;
       }

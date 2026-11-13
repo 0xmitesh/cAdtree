@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  ArrowDownToLine,
   ArrowLeftRight,
   File,
   GitBranch,
@@ -12,7 +11,6 @@ import {
 import type {
   FileEntry,
   ProgressUpdate,
-  RestoreResult,
   VaultState,
 } from "../engine/types";
 import {
@@ -28,13 +26,14 @@ import {
 } from "./ApplyPreviewDialog";
 import { AppliedFrom } from "./ApplicationStatus";
 import { caseLabel } from "../engine/case-lifecycle";
+import { applyModeFor, type ApplyMode } from "../engine/apply-preview";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
 import {
   CreateBranchDialog,
   type CreateBranchParams,
 } from "./CreateBranchDialog";
-import { Modal, Notice, NotesText, OperationProgress, StatusBadge } from "./ui";
+import { Notice, NotesText, StatusBadge } from "./ui";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
 import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialog';
@@ -48,36 +47,22 @@ export interface HistoryRecoveryViewProps {
   application?: ApplicationController;
   vaultState: VaultState;
   activeBranchId: string;
-  isRestoring: boolean;
   progress: ProgressUpdate | null;
-  lastRestoreReport: {
-    result: RestoreResult;
-    destinationPath?: string;
-    recoveredFiles?: { relativeDirectory: string; paths: string[] };
-  } | null;
   statusBanner: { type: "success" | "error" | "info"; message: string } | null;
-  onRestoreFullProject: (
-    revisionId: string,
-    external?: boolean,
-  ) => Promise<void>;
-  onRestoreSelectedFiles: (
-    revisionId: string,
-    paths: string[],
-    external?: boolean,
-  ) => Promise<void>;
   onVerifySingleRevisionObjects: (revisionId: string) => Promise<void>;
   onCancelOperation: () => void;
   onGoToChanges?: () => void;
   onCreateBranch?: (params: CreateBranchParams) => Promise<void>;
   isCreatingBranch?: boolean;
   managedDestination?: string;
+  /** Absolute address of the managed project folder, when known (name hint in the create-case dialog). */
+  projectAddress?: string;
   operationsBlockedReason?: string;
   onPrepareWrite?: () => Promise<void>;
   resolveWorkingFilePath?: (
     branchId: string,
     path: string,
   ) => Promise<FilePathLocation>;
-  resolveRecoveredFilePath?: (path: string) => Promise<FilePathLocation>;
 }
 export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   return (
@@ -91,11 +76,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const {
     vaultState,
     activeBranchId,
-    isRestoring,
     progress,
-    lastRestoreReport,
-    onRestoreFullProject,
-    onRestoreSelectedFiles,
     onVerifySingleRevisionObjects,
     onCancelOperation,
   } = props;
@@ -133,19 +114,16 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const [tab, setTab] = useState<"changes" | "references" | "notes" | "technical">("changes");
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
-  const [restoreKind, setRestoreKind] = useState<"full" | "selected" | null>(
-    null,
-  );
   const [comparison, setComparison] = useState<{
     inspectedId: string;
     initialPath: string;
   } | null>(null);
   const [previewSourceId, setPreviewSourceId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<ApplyMode>("merge");
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
   const [branchSource, setBranchSource] = useState<string | null>(null);
   const [exportRevisionId, setExportRevisionId] = useState<string | null>(null);
-  const [externalRecovery, setExternalRecovery] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const prepareWrite = async (action: () => void) => {
     if (!props.onPrepareWrite) {
@@ -189,7 +167,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     setSelectedId(null);
     setContextId(null);
     setSelectedPaths(new Set());
-    setRestoreKind(null);
     setShowAll(false);
   };
   const changeHighlight = (id: string | null) => {
@@ -198,8 +175,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
       setSelectedId(null);
       setContextId(null);
       setSelectedPaths(new Set());
-      setRestoreKind(null);
-    }
+      }
   };
   const diff = useMemo(
     () => (rev ? computeRevisionDiff(rev, vaultState) : null),
@@ -210,7 +186,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     if (filePath && !graph.nodes.some((n) => n.id === id)) setContextId(id);
     setSelectedPaths(new Set(preselect ? [preselect] : []));
     setShowAll(Boolean(preselect));
-    setRestoreKind(null);
   };
   const toggle = (path: string) =>
     setSelectedPaths((prev) => {
@@ -254,10 +229,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
         ]
       : []
     : projectRows;
-  const fileCount =
-    restoreKind === "full"
-      ? (rev?.manifest.files.length ?? 0)
-      : selectedPaths.size;
+  const applyMode = rev
+    ? applyModeFor(vaultState, rev.manifest.revisionId, activeBranchId)
+    : "merge";
   const damaged =
     rev?.integrityStatus === "corrupted" ||
     selected?.warnings.some((w) => /Duplicate/.test(w));
@@ -348,67 +322,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
         </Notice>
       ))}
       {error ? <Notice type="error">{error}</Notice> : null}
-      {isRestoring ? (
-        <OperationProgress progress={progress} onCancel={onCancelOperation} />
-      ) : null}
-      {lastRestoreReport ? (
-        <Notice type="success">
-          <strong>
-            {lastRestoreReport.result.kind === "selected_files"
-              ? "Selected-file copy verified"
-              : "Complete project copy verified"}
-          </strong>{" "}
-          · {formatRevisionNumber(lastRestoreReport.result.displayNumber)} ·{" "}
-          {lastRestoreReport.result.restoredFilesCount} files in “
-          {lastRestoreReport.result.destinationName}” ·{" "}
-          {formatBytes(lastRestoreReport.result.verifiedBytes)} verified.{" "}
-          {lastRestoreReport.result.kind === "selected_files"
-            ? "This is a partial copy; CAD dependencies may be absent."
-            : ""}
-          <details>
-            <summary>Recovery report</summary>
-            <p>
-              {lastRestoreReport.result.restoredDirectoriesCount} directories ·{" "}
-              {formatTimestamp(lastRestoreReport.result.completedAt)}
-            </p>
-            {lastRestoreReport.destinationPath ? (
-              <p className="file-path">
-                Location: {lastRestoreReport.destinationPath}
-              </p>
-            ) : null}
-            {lastRestoreReport.result.selectedPaths?.map((p) => (
-              <p key={p} className="file-path">
-                {p}
-              </p>
-            ))}
-          </details>
-          {lastRestoreReport.recoveredFiles &&
-          props.resolveRecoveredFilePath ? (
-            <details className="restored-paths">
-              <summary>
-                Restored files — copy paths (
-                {lastRestoreReport.recoveredFiles.paths.length})
-              </summary>
-              {lastRestoreReport.recoveredFiles.paths.map((path) => (
-                <div className="restored-file" key={path}>
-                  <span className="file-path">{path}</span>
-                  <FilePathActions
-                    filePath={path}
-                    restored
-                    resolve={() => props.resolveRecoveredFilePath!(path)}
-                  />
-                </div>
-              ))}
-            </details>
-          ) : (
-            <p className="small">
-              A full local path is not known for this external destination.
-              Find the chosen folder in Explorer; cAdtree cannot fabricate its
-              absolute location.
-            </p>
-          )}
-        </Notice>
-      ) : null}
       {!fullGraph.nodes.length ? (
         <div className="empty-state">
           <History size={32} />
@@ -508,7 +421,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 <p className={damaged ? "integrity damaged" : "integrity"}>
                   <ShieldCheck size={14} />
                   {damaged
-                    ? "Damaged revision · recovery blocked"
+                    ? "Damaged revision · export blocked"
                     : rev.integrityStatus === "objects_verified"
                       ? "Metadata and file contents verified"
                       : "Metadata verified · contents not yet checked"}
@@ -518,12 +431,19 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 ) : null}
               </div>
               <div className="detail-preview-action">
-                <button
-                  className="button secondary revision-compare-action"
-                  onClick={() => setPreviewSourceId(rev.manifest.revisionId)}
-                >
-                  Review changes to apply
-                </button>
+                {applyMode === "latest" ? null : (
+                  <button
+                    className="button secondary revision-compare-action"
+                    onClick={() => {
+                      setPreviewMode(applyMode === "revert" ? "revert" : "merge");
+                      setPreviewSourceId(rev.manifest.revisionId);
+                    }}
+                  >
+                    {applyMode === "revert"
+                      ? `Bring back onto ${caseLabel(vaultState, activeBranchId)}…`
+                      : "Review changes to apply"}
+                  </button>
+                )}
               </div>
               <AppliedFrom
                 state={vaultState}
@@ -568,8 +488,8 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         {vaultState.branches.find(
                           (branch) => branch.branchId === rev.manifest.branchId,
                         )?.name ?? "the recorded branch"}
-                        , which may differ from this saved revision. Restore a
-                        copy for the exact historical bytes.
+                        , which may differ from this saved revision. Export this
+                        revision for the exact historical bytes.
                       </p>
                     ) : null}
                     {filePath ? (
@@ -632,7 +552,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         }}
                       >
                         {filePath
-                          ? "Select file for recovery"
+                          ? "Select file for export"
                           : "Select all snapshot files"}
                       </button>
                       <button
@@ -648,7 +568,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                           <label className="file-choice">
                             <input
                               type="checkbox"
-                              aria-label={`Select ${file.path} for recovery`}
+                              aria-label={`Select ${file.path} for export`}
                               disabled={damaged || status === "Deleted" || !componentPresent}
                               checked={selectedPaths.has(file.path)}
                               onChange={() => toggle(file.path)}
@@ -801,7 +721,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     ))}
                     <button
                       className="button secondary"
-                      disabled={verifying || isRestoring || damaged}
+                      disabled={verifying || damaged}
                       onClick={async () => {
                         setVerifying(true);
                         setError("");
@@ -841,7 +761,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       damaged ||
                       preparing ||
                       Boolean(props.operationsBlockedReason) ||
-                      isRestoring ||
                       verifying ||
                       props.isCreatingBranch ||
                       Boolean(
@@ -861,46 +780,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     <GitBranch size={16} /> Create design case from this revision
                   </button>
                 ) : null}
-                <button
-                  className="button primary"
-                  disabled={
-                    damaged ||
-                    isRestoring ||
-                    verifying ||
-                    preparing ||
-                    Boolean(props.operationsBlockedReason)
-                  }
-                  onClick={() =>
-                    void prepareWrite(() => {
-                      setExternalRecovery(false);
-                      setRestoreKind("full");
-                    })
-                  }
-                >
-                  <ArrowDownToLine size={16} />
-                  Restore project copy
-                </button>
-                <button
-                  className="button secondary"
-                  disabled={
-                    damaged ||
-                    isRestoring ||
-                    verifying ||
-                    !selectedPaths.size ||
-                    preparing ||
-                    Boolean(props.operationsBlockedReason)
-                  }
-                  onClick={() =>
-                    void prepareWrite(() => {
-                      setExternalRecovery(false);
-                      setRestoreKind("selected");
-                    })
-                  }
-                >
-                  Copy selected files ({selectedPaths.size})
-                </button>
-                {props.onExportForReview ? <button className="button secondary" disabled={damaged || isRestoring || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export for review</button> : null}
-                <p>Recovery creates a separate copy in a fresh, empty folder.</p>
+                {props.onExportForReview ? <button className="button secondary" disabled={damaged || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export for review</button> : null}
               </div>
             </aside>
           ) : null}
@@ -912,6 +792,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           application={props.application}
           state={vaultState}
           sourceId={previewSourceId}
+          mode={previewMode}
           destinationBranchId={activeBranchId}
           onClose={() => setPreviewSourceId(null)}
         />
@@ -942,98 +823,8 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
               ? `${props.managedDestination}/working`
               : undefined
           }
+          projectAddress={props.projectAddress}
         />
-      ) : null}
-      {restoreKind && rev ? (
-        <Modal
-          title={
-            restoreKind === "full"
-              ? "Restore a complete project copy"
-              : "Copy selected files"
-          }
-          onClose={() => setRestoreKind(null)}
-          busy={isRestoring}
-        >
-          <p>
-            <strong>
-              {formatRevisionNumber(rev.manifest.displayNumber)} ·{" "}
-              {rev.manifest.summary}
-            </strong>
-          </p>
-          <p>
-            {fileCount} file{fileCount === 1 ? "" : "s"} ·{" "}
-            {restoreKind === "full"
-              ? "Complete project snapshot"
-              : "Selected-file copy"}
-          </p>
-          {props.managedDestination ? (
-            <label className="recovery-external-choice">
-              <input
-                type="checkbox"
-                checked={externalRecovery}
-                onChange={(event) => setExternalRecovery(event.target.checked)}
-              />{" "}
-              Choose an external destination instead
-            </label>
-          ) : null}
-          <p className="muted">
-            {props.managedDestination && !externalRecovery ? (
-              `A fresh copy is created automatically under ${props.managedDestination}/recoveries/.`
-            ) : (
-              <>
-                Choose a fresh, empty folder outside your working folder and
-                vault. The destination is verified and existing files are never
-                overwritten.
-              </>
-            )}
-          </p>
-          {restoreKind === "selected" ? (
-            <>
-              <Notice>
-                This copy contains only selected files. It may not contain all
-                CAD assembly dependencies.
-              </Notice>
-              <details>
-                <summary>Selected paths ({selectedPaths.size})</summary>
-                {[...selectedPaths].map((p) => (
-                  <p className="file-path" key={p}>
-                    {p}
-                  </p>
-                ))}
-              </details>
-            </>
-          ) : null}
-          <div className="modal-actions">
-            <button
-              className="button secondary"
-              onClick={() => setRestoreKind(null)}
-            >
-              Cancel
-            </button>
-            <button
-              className="button primary"
-              onClick={async () => {
-                const kind = restoreKind;
-                setRestoreKind(null);
-                if (kind === "full")
-                  await onRestoreFullProject(
-                    rev.manifest.revisionId,
-                    externalRecovery,
-                  );
-                else
-                  await onRestoreSelectedFiles(
-                    rev.manifest.revisionId,
-                    [...selectedPaths],
-                    externalRecovery,
-                  );
-              }}
-            >
-              {props.managedDestination && !externalRecovery
-                ? "Restore copy"
-                : "Choose destination"}
-            </button>
-          </div>
-        </Modal>
       ) : null}
     </div>
   );

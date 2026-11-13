@@ -1,5 +1,6 @@
 import {
   checkCaseInsensitiveCollisions,
+  DirectoryEntryInfo,
   FileSystemDirectoryAdapter,
   splitAndValidatePath,
 } from './fs-adapter';
@@ -17,6 +18,81 @@ export interface EnumerateWorkingFolderResult {
   directories: string[];
   errors: ScanErrorEntry[];
   totalBytes: number;
+}
+
+/**
+ * OS-generated clutter names (Finder, Explorer). These are never CAD data, but a
+ * file that a saved revision already contains is always tracked normally.
+ */
+export function isSystemClutterName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower === '.ds_store' || lower === 'thumbs.db' || lower === 'desktop.ini';
+}
+
+/**
+ * Splits scanned files into kept files and skipped untracked OS clutter. A file is
+ * skipped only when its path is not in `expectedPaths` and it is either a clutter
+ * name or a macOS AppleDouble `._x` companion whose `x` sibling exists (scanned or
+ * expected). Anything the expected set contains is never hidden.
+ */
+export function partitionSystemFiles(
+  files: FileEntry[],
+  expectedPaths: ReadonlySet<string>
+): { files: FileEntry[]; skipped: string[] } {
+  const known = new Set<string>([...expectedPaths, ...files.map((f) => f.path)]);
+  const kept: FileEntry[] = [];
+  const skipped: string[] = [];
+  for (const file of files) {
+    if (isUntrackedSystemPath(file.path, expectedPaths, known)) {
+      skipped.push(file.path);
+    } else {
+      kept.push(file);
+    }
+  }
+  return { files: kept, skipped };
+}
+
+function isUntrackedSystemPath(
+  path: string,
+  expectedPaths: ReadonlySet<string>,
+  known: ReadonlySet<string>
+): boolean {
+  if (expectedPaths.has(path)) return false;
+  const slash = path.lastIndexOf('/');
+  const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
+  const base = path.slice(slash + 1);
+  return (
+    isSystemClutterName(base) ||
+    (base.startsWith('._') && base.length > 2 && known.has(dir + base.slice(2)))
+  );
+}
+
+/**
+ * Splits file-read errors into those for untracked OS clutter (dropped, never block
+ * a capture) and the rest. Errors for tracked paths and for directories are kept.
+ */
+export function partitionSystemErrors(
+  errors: ScanErrorEntry[],
+  scannedFiles: FileEntry[],
+  expectedPaths: ReadonlySet<string>
+): { errors: ScanErrorEntry[]; skipped: string[] } {
+  const known = new Set<string>([...expectedPaths, ...scannedFiles.map((f) => f.path)]);
+  const kept: ScanErrorEntry[] = [];
+  const skipped: string[] = [];
+  for (const e of errors) {
+    const isFileError = e.error.startsWith('Unreadable file') || e.error.startsWith('File size changed');
+    if (isFileError && isUntrackedSystemPath(e.path, expectedPaths, known)) {
+      skipped.push(e.path);
+    } else {
+      kept.push(e);
+    }
+  }
+  return { errors: kept, skipped };
+}
+
+/** True when a folder holds nothing but OS clutter files (directories never count). */
+export function isEffectivelyEmpty(entries: DirectoryEntryInfo[]): boolean {
+  return entries.every((e) => e.kind === 'file' && isSystemClutterName(e.name));
 }
 
 /**
@@ -183,7 +259,18 @@ export async function scanBranchChanges(
   }
 ): Promise<ScanResult> {
   const scannedAt = new Date().toISOString();
-  const enumerated = await enumerateWorkingFolder(workingDir, options);
+  const rawEnumerated = await enumerateWorkingFolder(workingDir, options);
+  const expectedPaths = new Set((baselineManifest?.files ?? []).map((f) => f.path));
+  const partitioned = partitionSystemFiles(rawEnumerated.files, expectedPaths);
+  const droppedErrors = partitionSystemErrors(rawEnumerated.errors, rawEnumerated.files, expectedPaths);
+  partitioned.skipped.push(...droppedErrors.skipped);
+  partitioned.skipped.sort();
+  const enumerated = {
+    ...rawEnumerated,
+    errors: droppedErrors.errors,
+    files: partitioned.files,
+    totalBytes: partitioned.files.reduce((n, f) => n + f.size, 0),
+  };
 
   const baselineFilesMap = new Map<string, FileEntry>();
   const baselineDirsSet = new Set<string>();
@@ -262,6 +349,7 @@ export async function scanBranchChanges(
     addedDirectories,
     deletedDirectories,
     errors: enumerated.errors,
+    skippedSystemFiles: partitioned.skipped,
     hasChanges: hasFileOrDirDelta,
     canCapture,
     totalBytes: enumerated.totalBytes,

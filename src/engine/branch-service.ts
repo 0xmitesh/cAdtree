@@ -1,5 +1,6 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { validateDirectoryIsolation } from "./fs-adapter";
+import { FileConflictError, validateDirectoryIsolation } from "./fs-adapter";
+import { newRecordId } from "./ids";
 import {
   assertRevisionAncestry,
   branchNameKey,
@@ -7,16 +8,18 @@ import {
   type WorkingFolderBindings,
 } from "./branch-state";
 import { withProjectWriterLock } from "./locks";
+import { folderNameFor, pickFreeName } from "./folder-names";
 import { componentWriteBlock } from './component-identity';
 import { hashString } from "./hash";
 import { restoreRevisionToFolder } from "./recovery-service";
-import { enumerateWorkingFolder } from "./scanner";
+import { enumerateWorkingFolder, partitionSystemFiles } from "./scanner";
 import {
   computeBranchRecordChecksum,
   openExistingVault,
 } from "./vault-service";
 import {
   CADTREE_SCHEMA_VERSION,
+  MAIN_BRANCH_ID,
   type BranchRecord,
   type ProgressUpdate,
   type VaultState,
@@ -32,6 +35,15 @@ export interface CreateDesignBranchOptions {
   signal?: AbortSignal;
   onProgress?: (progress: ProgressUpdate) => void;
   resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
+  /** Test seam: supplies each candidate record ID. Defaults to newRecordId(). */
+  newBranchId?: () => string;
+  /** Extra clash check for stores outside the vault (e.g. the workspace breadcrumb). Read-only. */
+  isBranchIdTaken?: (branchId: string) => Promise<boolean>;
+  /**
+   * Called under the project writer lock after the final folder name is chosen and before anything
+   * is written. Throwing here leaves nothing behind (e.g. the path budget check).
+   */
+  beforeFirstWrite?: (info: { folderName: string; sourceFiles: string[]; sourceDirectories: string[] }) => void | Promise<void>;
   beforePublish?: (branch: BranchRecord, workingDir: FileSystemDirectoryAdapter) => Promise<void>;
 }
 export class BranchCreationError extends Error {
@@ -66,6 +78,11 @@ function validateName(state: VaultState, name: string) {
   }
 }
 
+export const branchAttemptPath = (branchId: string): string[] => ["staging", `${branchId}.branch-attempt.json`];
+export const branchRecordPath = (branchId: string): string[] => ["branches", `${branchId}.branch.json`];
+export const branchReadyPath = (branchId: string): string[] => ["branches", `${branchId}.ready.json`];
+/** New cases try this many record IDs before giving up; nothing is written for a rejected ID. */
+export const MAX_BRANCH_ID_ATTEMPTS = 5;
 export async function createDesignBranch(
   options: CreateDesignBranchOptions,
 ): Promise<{
@@ -135,32 +152,58 @@ export async function createDesignBranch(
         );
       }
     }
-    const branchId = `branch-${crypto.randomUUID()}`;
-    // Readable branch names are never interpreted as filesystem paths.
-    const slug =
-      name
-        .normalize("NFKD")
-        .replace(/[^a-zA-Z0-9 -]/g, "")
-        .trim()
-        .replace(/\s+/g, "-")
-        .slice(0, 40) || "design-case";
-    const folderName = `cAdtree-${slug}-${branchId.slice(7)}`;
-    const stagingPath = ["staging", `${branchId}.branch-attempt.json`];
+    // Readable name chosen under the project writer lock, before the breadcrumb
+    // records it. "main" is reserved: Main's folder is working/main.
+    const folderName = await pickFreeName(
+      destinationParent,
+      folderNameFor(name, "Design case"),
+      { extraTaken: ["main"] },
+    );
+    await options.beforeFirstWrite?.({ folderName, sourceFiles: source.files.map((f) => f.path), sourceDirectories: source.directories });
     let workingDir: FileSystemDirectoryAdapter | undefined;
     let publicationAttempted = false;
+    let branchId = "";
+    let stagingPath: string[] = [];
     try {
       checkCancelled(signal);
-      await vaultDir.writeFileText(
-        stagingPath,
-        JSON.stringify({
-          branchId,
-          name,
-          sourceRevisionId,
-          destinationName: folderName,
-          startedAt: new Date().toISOString(),
-        }),
-        { exclusive: true },
-      );
+      // The staging attempt is the first write for a case and is exclusive, so it claims the
+      // record ID. A clash (existing case, leftover attempt, existing breadcrumb) draws a new ID
+      // before anything else is written; other cases' records are never touched.
+      for (let attempt = 1; ; attempt++) {
+        const candidate = (options.newBranchId ?? newRecordId)();
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(candidate) || candidate === MAIN_BRANCH_ID)
+          throw new Error("Invalid design case ID. Nothing was written.");
+        const known =
+          state.branches.some((b) => b.branchId === candidate) ||
+          (await vaultDir.hasFile(branchRecordPath(candidate))) ||
+          (await vaultDir.hasFile(branchReadyPath(candidate))) ||
+          (await vaultDir.hasFile(branchAttemptPath(candidate))) ||
+          (options.isBranchIdTaken ? await options.isBranchIdTaken(candidate) : false);
+        if (!known) {
+          try {
+            await vaultDir.writeFileText(
+              branchAttemptPath(candidate),
+              JSON.stringify({
+                branchId: candidate,
+                name,
+                sourceRevisionId,
+                destinationName: folderName,
+                startedAt: new Date().toISOString(),
+              }),
+              { exclusive: true },
+            );
+            branchId = candidate;
+            stagingPath = branchAttemptPath(candidate);
+            break;
+          } catch (error) {
+            if (!(error instanceof FileConflictError)) throw error;
+          }
+        }
+        if (attempt >= MAX_BRANCH_ID_ATTEMPTS)
+          throw new Error(
+            `No free design case ID after ${MAX_BRANCH_ID_ATTEMPTS} attempts. Nothing was written. Try again.`,
+          );
+      }
       workingDir = await destinationParent.getDirectory([folderName], {
         create: true,
         exclusiveCreate: true,
@@ -214,7 +257,10 @@ export async function createDesignBranch(
       const expected = source.files
         .map((f) => [f.path, f.size, f.sha256])
         .sort();
-      const actual = inventory.files
+      const actual = partitionSystemFiles(
+        inventory.files,
+        new Set(source.files.map((f) => f.path)),
+      ).files
         .map((f) => [f.path, f.size, f.sha256])
         .sort();
       if (
@@ -244,7 +290,7 @@ export async function createDesignBranch(
       };
       await options.beforePublish?.(branch, workingDir);
       checkCancelled(signal);
-      const recordPath = ["branches", `${branchId}.branch.json`];
+      const recordPath = branchRecordPath(branchId);
       const text = JSON.stringify(branch, null, 2);
       // The large record is staged and read back before a small ready marker commits it.
       let publicationWarning: string | undefined;
@@ -257,7 +303,7 @@ export async function createDesignBranch(
         throw new Error(
           "Branch record read-back verification failed. No ready marker was published.",
         );
-      const readyPath = ["branches", `${branchId}.ready.json`];
+      const readyPath = branchReadyPath(branchId);
       const readyText = JSON.stringify({
         projectId: state.project.projectId,
         branchId,

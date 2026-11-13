@@ -4,7 +4,9 @@ import {
   InMemoryFileSystemAdapter,
   type FileSystemDirectoryAdapter,
 } from "./fs-adapter";
-import { initializeProjectVault, openExistingVault } from "./vault-service";
+import { computeManifestPayloadChecksum, initializeProjectVault, openExistingVault } from "./vault-service";
+import { hashString } from "./hash";
+import { restoreRevisionToFolder } from "./recovery-service";
 import { captureRevision } from "./revision-service";
 import { createDesignBranch } from "./branch-service";
 import {
@@ -19,7 +21,12 @@ import {
   recoverApplication,
   abandonApplication,
   requestApplicationWriteAccess,
+  createEventFolder,
 } from "./application-service";
+import { createIdentityReview } from "./component-identity";
+import { getBranchBaseline } from "./branch-state";
+import { eventIdCandidate, isEventId } from "./ids";
+import { sealApplication, applicationStagedPath, applicationPlanPath } from "./application-records";
 import {
   applicationCaptureBlock,
   branchApplications,
@@ -33,6 +40,7 @@ import {
   inventorySignature,
 } from "./copy-service";
 import { scanBranchChanges } from "./scanner";
+import { prepareReviewExport, exportRevisionForReview } from "./review-export";
 import type { CaptureRevisionInput } from "./types";
 import {
   createWorkspace,
@@ -706,4 +714,668 @@ test("explicit preparation can renew a read-only folder permission; denied renew
     (await openExistingVault(f.vault)).applicationOperations!.length,
     0,
   );
+});
+
+test("a revision that tracks .DS_Store still creates a case, applies and exports with the clutter file written and verified", async () => {
+  const vault = new InMemoryFileSystemAdapter("Vault"),
+    main = new InMemoryFileSystemAdapter("Main"),
+    parent = new InMemoryFileSystemAdapter("Cases"),
+    reviews = new InMemoryFileSystemAdapter("Reviews");
+  const folders: Record<string, FileSystemDirectoryAdapter> = {
+    "branch-main": main,
+  };
+  await main.writeFileText(["Part.SLDPRT"], "geometry");
+  await initializeProjectVault(main, vault, "Clutter");
+  const first = await captureRevision(main, vault, {
+    branchId: "branch-main",
+    summary: "Base",
+    notes,
+    workingFolders: folders,
+  });
+  // Model a pre-feature vault (no component or reference evidence).
+  await vault.removeEntry(["components"], { recursive: true });
+  if (await vault.hasFile(["reference-context.json"]))
+    await vault.removeEntry(["reference-context.json"]);
+  await vault.removeEntry(["references"], { recursive: true });
+  const firstDonePath = [
+    "completed",
+    `${first.revision.manifest.revisionId}.done.json`,
+  ];
+  const firstDone = JSON.parse(await vault.readFileText(firstDonePath));
+  delete firstDone.referenceContext;
+  await vault.writeFileText(firstDonePath, JSON.stringify(firstDone, null, 2));
+  // Forge a legacy revision that already tracks `.DS_Store` (untracked clutter is
+  // otherwise skipped, so a current capture can never produce one).
+  const clutterText = "legacy finder data";
+  const clutterSha = hashString(clutterText);
+  await vault.writeFileText(getObjectPathSegments(clutterSha), clutterText);
+  const forged = {
+    ...first.revision.manifest,
+    revisionId: "legacy-clutter",
+    displayNumber: 2,
+    parentRevisionId: first.revision.manifest.revisionId,
+    files: [
+      ...first.revision.manifest.files,
+      {
+        path: ".DS_Store",
+        size: clutterText.length,
+        sha256: clutterSha,
+        lastModified: 0,
+      },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+  };
+  forged.manifestPayloadSha256 = computeManifestPayloadChecksum(forged);
+  const forgedText = JSON.stringify(forged);
+  await vault.writeFileText(
+    ["revisions", "legacy-clutter.manifest.json"],
+    forgedText,
+  );
+  const legacyCompletion: Record<string, unknown> = {
+    ...firstDone,
+  };
+  delete legacyCompletion.referenceContext;
+  await vault.writeFileText(
+    ["completed", "legacy-clutter.done.json"],
+    JSON.stringify({
+      ...legacyCompletion,
+      revisionId: "legacy-clutter",
+      displayNumber: 2,
+      manifestSha256: hashString(forgedText),
+    }),
+  );
+  const base = { revision: { manifest: forged } };
+  // d. The tracked file is absent from main's working folder: reported as deleted.
+  const mainScan = await scanBranchChanges(main, "branch-main", forged);
+  assert.deepEqual(mainScan.deleted.map((f) => f.path), [".DS_Store"]);
+
+  const created = await createDesignBranch({
+    vaultDir: vault,
+    destinationParent: parent,
+    workingFolders: folders,
+    sourceRevisionId: base.revision.manifest.revisionId,
+    name: "Clutter case",
+    reason: "Verify tracked clutter",
+  });
+  assert.equal(
+    await created.workingDir.readFileText([".DS_Store"]),
+    "legacy finder data",
+  );
+  folders[created.branch.branchId] = created.workingDir;
+  await created.workingDir.writeFileText([".DS_Store"], "edited finder data");
+  await created.workingDir.writeFileText(["Part.SLDPRT"], "case geometry");
+  const caseScan = await scanBranchChanges(
+    created.workingDir,
+    created.branch.branchId,
+    base.revision.manifest,
+  );
+  assert.deepEqual(caseScan.skippedSystemFiles, []);
+  const sourceSave = await captureRevision(created.workingDir, vault, {
+    branchId: created.branch.branchId,
+    summary: "Case edits",
+    notes,
+    workingFolders: folders,
+  });
+  assert.ok(
+    sourceSave.revision.manifest.files.some((f) => f.path === ".DS_Store"),
+  );
+
+  // Main deletes the tracked file, so applying the case must write it back.
+  const mainSave = await captureRevision(main, vault, {
+    branchId: "branch-main",
+    summary: "Main drops clutter",
+    notes,
+    workingFolders: folders,
+  });
+  assert.ok(!mainSave.revision.manifest.files.some((f) => f.path === ".DS_Store"));
+  const state = await openExistingVault(vault);
+  const prepared = prepareApplyPreview(
+    state,
+    sourceSave.revision.manifest.revisionId,
+    "branch-main",
+  );
+  if (prepared.status !== "available") throw new Error(prepared.reason);
+  const selection = Object.fromEntries(
+    prepared.context.rows
+      .filter((r) => r.kind === "available" || r.kind === "conflict")
+      .map((r) => [r.path, { selected: true, decision: "use-source" as const }]),
+  );
+  assert.ok(selection[".DS_Store"]);
+  const options = { workingFolders: folders };
+  const review = applicationReview(
+    buildApplyPreview(prepared.context, selection, "Reuse case"),
+    selection,
+  );
+  // An untracked on-disk .DS_Store at a planned path is surfaced before any write.
+  await main.writeFileText([".DS_Store"], "untracked finder data");
+  await assert.rejects(
+    prepareApplication(vault, review, options),
+    /untracked system file \.DS_Store.*remove it or save it first/,
+  );
+  assert.equal(await main.readFileText([".DS_Store"]), "untracked finder data");
+  await main.removeEntry([".DS_Store"]);
+  const op = await applyPreparedApplication(
+    vault,
+    await prepareApplication(vault, review, options),
+    options,
+  );
+  assert.equal(op.status, "applied");
+  assert.equal(await main.readFileText([".DS_Store"]), "edited finder data");
+
+  const plan = prepareReviewExport(
+    await openExistingVault(vault),
+    sourceSave.revision.manifest.revisionId,
+    { kind: "complete", selectedPaths: [], labelFilenames: false },
+  );
+  const exported = await exportRevisionForReview({
+    vaultDir: vault,
+    parent: reviews,
+    plan,
+    folderName: plan.folderName,
+    workingFolders: folders,
+  });
+  const out = await reviews.getDirectory([exported.folderName]);
+  assert.equal(await out.readFileText([".DS_Store"]), "edited finder data");
+});
+
+test("recovery tolerates an existing root .DS_Store in an otherwise empty destination, writing the saved bytes over it", async () => {
+  const vault = new InMemoryFileSystemAdapter("Vault"),
+    main = new InMemoryFileSystemAdapter("Main"),
+    root = new InMemoryFileSystemAdapter("Root");
+  await main.writeFileText(["Part.SLDPRT"], "geometry");
+  await initializeProjectVault(main, vault, "Recover clutter");
+  const first = await captureRevision(main, vault, {
+    branchId: "branch-main",
+    summary: "Base",
+    notes,
+    workingFolders: { "branch-main": main },
+  });
+  await vault.removeEntry(["components"], { recursive: true });
+  if (await vault.hasFile(["reference-context.json"]))
+    await vault.removeEntry(["reference-context.json"]);
+  await vault.removeEntry(["references"], { recursive: true });
+  const donePath = ["completed", `${first.revision.manifest.revisionId}.done.json`];
+  const done = JSON.parse(await vault.readFileText(donePath));
+  delete done.referenceContext;
+  await vault.writeFileText(donePath, JSON.stringify(done, null, 2));
+  const text = "saved finder data";
+  await vault.writeFileText(getObjectPathSegments(hashString(text)), text);
+  const forged = {
+    ...first.revision.manifest,
+    revisionId: "legacy-clutter",
+    displayNumber: 2,
+    parentRevisionId: first.revision.manifest.revisionId,
+    files: [
+      ...first.revision.manifest.files,
+      { path: ".DS_Store", size: text.length, sha256: hashString(text), lastModified: 0 },
+      { path: "sub/.DS_Store", size: text.length, sha256: hashString(text), lastModified: 0 },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+    directories: ["sub"],
+  };
+  forged.manifestPayloadSha256 = computeManifestPayloadChecksum(forged);
+  const forgedText = JSON.stringify(forged);
+  await vault.writeFileText(["revisions", "legacy-clutter.manifest.json"], forgedText);
+  await vault.writeFileText(
+    ["completed", "legacy-clutter.done.json"],
+    JSON.stringify({ ...done, revisionId: "legacy-clutter", displayNumber: 2, manifestSha256: hashString(forgedText) }),
+  );
+  const dest = await root.getDirectory(["dest"], { create: true });
+  await dest.writeFileText([".DS_Store"], "finder junk");
+  await restoreRevisionToFolder({
+    vaultDir: vault,
+    destinationDir: dest,
+    workingDir: main,
+    revisionId: "legacy-clutter",
+  });
+  assert.equal(await dest.readFileText([".DS_Store"]), text);
+  assert.equal(await dest.readFileText(["sub", ".DS_Store"]), text);
+  // Nested paths stay exclusive: a pre-existing nested clutter file is a conflict.
+  const dest2 = await root.getDirectory(["dest2"], { create: true });
+  await dest2.writeFileText(["sub", ".DS_Store"], "junk");
+  await assert.rejects(
+    restoreRevisionToFolder({ vaultDir: vault, destinationDir: dest2, workingDir: main, revisionId: "legacy-clutter" }),
+    /not empty/,
+  );
+});
+
+test("copyVerifiedTree overwrites only a root clutter file already listed in the destination", async () => {
+  const src = new InMemoryFileSystemAdapter("Src"),
+    dst = new InMemoryFileSystemAdapter("Dst");
+  await src.writeFileText([".DS_Store"], "source finder");
+  await src.writeFileText(["sub", ".DS_Store"], "nested finder");
+  await src.writeFileText(["a.txt"], "a");
+  await dst.writeFileText([".DS_Store"], "junk");
+  await copyVerifiedTree(src, dst);
+  assert.equal(await dst.readFileText([".DS_Store"]), "source finder");
+  assert.equal(await dst.readFileText(["sub", ".DS_Store"]), "nested finder");
+});
+
+const FIXED = new Date(Date.UTC(2026, 10, 10, 12, 0, 0));
+const BASE_ID = "20261110-120000";
+const fixedNow = () => new Date(FIXED);
+const interruptAtEvent = (f: Awaited<ReturnType<typeof fixture>>, file: string) =>
+  f.vault.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.includes("/events/") && path.endsWith(file))
+        throw new Error("injected interruption");
+    },
+  });
+const unexpectedDirs = async (f: Awaited<ReturnType<typeof fixture>>, rel: string) => {
+  const dir = await f.vault.getDirectory(rel.split("/"));
+  if (!(await dir.listEntries()).some((e) => e.name === "unexpected")) return [];
+  return (await (await dir.getDirectory(["unexpected"])).listEntries()).map((e) => e.name);
+};
+
+test("a new apply is stored under a short event ID and completes with plan and events intact", async () => {
+  const f = await fixture();
+  const op = await f.apply();
+  assert.equal(op.status, "applied");
+  assert.ok(isEventId(op.operationId), op.operationId);
+  assert.equal(op.relativePath, `applications/branch-main/${op.operationId}`);
+  assert.equal(op.record!.operationId, op.operationId);
+  const listed = await f.op();
+  assert.equal(listed.operationId, op.operationId);
+  assert.equal(listed.status, "applied");
+  assert.deepEqual(listed.events.map((e) => e.kind).at(-1), "applied");
+  assert.ok(listed.record!.plan.actions.length > 0);
+});
+
+test("two applies in the same second get the base ID and -2; recovery without unexpected bytes creates no unexpected folder", async () => {
+  const f = await fixture();
+  const options = { ...f.options, now: fixedNow };
+  interruptAtEvent(f, "000002.json");
+  await assert.rejects(
+    applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options),
+    /injected/,
+  );
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  const first = await f.op();
+  assert.equal(first.operationId, BASE_ID);
+  const recovered = await recoverApplication(f.vault, first.record!.plan.projectId, "branch-main", first.operationId, options);
+  assert.deepEqual(recovered.manualPaths, []);
+  assert.deepEqual(await unexpectedDirs(f, first.relativePath), []);
+  const second = await applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options);
+  assert.equal(second.operationId, `${BASE_ID}-2`);
+  assert.equal(second.status, "applied");
+  const ids = branchApplications(await openExistingVault(f.vault), "branch-main").map((o) => o.operationId).sort();
+  assert.deepEqual(ids, [BASE_ID, `${BASE_ID}-2`]);
+});
+
+test("unexpected bytes are staged under unexpected/<eventId>; a second recovery in the same second gets -2", async () => {
+  const f = await fixture();
+  const options = { ...f.options, now: fixedNow };
+  interruptAtEvent(f, "000004.json");
+  await assert.rejects(
+    applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options),
+    /injected/,
+  );
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  await f.main.writeFileText(part.split("/"), "unexpected later CAD edit");
+  const op = await f.op();
+  const projectId = op.record!.plan.projectId;
+  for (const expected of [[BASE_ID], [BASE_ID, `${BASE_ID}-2`]]) {
+    const result = await recoverApplication(f.vault, projectId, "branch-main", op.operationId, options);
+    assert.deepEqual(result.manualPaths, [part]);
+    assert.deepEqual((await unexpectedDirs(f, op.relativePath)).sort(), expected);
+  }
+  const folder = await f.vault.getDirectory([...op.relativePath.split("/"), "unexpected", BASE_ID]);
+  const entries = await folder.listEntries();
+  assert.equal(entries.length, 1);
+  assert.match(entries[0].name, /^\d{6}\.bin$/);
+  assert.equal((await f.op()).status, "unresolved");
+  assert.equal(await f.main.readFileText(part.split("/")), "unexpected later CAD edit");
+});
+
+test("old apply-<uuid> operations with recovery-<uuid> evidence still list, recover and report beside new event-ID operations", async () => {
+  const f = await fixture();
+  // A new-format interrupted operation provides a valid plan to re-seal under the old shape.
+  interruptAtEvent(f, "000004.json");
+  await assert.rejects(f.apply(), /injected/);
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  const modern = await f.op();
+  assert.ok(isEventId(modern.operationId));
+  const legacyId = "apply-123e4567-e89b-42d3-a456-426614174000";
+  const { checksum: _drop, ...body } = modern.record!;
+  void _drop;
+  const legacyRecord = sealApplication({ ...body, operationId: legacyId });
+  const legacyPath = ["applications", "branch-main", legacyId];
+  await f.vault.writeFileText([...legacyPath, "plan.json"], JSON.stringify(legacyRecord, null, 2), { exclusive: true });
+  const oldEvidence = ["unexpected", "recovery-123e4567-e89b-42d3-a456-426614174001", "000001.bin"];
+  await f.vault.writeFileText([...legacyPath, ...oldEvidence], "old evidence", { exclusive: true });
+  await f.main.writeFileText(part.split("/"), "unexpected later CAD edit");
+
+  const listed = branchApplications(await openExistingVault(f.vault), "branch-main");
+  const legacy = listed.find((o) => o.operationId === legacyId)!;
+  assert.equal(legacy.status, "unresolved");
+  assert.equal(legacy.relativePath, `applications/branch-main/${legacyId}`);
+  assert.equal(listed.find((o) => o.operationId === modern.operationId)!.status, "unresolved");
+  assert.equal(listed.length, 2);
+
+  const options = { ...f.options, now: fixedNow };
+  const result = await recoverApplication(f.vault, modern.record!.plan.projectId, "branch-main", legacyId, options);
+  assert.deepEqual(result.manualPaths, [part]);
+  assert.deepEqual((await unexpectedDirs(f, legacy.relativePath)).sort(), [BASE_ID, "recovery-123e4567-e89b-42d3-a456-426614174001"].sort());
+  const evidence = await readVerifiedInventory(await f.vault.getDirectory(legacyPath));
+  assert.ok(evidence.files.some((e) => e.path === `unexpected/recovery-123e4567-e89b-42d3-a456-426614174001/000001.bin`));
+  assert.equal(listed.find((o) => o.operationId === modern.operationId)!.status, "unresolved");
+});
+
+test("event folder allocation is conservative: clashes move on, other errors pass through, exhaustion writes nothing", async () => {
+  const vault = new InMemoryFileSystemAdapter("Alloc");
+  for (let attempt = 1; attempt <= 999; attempt++)
+    await vault.getDirectory(["p", eventIdCandidate(BASE_ID, attempt)], { create: true });
+  const before = (await (await vault.getDirectory(["p"])).listEntries()).length;
+  await assert.rejects(
+    createEventFolder(vault, fixedNow, (id) => ["p", id], "application"),
+    /No free application ID/,
+  );
+  assert.equal((await (await vault.getDirectory(["p"])).listEntries()).length, before);
+  const broken = {
+    getDirectory: async () => {
+      throw new Error("disk exploded");
+    },
+  } as unknown as FileSystemDirectoryAdapter;
+  await assert.rejects(createEventFolder(broken, fixedNow, (id) => ["p", id], "application"), /disk exploded/);
+  assert.equal(await createEventFolder(vault, fixedNow, (id) => ["q", id], "application"), BASE_ID);
+});
+
+// ---- Revert mode: bring an older revision back onto its own branch ----
+async function revertFixture() {
+  const vault = new InMemoryFileSystemAdapter("RVault"),
+    main = new InMemoryFileSystemAdapter("RMain");
+  const folders: Record<string, FileSystemDirectoryAdapter> = { "branch-main": main };
+  const w = (p: string, t: string) => main.writeFileText(p.split("/"), t);
+  await w("A.txt", "a1");
+  await w("D.txt", "d1");
+  await w("Keep.txt", "keep");
+  await w("X.txt", "x1");
+  await initializeProjectVault(main, vault, "Revert test");
+  const save = (summary: string, extra: Partial<CaptureRevisionInput> = {}) =>
+    captureRevision(main, vault, {
+      branchId: "branch-main",
+      summary,
+      notes,
+      workingFolders: folders,
+      ...extra,
+    });
+  const r1 = await save("R1");
+  await w("A.txt", "a2");
+  await w("N.txt", "added later");
+  const r2 = await save("R2");
+  await main.removeEntry(["D.txt"]);
+  await w("A.txt", "a3");
+  const r3 = await save("R3");
+  const ids = {
+    r1: r1.revision.manifest.revisionId,
+    r2: r2.revision.manifest.revisionId,
+    r3: r3.revision.manifest.revisionId,
+  };
+  const options = { workingFolders: folders };
+  const prepareRows = async (sourceId: string, mode?: "merge" | "revert") => {
+    const state = await openExistingVault(vault);
+    return prepareApplyPreview(state, sourceId, "branch-main", mode);
+  };
+  const review = async (
+    sourceId: string,
+    only?: string[],
+  ): Promise<ApplicationReview> => {
+    const prepared = await prepareRows(sourceId, "revert");
+    if (prepared.status !== "available") throw new Error(prepared.reason);
+    const selection = Object.fromEntries(
+      prepared.context.rows
+        .filter((r) => r.kind === "available" || r.kind === "conflict")
+        .filter((r) => !only || only.includes(r.path))
+        .map((r) => [r.path, { selected: true, decision: "use-source" as const }]),
+    );
+    return applicationReview(
+      buildApplyPreview(prepared.context, selection, "Bring back R1"),
+      selection,
+    );
+  };
+  return { vault, main, folders, options, ids, save, w, prepareRows, review };
+}
+const rowMap = (p: Awaited<ReturnType<typeof prepareApplyPreview>>) => {
+  if (p.status !== "available") throw new Error(p.reason);
+  return Object.fromEntries(p.context.rows.map((r) => [r.path, r]));
+};
+
+test("revert preview: older revision gives replace/delete/add rows, all available; merge mode and the latest revision are rejected", async () => {
+  const f = await revertFixture();
+  const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
+  assert.equal(rows["A.txt"].kind, "available");
+  assert.equal(rows["N.txt"].kind, "available");
+  assert.equal(rows["D.txt"].kind, "available");
+  assert.equal(rows["Keep.txt"].kind, "no-source-change");
+  const plan = buildApplyPreview(
+    (await f.prepareRows(f.ids.r1, "revert") as any).context,
+    Object.fromEntries(
+      ["A.txt", "N.txt", "D.txt"].map((p) => [p, { selected: true, decision: "use-source" as const }]),
+    ),
+    "Bring back R1",
+  );
+  assert.equal(plan.mode, "revert");
+  assert.equal(plan.baseRevisionId, f.ids.r3);
+  assert.deepEqual(
+    plan.actions.map((a) => [a.path, a.operation]),
+    [["A.txt", "replace"], ["D.txt", "add"], ["N.txt", "delete"]],
+  );
+  const merge = await f.prepareRows(f.ids.r1);
+  assert.equal(merge.status, "unavailable");
+  assert.match((merge as any).reason, /earlier revision in this branch.s history.*Bring back/);
+  for (const mode of ["merge", "revert"] as const) {
+    const latest = await f.prepareRows(f.ids.r3, mode);
+    assert.equal(latest.status, "unavailable");
+    assert.match((latest as any).reason, /already the latest saved revision/);
+  }
+});
+
+test("revert is rejected for a revision that is not an ancestor (case revision)", async () => {
+  const f = await revertFixture();
+  const parent = new InMemoryFileSystemAdapter("RCases");
+  const created = await createDesignBranch({
+    vaultDir: f.vault,
+    destinationParent: parent,
+    workingFolders: f.folders,
+    sourceRevisionId: f.ids.r1,
+    name: "Side case",
+    reason: "Alt",
+  });
+  const folders = { ...f.folders, [created.branch.branchId]: created.workingDir };
+  await created.workingDir.writeFileText(["A.txt"], "case a");
+  const saved = await captureRevision(created.workingDir, f.vault, {
+    branchId: created.branch.branchId,
+    summary: "Case change",
+    notes,
+    workingFolders: folders,
+  });
+  const caseId = saved.revision.manifest.revisionId;
+  const revert = await f.prepareRows(caseId, "revert");
+  assert.equal(revert.status, "unavailable");
+  assert.match((revert as any).reason, /not an earlier revision in this branch.s history/);
+  assert.equal((await f.prepareRows(caseId, "merge")).status, "available");
+});
+
+test("revert all: working folder equals R1, before/ evidence holds Main's previous bytes, nothing else changes", async () => {
+  const f = await revertFixture();
+  const state = await openExistingVault(f.vault);
+  const r1 = state.revisions.find((r) => r.manifest.revisionId === f.ids.r1)!;
+  const expected = new Map(r1.manifest.files.map((x) => [x.path, x.sha256]));
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1), f.options);
+  const op = await applyPreparedApplication(f.vault, prepared, f.options);
+  assert.equal(op.status, "applied");
+  assert.equal(op.record!.plan.mode, "revert");
+  const inv = await readVerifiedInventory(f.main);
+  assert.deepEqual(
+    inv.files.map((x) => [x.path, x.sha256]).sort(),
+    [...expected].sort(),
+  );
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal(await f.main.readFileText(["D.txt"]), "d1");
+  assert.equal(await f.main.hasFile(["N.txt"]), false);
+  const before = await vaultBeforeTexts(f.vault, op);
+  assert.deepEqual(before.sort(), ["a3", "added later"].sort());
+  const stored = JSON.parse(
+    await f.vault.readFileText(applicationPlanPath("branch-main", op.operationId)),
+  );
+  assert.equal(stored.plan.mode, "revert");
+  assert.equal(stored.review.mode, "revert");
+});
+async function vaultBeforeTexts(
+  vault: FileSystemDirectoryAdapter,
+  op: { operationId: string; record?: { plan: { actions: unknown[] } } },
+) {
+  const out: string[] = [];
+  for (let i = 0; i < op.record!.plan.actions.length; i++) {
+    const path = applicationStagedPath("branch-main", op.operationId, "before", i);
+    if (await vault.hasFile(path)) out.push(await vault.readFileText(path));
+  }
+  return out;
+}
+
+test("revert with only the deleted file selected brings back just that file", async () => {
+  const f = await revertFixture();
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["D.txt"]), f.options);
+  await applyPreparedApplication(f.vault, prepared, f.options);
+  assert.equal(await f.main.readFileText(["D.txt"]), "d1");
+  assert.equal(await f.main.readFileText(["A.txt"]), "a3");
+  assert.equal(await f.main.readFileText(["N.txt"]), "added later");
+});
+
+test("revert is blocked by unsaved working changes, like apply", async () => {
+  const f = await revertFixture();
+  await f.w("A.txt", "unsaved edit");
+  await assert.rejects(
+    prepareApplication(f.vault, await f.review(f.ids.r1), f.options),
+    /uncaptured/,
+  );
+  assert.equal(await f.main.readFileText(["A.txt"]), "unsaved edit");
+});
+
+test("tampered or missing mode: review/plan disagreement is rejected; records without mode read as merge", async () => {
+  const f = await revertFixture();
+  const review = await f.review(f.ids.r1);
+  await assert.rejects(
+    prepareApplication(f.vault, { ...review, mode: "merge" }, f.options),
+    /earlier revision|changed|Bring back/,
+  );
+  const prepared = await prepareApplication(f.vault, review, f.options);
+  const op = await applyPreparedApplication(f.vault, prepared, f.options);
+  const { checksum: _c, ...body } = op.record!;
+  void _c;
+  const plant = async (id: string, record: object) => {
+    await f.vault.writeFileText(
+      ["applications", "branch-main", id, "plan.json"],
+      JSON.stringify(sealApplication({ ...record, operationId: id } as any), null, 2),
+      { exclusive: true },
+    );
+    return branchApplications(await openExistingVault(f.vault), "branch-main").find(
+      (o) => o.operationId === id,
+    )!;
+  };
+  // review says merge, plan says revert: the record is not trusted.
+  const bad = await plant("20990101-000001", {
+    ...body,
+    review: { ...body.review, mode: "merge" },
+  });
+  assert.equal(bad.record, undefined);
+  // a revert plan whose base is not the destination baseline is rejected.
+  const badBase = await plant("20990101-000004", {
+    ...body,
+    plan: { ...body.plan, baseRevisionId: body.plan.sourceRevisionId },
+  });
+  assert.equal(badBase.record, undefined);
+  // plan says merge, review says revert: also rejected.
+  const bad2 = await plant("20990101-000002", {
+    ...body,
+    plan: { ...body.plan, mode: "merge" },
+  });
+  assert.equal(bad2.record, undefined);
+  // neither has a mode: an older record, read as merge.
+  const { mode: _m1, ...reviewNoMode } = body.review;
+  const { mode: _m2, ...planNoMode } = body.plan;
+  void _m1;
+  void _m2;
+  const legacy = await plant("20990101-000003", {
+    ...body,
+    review: reviewNoMode,
+    plan: planNoMode,
+  });
+  assert.ok(legacy.record);
+  assert.equal(legacy.status, "unresolved");
+  assert.equal((legacy.record!.review.mode ?? "merge"), "merge");
+});
+
+test("interrupted revert recovers through the existing recovery path", async () => {
+  const f = await revertFixture();
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1), f.options);
+  const before = await inventory(f.main);
+  let interrupted = false;
+  f.vault.setHooks({
+    onBeforeWrite: async (path) => {
+      if (interrupted || !path.includes("/events/") || !path.endsWith("000004.json")) return;
+      interrupted = true;
+      throw new Error("injected revert");
+    },
+  });
+  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected/);
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  const state = await openExistingVault(f.vault);
+  const op = branchApplications(state, "branch-main").at(-1)!;
+  assert.equal(op.status, "unresolved");
+  const recovery = await recoverApplication(f.vault, op.record!.plan.projectId, "branch-main", op.operationId, f.options);
+  assert.deepEqual(recovery.manualPaths, []);
+  assert.equal(await inventory(f.main), before);
+});
+
+test("confirmed rename since the revision blocks both rename rows with revert wording; other rows still apply", async () => {
+  const f = await revertFixture();
+  await f.main.removeEntry(["X.txt"]);
+  await f.w("Y.txt", "x1");
+  const state0 = await openExistingVault(f.vault);
+  const scan = await scanBranchChanges(f.main, "branch-main", getBranchBaseline(state0, "branch-main"));
+  const idReview = createIdentityReview(state0, scan, [{ from: "X.txt", to: "Y.txt" }], []);
+  const r4 = await f.save("Rename X to Y", {
+    identityReview: idReview,
+    reviewedChangesSignature: scan.changesSignature,
+  });
+  void r4;
+  const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
+  for (const p of ["X.txt", "Y.txt"]) {
+    assert.match(rows[p].identityBlock ?? "", /renamed since that revision.*cannot undo renames/);
+  }
+  assert.equal(rows["A.txt"].identityBlock, undefined);
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["A.txt", "D.txt"]), f.options);
+  await applyPreparedApplication(f.vault, prepared, f.options);
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal(await f.main.readFileText(["Y.txt"]), "x1");
+});
+
+test("bringing back a deleted file then saving keeps its original componentId and identity stays available", async () => {
+  const f = await revertFixture();
+  const stateBefore = await openExistingVault(f.vault);
+  const idIn = (s: typeof stateBefore, rev: string, p: string) =>
+    s.components?.revisions[rev]?.files.find((x) => x.path === p)?.componentId;
+  const original = idIn(stateBefore, f.ids.r1, "D.txt");
+  assert.ok(original);
+  assert.equal(idIn(stateBefore, f.ids.r3, "D.txt"), undefined);
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["D.txt"]), f.options);
+  await applyPreparedApplication(f.vault, prepared, f.options);
+  const saved = await f.save("Bring back D");
+  const after = await openExistingVault(f.vault);
+  assert.equal(after.components?.status, "available");
+  assert.equal(idIn(after, saved.revision.manifest.revisionId, "D.txt"), original);
+  assert.equal((await openExistingVault(f.vault)).applicationOperations!.at(-1)!.status, "captured");
+});
+
+test("revert row stays blocked when a different component now occupies the path; other rows still apply", async () => {
+  const f = await revertFixture();
+  await f.w("D.txt", "a brand new D");
+  await f.save("New D, new component");
+  const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
+  assert.match(rows["D.txt"].identityBlock ?? "", /Different components occupy this path/);
+  assert.equal(rows["A.txt"].identityBlock, undefined);
+  assert.equal(rows["A.txt"].kind, "available");
+  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["A.txt"]), f.options);
+  await applyPreparedApplication(f.vault, prepared, f.options);
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal(await f.main.readFileText(["D.txt"]), "a brand new D");
 });

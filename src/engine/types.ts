@@ -95,6 +95,8 @@ export interface ScanResult {
   addedDirectories: string[];
   deletedDirectories: string[];
   errors: ScanErrorEntry[];
+  /** Untracked OS-generated files left out of this scan (e.g. .DS_Store). */
+  skippedSystemFiles?: string[];
   hasChanges: boolean;
   canCapture: boolean;
   totalBytes: number;
@@ -141,6 +143,8 @@ export interface IncompleteAttemptRecord {
 }
 
 export interface VaultState {
+  /** Independent append-only knowledge store. Failures never enter CAD recovery diagnostics. */
+  knowledge?: import('../knowledge/records/types').PersistedKnowledgeEvidence;
   references?: import('./references').ReferenceEvidence;
   components?: import('./component-identity').ComponentEvidence;
   /** Reconstructed endpoint identities only; absence means the saved head is unavailable.
@@ -180,6 +184,8 @@ export interface ProgressUpdate {
 }
 
 export interface CaptureRevisionInput {
+  /** Test seam: supplies each candidate revision record ID. Defaults to newRecordId(). */
+  newRevisionId?: () => string;
   referenceAttachments?: import('./references').PendingReferenceAttachment[];
   referenceAuthor?: import('./references').ReferenceAuthor;
   onReferenceAttachmentsStored?: (review: import('./references').ReferenceReview, state: VaultState) => void;
@@ -197,10 +203,9 @@ export interface CaptureRevisionInput {
 }
 
 export interface RestoreResult {
-  kind: 'full_project' | 'selected_files';
+  kind: 'full_project';
   revisionId: string;
   displayNumber: number;
-  selectedPaths?: string[];
   restoredFilesCount: number;
   restoredDirectoriesCount: number;
   verifiedBytes: number;

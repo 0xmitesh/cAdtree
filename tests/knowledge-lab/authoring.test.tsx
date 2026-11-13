@@ -1,0 +1,222 @@
+import '../dom';
+import test, { afterEach } from 'node:test';
+import assert from 'node:assert/strict';
+import { render, cleanup, fireEvent, within, waitFor, act, type RenderResult } from '@testing-library/react';
+import { KnowledgeExplorer } from './explorer';
+import { disposableAuthoringFixture } from './authoring-fixture';
+import { nativeDirectory } from '../native-fs';
+import { openExistingVault } from '../../src/engine/vault-service';
+import { createKnowledgeRecord, createKnowledgeSchemaRegistry, type JsonObject } from '../../src/knowledge/records';
+import { canonicalJson } from '../../src/knowledge/records/json';
+import { inventorySignature, readVerifiedInventory } from '../../src/engine/copy-service';
+
+afterEach(() => { cleanup(); Reflect.deleteProperty(window, 'showDirectoryPicker'); });
+
+async function selectTestVault(ui: RenderResult, fixture: Awaited<ReturnType<typeof disposableAuthoringFixture>>, handle = nativeDirectory(fixture.container)) {
+  Object.assign(window, { showDirectoryPicker: async (options: { mode: string }) => {
+    assert.equal(options.mode, 'read', 'selecting either inspection or test vault never requests writes'); return handle;
+  } });
+  fireEvent.click(ui.getByRole('button', { name: 'Select disposable test vault' }));
+  await ui.findByRole('region', { name: 'Knowledge authoring' });
+}
+
+async function enableWrites(ui: RenderResult) {
+  fireEvent.click(ui.getByLabelText('I confirm this selected vault is a disposable test copy.'));
+  fireEvent.click(ui.getByRole('button', { name: 'Enable writes to this test vault' }));
+  await ui.findByText('Writes enabled for this selected disposable vault only.');
+}
+
+function choose(ui: RenderResult, label: string, text: RegExp) {
+  const select = ui.getByLabelText(label);
+  const option = within(select).getAllByRole('option').find(o => text.test(o.textContent ?? '')) as HTMLOptionElement | undefined;
+  assert.ok(option, `Expected a verified ${label} option`);
+  fireEvent.change(select, { target: { value: option.value } });
+}
+
+test('CAD form selects verified identities, persists original content and reconstructs identical records after close/reopen', async () => {
+  const f = await disposableAuthoringFixture();
+  const working = inventorySignature(await readVerifiedInventory(f.working));
+  const writes: string[] = [];
+  f.container.setHooks({ onBeforeWrite: path => { writes.push(path); } });
+  f.working.setHooks({ onBeforeWrite: () => { throw new Error('Working CAD writes forbidden'); } });
+  const ui = render(<KnowledgeExplorer />);
+  await selectTestVault(ui, f);
+  assert.ok((ui.getByRole('button', { name: 'Create immutable record' }).closest('fieldset') as HTMLFieldSetElement).disabled);
+  fireEvent.submit(ui.getByRole('form', { name: 'New knowledge record' }));
+  assert.equal(writes.length, 0);
+  await enableWrites(ui);
+  fireEvent.change(ui.getByLabelText('Problem statement'), { target: { value: '  Collar bends.\nOriginal text. ' } });
+  fireEvent.change(ui.getByLabelText('Change description'), { target: { value: 'Increase thickness' } });
+  fireEvent.change(ui.getByLabelText('Engineering rationale'), { target: { value: 'Reduce bending; not validated.' } });
+  fireEvent.change(ui.getByLabelText('Change status'), { target: { value: 'implemented' } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add property change' }));
+  for (const [key, value] of [['property', 'thickness'], ['before', '6'], ['after', '8'], ['unit', 'mm']]) fireEvent.change(ui.getByLabelText(`Property 1 ${key}`), { target: { value } });
+  fireEvent.change(ui.getByLabelText('Assumptions (optional)'), { target: { value: '  Axial\nload ' } });
+  choose(ui, 'Relationship revision', /R01/);
+  choose(ui, 'Historical component', /collar\.SLDPRT/);
+  choose(ui, 'Captured reference association', /synthetic-requirement\.pdf/);
+  fireEvent.change(ui.getByLabelText('Reference relationship'), { target: { value: 'evidence' } });
+  fireEvent.submit(ui.getByRole('form', { name: 'New knowledge record' }));
+  await ui.findByText('· Just saved and reconstructed');
+  const saved = (await openExistingVault(f.vault)).knowledge!.records[0];
+  assert.ok(within(ui.getByRole('region', { name: 'Knowledge retrieval' })).getByRole('article', { name: `Retrieved record ${saved.record.recordId}` }), 'newly reconstructed CAD record is immediately retrievable');
+  assert.equal(saved.record.payload.problem, '  Collar bends.\nOriginal text. ');
+  assert.deepEqual(saved.record.payload.propertyChanges, [{ property: 'thickness', before: 6, after: 8, unit: 'mm' }]);
+  assert.deepEqual(saved.record.payload.assumptions, ['  Axial\nload ']);
+  assert.equal(saved.record.relationships.length, 3);
+  const component = saved.record.relationships.find(r => r.target.kind === 'component')!;
+  assert.equal(component.target.kind, 'component');
+  if (component.target.kind === 'component') assert.equal(component.target.componentId, f.state.components!.revisions[f.state.revisions[0].manifest.revisionId].files[0].componentId);
+  const reference = saved.record.relationships.find(r => r.target.kind === 'reference-version')!;
+  assert.equal(reference.relation, 'evidence');
+  if (reference.binding.kind === 'reference-version') assert.equal(reference.binding.association.locator, 'Page 4, figure 3');
+  const inspector = within(ui.getByRole('article', { name: `Persisted record ${saved.record.recordId}` }));
+  assert.ok(inspector.getByText('Checksum verified'));
+  assert.ok(inspector.getByText('Not independently validated'));
+  const canonical = ui.getByRole('article', { name: `Persisted record ${saved.record.recordId}` }).querySelector('.kl-canonical')!.textContent;
+  assert.equal(canonical, await f.vault.readFileText(saved.source.recordPath.split('/')));
+  assert.equal(canonical, canonicalJson(saved.record));
+  assert.ok(writes.length > 0 && writes.every(path => path.includes('/vault/knowledge/')));
+  fireEvent.click(ui.getByRole('button', { name: 'Close project' }));
+  assert.equal(ui.queryByRole('region', { name: 'Knowledge authoring' }), null);
+  fireEvent.click(ui.getByRole('button', { name: 'Open local project vault' }));
+  await ui.findByRole('article', { name: `Persisted record ${saved.record.recordId}` });
+  assert.equal(ui.queryByRole('region', { name: 'Knowledge authoring' }), null, 'ordinary inspection cannot enable authoring');
+  assert.ok(ui.getByText('Read-only', { exact: true }));
+  assert.deepEqual((await openExistingVault(f.vault)).knowledge!.records, [saved]);
+  assert.equal(inventorySignature(await readVerifiedInventory(f.working)), working);
+});
+
+test('generic form validates input, links an accepted record and reloads actual persisted data', async () => {
+  const f = await disposableAuthoringFixture();
+  const previous = await createKnowledgeRecord(f.vault, { projectId: f.state.project.projectId, recordType: 'generic.observation', schemaVersion: 1, payload: { description: 'Earlier accepted observation' }, relationships: [], provenance: { kind: 'user-entered' } });
+  let writes = 0;
+  f.container.setHooks({ onBeforeWrite: () => { writes++; } });
+  const ui = render(<KnowledgeExplorer />);
+  await selectTestVault(ui, f); await enableWrites(ui);
+  fireEvent.change(ui.getByLabelText('Knowledge schema'), { target: { value: 'generic.observation' } });
+  fireEvent.change(ui.getByLabelText('Observation description'), { target: { value: '  Packaging check\n' } });
+  fireEvent.change(ui.getByLabelText('Attributes (JSON object, optional)'), { target: { value: '{broken' } });
+  fireEvent.submit(ui.getByRole('form', { name: 'New knowledge record' }));
+  await ui.findByRole('alert');
+  assert.match(ui.getByRole('alert').textContent!, /valid JSON/);
+  assert.equal(writes, 0);
+  fireEvent.change(ui.getByLabelText('Attributes (JSON object, optional)'), { target: { value: '[]' } });
+  fireEvent.submit(ui.getByRole('form', { name: 'New knowledge record' }));
+  await waitFor(() => assert.match(ui.getByRole('alert').textContent!, /Invalid payload/));
+  assert.equal(writes, 0);
+  fireEvent.change(ui.getByLabelText('Attributes (JSON object, optional)'), { target: { value: '{"count":12,"unit":"box"}' } });
+  choose(ui, 'Accepted knowledge record', new RegExp(previous.record.recordId));
+  fireEvent.submit(ui.getByRole('form', { name: 'New knowledge record' }));
+  await ui.findByText('· Just saved and reconstructed');
+  const saved = (await openExistingVault(f.vault)).knowledge!.records.find(r => r.record.recordId !== previous.record.recordId)!;
+  assert.ok(within(ui.getByRole('region', { name: 'Knowledge retrieval' })).getByRole('article', { name: `Retrieved record ${saved.record.recordId}` }), 'generic authoring refreshes the same read-only retrieval view');
+  assert.deepEqual(saved.record.payload, { description: '  Packaging check\n', attributes: { count: 12, unit: 'box' } });
+  assert.deepEqual(saved.record.relationships[0].target, { kind: 'record', projectId: f.state.project.projectId, recordId: previous.record.recordId });
+  fireEvent.click(ui.getByRole('button', { name: 'Reload vault' }));
+  await ui.findByText('Vault reloaded from storage. Write authorization has been cleared.');
+  assert.ok(ui.getByRole('article', { name: `Persisted record ${saved.record.recordId}` }));
+  assert.ok((ui.getByRole('button', { name: 'Create immutable record' }).closest('fieldset') as HTMLFieldSetElement).disabled);
+});
+
+test('permission denial retains read-only inspection and no namespace is created', async () => {
+  const f = await disposableAuthoringFixture();
+  const before = inventorySignature(await readVerifiedInventory(f.container));
+  const working = inventorySignature(await readVerifiedInventory(f.working));
+  let writes = 0;
+  f.container.setHooks({ onBeforeWrite: () => { writes++; } });
+  f.working.setHooks({ onBeforeWrite: () => { writes++; } });
+  f.container.setHooks({ writePermission: 'denied' });
+  const permissions: string[] = [];
+  const handle = nativeDirectory(f.vault);
+  Object.assign(handle, { requestPermission: (options: { mode: 'read' | 'readwrite' }) => { permissions.push(options.mode); return f.vault.requestPermission(options.mode); } });
+  const ui = render(<KnowledgeExplorer />);
+  await selectTestVault(ui, f, handle);
+  await ui.findByText('Test vault selected read-only. Confirm its destination, then explicitly enable writes.');
+  fireEvent.click(ui.getByLabelText('I confirm this selected vault is a disposable test copy.'));
+  fireEvent.click(ui.getByRole('button', { name: 'Enable writes to this test vault' }));
+  await ui.findByText('Write permission was not granted. Inspection remains read-only.');
+  const retrieval = within(ui.getByRole('region', { name: 'Knowledge retrieval' }));
+  await waitFor(() => assert.equal((retrieval.getByRole('group', { name: 'Retrieval controls' }) as HTMLFieldSetElement).disabled, false));
+  assert.match(retrieval.getByRole('status').textContent!, /matches/);
+  assert.ok(retrieval.getByText('Axial bending'));
+  assert.ok((ui.getByRole('button', { name: 'Create immutable record' }).closest('fieldset') as HTMLFieldSetElement).disabled);
+  assert.equal((ui.getByLabelText('I confirm this selected vault is a disposable test copy.') as HTMLInputElement).checked, false);
+  assert.deepEqual(permissions, ['readwrite'], 'read-only recovery never retries write permission');
+  f.container.setHooks({ writePermission: 'granted' });
+  fireEvent.click(ui.getByRole('button', { name: 'Enable writes to this test vault' }));
+  assert.deepEqual(permissions, ['readwrite'], 'another attempt requires fresh explicit consent');
+  await enableWrites(ui);
+  assert.deepEqual(permissions, ['readwrite', 'readwrite']);
+  assert.equal((ui.getByRole('button', { name: 'Create immutable record' }).closest('fieldset') as HTMLFieldSetElement).disabled, false);
+  assert.equal(writes, 0);
+  assert.equal(inventorySignature(await readVerifiedInventory(f.container)), before);
+  assert.equal(inventorySignature(await readVerifiedInventory(f.working)), working);
+  assert.equal(await f.vault.hasDirectory(['knowledge']), false);
+  assert.ok(ui.getByRole('region', { name: 'Revision knowledge' }));
+});
+
+test('denied authorization with failed read-only reconstruction keeps retrieval unavailable until manual reload', async () => {
+  const f = await disposableAuthoringFixture();
+  const before = inventorySignature(await readVerifiedInventory(f.container));
+  const working = inventorySignature(await readVerifiedInventory(f.working));
+  let writes = 0, permissions = 0, recoveryReads = 0;
+  f.container.setHooks({ writePermission: 'denied', onBeforeWrite: () => { writes++; } });
+  f.working.setHooks({ onBeforeWrite: () => { writes++; } });
+  const handle = nativeDirectory(f.vault);
+  Object.assign(handle, { requestPermission: (options: { mode: 'read' | 'readwrite' }) => { assert.equal(options.mode, 'readwrite'); permissions++; return f.vault.requestPermission(options.mode); } });
+  const ui = render(<KnowledgeExplorer />);
+  await selectTestVault(ui, f, handle);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  f.container.setHooks({ onBeforeRead: async () => { recoveryReads++; await gate; throw new Error('Read-only reconstruction failed'); } });
+  fireEvent.click(ui.getByLabelText('I confirm this selected vault is a disposable test copy.'));
+  fireEvent.click(ui.getByRole('button', { name: 'Enable writes to this test vault' }));
+  await waitFor(() => assert.ok(recoveryReads > 0, 'authorization failure attempts read-only reconstruction'));
+  const retrieval = within(ui.getByRole('region', { name: 'Knowledge retrieval' }));
+  assert.equal(retrieval.queryAllByRole('article', { name: /^Retrieved record / }).length, 0);
+  assert.ok((ui.getByRole('button', { name: 'Close project' }) as HTMLButtonElement).disabled);
+  assert.ok((ui.getByRole('button', { name: 'Open local project vault' }) as HTMLButtonElement).disabled);
+  assert.ok((ui.getByRole('button', { name: 'Reload vault' }) as HTMLButtonElement).disabled);
+  assert.ok((ui.getByRole('form', { name: 'New knowledge record' }).querySelector('fieldset') as HTMLFieldSetElement).disabled);
+  await act(async () => { release(); });
+  await ui.findByText('Write permission was not granted. Inspection remains read-only.');
+  await waitFor(() => assert.equal((ui.getByRole('button', { name: 'Reload vault' }) as HTMLButtonElement).disabled, false));
+  assert.ok((retrieval.getByRole('group', { name: 'Retrieval controls' }) as HTMLFieldSetElement).disabled);
+  assert.ok(retrieval.getByText(/Retrieval results cleared/));
+  assert.ok(ui.getByText('Read-only', { exact: true }));
+  assert.equal((ui.getByLabelText('I confirm this selected vault is a disposable test copy.') as HTMLInputElement).checked, false);
+  assert.equal(ui.queryByText('Read-only reconstruction failed'), null, 'the recovery error must not replace the original denial');
+  assert.equal(permissions, 1);
+  f.container.setHooks({ onBeforeRead: undefined });
+  fireEvent.click(ui.getByRole('button', { name: 'Reload vault' }));
+  await ui.findByText('Vault reloaded from storage. Write authorization has been cleared.');
+  assert.equal((retrieval.getByRole('group', { name: 'Retrieval controls' }) as HTMLFieldSetElement).disabled, false);
+  assert.ok(retrieval.getByText('Axial bending'));
+  assert.ok((ui.getByRole('button', { name: 'Create immutable record' }).closest('fieldset') as HTMLFieldSetElement).disabled);
+  assert.equal(permissions, 1); assert.equal(writes, 0);
+  assert.equal(inventorySignature(await readVerifiedInventory(f.container)), before);
+  assert.equal(inventorySignature(await readVerifiedInventory(f.working)), working);
+  assert.equal(await f.vault.hasDirectory(['knowledge']), false);
+});
+
+test('unavailable component evidence and unsupported/corrupt records are explained and excluded from targets', async () => {
+  const f = await disposableAuthoringFixture();
+  const schemas = createKnowledgeSchemaRegistry();
+  schemas.register('generic.observation', 2, (payload): payload is JsonObject => typeof payload === 'object' && payload !== null);
+  const future = await createKnowledgeRecord(f.vault, { projectId: f.state.project.projectId, recordType: 'generic.observation', schemaVersion: 2, payload: { future: true }, relationships: [], provenance: { kind: 'user-entered' } }, schemas);
+  const corrupt = await createKnowledgeRecord(f.vault, { projectId: f.state.project.projectId, recordType: 'generic.observation', schemaVersion: 1, payload: { description: 'Corrupt me' }, relationships: [], provenance: { kind: 'user-entered' } });
+  await f.vault.writeFileText(corrupt.source.recordPath.split('/'), '{broken');
+  await f.vault.removeEntry(['components', 'ready.json']);
+  const ui = render(<KnowledgeExplorer />);
+  await selectTestVault(ui, f); await enableWrites(ui);
+  choose(ui, 'Relationship revision', /R01/);
+  assert.equal(within(ui.getByLabelText('Historical component')).getAllByRole('option').length, 1);
+  assert.ok(ui.getAllByText(/Component enrollment is incomplete/).length);
+  assert.equal(within(ui.getByLabelText('Accepted knowledge record')).getAllByRole('option').length, 1);
+  assert.equal(ui.queryByRole('article', { name: `Persisted record ${future.record.recordId}` }), null);
+  assert.ok(ui.getByRole('article', { name: `Knowledge diagnostic ${future.record.recordId}` }));
+  assert.ok(ui.getByRole('article', { name: `Knowledge diagnostic ${corrupt.record.recordId}` }));
+  assert.ok(ui.getAllByText(/unsupported/).length);
+  assert.ok(ui.getByText('No accepted persisted records in this snapshot.'));
+});

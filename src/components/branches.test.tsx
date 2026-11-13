@@ -363,12 +363,8 @@ test("multiple unmodified branch labels share their actual baseline node without
     <HistoryRecoveryView
       vaultState={state}
       activeBranchId="branch-main"
-      isRestoring={false}
       progress={null}
-      lastRestoreReport={null}
       statusBanner={null}
-      onRestoreFullProject={async () => {}}
-      onRestoreSelectedFiles={async () => {}}
       onVerifySingleRevisionObjects={async () => {}}
       onCancelOperation={() => {}}
     />,

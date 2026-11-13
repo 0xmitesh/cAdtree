@@ -38,6 +38,7 @@ const recordPath = (id: string) => {
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unsafe revision identity.');
   return [...directory, 'revisions', `${id}.json`];
 };
+export const componentRecordPath = recordPath;
 const id = () => `component-${crypto.randomUUID()}`;
 export function componentChecksum(value: object): string {
   const { payloadSha256: _, ...payload } = value as Record<string, unknown>;
