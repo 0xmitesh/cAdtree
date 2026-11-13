@@ -175,9 +175,9 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 ```
 
 **Environment notes**
-- **Requirements:** Node 24 LTS, version 24.12 or newer.
+- **Requirements:** Node 24 LTS, version 24.12 or newer (pinned by `.nvmrc` and `engines` in `package.json`; `engine-strict` is off).
 - **Flaky tests:** `src/components/navigation-cleanup.test.tsx`, `home-setup.test.tsx` and `branches.test.tsx` sometimes fail under full-suite load. If they fail, rerun them on their own and rerun the full suite.
-- **Unfinished cleanup:** some leftovers from AI Studio are still there: the package name `react-example`, unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) and a Gemini key in `.env.example`. None of them are used.
+- **AI Studio leftovers (kept on purpose):** the repo still syncs with Google AI Studio, so the package name `react-example`, `metadata.json` and the Gemini placeholder in `.env.example` stay. The unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) were removed, and the stale status-doc copy in `public/assets/aistudio/` is gone.
 
 **Local checkouts**
 | Machine | Location |
