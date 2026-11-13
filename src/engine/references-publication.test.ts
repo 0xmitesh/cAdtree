@@ -4,9 +4,8 @@ import { InMemoryFileSystemAdapter, RealFileSystemAdapter } from './fs-adapter';
 import { nativeDirectory } from '../../tests/native-fs';
 import { initializeProjectVault, openExistingVault } from './vault-service';
 import { captureRevision } from './revision-service';
-import { hashString } from './hash';
 import { newRecordId } from './ids';
-import { importReferenceAttachment, retrieveReferenceAttachment, updateProjectReference, referenceChecksum } from './references';
+import { importReferenceAttachment, retrieveReferenceAttachment, updateProjectReference } from './references';
 
 const notes = { problem: '', modification: '', observations: '' };
 const metadata = { title: 'Requirement', description: '', tags: [] };
@@ -166,29 +165,14 @@ for (const damage of ['record', 'marker', 'enrollment'] as const) test(`damaged 
   assert.equal((await openExistingVault(f.vault)).revisions.length, 0);
 });
 
-test('existing file marker/boundary evidence opens unchanged, and damaged committed file markers remain strict', async () => {
+test('a stray file in references/completed fails loading with the strict publication error and blocks writes', async () => {
   const f = await fixture(), state = await importReferenceAttachment(f.vault, f.projectId, source(), metadata), evidence = state.references!;
-  // Model ff80553's already-published on-disk format, without changing any identity.
-  await f.disk.writeFileText(['reference-context.json'], JSON.stringify(evidence.boundary, null, 2));
-  await f.disk.removeEntry(['references', 'enrollment'], { recursive: true });
-  const completed = await f.disk.getDirectory(['references', 'completed']);
-  for (const entry of await completed.listEntries()) await completed.removeEntry([entry.name], { recursive: true });
-  const marker = { schemaVersion: 1, projectId: f.projectId, catalogId: evidence.catalogId, recordSha256: evidence.catalogSha256, payloadSha256: '' };
-  marker.payloadSha256 = referenceChecksum(marker);
-  const markerPath = ['references', 'completed', `${marker.catalogId}.done.json`];
-  await f.disk.writeFileText(markerPath, JSON.stringify(marker, null, 2));
-  const boundaryText = await f.disk.readFileText(['reference-context.json']), markerText = await f.disk.readFileText(markerPath);
-  assert.equal((await openExistingVault(f.vault)).references!.catalogId, evidence.catalogId);
-  // A new attempt must preserve this healthy original library after a native failure.
-  f.fault.match = path => path.startsWith('references/catalogs/');
-  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /after native file creation/);
-  const ref = evidence.library[0];
-  assert.deepEqual((await retrieveReferenceAttachment(f.vault, f.projectId, ref.referenceId, ref.versions[0].versionId)).bytes, bytes);
-  await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
-  assert.equal(await f.disk.readFileText(['reference-context.json']), boundaryText); assert.equal(await f.disk.readFileText(markerPath), markerText);
-  assert.equal(hashString(await f.disk.readFileText(['references', 'catalogs', `${evidence.catalogId}.json`])), evidence.catalogSha256);
-  await f.disk.writeFileText(markerPath, '');
-  const damaged = await openExistingVault(f.vault); assert.equal(damaged.references!.status, 'unavailable');
+  assert.equal((await openExistingVault(f.vault)).references!.status, 'available');
+  // The retired `<catalogId>.done.json` file marker is no longer a valid publication.
+  await f.disk.writeFileText(['references', 'completed', `${evidence.catalogId}.done.json`], '{}');
+  const damaged = await openExistingVault(f.vault);
+  assert.equal(damaged.references!.status, 'unavailable');
+  assert.match(damaged.references!.reason!, /Unexpected reference catalog publication\./);
   await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Reference evidence unavailable/);
 });
 
