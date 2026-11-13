@@ -1127,11 +1127,15 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         const fresh = current.projects.find(
           (project) => project.containerPath === entry.containerPath,
         );
-        if (entry.status === "duplicate" || fresh?.status === "duplicate")
+        if (
+          !fresh?.project ||
+          fresh.status === "duplicate" ||
+          fresh.projectId !== entry.projectId
+        )
           throw new Error(PROJECT_NEEDS_ATTENTION);
         await activateManaged(
           current,
-          await resolveManagedProject(workspace.root, entry.containerPath),
+          await resolveManagedProject(workspace.root, fresh.containerPath),
           context,
         );
       },

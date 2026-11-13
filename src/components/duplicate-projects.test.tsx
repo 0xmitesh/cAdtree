@@ -40,7 +40,7 @@ async function fixture() {
   return { home, root: workspace.root, shared, normal };
 }
 
-test("Projects list: copies sharing a project identity cannot be opened through Use this location, and the reason is shown", async () => {
+test("Projects list: Use this location is disabled for every copy sharing a project identity, and the reason is shown", async () => {
   const f = await fixture();
   await copyProject(f.root, f.shared.record.containerPath, "projects/Actuator copy");
   const ui = render(<App />);
@@ -51,14 +51,14 @@ test("Projects list: copies sharing a project identity cannot be opened through 
   assert.equal(buttons.length, 2);
   assert.ok(buttons.every((button) => button.disabled));
   assert.ok(
-    ui.getAllByText(/This project identity exists at multiple locations/).length >= 1,
+    ui.getAllByText(/every copy stays read-only/).length >= 1,
   );
   for (const button of buttons) fireEvent.click(button);
   await waitFor(() => assert.equal(appBusy(ui), false));
   assert.equal(projectOpen(ui), false);
 });
 
-test("Projects list: a copy that appears after the list was shown is refused when opened, and a normal project still opens", async () => {
+test("openManaged guard: a copy that appears after the list was shown is refused, and a normal project still opens", async () => {
   const f = await fixture();
   const ui = render(<App />);
   await openHomeWorkspace(ui, f.home);
@@ -75,4 +75,21 @@ test("Projects list: a copy that appears after the list was shown is refused whe
   const gripperRow = ui.getByRole("heading", { name: "Gripper" }).closest(".workspace-project") as HTMLElement;
   fireEvent.click(within(gripperRow).getByRole("button", { name: "Open project" }));
   await waitFor(() => assert.equal(projectOpen(ui), true));
+});
+
+test("openManaged guard: a folder swapped for a different project after the list was shown is refused, not opened in its place", async () => {
+  const f = await fixture();
+  const ui = render(<App />);
+  await openHomeWorkspace(ui, f.home);
+  // Replace the Actuator folder with Gripper's project (and remove Gripper's own folder).
+  await copyProject(f.root, f.normal.record.containerPath, "projects/Swap");
+  await f.root.removeEntry(f.shared.record.containerPath.split("/"), { recursive: true });
+  await f.root.removeEntry(f.normal.record.containerPath.split("/"), { recursive: true });
+  await copyProject(f.root, "projects/Swap", f.shared.record.containerPath);
+  await f.root.removeEntry(["projects", "Swap"], { recursive: true });
+  const actuatorRow = ui.getByRole("heading", { name: "Actuator" }).closest(".workspace-project") as HTMLElement;
+  fireEvent.click(within(actuatorRow).getByRole("button", { name: "Open project" }));
+  await waitFor(() => assert.match(ui.container.textContent!, NEEDS_ATTENTION));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  assert.equal(projectOpen(ui), false);
 });

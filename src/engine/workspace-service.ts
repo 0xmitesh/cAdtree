@@ -443,7 +443,7 @@ export async function openWorkspace(
     if (entry.projectId && counts.get(entry.projectId)! > 1) {
       entry.status = "duplicate";
       entry.issues.push(
-        "This project identity exists at multiple locations. Choose one location explicitly; histories are not merged.",
+        "This project's ID exists at more than one location, so every copy stays read-only. Keep one location in the workspace and move the other copies out; histories are never combined.",
       );
     }
   if ((await workspaceIdentity(root)).workspaceId !== identity.workspaceId)

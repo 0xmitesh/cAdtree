@@ -543,7 +543,7 @@ test("duplicate project identities are discovered as alternative locations, not 
   assert.ok(
     state.projects.every((entry) =>
       entry.issues.some((issue) =>
-        issue.includes("Choose one location explicitly"),
+        issue.includes("every copy stays read-only"),
       ),
     ),
   );
