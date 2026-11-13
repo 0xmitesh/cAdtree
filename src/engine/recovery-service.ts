@@ -23,7 +23,8 @@ export interface RestoreRevisionOptions {
   signal?: AbortSignal;
 }
 
-const RECOVERY_MARKER_FILENAME = '_CADTREE_RECOVERY_INCOMPLETE.txt';
+/** Written into a design-case working folder when creation fails part-way. Single source: path-budget.ts derives its template and reserve from this. */
+export const RECOVERY_MARKER_FILENAME = '_CADTREE_RECOVERY_INCOMPLETE.txt';
 
 /**
  * Computes the minimal sorted list of parent directory paths required to materialize

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from './fs-adapter';
 import { openExistingVault } from './vault-service';
+import { RECOVERY_MARKER_FILENAME } from './recovery-service';
 import { captureRevision } from './revision-service';
 import { createProject, createWorkspace, createManagedBranch } from './workspace-service';
 import { prepareApplyPreview, buildApplyPreview, type PreviewChoice } from './apply-preview';
@@ -91,6 +92,8 @@ test('the incomplete marker of a failed design case is a covered internal path w
   const marker = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'design case incomplete marker')!;
   assert.equal(marker.segments.join('/'), `working/${'x'.repeat(32)}/_CADTREE_RECOVERY_INCOMPLETE.txt`);
   assert.equal(marker.reserveLength, 'working/'.length + 32 + 1 + '_CADTREE_RECOVERY_INCOMPLETE.txt'.length + CRSWAP_CHARS);
+  // The on-disk name is pinned by literal above; the engine's own constant must agree.
+  assert.equal(RECOVERY_MARKER_FILENAME, '_CADTREE_RECOVERY_INCOMPLETE.txt');
   assert.ok(marker.reserveLength <= internalReserve());
   assert.ok(INTERNAL_PATH_TEMPLATES.every((t) => !/recoveries\//.test(t.shape)));
 });

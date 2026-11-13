@@ -206,15 +206,10 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
         catalogs.push({ record, sha256: marker.sha256 });
         continue;
       }
-      // Existing file markers remain strict: malformed committed evidence is
-      // not reclassified as an interrupted attempt or silently discarded.
-      const catalogId = entry.name.replace(/\.done\.json$/, '');
-      if (entry.kind !== 'file' || !safeId(catalogId) || entry.name !== `${catalogId}.done.json`) throw new Error('Unexpected reference catalog publication.');
-      const marker = JSON.parse(await vault.readFileText([...DATA, 'completed', entry.name])); validateSeal(marker, state.project.projectId);
-      const content = await vault.readFileText([...DATA, 'catalogs', `${catalogId}.json`]);
-      const record: ReferenceCatalog = JSON.parse(content); validateSeal(record, state.project.projectId);
-      if (marker.catalogId !== catalogId || record.catalogId !== catalogId || marker.recordSha256 !== hashString(content)) throw new Error('Reference catalog publication mismatch.');
-      catalogs.push({ record, sha256: marker.recordSha256 });
+      // Only directory publications are current. Anything else here (including
+      // the retired `<id>.done.json` file marker) is unexpected committed
+      // evidence: fail conservatively, never skip or reclassify it.
+      throw new Error('Unexpected reference catalog publication.');
     }
     let current: { record: ReferenceCatalog; sha256: string } | undefined;
     while (catalogs.length) {
