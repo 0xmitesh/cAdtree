@@ -18,6 +18,7 @@ export type PendingAuthAction =
   | { kind: "my-workspaces" }
   | { kind: "callback"; run: () => Promise<void> | void };
 
+export type BannerScope = "workspace" | "project";
 
 export type StatusBanner = {
   type: "success" | "error" | "info";

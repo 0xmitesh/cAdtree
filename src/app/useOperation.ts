@@ -4,7 +4,7 @@ import type { ProgressUpdate } from "../engine/types";
 import { folderPermissionError } from "../utils/folder-access";
 import { presentPathBudgetError } from "../utils/path-budget-message";
 import { ProjectRenamedNotice } from "./project-lookup";
-import type { ActiveTab, Context, Operation, StatusBanner } from "./types";
+import type { ActiveTab, BannerScope, Context, Operation, StatusBanner } from "./types";
 
 export type UseOperationArgs = {
   activeTab: ActiveTab;
@@ -24,9 +24,7 @@ export function useOperation({
   executeSignOut,
   applyAuthSnapshot,
 }: UseOperationArgs) {
-  const [bannerScope, setBannerScope] = useState<"workspace" | "project">(
-    "workspace",
-  );
+  const [bannerScope, setBannerScope] = useState<BannerScope>("workspace");
   const [operation, setOperation] = useState<Operation | null>(null);
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
   const [statusBanner, setStatusBanner] = useState<StatusBanner | null>(null);
