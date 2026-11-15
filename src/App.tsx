@@ -28,7 +28,7 @@ import { AccountStatusControl } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
 } from "./engine/path-shortcuts";
-import { presentPathBudgetError, pathBudgetWarnSentence } from "./utils/path-budget-message";
+import { pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
   rememberFolderAddress,
   type HomeAddress,
@@ -65,7 +65,6 @@ import { scanBranchChanges } from "./engine/scanner";
 import {
   type FileSpecificNote,
   MAIN_BRANCH_ID,
-  type ProgressUpdate,
   type ScanResult,
   type VaultState,
 } from "./engine/types";
@@ -83,7 +82,7 @@ import { useViewHistory, type AppView, type ProjectView } from "./utils/view-his
 import { useSidebarWidth } from "./components/SidebarResize";
 import { DiagnosticsView } from "./components/DiagnosticsView";
 import type { CreateBranchParams } from "./components/CreateBranchDialog";
-import { assertFolderAccess, pickDirectory, folderPermissionError } from "./utils/folder-access";
+import { assertFolderAccess, pickDirectory } from "./utils/folder-access";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
 import type { WorkspaceTreeProps } from "./components/WorkspaceTree";
@@ -110,14 +109,13 @@ import {
 import { AppDialogs } from "./app/AppDialogs";
 import { AppNotices } from "./app/AppNotices";
 import { NavigationRail } from "./app/NavigationRail";
+import { useOperation } from "./app/useOperation";
 import type {
   ActiveTab,
   Context,
-  Operation,
   PendingAuthAction,
   PendingHome,
   SignInPrompt,
-  StatusBanner,
 } from "./app/types";
 import {
   PROJECT_NEEDS_ATTENTION,
@@ -197,9 +195,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [rememberedWorkspace, setRememberedWorkspace] =
     useState<RememberedWorkspace | null>(null);
   const [convenienceEpoch, setConvenienceEpoch] = useState(0);
-  const [bannerScope, setBannerScope] = useState<"workspace" | "project">(
-    "workspace",
-  );
   const [projectSession, setProjectSession] = useState(0);
   // Set when the open project can't be re-found by its ID (gone, or copied so the ID is shared): read-only.
   const [projectUnavailable, setProjectUnavailable] = useState<string | null>(null);
@@ -215,12 +210,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [activeBranchId, setActiveBranchId] = useState(MAIN_BRANCH_ID);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanStale, setIsScanStale] = useState(false);
-  const [operation, setOperation] = useState<Operation | null>(null);
-  const [progress, setProgress] = useState<ProgressUpdate | null>(null);
-  const [statusBanner, setStatusBanner] = useState<StatusBanner | null>(null);
-  // Synchronous guards also cover rapid double clicks before React renders disabled controls.
-  const operationRef = useRef<AbortController | null>(null);
-  const contextVersion = useRef(0);
 
   const resetActiveSessionUi = () => {
     contextVersion.current++;
@@ -310,79 +299,33 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     };
   }, [authState.ready, authState.user?.uid]);
 
-  useEffect(
-    () => () => {
-      contextVersion.current++;
-      operationRef.current?.abort();
-    },
-    [],
-  );
+  // Declared here so its unmount effect keeps its place among App's effects.
+  const {
+    bannerScope,
+    setBannerScope,
+    operation,
+    progress,
+    statusBanner,
+    setStatusBanner,
+    operationRef,
+    contextVersion,
+    perform,
+    handleCancelOperation,
+  } = useOperation({
+    activeTab,
+    pendingSignOutRef,
+    pendingAccountSnapshotRef,
+    setSignOutPending,
+    // Declared below; called only when a deferred sign-out runs after an operation.
+    executeSignOut: () => executeSignOut(),
+    applyAuthSnapshot,
+  });
   useEffect(() => {
     setIsScanStale(false);
     if (!scanResult) return;
     const timer = setTimeout(() => setIsScanStale(true), 5000);
     return () => clearTimeout(timer);
   }, [scanResult]);
-
-  const perform = async <T,>(
-    kind: Operation,
-    action: (context: Context) => Promise<T>,
-    rethrow = false,
-  ): Promise<T | undefined> => {
-    if (operationRef.current || pendingSignOutRef.current || pendingAccountSnapshotRef.current) {
-      if (rethrow)
-        throw new Error("Finish or cancel the current operation first.");
-      return;
-    }
-    const abort = new AbortController();
-    const version = contextVersion.current;
-    operationRef.current = abort;
-    setOperation(kind);
-    setStatusBanner(null);
-    setBannerScope(activeTab === "connect" ? "workspace" : "project");
-    const current = () =>
-      contextVersion.current === version && operationRef.current === abort;
-    const context = {
-      version,
-      signal: abort.signal,
-      current,
-      progress: (p: ProgressUpdate) => {
-        if (current()) setProgress(p);
-      },
-    };
-    try {
-      return await action(context);
-    } catch (error) {
-      error = folderPermissionError(error);
-      // Over the path limit: the same wording in the banner and in any dialog that shows the rethrown error.
-      error = presentPathBudgetError(error);
-      if (current())
-        setStatusBanner({
-          type:
-            (error instanceof DOMException && error.name === "AbortError") ||
-            error instanceof ProjectRenamedNotice
-              ? "info"
-              : "error",
-          message: error instanceof Error ? error.message : String(error),
-        });
-      if (rethrow) throw error;
-    } finally {
-      if (operationRef.current === abort) {
-        operationRef.current = null;
-        setOperation(null);
-        setProgress(null);
-        if (pendingSignOutRef.current) {
-          pendingSignOutRef.current = false;
-          void executeSignOut();
-        } else if (pendingAccountSnapshotRef.current) {
-          const pending = pendingAccountSnapshotRef.current;
-          pendingAccountSnapshotRef.current = null;
-          setSignOutPending(false);
-          applyAuthSnapshot(pending);
-        }
-      }
-    }
-  };
 
   const executeSignOut = async () => {
     setSignOutPending(true);
@@ -2031,7 +1974,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, true);
   };
-  const handleCancelOperation = () => operationRef.current?.abort();
   const busy = operation !== null || signOutPending;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
