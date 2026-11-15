@@ -13,8 +13,7 @@ import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import type { ScanResult, VaultState } from "../engine/types";
 import { openExistingVault } from "../engine/vault-service";
 import { resolveManagedProject, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
-import type { Context, StatusBanner } from "./types";
-import type { useOperation } from "./useOperation";
+import type { AssertProjectWritable, Context, Perform, StatusBanner } from "./types";
 
 export type UseApplicationActionsArgs = {
   vaultDir: FileSystemDirectoryAdapter | null;
@@ -24,8 +23,8 @@ export type UseApplicationActionsArgs = {
   activeBranchId: string;
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
-  perform: ReturnType<typeof useOperation>["perform"];
-  assertProjectWritable: (context: Context, readOnlyOperation?: boolean) => Promise<ManagedProject | null>;
+  perform: Perform;
+  assertProjectWritable: AssertProjectWritable;
   applyVaultState: (next: VaultState) => void;
   setScanResult: Dispatch<SetStateAction<ScanResult | null>>;
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
