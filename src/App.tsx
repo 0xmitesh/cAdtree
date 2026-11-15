@@ -31,29 +31,17 @@ import {
 } from "./components/FolderAddressDialog";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import { joinAddress } from "./engine/path-budget";
-import { componentWriteBlock, enableComponentTracking } from './engine/component-identity';
+import { enableComponentTracking } from './engine/component-identity';
 import { requestApplicationWriteAccess } from "./engine/application-service";
-import {
-  applicationCaptureBlock,
-  branchApplications,
-} from "./engine/application-records";
-import { ApplicationStatus } from "./components/ApplicationStatus";
-import { DesignCases } from "./components/DesignCases";
-import { assertCaseWritable, caseWriteBlock } from "./engine/case-lifecycle";
+import { assertCaseWritable } from "./engine/case-lifecycle";
 import { type WorkingFolderBindings } from "./engine/branch-state";
 import {
   MAIN_BRANCH_ID,
   type ScanResult,
   type VaultState,
 } from "./engine/types";
-import { ChangesCaptureView } from "./components/ChangesCaptureView";
-import { ReferencesView } from './components/ReferencesView';
-import { referenceWriteBlock } from './engine/references';
-import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
-import { ProjectContextHeader } from "./components/ProjectContextHeader";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
 import { useSidebarWidth } from "./components/SidebarResize";
-import { DiagnosticsView } from "./components/DiagnosticsView";
 import { assertFolderAccess, pickDirectory } from "./utils/folder-access";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
@@ -80,6 +68,7 @@ import {
 import { AppDialogs } from "./app/AppDialogs";
 import { AppNotices } from "./app/AppNotices";
 import { NavigationRail } from "./app/NavigationRail";
+import { ProjectViews } from "./app/ProjectViews";
 import { useAuthSession } from "./app/useAuthSession";
 import { useApplicationActions } from "./app/useApplicationActions";
 import { useBranchActions } from "./app/useBranchActions";
@@ -1336,6 +1325,48 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     },
   };
 
+  // Built here, not in ProjectViews, because they use App's operation and project setters.
+  const handleEnableComponentTracking = async () => {
+    if (!vaultDir || !workingDir) return;
+    await perform('capture', async (context) => {
+      await assertProjectWritable(context);
+      await requestApplicationWriteAccess(vaultDir, workingDir);
+      const updated = await enableComponentTracking(vaultDir);
+      if (context.current()) {
+        setVaultState(updated);
+        setScanResult(null);
+      }
+    }, true);
+  };
+  const handlePrepareWrite =
+    managedProject && workspace
+      ? async () => {
+          await perform(
+            "connect",
+            async (context) => {
+              await assertProjectWritable(context);
+              const current = await resolveManagedProject(
+                workspace.root,
+                managedProject.record.containerPath,
+              );
+              if (context.current()) {
+                setManagedProject(current);
+                setWorkingFolders(current.workingFolders);
+                setWorkingDir(
+                  current.workingFolders[activeBranchId] ??
+                    null,
+                );
+              }
+              if (!current.ready || current.issues.length)
+                throw new Error(
+                  `Managed project is read-only. ${current.issues.join(" ")}`,
+                );
+            },
+            true,
+          );
+        }
+      : undefined;
+
   return (
     <FilePathShortcutsProvider
       workspace={workspace}
@@ -1455,205 +1486,50 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             ) : null}
             {vaultState && vaultDir ? (
               <div hidden={!projectView} key={`${vaultState.project.projectId}:${projectSession}`}>
-                <ProjectContextHeader
-                  state={vaultState}
+                <ProjectViews
+                  vaultState={vaultState}
+                  vaultDir={vaultDir}
+                  workingDir={workingDir}
                   activeBranchId={activeBranchId}
+                  activeTab={activeTab}
+                  managedProject={managedProject}
+                  workspace={workspace}
+                  managedWorkspaceKey={managedWorkspaceKey}
+                  workspaceBudgetAddress={workspaceBudgetAddress}
+                  draftCache={draftCache.current}
+                  scanResult={scanResult}
+                  isScanStale={isScanStale}
+                  isScanning={isScanning}
+                  isCapturing={isCapturing}
+                  isVerifyingAll={isVerifyingAll}
+                  isCreatingBranch={isCreatingBranch}
                   busy={busy}
-                  onSelect={handleSelectBranch}
-                  showWorkingCase={activeTab !== 'references'}
-                />
-                <ApplicationStatus
-                  key={`${vaultState.project.projectId}:${activeBranchId}`}
-                  state={vaultState}
-                  branchId={activeBranchId}
-                  busy={busy}
+                  operation={operation}
                   progress={progress}
-                  onCancel={handleCancelOperation}
-                  onRecover={handleRecoverApplication}
-                  onAbandon={handleAbandonApplication}
-                  onRefresh={handleScanCurrent}
-                  onChanges={() => navigate("changes")}
+                  managedBlockReason={managedBlockReason}
+                  missingConnections={missingConnections}
+                  navigate={navigate}
+                  workingFileResolver={workingFileResolver}
+                  handleCancelOperation={handleCancelOperation}
+                  handleSelectBranch={handleSelectBranch}
+                  handleCaseLifecycle={handleCaseLifecycle}
+                  handleReattachWorkingFolder={handleReattachWorkingFolder}
+                  handleCreateBranch={handleCreateBranch}
+                  handleScanCurrent={handleScanCurrent}
+                  handleCaptureRevision={handleCaptureRevision}
+                  handlePrepareApplication={handlePrepareApplication}
+                  handleRefreshApplicationReview={handleRefreshApplicationReview}
+                  handleApplyApplication={handleApplyApplication}
+                  handleRecoverApplication={handleRecoverApplication}
+                  handleAbandonApplication={handleAbandonApplication}
+                  handleExportForReview={handleExportForReview}
+                  handleRetrieveReference={handleRetrieveReference}
+                  handleVerifySingleRevisionObjects={handleVerifySingleRevisionObjects}
+                  handleVerifyAllObjects={handleVerifyAllObjects}
+                  handleSimulateClearMetadataAndReopenVault={handleSimulateClearMetadataAndReopenVault}
+                  onEnableComponentTracking={handleEnableComponentTracking}
+                  onPrepareWrite={handlePrepareWrite}
                 />
-                {vaultState.branches.map((branch) => (
-                  <div
-                    key={branch.branchId}
-                    hidden={
-                      activeTab !== "changes" ||
-                      activeBranchId !== branch.branchId
-                    }
-                  >
-                    <ChangesCaptureView
-                      vaultState={vaultState}
-                      draftCache={draftCache.current}
-                      draftKey={`${managedWorkspaceKey ?? workspace?.root.name ?? "external"}:${workspace?.identity.workspaceId ?? "external"}:${vaultState.project.projectId}:${branch.branchId}`}
-                      activeBranchId={branch.branchId}
-                      workingFolderName={
-                        branch.branchId === activeBranchId
-                          ? (workingDir?.name ?? null)
-                          : null
-                      }
-                      vaultFolderName={vaultDir.name}
-                      scanResult={
-                        scanResult?.branchId === branch.branchId &&
-                        branch.branchId === activeBranchId
-                          ? scanResult
-                          : null
-                      }
-                      isScanStale={isScanStale}
-                      isScanning={isScanning}
-                      isCapturing={isCapturing}
-                      progress={progress}
-                      statusBanner={null}
-                      onScan={handleScanCurrent}
-                      onCapture={(params) =>
-                        handleCaptureRevision(branch.branchId, params)
-                      }
-                      onEnableComponentTracking={async () => {
-                        if (!vaultDir || !workingDir) return;
-                        await perform('capture', async (context) => {
-                          await assertProjectWritable(context);
-                          await requestApplicationWriteAccess(vaultDir, workingDir);
-                          const updated = await enableComponentTracking(vaultDir);
-                          if (context.current()) {
-                            setVaultState(updated);
-                            setScanResult(null);
-                          }
-                        }, true);
-                      }}
-                      onCancelOperation={handleCancelOperation}
-                      onReattachWorkingFolder={handleReattachWorkingFolder}
-                      operationBlockReason={
-                        componentWriteBlock(vaultState) ??
-                        referenceWriteBlock(vaultState) ??
-                        caseWriteBlock(vaultState, branch.branchId) ??
-                        applicationCaptureBlock(vaultState, branch.branchId) ??
-                        managedBlockReason ??
-                        (missingConnections.length
-                          ? `Reconnect ${missingConnections.join(", ")} before saving, so folder isolation can be verified.`
-                          : undefined)
-                      }
-                      resolveFilePath={(path) =>
-                        workingFileResolver(branch.branchId, path)()
-                      }
-                    />
-                  </div>
-                ))}
-                <div hidden={activeTab !== 'references'}>
-                  <ReferencesView state={vaultState} busy={busy} progress={progress} onCancel={handleCancelOperation}
-                    onRetrieve={handleRetrieveReference} />
-                </div>
-                <div hidden={activeTab !== "history"}>
-                  <HistoryRecoveryView
-                    caseControls={
-                      <DesignCases
-                        state={vaultState}
-                        activeBranchId={activeBranchId}
-                        busy={busy}
-                        progress={progress}
-                        onCancel={handleCancelOperation}
-                        onChange={handleCaseLifecycle}
-                      />
-                    }
-                    onRetrieveReference={handleRetrieveReference}
-                    application={{
-                      prepare: handlePrepareApplication,
-                      apply: handleApplyApplication,
-                      refresh: handleRefreshApplicationReview,
-                      progress,
-                      cancel: handleCancelOperation,
-                      destinationLocation:
-                        managedProject && workspace
-                          ? `${workspace.root.name}/${managedProject.workingPaths[activeBranchId]}`
-                          : workingDir?.name,
-                      blockedReason:
-                        caseWriteBlock(vaultState, activeBranchId) ??
-                        managedBlockReason ??
-                        (branchApplications(vaultState, activeBranchId).some(
-                          (op) =>
-                            !["captured", "recovered", "abandoned"].includes(
-                              op.status,
-                            ),
-                        )
-                          ? "Resolve the pending application for this branch before applying again."
-                          : undefined),
-                    }}
-                    vaultState={vaultState}
-                    activeBranchId={activeBranchId}
-                    progress={progress}
-                    statusBanner={null}
-                    onExportForReview={handleExportForReview}
-                    isExporting={operation === 'export'}
-                    onVerifySingleRevisionObjects={
-                      handleVerifySingleRevisionObjects
-                    }
-                    onCancelOperation={handleCancelOperation}
-                    onGoToChanges={() => navigate("changes")}
-                    onPrepareWrite={
-                      managedProject && workspace
-                        ? async () => {
-                            await perform(
-                              "connect",
-                              async (context) => {
-                                await assertProjectWritable(context);
-                                const current = await resolveManagedProject(
-                                  workspace.root,
-                                  managedProject.record.containerPath,
-                                );
-                                if (context.current()) {
-                                  setManagedProject(current);
-                                  setWorkingFolders(current.workingFolders);
-                                  setWorkingDir(
-                                    current.workingFolders[activeBranchId] ??
-                                      null,
-                                  );
-                                }
-                                if (!current.ready || current.issues.length)
-                                  throw new Error(
-                                    `Managed project is read-only. ${current.issues.join(" ")}`,
-                                  );
-                              },
-                              true,
-                            );
-                          }
-                        : undefined
-                    }
-                    managedDestination={managedProject?.record.containerPath}
-                    projectAddress={
-                      managedProject && workspaceBudgetAddress
-                        ? joinAddress(workspaceBudgetAddress, managedProject.record.containerPath)
-                        : undefined
-                    }
-                    operationsBlockedReason={
-                      managedBlockReason ??
-                      (managedProject && missingConnections.length
-                        ? "Reconnect workspace before creating branches."
-                        : undefined)
-                    }
-                    onCreateBranch={handleCreateBranch}
-                    isCreatingBranch={isCreatingBranch}
-                    resolveWorkingFilePath={(branchId, path) =>
-                      workingFileResolver(branchId, path)()
-                    }
-                  />
-                </div>
-                <div hidden={activeTab !== "diagnostics"}>
-                  <DiagnosticsView
-                    managed={Boolean(managedProject)}
-                    vaultState={vaultState}
-                    isVerifyingAll={isVerifyingAll}
-                    onVerifyAllObjects={handleVerifyAllObjects}
-                    onSimulateClearMetadataAndReopenVault={
-                      handleSimulateClearMetadataAndReopenVault
-                    }
-                    workingFolderName={
-                      managedProject
-                        ? (managedProject.workingPaths[activeBranchId] ?? null)
-                        : (workingDir?.name ?? null)
-                    }
-                    vaultFolderName={vaultDir.name}
-                    onReattachWorkingFolder={handleReattachWorkingFolder}
-                  />
-                </div>
               </div>
             ) : null}
           </main>
