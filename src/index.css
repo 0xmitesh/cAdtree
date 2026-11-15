@@ -2533,11 +2533,26 @@ input::placeholder {
 .rail-navigation > button {
   flex-shrink: 0;
 }
+/*
+ * The block always reserves the height of its full content (label plus the
+ * five project buttons), so the Explorer above it keeps its height whether or
+ * not a project is open. Heights come from the rules above: 1px border, 14px
+ * padding, the 12px label (line-height 1.5) with an 8px margin, and buttons of
+ * 12px + 13px * 1.5 line + 12px, separated by 5px. Adding or removing a
+ * project button means changing --project-navigation-buttons; the Explorer
+ * height check in tests/browser/home.spec.ts guards the result.
+ */
 .project-navigation {
+  --project-navigation-buttons: 5;
+  --project-navigation-height: calc(
+    15px + (12px * 1.5 + 8px) +
+      var(--project-navigation-buttons) * (24px + 13px * 1.5) +
+      var(--project-navigation-buttons) * 5px
+  );
   display: flex;
   flex-direction: column;
   gap: 5px;
-  flex: 0 0 204px;
+  flex: 0 0 var(--project-navigation-height);
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid transparent;
