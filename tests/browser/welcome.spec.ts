@@ -35,11 +35,13 @@ for (const width of [1366, 390]) {
     });
     await expect(start).toBeEnabled();
     await expect(open).toBeEnabled();
-    await expect(
-      page.getByRole("complementary").getByText("Your files. Your storage.", {
-        exact: true,
-      }),
-    ).toBeVisible();
+    // The rail caption is hidden on narrow screens on purpose (index.css).
+    if (width >= 1000)
+      await expect(
+        page.getByRole("complementary").getByText("Your files. Your storage.", {
+          exact: true,
+        }),
+      ).toBeVisible();
     expect(
       await start.evaluate((el) => el.getBoundingClientRect().bottom),
     ).toBeLessThan(844);

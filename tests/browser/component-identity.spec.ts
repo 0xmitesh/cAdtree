@@ -75,7 +75,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await page.getByRole('combobox', { name: 'File history' }).selectOption(`component:${replacementId}`);
   await expect(page.getByRole('heading', { name: 'Unrelated replacement' })).toBeVisible();
   await page.getByRole('combobox', { name: 'File history' }).selectOption(`component:${info.componentId}`);
-  await expect(page.getByRole('button', { name: 'Select file for recovery', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Select file for export', exact: true })).toBeDisabled();
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   expect(errors).toEqual([]);
 });

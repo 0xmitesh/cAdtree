@@ -77,7 +77,7 @@ test("actual App: read-only application preview retains Main's 20 files and requ
   await selection.check();
   await expect(readiness).toContainText("Ready as a saved-state preview");
   await expect(summary).toContainText("Proposed result: 20 files");
-  await expect(summary).toContainText("1 replacements");
+  await expect(summary).toContainText("1 replacement");
   await expect(
     dialog.getByRole("button", { name: "Prepare application" }),
   ).toBeEnabled();
@@ -221,7 +221,7 @@ test("actual App: read-only application preview retains Main's 20 files and requ
   await decision.selectOption("keep-destination");
   await expect(readiness).toContainText("Ready as a saved-state preview");
   await decision.selectOption("use-source");
-  await expect(summary).toContainText("1 replacements");
+  await expect(summary).toContainText("1 replacement");
   await dialog
     .getByRole("checkbox", { name: "Select source deletion: DeleteMe.SLDPRT" })
     .check();
@@ -235,7 +235,7 @@ test("actual App: read-only application preview retains Main's 20 files and requ
     }),
   ).toHaveCount(1);
   await deleteDecision.selectOption("use-source");
-  await expect(summary).toContainText("1 deletions");
+  await expect(summary).toContainText("1 deletion");
   await dialog
     .getByRole("checkbox", {
       name: "Select source modification: ModifiedVsDeleted.SLDPRT",
@@ -246,12 +246,16 @@ test("actual App: read-only application preview retains Main's 20 files and requ
       name: "Conflict decision: ModifiedVsDeleted.SLDPRT",
     })
     .selectOption("use-source");
-  await dialog
-    .getByRole("checkbox", { name: "Select source addition: SharedNew.SLDPRT" })
-    .check();
-  await dialog
-    .getByRole("combobox", { name: "Conflict decision: SharedNew.SLDPRT" })
-    .selectOption("keep-destination");
+  // Added independently on both branches: different component identities, so
+  // the row is blocked and cannot be selected (identity is never guessed).
+  await expect(
+    dialog.getByRole("checkbox", {
+      name: "Select source addition: SharedNew.SLDPRT",
+    }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByText(/Different components occupy this path/).first(),
+  ).toBeVisible();
   await expect(readiness).toContainText("Ready as a saved-state preview");
   await dialog
     .getByRole("checkbox", { name: "Select source addition: Collision" })

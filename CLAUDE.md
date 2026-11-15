@@ -179,6 +179,7 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 **Environment notes**
 - **Requirements:** Node 24 LTS, version 24.12 or newer (pinned by `.nvmrc` and `engines` in `package.json`; `engine-strict` is off).
 - **Flaky tests:** `home-setup.test.tsx` and `branches.test.tsx` may still fail under full-suite load (each passes alone). If one fails, rerun it on its own and rerun the full suite. `navigation-cleanup.test.tsx` was a focus race, fixed in #75; if it fails now, treat it as real.
+- **Browser tests in the cloud sandbox:** run `npm run test:ui` with Playwright's own Chromium (`npx playwright install chromium`, no `CADTREE_BROWSER_CHANNEL`) and `LC_ALL=C.UTF-8`. The sandbox's system Chrome crashes when it reads stored OPFS handles. On Windows or Mac, `CADTREE_BROWSER_CHANNEL=chrome` is fine.
 - **AI Studio leftovers (kept on purpose):** the repo still syncs with Google AI Studio, so the package name `react-example`, `metadata.json` and the Gemini placeholder in `.env.example` stay. The unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) were removed, and the stale status-doc copy in `public/assets/aistudio/` is gone.
 
 **Local checkouts**

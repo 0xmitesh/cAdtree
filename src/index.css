@@ -2533,17 +2533,24 @@ input::placeholder {
 .rail-navigation > button {
   flex-shrink: 0;
 }
+/*
+ * Always rendered (inert) so its height is the real content height whether or
+ * not a project is open, and the Explorer above keeps its height.
+ */
 .project-navigation {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  flex: 0 0 204px;
+  flex: 0 0 auto;
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid transparent;
 }
 .project-navigation.has-project {
   border-top-color: #38474a;
+}
+.project-navigation:not(.has-project) {
+  visibility: hidden;
 }
 @media (max-width: 960px) {
   .navigation-rail > .rail-navigation {
@@ -2555,6 +2562,9 @@ input::placeholder {
     margin-top: 0;
     padding-top: 0;
     border-top: 0;
+  }
+  .project-navigation:not(.has-project) {
+    display: none;
   }
   .project-navigation.has-project {
     margin-top: 16px;
