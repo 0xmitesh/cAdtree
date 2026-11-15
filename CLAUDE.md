@@ -91,7 +91,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Restore primitive and Export:** `recovery-service` (`restoreRevisionToFolder`, used by design-case creation; the name is historical), `review-export` (Export for review).
 - **Identity and references:** `component-identity`, `references`.
 - **Knowledge Lab:** `src/knowledge/` (index, retrieval, persisted `records/`), test vault and Explorer under `tests/knowledge-lab`.
-- **UI shell:** `src/App.tsx` (app state and wiring), `src/components/`.
+- **UI shell:** `src/App.tsx` (shared state and wiring), `src/app/` (shell components and, in later stages, hooks per concern), `src/components/`.
 
 ## 3. Invariants (never weaken)
 
