@@ -11,11 +11,13 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- --port=${port}`,
     url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
     env: {
       ...process.env,
       CADTREE_TEST_AUTH: "1",
     },
   },
-  reporter: "list",
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
 });

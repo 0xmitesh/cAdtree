@@ -149,7 +149,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
   - Each commit must pass lint and tests on its own.
 - **Before every merge:**
   1. Fast-forward the local `main` checkout to the current GitHub `main`. Never test against a stale copy.
-  2. Test the piece on top of it, and check that the PR's CI checks (GitHub Actions `CI`) are green. They come in addition to the orchestrator's own runs, not instead of them.
+  2. Test the piece on top of it, and check that the PR's CI checks (GitHub Actions `CI`) are green. They come in addition to the orchestrator's own runs, not instead of them. GitHub Free can't enforce required checks on a private repo, so this is process-only: read the result with the REST call `GET /repos/{owner}/{repo}/commits/{sha}/check-runs` (GraphQL is blocked).
   3. After merging, confirm the GitHub tree equals the tested tree.
   4. Fast-forward the local checkout again.
 - **Never commit, push, open a PR or merge without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
@@ -178,6 +178,7 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 
 **Environment notes**
 - **Requirements:** Node 24 LTS, version 24.12 or newer (pinned by `.nvmrc` and `engines` in `package.json`; `engine-strict` is off).
+- **CI:** `.github/workflows/ci.yml` (workflow `CI`) runs lint, `npm test`, `npm run test:knowledge-lab` and `npm run build` on every push to `main`, on every PR and on manual runs, and the Playwright browser tests (Playwright's Chromium, `LC_ALL=C.UTF-8`) on PRs and manual runs. It never deploys.
 - **Flaky tests:** `home-setup.test.tsx` and `branches.test.tsx` may still fail under full-suite load (each passes alone). If one fails, rerun it on its own and rerun the full suite. `navigation-cleanup.test.tsx` was a focus race, fixed in #75; if it fails now, treat it as real.
 - **Browser tests in the cloud sandbox:** run `npm run test:ui` with Playwright's own Chromium (`npx playwright install chromium`, no `CADTREE_BROWSER_CHANNEL`) and `LC_ALL=C.UTF-8`. The sandbox's system Chrome crashes when it reads stored OPFS handles. On Windows or Mac, `CADTREE_BROWSER_CHANNEL=chrome` is fine.
 - **AI Studio leftovers (kept on purpose):** the repo still syncs with Google AI Studio, so the package name `react-example`, `metadata.json` and the Gemini placeholder in `.env.example` stay. The unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) were removed, and the stale status-doc copy in `public/assets/aistudio/` is gone.
@@ -194,7 +195,6 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 - **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
 - **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
-- **CI:** `.github/workflows/ci.yml` (workflow `CI`) runs lint, `npm test`, `npm run test:knowledge-lab` and `npm run build` on every push to `main` and on every PR, and the Playwright browser tests (Playwright's Chromium, `LC_ALL=C.UTF-8`) on PRs and manual runs. It never deploys.
 - **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards. Give every bundle a unique file name (e.g. `main-<short sha>.bundle`) and check `git bundle list-heads` on the device before fetching: re-sending a file under the same name has delivered a stale copy.
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
 - **Git writes need delete permission:** git has to delete its own lock files and replace files in the connected folder. Request delete permission at the first git write of each session **and again after the desktop app reconnects** (the grant doesn't survive a reconnect). Before any git write, check that a test delete works and **stop if it fails**: without permission a fast-forward half-applies, leaving `.git/index.lock` and partly written files.
