@@ -2307,64 +2307,59 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             <div className="desktop-workspace-tree">
               <WorkspaceTree {...treeProps} />
             </div>
+            {/* Always rendered so the Explorer above keeps its height; hidden and inert until a project is open. */}
             <div
               className={`project-navigation${!homeView && vaultState ? " has-project" : ""}`}
+              inert={homeView || !vaultState}
+              aria-hidden={homeView || !vaultState ? true : undefined}
             >
-              {!homeView ? (
-                <>
-                  {vaultState ? (
-                    <>
-                      <p className="rail-section-label">PROJECT</p>
-                      <button
-                        aria-label="History"
-                        disabled={!vaultState || busy}
-                        aria-current={
-                          activeTab === "history" ? "page" : undefined
-                        }
-                        onClick={() => navigate("history")}
-                      >
-                        <History size={18} />
-                        <span>History</span>
-                      </button>
-                      <button
-                        aria-label="Changes"
-                        disabled={!vaultState || busy}
-                        aria-current={
-                          activeTab === "changes" ? "page" : undefined
-                        }
-                        onClick={() => navigate("changes")}
-                      >
-                        <ScanLine size={18} />
-                        <span>Changes</span>
-                        {scanResult?.hasChanges ? (
-                          <i className="nav-change-dot" />
-                        ) : null}
-                      </button>
-                      <button aria-label="References" disabled={busy || !vaultState} aria-current={activeTab === 'references' ? 'page' : undefined} onClick={() => navigate('references')}><BookOpen size={18} /><span>References</span></button>
-                      <button
-                        aria-label="Settings"
-                        disabled={!vaultState || busy}
-                        aria-current={
-                          activeTab === "diagnostics" ? "page" : undefined
-                        }
-                        onClick={() => navigate("diagnostics")}
-                      >
-                        <Settings size={18} />
-                        <span>Settings</span>
-                      </button>
-                      <button
-                        aria-label="Learn cAdtree"
-                        aria-haspopup="dialog"
-                        disabled={busy}
-                        onClick={() => setLearningOpen(true)}
-                      >
-                        <GraduationCap size={18} />
-                        <span>Learn cAdtree</span>
-                      </button>
-                    </>
-                  ) : null}
-                </>
-              ) : null}
+              <p className="rail-section-label">PROJECT</p>
+              <button
+                aria-label="History"
+                disabled={!vaultState || busy}
+                aria-current={
+                  activeTab === "history" ? "page" : undefined
+                }
+                onClick={() => navigate("history")}
+              >
+                <History size={18} />
+                <span>History</span>
+              </button>
+              <button
+                aria-label="Changes"
+                disabled={!vaultState || busy}
+                aria-current={
+                  activeTab === "changes" ? "page" : undefined
+                }
+                onClick={() => navigate("changes")}
+              >
+                <ScanLine size={18} />
+                <span>Changes</span>
+                {scanResult?.hasChanges ? (
+                  <i className="nav-change-dot" />
+                ) : null}
+              </button>
+              <button aria-label="References" disabled={busy || !vaultState} aria-current={activeTab === 'references' ? 'page' : undefined} onClick={() => navigate('references')}><BookOpen size={18} /><span>References</span></button>
+              <button
+                aria-label="Settings"
+                disabled={!vaultState || busy}
+                aria-current={
+                  activeTab === "diagnostics" ? "page" : undefined
+                }
+                onClick={() => navigate("diagnostics")}
+              >
+                <Settings size={18} />
+                <span>Settings</span>
+              </button>
+              <button
+                aria-label="Learn cAdtree"
+                aria-haspopup="dialog"
+                disabled={busy}
+                onClick={() => setLearningOpen(true)}
+              >
+                <GraduationCap size={18} />
+                <span>Learn cAdtree</span>
+              </button>
             </div>
           </nav>
           <div className="rail-bottom">
