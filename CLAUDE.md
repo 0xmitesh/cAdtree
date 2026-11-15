@@ -126,7 +126,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 ## 4. How we work
 
 **Approval and scope**
-- **One feature or fix at a time.** If anything is uncertain, ask or counter-question before executing.
+- **One feature or fix at a time** (related small cleanups may be batched, see Batching in Roles and process). If anything is uncertain, ask or counter-question before executing.
 - **Name work by its title or problem** (e.g. "Remove Restore copy"), not by a bare item number, in reports, briefs and PR titles.
 - **For each item:**
   1. Read the actual code.
@@ -143,7 +143,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 
 **Git and PRs**
 - **Branches:** `main` is the development line for everything, including the Knowledge Lab (since 2026-11-13). `cadtree-knowledge-lab` is frozen at `3fc4fdf`, the same tree as `main` when development moved; nothing new goes there.
-- **One PR per reviewed piece:**
+- **One PR per reviewed piece** (small related cleanups may be batched, see Batching above):
   - Use stacked branches named `item<N>/p<k>-…`, based on `main` (`housekeeping/p<k>-…` or `docs/p<k>-…` for work outside an item).
   - Merge with **merge commits, not squash**.
   - Each commit must pass lint and tests on its own.
@@ -152,7 +152,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
   2. Test the piece on top of it.
   3. After merging, confirm the GitHub tree equals the tested tree.
   4. Fast-forward the local checkout again.
-- **Never commit, push, open a PR, merge or deploy without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
+- **Never commit, push, open a PR or merge without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
 
 **Verification:**
 - Run real checks: `npm run lint`, `npm test`, `npm run test:knowledge-lab` and `npm run build`. Use hands-on Chrome checks on disposable homes where relevant.
@@ -242,4 +242,4 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - One stable `CLAUDE.md` in the repo plus one living status doc in the Project; no new handoff documents (2026-11-10).
 - Every item: read the code, write a design note, get the founder's approval, then deliver in small reviewed PRs into `main` with merge commits, each tested on top of the current GitHub head (2026-11-10).
 - All development, including the Knowledge Lab, happens on `main`; `cadtree-knowledge-lab` is frozen (2026-11-13).
-- Cost-aware orchestration (2026-11-13): the main chat orchestrates; Sonnet 5.5 (high) implements; Opus 5.5 (medium) gives the independent review; the orchestrator runs the checks and merges approved items (§4).
+- Cost-aware orchestration (2026-11-13, updated 2026-11-15): the main chat orchestrates; Sonnet 5.5 (high) implements; Opus 5.5 (medium) gives the independent review; the orchestrator runs the checks and merges approved items (§4).
