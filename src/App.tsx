@@ -39,7 +39,6 @@ import {
 } from "./engine/application-records";
 import { ApplicationStatus } from "./components/ApplicationStatus";
 import { DesignCases } from "./components/DesignCases";
-import { changeCaseLifecycle } from "./engine/case-lifecycle-service";
 import { assertCaseWritable, caseWriteBlock } from "./engine/case-lifecycle";
 import { type WorkingFolderBindings } from "./engine/branch-state";
 import {
@@ -47,7 +46,6 @@ import {
   type ScanResult,
   type VaultState,
 } from "./engine/types";
-import { openExistingVault } from "./engine/vault-service";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { ReferencesView } from './components/ReferencesView';
 import { referenceWriteBlock } from './engine/references';
@@ -56,7 +54,6 @@ import { ProjectContextHeader } from "./components/ProjectContextHeader";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
 import { useSidebarWidth } from "./components/SidebarResize";
 import { DiagnosticsView } from "./components/DiagnosticsView";
-import type { CreateBranchParams } from "./components/CreateBranchDialog";
 import { assertFolderAccess, pickDirectory } from "./utils/folder-access";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
@@ -76,7 +73,6 @@ import {
   createProject,
   importProject,
   resolveManagedProject,
-  createManagedBranch,
   type WorkspaceState,
   type ManagedProject,
   type WorkspaceProjectEntry,
@@ -86,6 +82,7 @@ import { AppNotices } from "./app/AppNotices";
 import { NavigationRail } from "./app/NavigationRail";
 import { useAuthSession } from "./app/useAuthSession";
 import { useApplicationActions } from "./app/useApplicationActions";
+import { useBranchActions } from "./app/useBranchActions";
 import { useCaptureActions } from "./app/useCaptureActions";
 import { useDiagnosticsActions } from "./app/useDiagnosticsActions";
 import { useOperation } from "./app/useOperation";
@@ -1131,66 +1128,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setScanResult(null);
     setActiveTab(state.revisions.length ? "history" : "changes");
   };
-  const handleSelectBranch = async (branchId: string) => {
-    if (
-      operationRef.current ||
-      !vaultState ||
-      !vaultDir ||
-      branchId === activeBranchId
-    )
-      return;
-    contextVersion.current++;
-    setScanResult(null);
-    setStatusBanner(null);
-    await perform("scan", async (context) => {
-      await assertProjectWritable(context, true);
-      const state = await openExistingVault(vaultDir);
-      if (!context.current()) return;
-      applyVaultState(state);
-      if (!state.branches.some((b) => b.branchId === branchId))
-        throw new Error("Selected branch is missing. Reopen the vault.");
-      assertCaseWritable(state, branchId);
-      setActiveBranchId(branchId);
-      setWorkingDir(null);
-      const folder = workingFolders[branchId];
-      let readable = false;
-      try {
-        readable = Boolean(
-          folder && (await folder.queryPermission("read")) === "granted",
-        );
-      } catch {
-        /* Reconnect a stale handle explicitly. */
-      }
-      if (folder && readable) {
-        if (!context.current()) return;
-        setWorkingDir(folder);
-        await scan(vaultDir, workingFolders, branchId, context);
-      } else {
-        setWorkingFolders((previous) => {
-          const updated = { ...previous };
-          delete updated[branchId];
-          return updated;
-        });
-      }
-      const warning = workspace && managedProject
-        ? await persistWorkspace(
-            workspace,
-            { path: managedProject.record.containerPath, id: managedProject.record.projectId },
-            branchId,
-          )
-        : "";
-      if (context.current())
-        setStatusBanner(
-          !readable || warning
-            ? {
-                type: "info",
-                message:
-                  `${readable ? "" : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`.trim(),
-              }
-            : null,
-        );
-    });
-  };
   const {
     applicationOptions,
     handlePrepareApplication,
@@ -1212,112 +1149,37 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setScanResult,
     setStatusBanner,
   });
-  const handleCaseLifecycle = async (
-    branchId: string,
-    status: "active" | "archived",
-    expectedVersion: string | null,
-  ) => {
-    if (!vaultDir || !vaultState) throw new Error("Open the project first.");
-    await perform(
-      "scan",
-      async (context) => {
-        try {
-          await assertProjectWritable(context);
-          if (
-            (await vaultDir.queryPermission("readwrite")) !== "granted" &&
-            (await vaultDir.requestPermission("readwrite")) !== "granted"
-          )
-            throw new Error(
-              "Write access to the vault is required for lifecycle metadata.",
-            );
-          const result = await changeCaseLifecycle(
-            vaultDir,
-            {
-              projectId: vaultState.project.projectId,
-              branchId,
-              activeBranchId,
-              status,
-              expectedVersion,
-            },
-            applicationOptions(context),
-          );
-          if (context.current()) {
-            applyVaultState(result.state);
-            setStatusBanner({
-              type: "success",
-              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in History → Design cases or Show archived cases in Explorer." : "The working case has not been switched."} ${result.warning ?? ""}`,
-            });
-          }
-        } finally {
-          if (context.current()) {
-            try {
-              applyVaultState(await openExistingVault(vaultDir));
-            } catch {
-              /* Original error remains visible. */
-            }
-          }
-        }
-      },
-      true,
-    );
-  };
-  const handleReattachWorkingFolder = async () => {
-    if (managedProject && workspace) await refreshWorkspace();
-  };
-  const handleCreateBranch = async (params: CreateBranchParams) => {
-    if (!vaultDir || !vaultState || !managedProject || !workspace)
-      throw new Error("Open a project in a Cadtree workspace first.");
-    await ensureHomeAddress("workspace");
-    await perform(
-      "branch",
-      async (context) => {
-        await assertProjectWritable(context);
-        if (managedProject && workspace) {
-          const current = await createManagedBranch(
-            workspace.root,
-            managedProject.record.containerPath,
-            {
-              sourceRevisionId: params.sourceRevisionId,
-              name: params.name,
-              reason: params.reason,
-              signal: context.signal,
-              onProgress: context.progress,
-              budget: { workspaceAddress: await budgetWorkspaceAddress() },
-            },
-          );
-          if (!context.current()) return;
-          setManagedProject(current);
-          setVaultState(current.vaultState);
-          setWorkingFolders(current.workingFolders);
-          setWorkingDir(current.workingFolders[current.createdBranchId]!);
-          setActiveBranchId(current.createdBranchId);
-          setScanResult(null);
-          const warning = await persistWorkspace(
-            workspace,
-            { path: current.record.containerPath, id: current.record.projectId },
-            current.createdBranchId,
-          );
-          try {
-            await scan(
-              current.vaultDir,
-              current.workingFolders,
-              current.createdBranchId,
-              context,
-            );
-          } catch {
-            /* The published branch stays successful; connection diagnostics are refreshed next time. */
-          }
-          if (context.current())
-            setStatusBanner({
-              type: "success",
-              message: `Created and verified "${params.name}". Open ${workspace.root.name}/${current.workingPaths[current.createdBranchId]} manually in SolidWorks. ${warning}${pathBudgetWarnSentence(current.pathBudget) ? ` ${pathBudgetWarnSentence(current.pathBudget)}` : ""}`,
-            });
-          return;
-        }
-      },
-      true,
-    );
-  };
+  const {
+    handleSelectBranch,
+    handleCaseLifecycle,
+    handleReattachWorkingFolder,
+    handleCreateBranch,
+  } = useBranchActions({
+    vaultDir,
+    vaultState,
+    workingFolders,
+    activeBranchId,
+    managedProject,
+    workspace,
+    operationRef,
+    contextVersion,
+    perform,
+    assertProjectWritable,
+    scan,
+    applicationOptions,
+    applyVaultState,
+    persistWorkspace,
+    refreshWorkspace,
+    ensureHomeAddress,
+    budgetWorkspaceAddress,
+    setVaultState,
+    setManagedProject,
+    setWorkingFolders,
+    setWorkingDir,
+    setActiveBranchId,
+    setScanResult,
+    setStatusBanner,
+  });
   const { handleExportForReview, handleRetrieveReference } = useReviewActions({
     vaultDir,
     vaultState,
