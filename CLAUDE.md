@@ -91,7 +91,12 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Restore primitive and Export:** `recovery-service` (`restoreRevisionToFolder`, used by design-case creation; the name is historical), `review-export` (Export for review).
 - **Identity and references:** `component-identity`, `references`.
 - **Knowledge Lab:** `src/knowledge/` (index, retrieval, persisted `records/`), test vault and Explorer under `tests/knowledge-lab`.
-- **UI shell:** `src/App.tsx` (shared state and wiring), `src/app/` (shell components and hooks per concern, e.g. `useOperation`), `src/components/`.
+- **UI shell:** `src/App.tsx` (shared state; home/workspace/project open and leave, `leaveProject` / `resetActiveSessionUi`; the home-address prompt; Back/Forward wiring; home and workspace views) and `src/app/`:
+  - shell components: `NavigationRail`, `AppNotices`, `AppDialogs`, `ProjectViews` (the project tabs inside App's keyed container);
+  - `useOperation` (`perform`: one operation at a time, busy state, progress, banners, cancellation via `context.signal`; `context.current()` stops updates from an operation that has been replaced or unmounted) and `useAuthSession` (sign-in/out);
+  - action hooks per concern: `useCaptureActions`, `useApplicationActions`, `useBranchActions`, `useDiagnosticsActions`, `useReviewActions`. Each takes the current render's values and setters and runs its work through `perform`; hooks that write project files (all except `useDiagnosticsActions`) call `assertProjectWritable(context)` first;
+  - `types.ts` (shared types incl. `Perform`, `AssertProjectWritable`), `project-lookup.ts`.
+  - New UI concerns get their own hook or component here; reusable views stay in `src/components/`.
 
 ## 3. Invariants (never weaken)
 
@@ -137,6 +142,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Orchestrator** (the main chat, Opus): reads the code, writes the design notes, briefs the subagents, does the final review of every diff, runs all checks itself on the final head, opens and merges the PRs, updates the local checkout and the status doc. It keeps its own context small: broad code searches go to a read-only Explore subagent, not into the main chat.
 - **Executor** (subagent, model Sonnet 5.5, effort high): implements one piece from a precise brief. Each brief states the problem, the files in scope, the rules (cite CLAUDE.md sections), the required tests, the verification commands and the commit message; it asks for a report back in under 20 lines. Executors commit on the feature branch but never push.
 - **Independent reviewer** (subagent, model Opus 5.5, effort medium): reviews every piece before it's merged. It never edits, commits or pushes. Its brief says what to check (correctness, every write path, invariants, whether the tests fail without the fix) and asks for a verdict with blocker/should/nit findings in under 20–25 lines. Should-fix findings go back to the same executor as a follow-up commit; the orchestrator checks the follow-up diff itself.
+- **Critical refactors** (e.g. the `App.tsx` split, 2026-11-15): the founder may choose Opus 5.5 (medium) to implement and Opus 5.5 (high) to review instead of Sonnet. Pure refactors must prove they change nothing: bodies moved word for word, effect order unchanged, and rendered `body.innerHTML` identical between base and head in many app states (seeded clock, `Math.random`, `crypto.getRandomValues` and `randomUUID`; compare same-run pairs).
 - **Haiku:** not used for reviews or engine code; at most for purely mechanical chores.
 - **Batching:** small, related cleanups may share one PR, with one commit each. Anything touching identity, writes or invariants gets its own PR.
 - **Standing approval:** once the founder approves an item (or its design note), the orchestrator may commit, push, open the PR and merge it when the review has no open blockers or should-fix items and all checks pass on the final head. It reports after each merge.
@@ -155,7 +161,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Never commit, push, open a PR or merge without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
 
 **Verification:**
-- Run real checks: `npm run lint`, `npm test`, `npm run test:knowledge-lab` and `npm run build`. Use hands-on Chrome checks on disposable homes where relevant.
+- Run real checks: `npm run lint`, `npm test`, `npm run test:knowledge-lab` and `npm run build`, plus `npm run test:ui` when UI or specs change. Use hands-on Chrome checks on disposable homes where relevant.
 - Report only the commands that actually ran, with their results.
 - Don't turn sandbox network failures into claims that the app works.
 - Update the status doc at the end of each session instead of writing new handoff documents.
@@ -168,7 +174,7 @@ npm run dev                  # app, http://127.0.0.1:2500 (real Firebase sign-in
 npm run dev:synthetic        # synthetic preview, :2517 (fake "Test Engineer" sign-in; seeds 4 workspaces/9 projects)
 npm run dev:knowledge-lab    # :2727, Knowledge Explorer at /tests/knowledge-lab.html
 npm run lint                 # tsc --noEmit
-npm test                     # engine/history/knowledge/components (~580 tests)
+npm test                     # engine/history/knowledge/components (~630 tests)
 npm run test:knowledge-lab   # 27 tests
 npm run build
 npm run test:ui              # Playwright; needs `npx playwright install chromium` or CADTREE_BROWSER_CHANNEL=chrome
@@ -192,10 +198,10 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 On Windows, `_test-home` has a deliberately deep path for reproducing path-budget problems.
 
 **Agent environment** (Claude sessions with a connected folder):
-- **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
+- **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server: in Terminal on the Mac, or on Windows by double-clicking `C:\Users\1\Documents\cAdtree\start-cadtree-dev.cmd` (outside the repo; it checks Node, installs packages if missing, runs `npm.cmd run dev` and keeps its window open on errors). Computer use can't type into terminals, so agents can't start it.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
 - **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
-- **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards. Give every bundle a unique file name (e.g. `main-<short sha>.bundle`) and check `git bundle list-heads` on the device before fetching: re-sending a file under the same name has delivered a stale copy.
+- **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards. Give every bundle a unique file name (e.g. `main-<short sha>.bundle`) and check `git bundle list-heads` on the device before fetching: re-sending a file under the same name has delivered a stale copy. Fetch with enough history before bundling (`git fetch --depth=50 origin main` in the shallow cloud clone) and run `git bundle verify`: a too-shallow clone produced a bundle that "did not send all necessary objects".
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
 - **Git writes need delete permission:** git has to delete its own lock files and replace files in the connected folder. Request delete permission at the first git write of each session **and again after the desktop app reconnects** (the grant doesn't survive a reconnect). Before any git write, check that a test delete works and **stop if it fails**: without permission a fast-forward half-applies, leaving `.git/index.lock` and partly written files.
 
@@ -238,10 +244,13 @@ These are decided. Build on them; don't redesign around them. The full decision 
   - keep working from it → **Create design case**.
 - "Restore copy" and `recoveries/` are gone and must not come back as a parallel path. Existing `recoveries/` folders are left untouched; cAdtree never deletes user data.
 - Apply (merge or Bring back) only changes working files; the user saves a revision afterwards. Nothing creates a revision automatically.
+- Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files or a subfolder that stays is kept and not selectable; a folder to remove that holds only untracked OS clutter stops the Apply before any write (a deliberate exception to skipping untracked clutter: cAdtree never deletes it, so the user deletes it or unticks the folder); recovery undoes folder changes too. Case-only renames stay blocked at review.
 - Design cases are archived, never auto-deleted. Duplicated IDs become read-only, never merged.
 
 **How we work**
 - One stable `CLAUDE.md` in the repo plus one living status doc in the Project; no new handoff documents (2026-11-10).
 - Every item: read the code, write a design note, get the founder's approval, then deliver in small reviewed PRs into `main` with merge commits, each tested on top of the current GitHub head (2026-11-10).
 - All development, including the Knowledge Lab, happens on `main`; `cadtree-knowledge-lab` is frozen (2026-11-13).
-- Cost-aware orchestration (2026-11-13, updated 2026-11-15): the main chat orchestrates; Sonnet 5.5 (high) implements; Opus 5.5 (medium) gives the independent review; the orchestrator runs the checks and merges approved items (§4).
+- Cost-aware orchestration (2026-11-13, updated 2026-11-15): the main chat orchestrates; Sonnet 5.5 (high) implements; Opus 5.5 (medium) gives the independent review; the orchestrator runs the checks and merges approved items (§4). Critical refactors may use Opus (medium) to implement and Opus (high) to review, at the founder's choice.
+- CI (2026-11-15, #83): GitHub Actions `CI` must be green on a PR before merging, in addition to the orchestrator's own runs; it never deploys.
+- `App.tsx` split (2026-11-15, #84–#88): concerns live in `src/app/` hooks and shell components (§2 code map); home/workspace/project open-leave and Back/Forward deliberately stay in `App.tsx` (moving them was declined as not worth the risk).
