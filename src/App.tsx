@@ -5,7 +5,6 @@ import {
   RealFileSystemAdapter,
 } from "./engine/fs-adapter";
 import {
-  clearAllConvenienceMetadata,
   rememberWorkspace,
   getRememberedWorkspace,
   type RememberedWorkspace,
@@ -31,48 +30,27 @@ import {
   type HomeAddress,
 } from "./components/FolderAddressDialog";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
-import { exportRevisionForReview } from './engine/review-export';
-import type { ExportReviewAction } from './components/ReviewExportDialog';
 import { joinAddress } from "./engine/path-budget";
-import { captureRevision, ReviewStaleError } from "./engine/revision-service";
-import { componentWriteBlock, enableComponentTracking, type IdentityReview } from './engine/component-identity';
-import {
-  prepareApplication,
-  applyPreparedApplication,
-  recoverApplication,
-  abandonApplication,
-  requestApplicationWriteAccess,
-  type PreparedApplication,
-} from "./engine/application-service";
+import { componentWriteBlock, enableComponentTracking } from './engine/component-identity';
+import { requestApplicationWriteAccess } from "./engine/application-service";
 import {
   applicationCaptureBlock,
   branchApplications,
-  type ApplicationReview,
 } from "./engine/application-records";
 import { ApplicationStatus } from "./components/ApplicationStatus";
 import { DesignCases } from "./components/DesignCases";
 import { changeCaseLifecycle } from "./engine/case-lifecycle-service";
 import { assertCaseWritable, caseWriteBlock } from "./engine/case-lifecycle";
+import { type WorkingFolderBindings } from "./engine/branch-state";
 import {
-  getBranchBaseline,
-  validateWorkingFolderBindings,
-  type WorkingFolderBindings,
-} from "./engine/branch-state";
-import { scanBranchChanges } from "./engine/scanner";
-import {
-  type FileSpecificNote,
   MAIN_BRANCH_ID,
   type ScanResult,
   type VaultState,
 } from "./engine/types";
-import {
-  formatRevisionNumber,
-  openExistingVault,
-  verifyRevisionObjects,
-} from "./engine/vault-service";
+import { openExistingVault } from "./engine/vault-service";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { ReferencesView } from './components/ReferencesView';
-import { retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
+import { referenceWriteBlock } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ProjectContextHeader } from "./components/ProjectContextHeader";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
@@ -107,7 +85,11 @@ import { AppDialogs } from "./app/AppDialogs";
 import { AppNotices } from "./app/AppNotices";
 import { NavigationRail } from "./app/NavigationRail";
 import { useAuthSession } from "./app/useAuthSession";
+import { useApplicationActions } from "./app/useApplicationActions";
+import { useCaptureActions } from "./app/useCaptureActions";
+import { useDiagnosticsActions } from "./app/useDiagnosticsActions";
 import { useOperation } from "./app/useOperation";
+import { useReviewActions } from "./app/useReviewActions";
 import type {
   ActiveTab,
   Context,
@@ -1114,93 +1096,25 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const scan = async (
-    vault: FileSystemDirectoryAdapter,
-    folders: WorkingFolderBindings,
-    branchId: string,
-    context: Context,
-    explicitContext?: {
-      root: FileSystemDirectoryAdapter;
-      path: string;
-    } | null,
-    // Called when the open project was re-found at a new folder during this scan (the banner is already set).
-    onRebound?: (notice: string) => void,
-  ) => {
-    let folder = folders[branchId];
-    let state: VaultState;
-    // Without an explicit location, the open project's stored path is used, and re-found by ID if it moved.
-    const managedContext =
-      explicitContext !== undefined
-        ? explicitContext
-        : managedProject && workspace
-          ? { root: workspace.root, path: managedProject.record.containerPath }
-          : null;
-    if (managedContext) {
-      let current: ManagedProject;
-      try {
-        current = await resolveManagedProject(
-          managedContext.root,
-          managedContext.path,
-        );
-        if (
-          explicitContext === undefined &&
-          current.record.projectId !== managedProject?.record.projectId
-        )
-          throw new Error("The project at the stored location changed.");
-      } catch (error) {
-        if (explicitContext !== undefined) throw error;
-        const found = await refindOpenProject(context);
-        if (!found) throw error;
-        if (found.kind === "unavailable") throw new Error(found.reason);
-        current = found.project;
-        vault = current.vaultDir;
-        if (found.renamed) {
-          const notice = renamedNotice(found.project);
-          if (context.current()) setStatusBanner({ type: "info", message: notice });
-          onRebound?.(notice);
-        }
-      }
-      if (context.current()) {
-        setManagedProject(current);
-        setWorkingFolders(current.workingFolders);
-        setWorkingDir(current.workingFolders[branchId] ?? null);
-      }
-      if (!current.ready || current.issues.length)
-        throw new Error(
-          `This managed project is read-only. ${current.issues.join(" ")}`,
-        );
-      folders = current.workingFolders;
-      folder = folders[branchId];
-      state = current.vaultState;
-    } else state = await openExistingVault(vault);
-    if (!folder)
-      throw new Error(
-        "Connect the selected branch’s working folder before scanning.",
-      );
-    if (!context.current()) return;
-    applyVaultState(state);
-    await validateWorkingFolderBindings(state, vault, folders, false);
-    if ((await folder.queryPermission("read")) !== "granted")
-      throw new Error(
-        "Reconnect the selected branch’s working folder to restore read permission.",
-      );
-    const baseline = getBranchBaseline(state, branchId);
-    const result = await scanBranchChanges(folder, branchId, baseline, {
-      signal: context.signal,
-      onProgress: (path, files, bytes) =>
-        context.progress({
-          phase: "scanning_source",
-          currentFile: path,
-          processedFiles: files,
-          totalFiles: files,
-          processedBytes: bytes,
-          totalBytes: bytes,
-          message: `Scanning ${path}…`,
-        }),
-    });
-    if (context.current()) setScanResult(result);
-    return result;
-  };
+  const { scan, handleScanCurrent, handleCaptureRevision } = useCaptureActions({
+    vaultDir,
+    workingDir,
+    workingFolders,
+    activeBranchId,
+    managedProject,
+    workspace,
+    authStateRef,
+    perform,
+    assertProjectWritable,
+    refindOpenProject,
+    applyVaultState,
+    setVaultState,
+    setManagedProject,
+    setWorkingFolders,
+    setWorkingDir,
+    setScanResult,
+    setStatusBanner,
+  });
   // Install a project only after all explicit connections have passed identity checks.
   const installProject = async (
     state: VaultState,
@@ -1277,120 +1191,26 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         );
     });
   };
-  const handleScanCurrent = async () => {
-    if (!vaultDir) return;
-    await perform("scan", async (context) => {
-      setScanResult(null);
-      let renamed: string | null = null;
-      const result = await scan(
-        vaultDir,
-        workingFolders,
-        activeBranchId,
-        context,
-        undefined,
-        (notice) => {
-          renamed = notice;
-        },
-      );
-      if (result && context.current())
-        setStatusBanner({
-          type: "info",
-          message: `${renamed ? `${renamed} ` : ""}${
-            result.hasChanges
-              ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
-              : "This working folder matches its branch’s saved revision."
-          }`,
-        });
-    });
-  };
-  const handleCaptureRevision = async (
-    branchId: string,
-    params: {
-      summary: string;
-      notes: { problem: string; modification: string; observations: string };
-      fileNotes: FileSpecificNote[];
-      reviewedChangesSignature: string;
-      identityReview?: IdentityReview;
-      referenceReview?: ReferenceReview;
-      referenceAttachments?: import('./engine/references').PendingReferenceAttachment[];
-      onReferenceAttachmentsStored?: (review: ReferenceReview) => void;
-    },
-  ) => {
-    if (!workingDir || !vaultDir || branchId !== activeBranchId)
-      throw new Error(
-        "The active branch connection changed. Scan again before saving.",
-      );
-    await perform(
-      "capture",
-      async (context) => {
-        try {
-          await assertProjectWritable(context);
-          const result = await captureRevision(workingDir, vaultDir, {
-            ...params,
-            referenceAuthor: authStateRef.current.user ? { id: authStateRef.current.user.uid, displayName: authStateRef.current.user.displayName || authStateRef.current.user.email || 'User' } : undefined,
-            onReferenceAttachmentsStored: (review, state) => {
-              if (!context.current()) return;
-              setVaultState(state);
-              params.onReferenceAttachmentsStored?.(review);
-            },
-            branchId,
-            workingFolders,
-            resolveWorkingFolders:
-              managedProject && workspace
-                ? async (state) => {
-                    const current = await resolveManagedProject(
-                      workspace.root,
-                      managedProject.record.containerPath,
-                      state,
-                    );
-                    if (!current.ready || current.issues.length)
-                      throw new Error(current.issues.join(" "));
-                    return current.workingFolders;
-                  }
-                : undefined,
-            signal: context.signal,
-            onProgress: context.progress,
-          });
-          if (!context.current()) return;
-          setVaultState(result.vaultState);
-          setScanResult(null);
-          // Publication succeeded even if a subsequent scan loses folder access.
-          let scanWarning = "";
-          try {
-            await scan(vaultDir, workingFolders, branchId, context);
-          } catch (error) {
-            scanWarning = `Rescan needed: ${error instanceof Error ? error.message : String(error)}`;
-          }
-          if (context.current())
-            setStatusBanner({
-              type: "success",
-              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this working case. ${result.cacheWarning ?? ""} ${scanWarning}`,
-            });
-        } catch (error) {
-          if (error instanceof ReviewStaleError && context.current())
-            setScanResult(error.freshScan);
-          throw error;
-        }
-      },
-      true,
-    );
-  };
-  const applicationFolders = async (state: VaultState) => {
-    if (!managedProject || !workspace) return workingFolders;
-    const current = await resolveManagedProject(
-      workspace.root,
-      managedProject.record.containerPath,
-      state,
-    );
-    if (!current.ready || current.issues.length)
-      throw new Error(current.issues.join(" "));
-    return current.workingFolders;
-  };
-  const applicationOptions = (context: Context) => ({
+  const {
+    applicationOptions,
+    handlePrepareApplication,
+    handleRefreshApplicationReview,
+    handleApplyApplication,
+    handleRecoverApplication,
+    handleAbandonApplication,
+  } = useApplicationActions({
+    vaultDir,
+    vaultState,
+    workingDir,
     workingFolders,
-    resolveWorkingFolders: applicationFolders,
-    signal: context.signal,
-    onProgress: context.progress,
+    activeBranchId,
+    managedProject,
+    workspace,
+    perform,
+    assertProjectWritable,
+    applyVaultState,
+    setScanResult,
+    setStatusBanner,
   });
   const handleCaseLifecycle = async (
     branchId: string,
@@ -1436,128 +1256,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               /* Original error remains visible. */
             }
           }
-        }
-      },
-      true,
-    );
-  };
-  const handlePrepareApplication = async (review: ApplicationReview) => {
-    if (!vaultDir || review.destinationBranchId !== activeBranchId)
-      throw new Error("Destination context changed. Refresh and review again.");
-    const result = await perform(
-      "apply",
-      async (context) => {
-        await assertProjectWritable(context);
-        await requestApplicationWriteAccess(vaultDir, workingDir);
-        return prepareApplication(
-          vaultDir,
-          review,
-          applicationOptions(context),
-        );
-      },
-      true,
-    );
-    if (!result) throw new Error("Application preparation did not finish.");
-    return result;
-  };
-  const handleRefreshApplicationReview = async () => {
-    if (!vaultDir) throw new Error("Reconnect the revision vault.");
-    await perform(
-      "scan",
-      async (context) => {
-        const state = await openExistingVault(vaultDir);
-        if (context.current()) {
-          applyVaultState(state);
-          setScanResult(null);
-        }
-      },
-      true,
-    );
-  };
-  const refreshApplicationState = async () => {
-    if (!vaultDir) return;
-    try {
-      applyVaultState(await openExistingVault(vaultDir));
-      setScanResult(null);
-    } catch {
-      /* The operation's original permission/outcome error remains visible. */
-    }
-  };
-  const handleApplyApplication = async (prepared: PreparedApplication) => {
-    if (!vaultDir || prepared.review.destinationBranchId !== activeBranchId)
-      throw new Error("Destination context changed. Refresh and review again.");
-    await perform(
-      "apply",
-      async (context) => {
-        try {
-          await assertProjectWritable(context);
-          await applyPreparedApplication(
-            vaultDir,
-            prepared,
-            applicationOptions(context),
-          );
-          if (context.current())
-            setStatusBanner({
-              type: "success",
-              message:
-                prepared.plan.mode === "revert"
-                  ? "Brought back into working files — revision not yet saved."
-                  : "Applied to working files — revision not yet saved.",
-            });
-        } finally {
-          if (context.current()) await refreshApplicationState();
-        }
-      },
-      true,
-    );
-  };
-  const handleRecoverApplication = async (id: string) => {
-    if (!vaultDir || !vaultState) return;
-    await perform(
-      "apply",
-      async (context) => {
-        try {
-          await assertProjectWritable(context);
-          await requestApplicationWriteAccess(vaultDir, workingDir);
-          const result = await recoverApplication(
-            vaultDir,
-            vaultState.project.projectId,
-            activeBranchId,
-            id,
-            applicationOptions(context),
-          );
-          if (result.manualPaths.length)
-            throw new Error(
-              `Manual recovery required: ${result.manualPaths.join(", ")}. Unexpected files remain untouched; readable copies are retained under the operation's unexpected folder. Inspect the before-state evidence, restore affected paths manually, then retry recovery.`,
-            );
-          if (context.current())
-            setStatusBanner({
-              type: "success",
-              message:
-                "Affected file before-states recovered and verified. Unrelated files and directories were retained. Scan before saving.",
-            });
-        } finally {
-          if (context.current()) await refreshApplicationState();
-        }
-      },
-      true,
-    );
-  };
-  const handleAbandonApplication = async (id: string) => {
-    if (!vaultDir || !vaultState) return;
-    await perform(
-      "apply",
-      async (context) => {
-        try {
-          await assertProjectWritable(context);
-          await abandonApplication(
-            vaultDir,
-            vaultState.project.projectId,
-            activeBranchId,
-            id,
-          );
-        } finally {
-          if (context.current()) await refreshApplicationState();
         }
       },
       true,
@@ -1620,160 +1318,41 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const handleExportForReview: ExportReviewAction = async (plan, parent, folderName) => {
-    if (!vaultDir || !vaultState) throw new Error('Open the saved project before exporting.');
-    const result = await perform('export', async context => {
-      await assertProjectWritable(context);
-      return exportRevisionForReview({
-      vaultDir, parent, plan, folderName, workingFolders,
-      signal: context.signal, onProgress: context.progress,
-      resolveWorkingFolders: managedProject && workspace ? async () => {
-        const current = await resolveManagedProject(workspace.root, managedProject.record.containerPath);
-        if (current.record.projectId !== plan.projectId || !current.ready || current.issues.length) throw new Error('Reconnect the project to validate its working-folder isolation before exporting.');
-        return current.workingFolders;
-      } : undefined,
-    });
-    }, true);
-    if (!result) throw new Error('Export did not complete.');
-    return result;
-  };
-  const handleVerifyObjects = async (ids: string[]) => {
-    if (!vaultDir || !vaultState) return;
-    await perform("verify", async (context) => {
-      let processedFiles = 0,
-        processedBytes = 0,
-        corrupt = false;
-      const targets = vaultState.revisions.filter((r) =>
-        ids.includes(r.manifest.revisionId),
-      );
-      const totalFiles = targets.reduce(
-        (n, r) => n + r.manifest.files.length,
-        0,
-      );
-      const totalBytes = targets.reduce(
-        (n, r) => n + r.manifest.files.reduce((s, f) => s + f.size, 0),
-        0,
-      );
-      for (const revision of targets) {
-        if (context.signal.aborted)
-          throw new DOMException(
-            "Verification cancelled. Completed checks have been retained.",
-            "AbortError",
-          );
-        context.progress({
-          phase: "verifying_objects",
-          processedFiles,
-          totalFiles,
-          processedBytes,
-          totalBytes,
-          message: `Verifying ${formatRevisionNumber(revision.manifest.displayNumber)}…`,
-        });
-        const verified = await verifyRevisionObjects(
-          vaultDir,
-          revision,
-          context.signal,
-        );
-        corrupt ||= verified.integrityStatus === "corrupted";
-        if (context.current())
-          setVaultState((previous) =>
-            previous
-              ? {
-                  ...previous,
-                  revisions: previous.revisions.map((r) =>
-                    r.manifest.revisionId === verified.manifest.revisionId
-                      ? verified
-                      : r,
-                  ),
-                }
-              : previous,
-          );
-        if (verified.integrityStatus === "objects_verified") {
-          processedFiles += verified.manifest.files.length;
-          processedBytes += verified.manifest.files.reduce(
-            (n, f) => n + f.size,
-            0,
-          );
-        }
-      }
-      if (context.current())
-        setStatusBanner({
-          type: corrupt ? "error" : "success",
-          message: corrupt
-            ? "One or more revisions failed content verification."
-            : `Verified file contents across ${targets.length} revisions.`,
-        });
-    });
-  };
-  const handleVerifySingleRevisionObjects = (id: string) =>
-    handleVerifyObjects([id]);
-  const handleVerifyAllObjects = () =>
-    handleVerifyObjects(
-      vaultState?.revisions.map((r) => r.manifest.revisionId) ?? [],
-    );
-  const clearConnections = async () => {
-    await clearAllConvenienceMetadata();
-    homeAddressCache.current = [];
-    setHomeAddress(null);
-    setConvenienceEpoch((value) => value + 1);
-    setRememberedWorkspace(null);
-    setRememberedHome(null);
-    if (workspace && managedProject) {
-      const current = await openWorkspace(workspace.root);
-      const found = locateProjectById(
-        current,
-        managedProject.record.projectId,
-        managedProject.record.containerPath,
-      );
-      if (found.kind === "unavailable") {
-        setWorkspace(current);
-        setProjectUnavailable(found.reason);
-        setStatusBanner({ type: "error", message: found.reason });
-        return;
-      }
-      setProjectUnavailable(null);
-      const managed = found.project;
-      setWorkspace(current);
-      setManagedProject(managed);
-      setVaultState(managed.vaultState);
-      setWorkingFolders(managed.workingFolders);
-      setWorkingDir(managed.workingFolders[activeBranchId] ?? null);
-      setScanResult(null);
-      setActiveTab("history");
-      setStatusBanner({
-        type: "info",
-        message:
-          "Reset remembered folder connections and addresses across all accounts and workspaces in this browser. The current workspace was reread; reconnect folders and re-enter their addresses when needed.",
-      });
-      return;
-    }
-    setWorkingFolders({});
-    setWorkingDir(null);
-    setScanResult(null);
-    if (vaultDir) {
-      setVaultState(await openExistingVault(vaultDir));
-      setActiveTab("history");
-    }
-    setStatusBanner({
-      type: "info",
-      message:
-        "Reset remembered folder connections and addresses across all accounts and workspaces in this browser. Saved history was reread from the vault. Reconnect working folders and re-enter their addresses when needed.",
-    });
-  };
-  const handleSimulateClearMetadataAndReopenVault = async () => {
-    await perform("connect", clearConnections);
-  };
-  const handleRetrieveReference = async (referenceId: string, versionId: string) => {
-    if (!vaultDir || !vaultState) throw new Error('Open a project first.');
-    await perform('references', async context => {
-      if (await vaultDir.requestPermission('read') !== 'granted') throw new Error('Allow read access to the project folder, then retrieve the attachment again.');
-      const { version, bytes } = await retrieveReferenceAttachment(vaultDir, vaultState.project.projectId, referenceId, versionId);
-      if (!context.current() || context.signal.aborted) throw new Error('Attachment retrieval cancelled.');
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }));
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = version.originalFilename;
-      document.body.appendChild(anchor); anchor.click(); anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, true);
-  };
+  const { handleExportForReview, handleRetrieveReference } = useReviewActions({
+    vaultDir,
+    vaultState,
+    workingFolders,
+    managedProject,
+    workspace,
+    perform,
+    assertProjectWritable,
+  });
+  const {
+    handleVerifySingleRevisionObjects,
+    handleVerifyAllObjects,
+    handleSimulateClearMetadataAndReopenVault,
+  } = useDiagnosticsActions({
+    vaultDir,
+    vaultState,
+    activeBranchId,
+    managedProject,
+    workspace,
+    homeAddressCache,
+    perform,
+    setHomeAddress,
+    setConvenienceEpoch,
+    setRememberedWorkspace,
+    setRememberedHome,
+    setWorkspace,
+    setProjectUnavailable,
+    setManagedProject,
+    setVaultState,
+    setWorkingFolders,
+    setWorkingDir,
+    setScanResult,
+    setActiveTab,
+    setStatusBanner,
+  });
   const busy = operation !== null || signOutPending;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
