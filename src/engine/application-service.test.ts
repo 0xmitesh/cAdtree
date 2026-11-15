@@ -26,7 +26,7 @@ import {
 import { createIdentityReview } from "./component-identity";
 import { getBranchBaseline } from "./branch-state";
 import { eventIdCandidate, isEventId } from "./ids";
-import { sealApplication, applicationStagedPath, applicationPlanPath } from "./application-records";
+import { sealApplication, applicationStagedPath, applicationPlanPath, appendApplicationEvent } from "./application-records";
 import {
   applicationCaptureBlock,
   branchApplications,
@@ -1779,4 +1779,46 @@ test("sealed record: altered folderActions (extra, missing, wrong operation, fil
     prepareApplication(f2.vault, { ...review, choices }, f2.options),
     /changed/,
   );
+});
+
+test("case-only folder renames are blocked at review and nothing is written", async () => {
+  const scenarios: [string, (m: FileSystemDirectoryAdapter) => Promise<void>, (m: FileSystemDirectoryAdapter) => Promise<void>][] = [
+    [
+      "empty folder docs -> Docs",
+      async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "docs"); },
+      async (m) => { await m.removeEntry(["docs"]); await mkdir(m, "Docs"); },
+    ],
+    [
+      "files moved A/ -> a/",
+      async (m) => { await writeAt(m, "A/x.txt", "x"); },
+      async (m) => { await m.removeEntry(["A"], { recursive: true }); await writeAt(m, "a/x.txt", "x"); },
+    ],
+  ];
+  for (const [name, r1, r2] of scenarios) {
+    const f = await folderFixture({ r1, r2 });
+    const { plan, review } = await f.review();
+    assert.equal(plan.ready, false, name);
+    assert.ok(plan.collisions.length > 0, name);
+    assert.ok(plan.blockers.some((b) => /collisions/.test(b)), name);
+    const before = await inventory(f.main);
+    await assert.rejects(prepareApplication(f.vault, review, f.options), /collisions/, name);
+    assert.equal(await inventory(f.main), before, name);
+    assert.equal(branchApplications(await openExistingVault(f.vault), "branch-main").length, 0, name);
+  }
+});
+
+test("a recovery-attempt event is accepted for parents of add/create actions only, not of a delete action", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
+    r2: async (m) => { await writeAt(m, "New/N.txt", "n"); },
+  });
+  const op = await f.apply(["New/N.txt"]);
+  assert.deepEqual(op.record!.plan.actions.map((a) => a.operation), ["delete"]);
+  await appendApplicationEvent(f.vault, op, { kind: "recovery-start" });
+  await appendApplicationEvent(f.vault, op, { kind: "recovery-attempt", path: "New/N.txt" });
+  assert.equal((await f.lastOp()).status, "unresolved");
+  await appendApplicationEvent(f.vault, op, { kind: "recovery-attempt", path: "New" });
+  const after = await f.lastOp();
+  assert.equal(after.status, "unavailable");
+  assert.match(after.error ?? "", /unknown action/);
 });

@@ -490,6 +490,7 @@ export function buildApplyPreview(
   // empty in the result (the source deletes files only when they are selected).
   const directories = new Set(context.destination.manifest.directories);
   const collisions: string[] = [];
+  const caseClashInput: string[] = [];
   const created = folderActions.filter((a) => a.operation === "create");
   const removed = new Set(
     folderActions.filter((a) => a.operation === "remove").map((a) => a.path),
@@ -513,12 +514,15 @@ export function buildApplyPreview(
       )
         blockers.push(`${path}: ${FOLDER_KEPT_MESSAGE}; untick it.`);
     }
+    // Case-only clashes are judged before removals: a removed folder still exists
+    // when the apply writes (a case-only rename cannot be written safely).
+    caseClashInput.push(...directories);
     for (const path of removed) directories.delete(path);
     for (const path of result.keys())
       if (directories.has(path))
         collisions.push(`File/directory path collision at "${path}".`);
     collisions.push(
-      ...checkCaseInsensitiveCollisions([...result.keys(), ...directories]),
+      ...checkCaseInsensitiveCollisions([...result.keys(), ...caseClashInput]),
     );
   } catch (error) {
     collisions.push(error instanceof Error ? error.message : String(error));

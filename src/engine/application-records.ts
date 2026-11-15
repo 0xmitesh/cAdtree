@@ -339,14 +339,15 @@ function classify(operation: ApplicationOperation, state: VaultState) {
           (a) => a.operation !== "keep" && a.path === event.path,
         ) &&
         !record.plan.folderActions.some((a) => a.path === event.path) &&
-        // Recovery may also remove parent folders that applied files or created
+        // Recovery may also remove parent folders that added files or created
         // folders brought along; those are not actions of their own.
         !(
           event.kind === "recovery-attempt" &&
           event.path &&
-          [...record.plan.actions, ...record.plan.folderActions].some((a) =>
-            a.path.startsWith(`${event.path}/`),
-          )
+          [
+            ...record.plan.actions.filter((a) => a.operation === "add"),
+            ...record.plan.folderActions.filter((a) => a.operation === "create"),
+          ].some((a) => a.path.startsWith(`${event.path}/`))
         )
       )
         throw new Error("Application event references an unknown action.");
