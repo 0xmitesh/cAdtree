@@ -7,7 +7,7 @@ import {
 } from "../components/ui";
 import type { ProgressUpdate, VaultState } from "../engine/types";
 import type { ManagedProject } from "../engine/workspace-service";
-import type { ActiveTab, StatusBanner } from "./types";
+import type { ActiveTab, BannerScope, StatusBanner } from "./types";
 
 export interface AppNoticesProps {
   progress: ProgressUpdate | null;
@@ -16,7 +16,7 @@ export interface AppNoticesProps {
   activeTab: ActiveTab;
   statusBanner: StatusBanner | null;
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
-  bannerScope: "workspace" | "project";
+  bannerScope: BannerScope;
   projectView: boolean;
   busy: boolean;
   vaultState: VaultState | null;

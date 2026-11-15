@@ -9,7 +9,7 @@ import {
 } from "../components/WorkspaceTree";
 import type { HomeState } from "../engine/home-service";
 import type { VaultState } from "../engine/types";
-import type { PendingHome, SignInPrompt, StatusBanner } from "./types";
+import type { BannerScope, PendingHome, SignInPrompt, StatusBanner } from "./types";
 
 export interface AppDialogsProps {
   busy: boolean;
@@ -20,7 +20,7 @@ export interface AppDialogsProps {
   pendingHome: PendingHome | null;
   setPendingHome: Dispatch<SetStateAction<PendingHome | null>>;
   connectHome: (create: boolean) => Promise<void>;
-  setBannerScope: Dispatch<SetStateAction<"workspace" | "project">>;
+  setBannerScope: Dispatch<SetStateAction<BannerScope>>;
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
   onCompleteHomeSetup: (path: string) => Promise<void>;
   addressPrompt: { resolve: (saved: boolean) => void } | null;
