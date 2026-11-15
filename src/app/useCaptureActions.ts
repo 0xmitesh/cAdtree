@@ -14,8 +14,7 @@ import type { FileSpecificNote, ScanResult, VaultState } from "../engine/types";
 import { formatRevisionNumber, openExistingVault } from "../engine/vault-service";
 import { resolveManagedProject, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
 import { renamedNotice, type OpenProjectLookup } from "./project-lookup";
-import type { Context, StatusBanner } from "./types";
-import type { useOperation } from "./useOperation";
+import type { AssertProjectWritable, Context, Perform, StatusBanner } from "./types";
 
 export type UseCaptureActionsArgs = {
   vaultDir: FileSystemDirectoryAdapter | null;
@@ -25,8 +24,8 @@ export type UseCaptureActionsArgs = {
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
   authStateRef: RefObject<AuthSnapshot>;
-  perform: ReturnType<typeof useOperation>["perform"];
-  assertProjectWritable: (context: Context, readOnlyOperation?: boolean) => Promise<ManagedProject | null>;
+  perform: Perform;
+  assertProjectWritable: AssertProjectWritable;
   refindOpenProject: (context: Context, prescanned?: WorkspaceState) => Promise<OpenProjectLookup | null>;
   applyVaultState: (next: VaultState) => void;
   setVaultState: Dispatch<SetStateAction<VaultState | null>>;

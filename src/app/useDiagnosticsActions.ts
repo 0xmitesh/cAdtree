@@ -15,8 +15,7 @@ import {
 } from "../engine/vault-service";
 import { openWorkspace, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
 import { locateProjectById } from "./project-lookup";
-import type { ActiveTab, StatusBanner } from "./types";
-import type { useOperation } from "./useOperation";
+import type { ActiveTab, Perform, StatusBanner } from "./types";
 
 export type UseDiagnosticsActionsArgs = {
   vaultDir: FileSystemDirectoryAdapter | null;
@@ -25,7 +24,7 @@ export type UseDiagnosticsActionsArgs = {
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
   homeAddressCache: RefObject<HomeAddress[]>;
-  perform: ReturnType<typeof useOperation>["perform"];
+  perform: Perform;
   setHomeAddress: Dispatch<SetStateAction<HomeAddress | null>>;
   setConvenienceEpoch: Dispatch<SetStateAction<number>>;
   setRememberedWorkspace: Dispatch<SetStateAction<RememberedWorkspace | null>>;

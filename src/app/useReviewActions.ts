@@ -5,8 +5,7 @@ import { retrieveReferenceAttachment } from "../engine/references";
 import { exportRevisionForReview } from "../engine/review-export";
 import type { VaultState } from "../engine/types";
 import { resolveManagedProject, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
-import type { Context } from "./types";
-import type { useOperation } from "./useOperation";
+import type { AssertProjectWritable, Perform } from "./types";
 
 export type UseReviewActionsArgs = {
   vaultDir: FileSystemDirectoryAdapter | null;
@@ -14,8 +13,8 @@ export type UseReviewActionsArgs = {
   workingFolders: WorkingFolderBindings;
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
-  perform: ReturnType<typeof useOperation>["perform"];
-  assertProjectWritable: (context: Context, readOnlyOperation?: boolean) => Promise<ManagedProject | null>;
+  perform: Perform;
+  assertProjectWritable: AssertProjectWritable;
 };
 
 /** Export for review and reference retrieval: hand a saved revision or an attachment to the user. */
