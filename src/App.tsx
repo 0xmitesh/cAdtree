@@ -19,10 +19,7 @@ import {
 import {
   type AccountUser,
   type AuthAdapter,
-  type AuthSnapshot,
-  isSignInCancelled,
   isUserActivationError,
-  resolveAuthAdapter,
 } from "./auth/firebase-auth";
 import { AccountStatusControl } from "./components/AccountControls";
 import {
@@ -109,13 +106,13 @@ import {
 import { AppDialogs } from "./app/AppDialogs";
 import { AppNotices } from "./app/AppNotices";
 import { NavigationRail } from "./app/NavigationRail";
+import { useAuthSession } from "./app/useAuthSession";
 import { useOperation } from "./app/useOperation";
 import type {
   ActiveTab,
   Context,
   PendingAuthAction,
   PendingHome,
-  SignInPrompt,
 } from "./app/types";
 import {
   PROJECT_NEEDS_ATTENTION,
@@ -127,28 +124,6 @@ import {
 
 export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const sidebar = useSidebarWidth();
-  const authAdapterRef = useRef<AuthAdapter | null>(null);
-  if (!authAdapterRef.current || auth) {
-    authAdapterRef.current = resolveAuthAdapter(auth);
-  }
-  const authAdapter = authAdapterRef.current;
-  const [authState, setAuthState] = useState<AuthSnapshot>(() => {
-    const initial = authAdapter.getCurrentState?.() ?? {
-      ready: false,
-      user: null,
-    };
-    setConvenienceAccountScope(
-      initial.ready && initial.user ? initial.user.uid : null,
-    );
-    return initial;
-  });
-  const authStateRef = useRef<AuthSnapshot>(authState);
-  authStateRef.current = authState;
-  const [signInPrompt, setSignInPrompt] = useState<SignInPrompt | null>(null);
-  const [signOutPending, setSignOutPending] = useState(false);
-  const pendingSignOutRef = useRef(false);
-  const pendingAccountSnapshotRef = useRef<AuthSnapshot | null>(null);
-
   const [home, setHome] = useState<HomeState | null>(null);
   const [rememberedHome, setRememberedHome] = useState<RememberedHome | null>(
     null,
@@ -240,38 +215,37 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setConvenienceEpoch((value) => value + 1);
   };
 
-  const applyAuthSnapshot = (next: AuthSnapshot) => {
-    const prevUid = authStateRef.current.user?.uid ?? null;
-    const nextUid = next.ready && next.user ? next.user.uid : null;
-    setConvenienceAccountScope(nextUid);
-    authStateRef.current = next;
-    setAuthState(next);
-    if (prevUid !== null && prevUid !== nextUid) {
-      resetActiveSessionUi();
-    } else if (nextUid === null) {
-      setRememberedWorkspace(null);
-      setRememberedHome(null);
-    }
-  };
-
-  useEffect(() => {
-    return authAdapter.subscribe((next) => {
-      const prevUid = authStateRef.current.user?.uid ?? null;
-      const nextUid = next.ready && next.user ? next.user.uid : null;
-      if (operationRef.current && prevUid !== null && prevUid !== nextUid) {
-        pendingAccountSnapshotRef.current = next;
-        setSignOutPending(true);
-        return;
-      }
-      // A later auth event can return to the account whose write is still running.
-      // Discard any superseded switch rather than applying it after completion.
-      if (operationRef.current && pendingAccountSnapshotRef.current) {
-        pendingAccountSnapshotRef.current = null;
-        setSignOutPending(pendingSignOutRef.current);
-      }
-      applyAuthSnapshot(next);
-    });
-  }, [authAdapter]);
+  // Called here so its auth subscription effect keeps its place among App's effects.
+  const {
+    authState,
+    authStateRef,
+    signInPrompt,
+    setSignInPrompt,
+    signOutPending,
+    setSignOutPending,
+    pendingSignOutRef,
+    pendingAccountSnapshotRef,
+    applyAuthSnapshot,
+    executeSignOut,
+    handleRequestSignOut,
+    requestSignIn,
+    handleContinueWithGoogle,
+    handleSubmitEmailAuth,
+    handleForgotPassword,
+    handleContinuePickerAfterSignIn,
+  } = useAuthSession({
+    auth,
+    resetActiveSessionUi,
+    setRememberedWorkspace,
+    setRememberedHome,
+    // Declared below by useOperation and the home actions; read only after this render.
+    getOperationRef: () => operationRef,
+    setBannerScope: (scope) => setBannerScope(scope),
+    setStatusBanner: (banner) => setStatusBanner(banner),
+    completeAuthenticatedSignIn: (account, intendedAction) =>
+      completeAuthenticatedSignIn(account, intendedAction),
+    connectHomeInternal: (create, saved) => connectHomeInternal(create, saved),
+  });
 
   useEffect(() => {
     const uid = authState.ready && authState.user ? authState.user.uid : null;
@@ -316,8 +290,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     pendingSignOutRef,
     pendingAccountSnapshotRef,
     setSignOutPending,
-    // Declared below; called only when a deferred sign-out runs after an operation.
-    executeSignOut: () => executeSignOut(),
+    executeSignOut,
     applyAuthSnapshot,
   });
   useEffect(() => {
@@ -327,48 +300,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     return () => clearTimeout(timer);
   }, [scanResult]);
 
-  const executeSignOut = async () => {
-    setSignOutPending(true);
-    try {
-      await authAdapter.signOut();
-    } catch (error) {
-      pendingSignOutRef.current = false;
-      setBannerScope("workspace");
-      setStatusBanner({
-        type: "error",
-        message:
-          error instanceof Error ? error.message : "Could not sign out.",
-      });
-      setSignOutPending(false);
-      return;
-    }
-    pendingSignOutRef.current = false;
-    pendingAccountSnapshotRef.current = null;
-    setSignOutPending(false);
-    setSignInPrompt(null);
-    applyAuthSnapshot({ ready: true, user: null });
-    resetActiveSessionUi();
-  };
-
-  const handleRequestSignOut = () => {
-    if (signOutPending || pendingSignOutRef.current) return;
-    pendingSignOutRef.current = true;
-    if (operationRef.current) {
-      setSignOutPending(true);
-      return;
-    }
-    void executeSignOut();
-  };
-
-  const requestSignIn = (action: PendingAuthAction) => {
-    setSignInPrompt({
-      step: "sign-in",
-      action,
-      signingIn: false,
-      error: null,
-      info: null,
-    });
-  };
   const pickFolder = async (mode: "read" | "readwrite") => new RealFileSystemAdapter(await pickDirectory(mode));
   const applyVaultState = (next: VaultState) => {
     setVaultState((previous) => {
@@ -630,137 +561,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     } else if (intendedAction.kind === "callback") {
       await intendedAction.run();
     }
-  };
-  const handleContinueWithGoogle = async () => {
-    if (!signInPrompt || signInPrompt.signingIn) return;
-    const intendedAction = signInPrompt.action;
-    setSignInPrompt({
-      ...signInPrompt,
-      signingIn: true,
-      error: null,
-      info: null,
-    });
-    try {
-      const account = await authAdapter.signInWithGoogle();
-      await completeAuthenticatedSignIn(account, intendedAction);
-    } catch (error) {
-      if (isSignInCancelled(error)) {
-        setSignInPrompt(null);
-        return;
-      }
-      setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
-        signingIn: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Google sign-in failed. Try again.",
-        info: null,
-      });
-    }
-  };
-  const handleSubmitEmailAuth = async (
-    mode: "sign-in" | "create-account",
-    email: string,
-    password: string,
-  ) => {
-    if (!signInPrompt || signInPrompt.signingIn) return;
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setSignInPrompt({
-        ...signInPrompt,
-        error: "Enter your email address.",
-        info: null,
-      });
-      return;
-    }
-    if (!password || password.length < 6) {
-      setSignInPrompt({
-        ...signInPrompt,
-        error: "Password must be at least 6 characters.",
-        info: null,
-      });
-      return;
-    }
-    const intendedAction = signInPrompt.action;
-    setSignInPrompt({
-      ...signInPrompt,
-      signingIn: true,
-      error: null,
-      info: null,
-    });
-    try {
-      const emailAction = mode === "create-account"
-        ? authAdapter.signUpWithEmail
-        : authAdapter.signInWithEmail;
-      if (!emailAction) throw new Error("Email authentication is unavailable. Use Continue with Google.");
-      const account = await emailAction.call(authAdapter, trimmedEmail, password);
-      await completeAuthenticatedSignIn(account, intendedAction);
-    } catch (error) {
-      setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
-        signingIn: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : mode === "create-account"
-              ? "Account creation failed. Try again."
-              : "Sign-in failed. Try again.",
-        info: null,
-      });
-    }
-  };
-  const handleForgotPassword = async (email: string) => {
-    if (!signInPrompt || signInPrompt.signingIn) return;
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setSignInPrompt({
-        ...signInPrompt,
-        error: "Enter your email address first to receive a password reset link.",
-        info: null,
-      });
-      return;
-    }
-    const intendedAction = signInPrompt.action;
-    setSignInPrompt({
-      ...signInPrompt,
-      signingIn: true,
-      error: null,
-      info: null,
-    });
-    try {
-      if (!authAdapter.sendPasswordReset) throw new Error("Password reset is unavailable. Try again later.");
-      await authAdapter.sendPasswordReset(trimmedEmail);
-      setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
-        signingIn: false,
-        error: null,
-        info: `Password reset email sent to ${trimmedEmail}. Check your inbox.`,
-      });
-    } catch (error) {
-      setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
-        signingIn: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not send password reset email. Try again.",
-        info: null,
-      });
-    }
-  };
-  const handleContinuePickerAfterSignIn = () => {
-    if (!signInPrompt || signInPrompt.action.kind !== "connect-home") {
-      setSignInPrompt(null);
-      return;
-    }
-    const { create, saved } = signInPrompt.action;
-    setSignInPrompt(null);
-    void connectHomeInternal(create, saved);
   };
   const completeHomeSetup = async (path: string) => {
     if (!authStateRef.current.ready || !authStateRef.current.user) {
