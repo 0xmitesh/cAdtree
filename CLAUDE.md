@@ -149,7 +149,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
   - Each commit must pass lint and tests on its own.
 - **Before every merge:**
   1. Fast-forward the local `main` checkout to the current GitHub `main`. Never test against a stale copy.
-  2. Test the piece on top of it.
+  2. Test the piece on top of it, and check that the PR's CI checks (GitHub Actions `CI`) are green. They come in addition to the orchestrator's own runs, not instead of them. GitHub Free can't enforce required checks on a private repo, so this is process-only: read the result with the REST call `GET /repos/{owner}/{repo}/commits/{sha}/check-runs` (GraphQL is blocked).
   3. After merging, confirm the GitHub tree equals the tested tree.
   4. Fast-forward the local checkout again.
 - **Never commit, push, open a PR or merge without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
@@ -178,6 +178,7 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 
 **Environment notes**
 - **Requirements:** Node 24 LTS, version 24.12 or newer (pinned by `.nvmrc` and `engines` in `package.json`; `engine-strict` is off).
+- **CI:** `.github/workflows/ci.yml` (workflow `CI`) runs lint, `npm test`, `npm run test:knowledge-lab` and `npm run build` on every push to `main`, on every PR and on manual runs, and the Playwright browser tests (Playwright's Chromium, `LC_ALL=C.UTF-8`) on PRs and manual runs. It never deploys.
 - **Flaky tests:** `home-setup.test.tsx` and `branches.test.tsx` may still fail under full-suite load (each passes alone). If one fails, rerun it on its own and rerun the full suite. `navigation-cleanup.test.tsx` was a focus race, fixed in #75; if it fails now, treat it as real.
 - **Browser tests in the cloud sandbox:** run `npm run test:ui` with Playwright's own Chromium (`npx playwright install chromium`, no `CADTREE_BROWSER_CHANNEL`) and `LC_ALL=C.UTF-8`. The sandbox's system Chrome crashes when it reads stored OPFS handles. On Windows or Mac, `CADTREE_BROWSER_CHANNEL=chrome` is fine.
 - **AI Studio leftovers (kept on purpose):** the repo still syncs with Google AI Studio, so the package name `react-example`, `metadata.json` and the Gemini placeholder in `.env.example` stay. The unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) were removed, and the stale status-doc copy in `public/assets/aistudio/` is gone.
