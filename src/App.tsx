@@ -30,8 +30,6 @@ import {
   type HomeAddress,
 } from "./components/FolderAddressDialog";
 import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
-import { exportRevisionForReview } from './engine/review-export';
-import type { ExportReviewAction } from './components/ReviewExportDialog';
 import { joinAddress } from "./engine/path-budget";
 import { componentWriteBlock, enableComponentTracking } from './engine/component-identity';
 import { requestApplicationWriteAccess } from "./engine/application-service";
@@ -52,7 +50,7 @@ import {
 import { openExistingVault } from "./engine/vault-service";
 import { ChangesCaptureView } from "./components/ChangesCaptureView";
 import { ReferencesView } from './components/ReferencesView';
-import { retrieveReferenceAttachment, referenceWriteBlock } from './engine/references';
+import { referenceWriteBlock } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ProjectContextHeader } from "./components/ProjectContextHeader";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
@@ -91,6 +89,7 @@ import { useApplicationActions } from "./app/useApplicationActions";
 import { useCaptureActions } from "./app/useCaptureActions";
 import { useDiagnosticsActions } from "./app/useDiagnosticsActions";
 import { useOperation } from "./app/useOperation";
+import { useReviewActions } from "./app/useReviewActions";
 import type {
   ActiveTab,
   Context,
@@ -1319,23 +1318,15 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const handleExportForReview: ExportReviewAction = async (plan, parent, folderName) => {
-    if (!vaultDir || !vaultState) throw new Error('Open the saved project before exporting.');
-    const result = await perform('export', async context => {
-      await assertProjectWritable(context);
-      return exportRevisionForReview({
-      vaultDir, parent, plan, folderName, workingFolders,
-      signal: context.signal, onProgress: context.progress,
-      resolveWorkingFolders: managedProject && workspace ? async () => {
-        const current = await resolveManagedProject(workspace.root, managedProject.record.containerPath);
-        if (current.record.projectId !== plan.projectId || !current.ready || current.issues.length) throw new Error('Reconnect the project to validate its working-folder isolation before exporting.');
-        return current.workingFolders;
-      } : undefined,
-    });
-    }, true);
-    if (!result) throw new Error('Export did not complete.');
-    return result;
-  };
+  const { handleExportForReview, handleRetrieveReference } = useReviewActions({
+    vaultDir,
+    vaultState,
+    workingFolders,
+    managedProject,
+    workspace,
+    perform,
+    assertProjectWritable,
+  });
   const {
     handleVerifySingleRevisionObjects,
     handleVerifyAllObjects,
@@ -1362,18 +1353,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setActiveTab,
     setStatusBanner,
   });
-  const handleRetrieveReference = async (referenceId: string, versionId: string) => {
-    if (!vaultDir || !vaultState) throw new Error('Open a project first.');
-    await perform('references', async context => {
-      if (await vaultDir.requestPermission('read') !== 'granted') throw new Error('Allow read access to the project folder, then retrieve the attachment again.');
-      const { version, bytes } = await retrieveReferenceAttachment(vaultDir, vaultState.project.projectId, referenceId, versionId);
-      if (!context.current() || context.signal.aborted) throw new Error('Attachment retrieval cancelled.');
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }));
-      const anchor = document.createElement('a'); anchor.href = url; anchor.download = version.originalFilename;
-      document.body.appendChild(anchor); anchor.click(); anchor.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }, true);
-  };
   const busy = operation !== null || signOutPending;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
