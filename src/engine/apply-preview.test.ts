@@ -76,7 +76,10 @@ test("5-file case changes only Part-X while retaining all 20 destination paths a
     c = context(state);
   assert.equal(c.base.manifest.revisionId, "base");
   assert.equal(c.destination.manifest.revisionId, "destination");
-  assert.equal(c.rows.filter((r) => r.kind === "available").length, 1);
+  assert.equal(
+    c.rows.filter((r) => r.entry === "file" && r.kind === "available").length,
+    1,
+  );
   assert.equal(
     c.rows.find((r) => r.path === "MainOnly/New0.SLDPRT")?.kind,
     "no-source-change",
@@ -362,7 +365,16 @@ test("older revision of the same branch: merge says use Bring back, revert uses 
   if (r.status !== "available") throw new Error(r.reason);
   assert.equal(r.context.mode, "revert");
   assert.equal(r.context.base.manifest.revisionId, "destination");
-  assert.equal(r.context.rows.filter((x) => x.kind === "available").length, 15);
+  assert.equal(
+    r.context.rows.filter((x) => x.entry === "file" && x.kind === "available").length,
+    15,
+  );
+  // Folders: "MainOnly" holds files the source (the old base) lacks -> removable
+  // together with its files; "Main empty" is an empty folder absent in the source.
+  assert.deepEqual(
+    r.context.rows.filter((x) => x.entry === "folder").map((x) => [x.path, x.sourceChange, x.kind]),
+    [["Main empty", "deleted", "available"], ["MainOnly", "deleted", "available"]],
+  );
   assert.ok(r.context.rows.every((x) => x.kind !== "conflict"));
   for (const mode of ["merge", "revert"] as const) {
     const latest = prepareApplyPreview(state, "destination", "branch-main", mode);
@@ -372,4 +384,111 @@ test("older revision of the same branch: merge says use Bring back, revert uses 
   const caseRevert = prepareApplyPreview(state, "source", "branch-main", "revert");
   assert.equal(caseRevert.status, "unavailable");
   assert.match((caseRevert as { reason: string }).reason, /not an earlier revision in this branch.s history/);
+});
+
+// ---- Folder changes: rows, kept removals and plan shape ----
+const folderRowsOf = (c: ApplyPreviewContext) =>
+  c.rows.filter((r) => r.entry === "folder");
+
+test("folder rows: added/deleted folders between base and source; no conflicts; already-matching when the destination agrees", () => {
+  const { state, base, source, destination } = fixture();
+  // Source also adds "Main empty", which the destination already has; it drops "Empty original".
+  source.manifest.directories = ["Parts", "Source empty", "Main empty"];
+  void base;
+  void destination;
+  const c = context(state);
+  assert.deepEqual(
+    folderRowsOf(c).map((r) => [r.path, r.sourceChange, r.kind]),
+    [
+      ["Empty original", "deleted", "available"],
+      ["Main empty", "added", "already-matches"],
+      ["Source empty", "added", "available"],
+    ],
+  );
+  const row = folderRowsOf(c).find((r) => r.path === "Source empty")!;
+  assert.deepEqual([row.base, row.source, row.destination], [null, null, null]);
+  assert.deepEqual(row.folder, { inBase: false, inSource: true, inDestination: false });
+  assert.ok(c.rows.every((r) => r.kind !== "conflict" || r.entry === "file"));
+  // File rows are unchanged and tagged as files.
+  assert.equal(c.rows.find((r) => r.path === part)?.entry, "file");
+});
+
+test("a folder-only selection is a ready plan: create and remove show in folderActions and resultDirectories", () => {
+  const { state, source } = fixture();
+  source.manifest.directories = ["Parts", "Source empty"];
+  const c = context(state);
+  const plan = buildApplyPreview(
+    c,
+    { "Source empty": chosen(), "Empty original": chosen() },
+    "Folders only",
+  );
+  assert.equal(plan.ready, true, plan.blockers.join("|"));
+  assert.deepEqual(plan.actions, []);
+  assert.deepEqual(plan.folderActions, [
+    { path: "Empty original", operation: "remove", sourceChange: "deleted" },
+    { path: "Source empty", operation: "create", sourceChange: "added" },
+  ]);
+  assert.ok(plan.resultDirectories.includes("Source empty"));
+  assert.equal(plan.resultDirectories.includes("Empty original"), false);
+  assert.ok(plan.resultDirectories.includes("Main empty"));
+  // Without any selection the old blocker still applies.
+  const none = buildApplyPreview(c, {}, "Nothing");
+  assert.ok(none.blockers.some((b) => /Select at least one source change/.test(b)));
+  // A folder needs an explicit use-source decision.
+  const keep = buildApplyPreview(c, { "Source empty": chosen("keep-destination") }, "Reason");
+  assert.equal(keep.ready, false);
+  assert.ok(keep.blockers.some((b) => /Select the source state explicitly for Source empty/.test(b)));
+});
+
+test("a removed folder that would still hold files is a blocker; with its file deletion selected it is fine", () => {
+  const { state, base, source, destination } = fixture();
+  const baseOnly = file("Shared/Base.SLDPRT", "shared-base");
+  base.manifest.files.push(baseOnly);
+  base.manifest.directories.push("Shared");
+  destination.manifest.files.push({ ...baseOnly });
+  destination.manifest.directories.push("Shared");
+  source.manifest.files = source.manifest.files.filter((f) => !f.path.startsWith("Shared/"));
+  const c = context(state);
+  assert.equal(c.rows.find((r) => r.path === "Shared")?.kind, "available");
+  const folderOnly = buildApplyPreview(c, { Shared: chosen() }, "Reason");
+  assert.equal(folderOnly.ready, false);
+  assert.ok(folderOnly.blockers.includes("Shared: Kept: still holds files; untick it."));
+  const both = buildApplyPreview(
+    c,
+    { Shared: chosen(), "Shared/Base.SLDPRT": chosen() },
+    "Reason",
+  );
+  assert.equal(both.ready, true, both.blockers.join("|"));
+  assert.equal(both.resultDirectories.includes("Shared"), false);
+  assert.equal(both.resultFiles.some((f) => f.path.startsWith("Shared/")), false);
+  // The destination gained a file there: no selection can remove the folder.
+  destination.manifest.files.push(file("Shared/Main.SLDPRT", "main-shared"));
+  const kept = context(state);
+  assert.equal(kept.rows.find((r) => r.path === "Shared")?.kind, "kept-holds-files");
+  const blocked = buildApplyPreview(
+    kept,
+    { Shared: chosen(), "Shared/Base.SLDPRT": chosen() },
+    "Reason",
+  );
+  assert.equal(blocked.ready, false);
+  assert.ok(blocked.blockers.includes("Shared: Kept: still holds files; untick it."));
+  assert.equal(blocked.folderActions.length, 0);
+  // Unselected, the kept row is simply left alone.
+  assert.equal(buildApplyPreview(kept, { "Shared/Base.SLDPRT": chosen() }, "R").ready, true);
+});
+
+test("nested removals: a parent is removable only together with its subfolders", () => {
+  const { state, base, source, destination } = fixture();
+  for (const m of [base.manifest, destination.manifest]) m.directories.push("Deep", "Deep/Inner");
+  void source;
+  const c = context(state);
+  assert.deepEqual(
+    folderRowsOf(c).filter((r) => r.path.startsWith("Deep")).map((r) => [r.path, r.kind]),
+    [["Deep", "available"], ["Deep/Inner", "available"]],
+  );
+  const parentOnly = buildApplyPreview(c, { Deep: chosen() }, "Reason");
+  assert.ok(parentOnly.blockers.includes("Deep: Kept: still holds files; untick it."));
+  const both = buildApplyPreview(c, { Deep: chosen(), "Deep/Inner": chosen() }, "Reason");
+  assert.equal(both.ready, true, both.blockers.join("|"));
+  assert.equal(both.resultDirectories.some((d) => d.startsWith("Deep")), false);
 });

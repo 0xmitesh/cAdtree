@@ -1379,3 +1379,404 @@ test("revert row stays blocked when a different component now occupies the path;
   assert.equal(await f.main.readFileText(["A.txt"]), "a1");
   assert.equal(await f.main.readFileText(["D.txt"]), "a brand new D");
 });
+
+// ---- Folder changes in Apply (merge and Bring back) ----
+async function folderFixture(
+  setup: {
+    r1: (main: FileSystemDirectoryAdapter) => Promise<void>;
+    r2: (main: FileSystemDirectoryAdapter) => Promise<void>;
+  },
+) {
+  const vault = new InMemoryFileSystemAdapter("FVault"),
+    main = new InMemoryFileSystemAdapter("FMain");
+  const folders: Record<string, FileSystemDirectoryAdapter> = { "branch-main": main };
+  await setup.r1(main);
+  await initializeProjectVault(main, vault, "Folder test");
+  const save = (summary: string) =>
+    captureRevision(main, vault, {
+      branchId: "branch-main",
+      summary,
+      notes,
+      workingFolders: folders,
+    });
+  const r1 = (await save("R1")).revision.manifest.revisionId;
+  await setup.r2(main);
+  const r2 = (await save("R2")).revision.manifest.revisionId;
+  const options = { workingFolders: folders };
+  const rows = async (sourceId = r1) => {
+    const prepared = prepareApplyPreview(await openExistingVault(vault), sourceId, "branch-main", "revert");
+    if (prepared.status !== "available") throw new Error(prepared.reason);
+    return prepared.context;
+  };
+  const review = async (only?: string[], reason = "Bring back R1") => {
+    const context = await rows();
+    const selection = Object.fromEntries(
+      context.rows
+        .filter((r) => r.kind === "available" || r.kind === "conflict")
+        .filter((r) => !only || only.includes(r.path))
+        .map((r) => [r.path, { selected: true, decision: "use-source" as const }]),
+    );
+    const plan = buildApplyPreview(context, selection, reason);
+    return { review: applicationReview(plan, selection), plan };
+  };
+  const apply = async (only?: string[]) =>
+    applyPreparedApplication(vault, await prepareApplication(vault, (await review(only)).review, options), options);
+  const lastOp = async () => branchApplications(await openExistingVault(vault), "branch-main").at(-1)!;
+  return { vault, main, folders, options, ids: { r1, r2 }, rows, review, apply, lastOp, save };
+}
+const dirs = async (dir: FileSystemDirectoryAdapter) => (await readVerifiedInventory(dir)).directories.sort();
+const mkdir = (dir: FileSystemDirectoryAdapter, path: string) =>
+  dir.getDirectory(path.split("/"), { create: true });
+const writeAt = (dir: FileSystemDirectoryAdapter, path: string, text: string) =>
+  dir.writeFileText(path.split("/"), text);
+
+test("Bring back recreates an empty folder that the older revision had", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
+    r2: async (m) => { await m.removeEntry(["Empty one"]); await writeAt(m, "A.txt", "a2"); },
+  });
+  const context = await f.rows();
+  assert.deepEqual(
+    context.rows.filter((r) => r.entry === "folder").map((r) => [r.path, r.sourceChange, r.kind]),
+    [["Empty one", "added", "available"]],
+  );
+  const op = await f.apply();
+  assert.equal(op.status, "applied");
+  assert.deepEqual(op.record!.plan.folderActions, [
+    { path: "Empty one", operation: "create", sourceChange: "added" },
+  ]);
+  assert.deepEqual(await dirs(f.main), ["Empty one"]);
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal((await f.lastOp()).status, "applied");
+});
+
+test("Bring back removes a folder the older revision lacked, after its files are deleted", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
+    r2: async (m) => {
+      await writeAt(m, "New/Sub/N.txt", "n");
+      await writeAt(m, "New/M.txt", "m");
+      await mkdir(m, "Empty new");
+    },
+  });
+  const context = await f.rows();
+  assert.deepEqual(
+    context.rows.filter((r) => r.entry === "folder").map((r) => [r.path, r.kind]),
+    [["Empty new", "available"], ["New", "available"], ["New/Sub", "available"]],
+  );
+  const op = await f.apply();
+  assert.equal(op.status, "applied");
+  assert.deepEqual(await dirs(f.main), []);
+  assert.deepEqual(
+    (await readVerifiedInventory(f.main)).files.map((x) => x.path),
+    ["A.txt"],
+  );
+});
+
+test("a folder-only difference can be brought back: the plan is ready with only a folder action", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
+    r2: async (m) => { await mkdir(m, "Only folder"); },
+  });
+  const { plan } = await f.review();
+  assert.equal(plan.ready, true, plan.blockers.join("|"));
+  assert.deepEqual(plan.actions, []);
+  assert.equal(plan.folderActions.length, 1);
+  const op = await f.apply();
+  assert.equal(op.status, "applied");
+  assert.deepEqual(await dirs(f.main), []);
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+});
+
+test("merge applies a design case's added empty folder, added folder with a file, and removed folder", async () => {
+  const vault = new InMemoryFileSystemAdapter("MVault"),
+    main = new InMemoryFileSystemAdapter("MMain"),
+    parent = new InMemoryFileSystemAdapter("MCases");
+  await writeAt(main, "A.txt", "a1");
+  await mkdir(main, "Del empty");
+  await initializeProjectVault(main, vault, "Merge folders");
+  const folders: Record<string, FileSystemDirectoryAdapter> = { "branch-main": main };
+  const save = (dir: FileSystemDirectoryAdapter, branchId: string, summary: string) =>
+    captureRevision(dir, vault, { branchId, summary, notes, workingFolders: folders });
+  const r1 = await save(main, "branch-main", "R1");
+  const created = await createDesignBranch({
+    vaultDir: vault,
+    destinationParent: parent,
+    workingFolders: folders,
+    sourceRevisionId: r1.revision.manifest.revisionId,
+    name: "Folder case",
+    reason: "Reorganise",
+  });
+  folders[created.branch.branchId] = created.workingDir;
+  await created.workingDir.removeEntry(["Del empty"]);
+  await mkdir(created.workingDir, "Case empty");
+  await writeAt(created.workingDir, "CaseDir/c.txt", "case file");
+  const caseSave = await save(created.workingDir, created.branch.branchId, "Case folders");
+  await writeAt(main, "MainOnly.txt", "main change");
+  await save(main, "branch-main", "Main moves on");
+  const prepared = prepareApplyPreview(
+    await openExistingVault(vault),
+    caseSave.revision.manifest.revisionId,
+    "branch-main",
+  );
+  if (prepared.status !== "available") throw new Error(prepared.reason);
+  assert.deepEqual(
+    prepared.context.rows.filter((r) => r.entry === "folder").map((r) => [r.path, r.sourceChange, r.kind]),
+    [
+      ["Case empty", "added", "available"],
+      ["CaseDir", "added", "available"],
+      ["Del empty", "deleted", "available"],
+    ],
+  );
+  const selection = Object.fromEntries(
+    prepared.context.rows
+      .filter((r) => r.kind === "available")
+      .map((r) => [r.path, { selected: true, decision: "use-source" as const }]),
+  );
+  const plan = buildApplyPreview(prepared.context, selection, "Reorganise folders");
+  assert.equal(plan.ready, true, plan.blockers.join("|"));
+  const options = { workingFolders: folders };
+  const op = await applyPreparedApplication(
+    vault,
+    await prepareApplication(vault, applicationReview(plan, selection), options),
+    options,
+  );
+  assert.equal(op.status, "applied");
+  assert.deepEqual(await dirs(main), ["Case empty", "CaseDir"]);
+  assert.equal(await main.readFileText(["CaseDir", "c.txt"]), "case file");
+  assert.equal(await main.readFileText(["MainOnly.txt"]), "main change");
+});
+
+test("removing a folder that would still hold files is blocked and nothing is removed", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
+    r2: async (m) => { await writeAt(m, "New/N.txt", "n"); },
+  });
+  // The folder alone, without its file deletion, would leave a file behind.
+  const { plan, review } = await f.review(["New"]);
+  assert.equal(plan.ready, false);
+  assert.ok(plan.blockers.includes("New: Kept: still holds files; untick it."));
+  const before = await inventory(f.main);
+  await assert.rejects(prepareApplication(f.vault, review, f.options), /still holds files/);
+  assert.equal(await inventory(f.main), before);
+  assert.equal(branchApplications(await openExistingVault(f.vault), "branch-main").length, 0);
+});
+
+test("a folder that gained a destination-side file is a kept row in a merge and cannot be removed", async () => {
+  const vault = new InMemoryFileSystemAdapter("KVault"),
+    main = new InMemoryFileSystemAdapter("KMain"),
+    parent = new InMemoryFileSystemAdapter("KCases");
+  await writeAt(main, "A.txt", "a1");
+  await mkdir(main, "Shared");
+  await initializeProjectVault(main, vault, "Kept folder");
+  const folders: Record<string, FileSystemDirectoryAdapter> = { "branch-main": main };
+  const save = (dir: FileSystemDirectoryAdapter, branchId: string, summary: string) =>
+    captureRevision(dir, vault, { branchId, summary, notes, workingFolders: folders });
+  const r1 = await save(main, "branch-main", "R1");
+  const created = await createDesignBranch({
+    vaultDir: vault,
+    destinationParent: parent,
+    workingFolders: folders,
+    sourceRevisionId: r1.revision.manifest.revisionId,
+    name: "Drop shared",
+    reason: "Reorganise",
+  });
+  folders[created.branch.branchId] = created.workingDir;
+  await created.workingDir.removeEntry(["Shared"]);
+  const caseSave = await save(created.workingDir, created.branch.branchId, "Drop Shared");
+  await writeAt(main, "Shared/Main.txt", "main work");
+  await save(main, "branch-main", "Main uses Shared");
+  const prepared = prepareApplyPreview(
+    await openExistingVault(vault),
+    caseSave.revision.manifest.revisionId,
+    "branch-main",
+  );
+  if (prepared.status !== "available") throw new Error(prepared.reason);
+  assert.deepEqual(
+    prepared.context.rows.filter((r) => r.entry === "folder").map((r) => [r.path, r.kind]),
+    [["Shared", "kept-holds-files"]],
+  );
+  const selection = { Shared: { selected: true, decision: "use-source" as const } };
+  const plan = buildApplyPreview(prepared.context, selection, "Try");
+  assert.equal(plan.ready, false);
+  assert.ok(plan.blockers.includes("Shared: Kept: still holds files; untick it."));
+  const before = await inventory(main);
+  await assert.rejects(
+    prepareApplication(vault, applicationReview(plan, selection), { workingFolders: folders }),
+    /still holds files/,
+  );
+  assert.equal(await inventory(main), before);
+});
+
+test("a folder holding only an untracked Thumbs.db stops the apply before any write or attempt event", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
+    r2: async (m) => { await writeAt(m, "New/N.txt", "n"); },
+  });
+  const expected = /Folder "New" holds only system files \(Thumbs\.db\)\. Delete them, or untick the folder, then prepare again\. No working files were changed\./;
+  // Present when preparing: refused up front.
+  await writeAt(f.main, "New/Thumbs.db", "clutter");
+  const before = await inventory(f.main);
+  await assert.rejects(prepareApplication(f.vault, (await f.review()).review, f.options), expected);
+  assert.equal(await inventory(f.main), before);
+  // Appears between prepare and apply: stopped before any operation, event or write.
+  await f.main.removeEntry(["New", "Thumbs.db"]);
+  const prepared = await prepareApplication(f.vault, (await f.review()).review, f.options);
+  await writeAt(f.main, "New/Thumbs.db", "clutter");
+  const later = await inventory(f.main);
+  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), expected);
+  assert.equal(await inventory(f.main), later);
+  assert.equal(await f.main.readFileText(["New", "N.txt"]), "n");
+  const state = await openExistingVault(f.vault);
+  assert.equal(branchApplications(state, "branch-main").length, 0);
+  assert.equal((await f.vault.listEntries()).some((e) => e.name === "applications"), false);
+  // The user's file was never touched.
+  assert.equal(await f.main.readFileText(["New", "Thumbs.db"]), "clutter");
+});
+
+test("interrupted apply with folder changes recovers: created folders removed, removed folders recreated", async () => {
+  for (const interruptAt of ["000003.json", "000007.json", "000008.json"]) {
+    const f = await folderFixture({
+      r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
+      r2: async (m) => {
+        await m.removeEntry(["Empty one"]);
+        await writeAt(m, "A.txt", "a2");
+        await mkdir(m, "Added empty");
+      },
+    });
+    const prepared = await prepareApplication(f.vault, (await f.review()).review, f.options);
+    assert.deepEqual(
+      prepared.plan.folderActions.map((a) => [a.path, a.operation]),
+      [["Added empty", "remove"], ["Empty one", "create"]],
+    );
+    const before = await inventory(f.main);
+    // Events: 1 staged, 2/3 create "Empty one", 4/5 A.txt, 6/7 remove "Added empty", 8 applied.
+    let interrupted = false;
+    f.vault.setHooks({
+      onBeforeWrite: async (path) => {
+        if (interrupted || !path.includes("/events/") || !path.endsWith(interruptAt)) return;
+        interrupted = true;
+        throw new Error("injected folder interruption");
+      },
+    });
+    await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected folder/);
+    f.vault.setHooks({ onBeforeWrite: undefined });
+    const op = await f.lastOp();
+    assert.equal(op.status, "unresolved");
+    if (interruptAt === "000003.json") assert.deepEqual(await dirs(f.main), ["Added empty", "Empty one"]);
+    if (interruptAt !== "000003.json") assert.deepEqual(await dirs(f.main), ["Empty one"]);
+    const recovery = await recoverApplication(f.vault, op.record!.plan.projectId, "branch-main", op.operationId, f.options);
+    assert.deepEqual(recovery.manualPaths, []);
+    assert.equal((await f.lastOp()).status, "recovered");
+    assert.equal(await inventory(f.main), before, `after interruption at ${interruptAt}`);
+    assert.deepEqual(await dirs(f.main), ["Added empty"]);
+  }
+});
+
+test("recovering an apply that added a file under a new folder removes that folder; the next apply is not refused", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); await writeAt(m, "Dir/Sub/F.txt", "f"); },
+    r2: async (m) => { await m.removeEntry(["Dir"], { recursive: true }); },
+  });
+  const only = ["Dir/Sub/F.txt"];
+  const prepared = await prepareApplication(f.vault, (await f.review(only)).review, f.options);
+  assert.deepEqual(prepared.plan.folderActions, []);
+  const before = await inventory(f.main);
+  let interrupted = false;
+  f.vault.setHooks({
+    onBeforeWrite: async (path) => {
+      // 1 staged, 2/3 attempt/written F.txt, 4 applied.
+      if (interrupted || !path.includes("/events/") || !path.endsWith("000004.json")) return;
+      interrupted = true;
+      throw new Error("injected after file add");
+    },
+  });
+  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected after/);
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  assert.deepEqual(await dirs(f.main), ["Dir", "Dir/Sub"]);
+  const op = await f.lastOp();
+  const recovery = await recoverApplication(f.vault, op.record!.plan.projectId, "branch-main", op.operationId, f.options);
+  assert.deepEqual(recovery.manualPaths, []);
+  assert.deepEqual(await dirs(f.main), []);
+  assert.equal(await inventory(f.main), before);
+  // The next apply is not refused for "uncaptured ... directory changes".
+  const again = await f.apply(only);
+  assert.equal(again.status, "applied");
+  assert.equal(await f.main.readFileText(["Dir", "Sub", "F.txt"]), "f");
+});
+
+test("recovery never deletes a non-empty folder its apply created; it is reported for manual inspection", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
+    r2: async (m) => { await m.removeEntry(["Empty one"]); },
+  });
+  const prepared = await prepareApplication(f.vault, (await f.review()).review, f.options);
+  let interrupted = false;
+  f.vault.setHooks({
+    onBeforeWrite: async (path) => {
+      if (interrupted || !path.includes("/events/") || !path.endsWith("000004.json")) return;
+      interrupted = true;
+      throw new Error("injected");
+    },
+  });
+  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected/);
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  await writeAt(f.main, "Empty one/Later.txt", "user work");
+  const op = await f.lastOp();
+  const recovery = await recoverApplication(f.vault, op.record!.plan.projectId, "branch-main", op.operationId, f.options);
+  assert.deepEqual(recovery.manualPaths, ["Empty one"]);
+  assert.equal(await f.main.readFileText(["Empty one", "Later.txt"]), "user work");
+  assert.equal((await f.lastOp()).status, "unresolved");
+});
+
+test("sealed record: altered folderActions (extra, missing, wrong operation, file overlap) are rejected; the review hash covers them", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
+    r2: async (m) => { await m.removeEntry(["Empty one"]); await writeAt(m, "A.txt", "a2"); await mkdir(m, "Added empty"); },
+  });
+  const op = await f.apply();
+  const { checksum: _c, ...body } = op.record!;
+  void _c;
+  const plant = async (id: string, record: object) => {
+    await f.vault.writeFileText(
+      ["applications", "branch-main", id, "plan.json"],
+      JSON.stringify(sealApplication({ ...record, operationId: id } as any), null, 2),
+      { exclusive: true },
+    );
+    return branchApplications(await openExistingVault(f.vault), "branch-main").find((o) => o.operationId === id)!;
+  };
+  const withFolders = (folderActions: unknown) => ({ ...body, plan: { ...body.plan, folderActions } });
+  const good = body.plan.folderActions;
+  assert.ok((await plant("20990101-000001", body)).record, "control: untouched record is valid");
+  const extra = [...good, { path: "Extra", operation: "create", sourceChange: "added" }];
+  const missing = good.slice(1);
+  const wrongOp = good.map((a) => ({ ...a, operation: a.operation === "create" ? "remove" : "create" }));
+  const wrongChange = good.map((a) => ({ ...a, sourceChange: a.sourceChange === "added" ? "deleted" : "added" }));
+  const dup = [...good, good[0]];
+  const overlap = [...good, { path: "A.txt", operation: "remove", sourceChange: "deleted" }];
+  const bad: [string, unknown][] = [
+    ["20990101-000002", extra],
+    ["20990101-000003", missing],
+    ["20990101-000004", wrongOp],
+    ["20990101-000005", wrongChange],
+    ["20990101-000006", dup],
+    ["20990101-000007", overlap],
+    ["20990101-000008", undefined],
+  ];
+  for (const [id, folderActions] of bad) {
+    const planted = await plant(id, withFolders(folderActions));
+    assert.equal(planted.record, undefined, `folderActions variant ${id} must be rejected`);
+    assert.equal(planted.status, "unavailable");
+  }
+  // The review hash covers folderActions: dropping a folder choice no longer matches it.
+  const f2 = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
+    r2: async (m) => { await m.removeEntry(["Empty one"]); await writeAt(m, "A.txt", "a2"); },
+  });
+  const { review } = await f2.review();
+  const choices = Object.fromEntries(Object.entries(review.choices).filter(([p]) => p !== "Empty one"));
+  await assert.rejects(
+    prepareApplication(f2.vault, { ...review, choices }, f2.options),
+    /changed/,
+  );
+});

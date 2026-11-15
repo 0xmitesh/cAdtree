@@ -13,14 +13,30 @@ import {
 
 export type SourceChange = "added" | "modified" | "deleted";
 export type ConflictDecision = "unresolved" | "keep-destination" | "use-source";
+/** Shown beside a folder row that cannot be removed because it would still hold something. */
+export const FOLDER_KEPT_MESSAGE = "Kept: still holds files";
 export interface PreviewFileRow {
+  /** "file" rows describe one tracked file; "folder" rows one folder that was added or
+   * removed between base and source (empty folders included). The path is the key of
+   * `choices` for both; a file and a folder never share a path. */
+  entry: "file" | "folder";
   identityBlock?: string;
   path: string;
-  kind: "no-source-change" | "already-matches" | "available" | "conflict";
+  /** "kept-holds-files": a folder removal that the destination's own files make
+   * impossible whatever is selected. Never selectable. Folder rows only. */
+  kind:
+    | "no-source-change"
+    | "already-matches"
+    | "available"
+    | "conflict"
+    | "kept-holds-files";
   sourceChange: SourceChange | null;
+  /** Always null for folder rows. */
   base: FileEntry | null;
   source: FileEntry | null;
   destination: FileEntry | null;
+  /** Folder rows only: presence of the folder in each endpoint. */
+  folder?: { inBase: boolean; inSource: boolean; inDestination: boolean };
 }
 export type ApplyMode = "merge" | "revert";
 export interface ApplyPreviewContext {
@@ -49,6 +65,12 @@ export interface PreviewAction {
   before: FileEntry | null;
   after: FileEntry | null;
 }
+/** A folder to create ("added" in the source) or remove ("deleted" in the source). */
+export interface PreviewFolderAction {
+  path: string;
+  operation: "create" | "remove";
+  sourceChange: "added" | "deleted";
+}
 export interface ApplyPreviewPlan {
   mode: ApplyMode;
   projectId: string;
@@ -58,6 +80,8 @@ export interface ApplyPreviewPlan {
   destinationBranchId: string;
   reason: string;
   actions: PreviewAction[];
+  /** Selected folder changes, sorted by path. */
+  folderActions: PreviewFolderAction[];
   resultFiles: FileEntry[];
   resultDirectories: string[];
   unresolvedPaths: string[];
@@ -68,6 +92,95 @@ export interface ApplyPreviewPlan {
 const sameFile = (a: FileEntry | null, b: FileEntry | null) =>
   a === null || b === null ? a === b : a.sha256 === b.sha256;
 const copyFile = (file: FileEntry | null) => (file ? { ...file } : null);
+
+/**
+ * Folder rows: one per folder that differs between base and source (empty folders
+ * included). Folders have no conflicts and no identity. A removal is "kept" up front
+ * ("kept-holds-files") when the destination holds something below the folder that no
+ * selection can remove: a destination file the source does not delete (or whose
+ * deletion is blocked), or a subfolder that is itself kept or not being removed.
+ * buildApplyPreview decides the exact outcome against the real selections.
+ */
+function folderRows(
+  base: ReconstructedRevision,
+  source: ReconstructedRevision,
+  destination: ReconstructedRevision,
+  fileRows: PreviewFileRow[],
+): PreviewFileRow[] {
+  const diff = compareSnapshotContents(base.manifest, source.manifest);
+  const baseDirs = new Set(base.manifest.directories);
+  const sourceDirs = new Set(source.manifest.directories);
+  const destDirs = new Set(destination.manifest.directories);
+  const fileRowByPath = new Map(fileRows.map((row) => [row.path, row]));
+  // A file row can remove its destination file only if the source deletes it and
+  // the removal is selectable.
+  const removableFile = (path: string) => {
+    const row = fileRowByPath.get(path);
+    return Boolean(
+      row &&
+        !row.source &&
+        row.base &&
+        (row.kind === "available" || row.kind === "conflict") &&
+        !row.identityBlock,
+    );
+  };
+  const depth = (path: string) => path.split("/").length;
+  const removable = new Set<string>();
+  const kept = new Set<string>();
+  const deleted = diff.deletedDirectories
+    .filter((path) => destDirs.has(path) && !fileRowByPath.has(path))
+    .sort((a, b) => depth(b) - depth(a) || a.localeCompare(b));
+  for (const path of deleted) {
+    const prefix = `${path}/`;
+    const holdsFile = destination.manifest.files.some(
+      (file) => file.path.startsWith(prefix) && !removableFile(file.path),
+    );
+    const holdsFolder = [...destDirs].some(
+      (dir) => dir.startsWith(prefix) && !removable.has(dir),
+    );
+    (holdsFile || holdsFolder ? kept : removable).add(path);
+  }
+  const rows: PreviewFileRow[] = [];
+  const folderRow = (
+    path: string,
+    sourceChange: "added" | "deleted",
+    kind: PreviewFileRow["kind"],
+  ): PreviewFileRow => ({
+    entry: "folder",
+    path,
+    kind,
+    sourceChange,
+    base: null,
+    source: null,
+    destination: null,
+    folder: {
+      inBase: baseDirs.has(path),
+      inSource: sourceDirs.has(path),
+      inDestination: destDirs.has(path),
+    },
+  });
+  // A path that is a file in some endpoint keeps its file row; the folder row is
+  // skipped so `choices` stays unambiguous (the files carry the change).
+  for (const path of diff.addedDirectories)
+    if (!fileRowByPath.has(path))
+      rows.push(
+        folderRow(path, "added", destDirs.has(path) ? "already-matches" : "available"),
+      );
+  for (const path of diff.deletedDirectories)
+    if (!fileRowByPath.has(path))
+      rows.push(
+        folderRow(
+          path,
+          "deleted",
+          !destDirs.has(path)
+            ? "already-matches"
+            : kept.has(path)
+              ? "kept-holds-files"
+              : "available",
+        ),
+      );
+  return rows.sort((a, b) => a.path.localeCompare(b.path));
+}
 
 /** Read-only preparation. The destination uses the canonical branch baseline;
  * the base follows verified parent edges, never numbering or immediate-parent guesses. */
@@ -241,6 +354,7 @@ export function prepareApplyPreview(
         }
       }
       return {
+        entry: "file" as const,
         identityBlock,
         path,
         base: b,
@@ -256,6 +370,7 @@ export function prepareApplyPreview(
               : "conflict",
       };
     });
+    rows.push(...folderRows(base, source, destination, rows));
     return {
       status: "available",
       context: {
@@ -288,16 +403,39 @@ export function buildApplyPreview(
   );
   const actions: PreviewAction[] = [];
   const blockers: string[] = [];
+  const isFolder = (row: PreviewFileRow) => row.entry === "folder";
   const selectable = new Map(
     context.rows
       .filter((row) => row.kind === "available" || row.kind === "conflict")
       .map((row) => [row.path, row]),
   );
+  const keptFolders = new Set(
+    context.rows
+      .filter((row) => isFolder(row) && row.kind === "kept-holds-files")
+      .map((row) => row.path),
+  );
+  const folderActions: PreviewFolderAction[] = [];
   for (const [path, choice] of Object.entries(choices).sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
     if (!choice.selected) continue;
+    if (keptFolders.has(path)) {
+      blockers.push(`${path}: ${FOLDER_KEPT_MESSAGE}; untick it.`);
+      continue;
+    }
     const row = selectable.get(path);
+    if (row && isFolder(row)) {
+      if (choice.decision !== "use-source") {
+        blockers.push(`Select the source state explicitly for ${path}.`);
+        continue;
+      }
+      folderActions.push({
+        path,
+        operation: row.sourceChange === "added" ? "create" : "remove",
+        sourceChange: row.sourceChange as "added" | "deleted",
+      });
+      continue;
+    }
     if (
       !row ||
       !["unresolved", "keep-destination", "use-source"].includes(
@@ -345,14 +483,37 @@ export function buildApplyPreview(
   const unresolvedPaths = actions
     .filter((action) => action.decision === "unresolved")
     .map((action) => action.path);
+  // Result folders = destination folders + selected created folders + the parents
+  // that result files and created folders need - selected removed folders. A
+  // selected removal whose folder still has a result file or a surviving result
+  // subfolder below it is a blocker: cAdtree never deletes a folder that is not
+  // empty in the result (the source deletes files only when they are selected).
   const directories = new Set(context.destination.manifest.directories);
   const collisions: string[] = [];
+  const created = folderActions.filter((a) => a.operation === "create");
+  const removed = new Set(
+    folderActions.filter((a) => a.operation === "remove").map((a) => a.path),
+  );
   try {
-    for (const path of result.keys()) {
+    for (const action of created) directories.add(action.path);
+    for (const path of [
+      ...result.keys(),
+      ...created.map((action) => action.path),
+    ]) {
       const segments = splitAndValidatePath(path);
       for (let i = 1; i < segments.length; i++)
         directories.add(segments.slice(0, i).join("/"));
     }
+    for (const path of removed) {
+      splitAndValidatePath(path);
+      const prefix = `${path}/`;
+      if (
+        [...result.keys()].some((file) => file.startsWith(prefix)) ||
+        [...directories].some((dir) => dir.startsWith(prefix) && !removed.has(dir))
+      )
+        blockers.push(`${path}: ${FOLDER_KEPT_MESSAGE}; untick it.`);
+    }
+    for (const path of removed) directories.delete(path);
     for (const path of result.keys())
       if (directories.has(path))
         collisions.push(`File/directory path collision at "${path}".`);
@@ -363,6 +524,7 @@ export function buildApplyPreview(
     collisions.push(error instanceof Error ? error.message : String(error));
   }
   if (
+    !folderActions.length &&
     !actions.some((action) =>
       ["add", "replace", "delete"].includes(action.operation),
     )
@@ -387,6 +549,7 @@ export function buildApplyPreview(
     destinationBranchId: context.destinationBranchId,
     reason,
     actions,
+    folderActions,
     resultFiles: [...result.values()].sort((a, b) =>
       a.path.localeCompare(b.path),
     ),

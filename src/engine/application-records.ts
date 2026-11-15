@@ -33,6 +33,7 @@ export interface ApplicationRecord {
     | "destinationBranchId"
     | "reason"
     | "actions"
+    | "folderActions"
   >;
   checksum: string;
 }
@@ -194,7 +195,8 @@ function validateRecord(
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||
     !Array.isArray(plan.actions) ||
-    !plan.actions.length
+    !Array.isArray(plan.folderActions) ||
+    !(plan.actions.length || plan.folderActions.length)
   )
     throw new Error("Invalid application identity, review or plan.");
   const seen = new Set<string>();
@@ -247,14 +249,35 @@ function validateRecord(
     )
       throw new Error("Application action does not describe a source change.");
   }
+  // Folder actions: valid unique paths that never overlap a file action, an
+  // operation that agrees with the source change, and an explicit use-source choice.
+  const folderSeen = new Set<string>();
+  for (const action of plan.folderActions) {
+    splitAndValidatePath(action.path);
+    if (
+      folderSeen.has(action.path) ||
+      seen.has(action.path) ||
+      !(
+        (action.operation === "create" && action.sourceChange === "added") ||
+        (action.operation === "remove" && action.sourceChange === "deleted")
+      ) ||
+      review.choices[action.path]?.selected !== true ||
+      review.choices[action.path]?.decision !== "use-source"
+    )
+      throw new Error("Invalid application folder action.");
+    folderSeen.add(action.path);
+  }
   if (
     Object.values(review.choices).filter((choice) => choice.selected).length !==
-    seen.size
+    seen.size + folderSeen.size
   )
     throw new Error(
       "Application choices do not match its exact recorded actions.",
     );
-  if (!plan.actions.some((action) => action.operation !== "keep"))
+  if (
+    !plan.folderActions.length &&
+    !plan.actions.some((action) => action.operation !== "keep")
+  )
     throw new Error("Application contains no source operation.");
 }
 const kinds: ApplicationEventKind[] = [
@@ -270,6 +293,27 @@ const kinds: ApplicationEventKind[] = [
 ];
 export function changedActions(record: ApplicationRecord) {
   return record.plan.actions.filter((action) => action.operation !== "keep");
+}
+/** Folder actions in execution order: created shallowest first, removed deepest first. */
+export function foldersToCreate(record: ApplicationRecord) {
+  return orderedFolders(record, "create", 1);
+}
+export function foldersToRemove(record: ApplicationRecord) {
+  return orderedFolders(record, "remove", -1);
+}
+function orderedFolders(
+  record: ApplicationRecord,
+  operation: "create" | "remove",
+  direction: 1 | -1,
+) {
+  const depth = (path: string) => path.split("/").length;
+  return record.plan.folderActions
+    .filter((action) => action.operation === operation)
+    .sort(
+      (a, b) =>
+        direction * (depth(a.path) - depth(b.path)) ||
+        a.path.localeCompare(b.path),
+    );
 }
 function classify(operation: ApplicationOperation, state: VaultState) {
   const record = operation.record!;
@@ -293,6 +337,16 @@ function classify(operation: ApplicationOperation, state: VaultState) {
       if (
         !record.plan.actions.some(
           (a) => a.operation !== "keep" && a.path === event.path,
+        ) &&
+        !record.plan.folderActions.some((a) => a.path === event.path) &&
+        // Recovery may also remove parent folders that applied files or created
+        // folders brought along; those are not actions of their own.
+        !(
+          event.kind === "recovery-attempt" &&
+          event.path &&
+          [...record.plan.actions, ...record.plan.folderActions].some((a) =>
+            a.path.startsWith(`${event.path}/`),
+          )
         )
       )
         throw new Error("Application event references an unknown action.");
@@ -317,7 +371,8 @@ function classify(operation: ApplicationOperation, state: VaultState) {
         !staged ||
         applied ||
         recovering ||
-        changedActions(record).some((a) => !written.has(a.path))
+        changedActions(record).some((a) => !written.has(a.path)) ||
+        record.plan.folderActions.some((a) => !written.has(a.path))
       )
         throw new Error("Incomplete application cannot be marked applied.");
       applied = true;

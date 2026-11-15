@@ -14,6 +14,8 @@ import {
   applicationUnexpectedPath,
   branchApplications,
   changedActions,
+  foldersToCreate,
+  foldersToRemove,
   sealApplication,
   type ApplicationOperation,
   type ApplicationRecord,
@@ -27,7 +29,11 @@ import { getObjectPathSegments, verifyStoredObject } from "./object-store";
 import { hashStream, hashString } from "./hash";
 import { withProjectWriterLock } from "./locks";
 import { eventIdBase, eventIdCandidate } from "./ids";
-import { partitionSystemFiles, scanBranchChanges } from "./scanner";
+import {
+  isSystemClutterName,
+  partitionSystemFiles,
+  scanBranchChanges,
+} from "./scanner";
 import {
   inventorySignature,
   readVerifiedInventory,
@@ -183,6 +189,69 @@ async function cleanDestination(
     throw new Error(
       "Destination has uncaptured file or directory changes. Save a revision first, then refresh and review the plan. No edits were discarded or captured automatically.",
     );
+  await assertFolderRemovalsReady(working, plan, context.destination.manifest.files);
+}
+/**
+ * Before any write: every folder this application removes must end up empty. What
+ * remains after this apply's own deletions must not be user data (a destination
+ * change) and must not be untracked OS clutter either: cAdtree never deletes user
+ * files, clutter included, so the user is asked to delete it or untick the folder.
+ */
+async function assertFolderRemovalsReady(
+  working: FileSystemDirectoryAdapter,
+  plan: ApplyPreviewPlan,
+  destinationFiles: FileEntry[],
+) {
+  const removals = plan.folderActions
+    .filter((action) => action.operation === "remove")
+    .map((action) => action.path)
+    .sort((a, b) => a.localeCompare(b));
+  if (!removals.length) return;
+  const removed = new Set(removals);
+  const deleted = new Set(
+    plan.actions
+      .filter((action) => action.operation === "delete")
+      .map((action) => action.path),
+  );
+  const tracked = new Set(destinationFiles.map((file) => file.path));
+  const other: string[] = [];
+  const clutter = new Map<string, string[]>();
+  for (const path of removals) {
+    let entries;
+    try {
+      entries = await (
+        await working.getDirectory(splitAndValidatePath(path))
+      ).listEntries();
+    } catch {
+      other.push(path);
+      continue;
+    }
+    const names = new Set(entries.map((entry) => entry.name));
+    for (const entry of entries) {
+      const child = `${path}/${entry.name}`;
+      if (entry.kind === "directory") {
+        if (!removed.has(child)) other.push(child);
+      } else if (!deleted.has(child)) {
+        const isClutter =
+          !tracked.has(child) &&
+          entry.kind === "file" &&
+          (isSystemClutterName(entry.name) ||
+            (entry.name.startsWith("._") &&
+              entry.name.length > 2 &&
+              names.has(entry.name.slice(2))));
+        if (isClutter) clutter.set(path, [...(clutter.get(path) ?? []), entry.name]);
+        else other.push(child);
+      }
+    }
+  }
+  if (other.length)
+    throw new Error(
+      `Destination changed: ${other.join(", ")} would remain inside a folder this application removes. Save a revision first, then refresh and review the plan. No working files were changed.`,
+    );
+  for (const [path, names] of clutter)
+    throw new Error(
+      `Folder "${path}" holds only system files (${names.join(", ")}). Delete them, or untick the folder, then prepare again. No working files were changed.`,
+    );
 }
 export async function prepareApplication(
   vault: FileSystemDirectoryAdapter,
@@ -252,6 +321,27 @@ async function currentFile(
 }
 const same = (a: FileEntry | null, b: FileEntry | null) =>
   a && b ? a.sha256 === b.sha256 && a.size === b.size : a === b;
+/** "directory" / "missing" / "other" (a file, or a parent that is not a folder).
+ * Established from exact directory entries; case aliases are a collision. */
+async function folderState(
+  root: FileSystemDirectoryAdapter,
+  path: string,
+): Promise<"directory" | "missing" | "other"> {
+  const segments = splitAndValidatePath(path);
+  let dir = root;
+  for (const [index, name] of segments.entries()) {
+    const matches = (await dir.listEntries()).filter(
+      (e) => e.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (!matches.length) return "missing";
+    if (matches.length !== 1 || matches[0].name !== name)
+      throw new Error(`Case collision at ${path}. Manual inspection required.`);
+    if (matches[0].kind !== "directory") return "other";
+    if (index < segments.length - 1) dir = await dir.getDirectory([name]);
+  }
+  return "directory";
+}
+const folderDepth = (path: string) => path.split("/").length;
 function stagedPath(
   op: ApplicationOperation,
   side: "before" | "source",
@@ -386,6 +476,7 @@ export async function applyPreparedApplication(
         destinationBranchId: plan.destinationBranchId,
         reason: plan.reason,
         actions: structuredClone(plan.actions),
+        folderActions: structuredClone(plan.folderActions),
       },
     });
     const text = JSON.stringify(record, null, 2);
@@ -470,6 +561,35 @@ export async function applyPreparedApplication(
         "Destination mapping changed during staging. Recover the retained operation before retrying.",
       );
     await cleanDestination(working, reloaded, review, options);
+    // Folders first (shallowest first), so files can land in them; removals come
+    // after the file writes, deepest first, and only for folders that are empty.
+    for (const folder of foldersToCreate(record)) {
+      throwIfCancelled(options.signal);
+      await appendApplicationEvent(vault, op, {
+        kind: "attempt",
+        path: folder.path,
+      });
+      try {
+        await working.getDirectory(splitAndValidatePath(folder.path), {
+          create: true,
+          exclusiveCreate: true,
+        });
+      } catch (error) {
+        if (error instanceof FileConflictError)
+          throw new Error(
+            `Destination changed at ${folder.path}; application stopped. Reopen to recover; unexpected edits will be preserved.`,
+          );
+        throw error;
+      }
+      if ((await folderState(working, folder.path)) !== "directory")
+        throw new Error(
+          `Applied result verification failed at ${folder.path}; recover the unfinished application.`,
+        );
+      await appendApplicationEvent(vault, op, {
+        kind: "written",
+        path: folder.path,
+      });
+    }
     let bytes = 0;
     for (const [index, action] of actions.entries()) {
       throwIfCancelled(options.signal);
@@ -523,6 +643,31 @@ export async function applyPreparedApplication(
         path: action.path,
       });
     }
+    for (const folder of foldersToRemove(record)) {
+      throwIfCancelled(options.signal);
+      await appendApplicationEvent(vault, op, {
+        kind: "attempt",
+        path: folder.path,
+      });
+      const segments = splitAndValidatePath(folder.path);
+      if ((await folderState(working, folder.path)) !== "directory")
+        throw new Error(
+          `Destination changed at ${folder.path}; application stopped. Reopen to recover; unexpected edits will be preserved.`,
+        );
+      if ((await (await working.getDirectory(segments)).listEntries()).length)
+        throw new Error(
+          `Folder ${folder.path} is no longer empty; application stopped. Nothing inside it was deleted. Reopen to recover.`,
+        );
+      await working.removeEntry(segments);
+      if ((await folderState(working, folder.path)) !== "missing")
+        throw new Error(
+          `Applied result verification failed at ${folder.path}; recover the unfinished application.`,
+        );
+      await appendApplicationEvent(vault, op, {
+        kind: "written",
+        path: folder.path,
+      });
+    }
     const rawResult = await readVerifiedInventory(working, options);
     const result = {
       ...rawResult,
@@ -572,6 +717,43 @@ export async function recoverApplication(
       op.events.filter((e) => e.kind === "attempt").map((e) => e.path),
     );
     const manualPaths: string[] = [];
+    // Undo in reverse: first recreate folders this apply removed (shallowest first,
+    // so files can be restored into them). Never touches a folder that is already there.
+    for (const folder of foldersToRemove(op.record).reverse()) {
+      throwIfCancelled(options.signal);
+      if (!touched.has(folder.path)) continue;
+      let state;
+      try {
+        state = await folderState(working, folder.path);
+      } catch (error) {
+        if (options.signal?.aborted) throw error;
+        manualPaths.push(folder.path);
+        continue;
+      }
+      if (state === "directory") continue;
+      if (state === "other") {
+        manualPaths.push(folder.path);
+        continue;
+      }
+      await appendApplicationEvent(vault, op, {
+        kind: "recovery-attempt",
+        path: folder.path,
+      });
+      try {
+        await working.getDirectory(splitAndValidatePath(folder.path), {
+          create: true,
+          exclusiveCreate: true,
+        });
+      } catch (error) {
+        if (!(error instanceof FileConflictError)) throw error;
+        manualPaths.push(folder.path);
+        continue;
+      }
+      if ((await folderState(working, folder.path)) !== "directory")
+        throw new Error(
+          `Recovery verification failed for ${folder.path}. Evidence is retained.`,
+        );
+    }
     // The recovery ID is allocated lazily, when the first unexpected file is staged.
     let recoveryId: string | undefined;
     for (const [index, action] of changedActions(op.record).entries()) {
@@ -643,10 +825,88 @@ export async function recoverApplication(
           `Recovery verification failed for ${action.path}. Evidence is retained.`,
         );
     }
+    await removeCreatedFolders(vault, op, working, state, touched, manualPaths, options);
     if (!manualPaths.length)
       await appendApplicationEvent(vault, op, { kind: "recovered" });
     return { manualPaths };
   });
+}
+/**
+ * Last recovery step: remove folders this apply created, now that files are back.
+ * Candidates are the created folder actions and the parent folders that file adds and
+ * created folders brought along (never folders the destination baseline already had).
+ * Deepest first; only a folder that is empty is removed, anything else is reported
+ * for manual inspection. No file is ever deleted.
+ */
+async function removeCreatedFolders(
+  vault: FileSystemDirectoryAdapter,
+  op: ApplicationOperation,
+  working: FileSystemDirectoryAdapter,
+  state: VaultState,
+  touched: Set<string | undefined>,
+  manualPaths: string[],
+  options: ApplicationOptions,
+) {
+  const record = op.record!;
+  const touchedAdds = changedActions(record)
+    .filter((a) => a.operation === "add" && touched.has(a.path))
+    .map((a) => a.path);
+  const touchedCreates = foldersToCreate(record)
+    .filter((a) => touched.has(a.path))
+    .map((a) => a.path);
+  const candidates = new Set<string>(touchedCreates);
+  for (const path of [...touchedAdds, ...touchedCreates]) {
+    const segments = path.split("/");
+    for (let i = 1; i < segments.length; i++)
+      candidates.add(segments.slice(0, i).join("/"));
+  }
+  if (!candidates.size) return;
+  const baseline = state.revisions.find(
+    (r) => r.manifest.revisionId === record.plan.destinationRevisionId,
+  );
+  const baselineDirs = new Set(baseline?.manifest.directories ?? []);
+  const ordered = [...candidates]
+    .filter((path) => !baselineDirs.has(path))
+    .sort((a, b) => folderDepth(b) - folderDepth(a) || a.localeCompare(b));
+  for (const path of ordered) {
+    throwIfCancelled(options.signal);
+    let current;
+    try {
+      current = await folderState(working, path);
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      manualPaths.push(path);
+      continue;
+    }
+    if (current === "missing") continue;
+    const inspect = async () =>
+      (
+        await (
+          await working.getDirectory(splitAndValidatePath(path))
+        ).listEntries()
+      ).length;
+    // A deeper manual path (or unknown baseline) keeps this folder as it is.
+    const covered = () =>
+      manualPaths.some((m) => m === path || m.startsWith(`${path}/`));
+    if (!baseline || current === "other" || covered() || (await inspect())) {
+      if (!covered()) manualPaths.push(path);
+      continue;
+    }
+    await appendApplicationEvent(vault, op, {
+      kind: "recovery-attempt",
+      path,
+    });
+    // Second read prevents a slow check from authorizing a later edit.
+    if (await inspect()) {
+      manualPaths.push(path);
+      continue;
+    }
+    await working.removeEntry(splitAndValidatePath(path));
+    if ((await folderState(working, path)) !== "missing")
+      throw new Error(
+        `Recovery verification failed for ${path}. Evidence is retained.`,
+      );
+  }
 }
 export async function abandonApplication(
   vault: FileSystemDirectoryAdapter,
