@@ -14,6 +14,7 @@ import {
   buildApplyPreview,
   prepareApplyPreview,
   type ApplyMode,
+  FOLDER_KEPT_MESSAGE,
   type ApplyPreviewContext,
   type ConflictDecision,
   type PreviewChoice,
@@ -40,12 +41,19 @@ function countsLine(
   replace: number,
   remove: number,
   revert: boolean,
+  foldersCreated = 0,
+  foldersRemoved = 0,
 ): string {
+  const folders = [
+    foldersCreated ? plural(foldersCreated, "folder created", "folders created") : "",
+    foldersRemoved ? plural(foldersRemoved, "folder removed", "folders removed") : "",
+  ];
   if (revert)
     return [
       add ? `${plural(add, "file", "files")} brought back` : "",
       replace ? `${replace} replaced` : "",
       remove ? `${remove} removed` : "",
+      ...folders,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -53,12 +61,18 @@ function countsLine(
     plural(add, "addition", "additions"),
     plural(replace, "replacement", "replacements"),
     plural(remove, "deletion", "deletions"),
-  ].join(" · ");
+    ...folders,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
-
-// Folder rows are not shown or pre-selected yet (a separate change adds them).
+const isFolder = (row: PreviewFileRow) => row.entry === "folder";
+/** Folders read with a trailing slash; files keep their path. */
+const rowLabel = (row: PreviewFileRow) =>
+  isFolder(row) ? `${row.path}/` : row.path;
+const folderChange = (row: PreviewFileRow) =>
+  row.sourceChange === "added" ? "Create folder" : "Remove folder";
 const isSelectable = (row: PreviewFileRow) =>
-  row.entry !== "folder" &&
   (row.kind === "available" || row.kind === "conflict") &&
   !row.identityBlock;
 
@@ -73,12 +87,16 @@ export function reconcileChoices(
   rows: PreviewFileRow[],
   revert: boolean,
 ): Record<string, PreviewChoice> {
-  const before = new Map(previousRows.map((row) => [row.path, row.kind]));
+  const before = new Map(
+    previousRows.map((row) => [row.path, `${row.entry}:${row.kind}`]),
+  );
   const next: Record<string, PreviewChoice> = {};
   for (const row of rows) {
     if (!isSelectable(row)) continue;
     const kept =
-      before.get(row.path) === row.kind ? previous[row.path] : undefined;
+      before.get(row.path) === `${row.entry}:${row.kind}`
+        ? previous[row.path]
+        : undefined;
     if (kept) next[row.path] = kept;
     else if (revert && row.kind === "available")
       next[row.path] = { selected: true, decision: "use-source" };
@@ -216,12 +234,18 @@ function ApplyPreviewBody({
         { side: "Source", revision: context.source },
         { side: "Destination", revision: context.destination },
       ];
-  const fileRows = context.rows.filter((row) => row.entry !== "folder");
-  const candidates = fileRows.filter(
+  const candidates = context.rows.filter(
     (row) => row.kind === "available" || row.kind === "conflict",
   );
-  const matching = fileRows.filter((row) => row.kind === "already-matches");
-  const retained = fileRows.filter((row) => row.kind === "no-source-change");
+  const keptFolders = context.rows.filter(
+    (row) => row.kind === "kept-holds-files",
+  );
+  const matching = context.rows.filter((row) => row.kind === "already-matches");
+  const retained = context.rows.filter(
+    (row) => row.kind === "no-source-change",
+  );
+  const foldersCreated = plan.folderActions.filter((a) => a.operation === "create");
+  const foldersRemoved = plan.folderActions.filter((a) => a.operation === "remove");
   const reasonLabel = revert
     ? "Engineering reason for bringing this back"
     : "Engineering reason for proposed application";
@@ -418,6 +442,8 @@ function ApplyPreviewBody({
                 prepared.plan.actions.filter((a) => a.operation === "replace").length,
                 prepared.plan.actions.filter((a) => a.operation === "delete").length,
                 true,
+                prepared.plan.folderActions.filter((a) => a.operation === "create").length,
+                prepared.plan.folderActions.filter((a) => a.operation === "remove").length,
               )}
             </strong>
           </p>
@@ -441,6 +467,14 @@ function ApplyPreviewBody({
                       : "Keep Destination"}
               </strong>{" "}
               · <span className="file-path">{action.path}</span>
+            </li>
+          ))}
+          {prepared.plan.folderActions.map((action) => (
+            <li key={`folder:${action.path}`}>
+              <strong>
+                {action.operation === "create" ? "Create folder" : "Remove folder"}
+              </strong>{" "}
+              · <span className="file-path">{action.path}/</span>
             </li>
           ))}
         </ul>
@@ -561,6 +595,8 @@ function ApplyPreviewBody({
               operations.filter((action) => action.operation === "replace").length,
               operations.filter((action) => action.operation === "delete").length,
               revert,
+              foldersCreated.length,
+              foldersRemoved.length,
             )}
           </span>
         </div>
@@ -663,7 +699,9 @@ function ApplyPreviewBody({
           </p>
           {!candidates.length ? (
             <Notice>
-              No source changes need application against this destination.
+              {keptFolders.length
+                ? "No source changes can be applied against this destination."
+                : "No source changes need application against this destination."}
             </Notice>
           ) : null}
           {candidates.map((row) => {
@@ -672,16 +710,18 @@ function ApplyPreviewBody({
               <article
                 className="comparison-file"
                 key={row.path}
-                aria-label={`${row.kind === "conflict" ? "Conflict" : "Source change"}: ${row.path}`}
+                aria-label={`${row.kind === "conflict" ? "Conflict" : "Source change"}: ${rowLabel(row)}`}
               >
                 <div className="comparison-file-heading">
                   <label className="file-choice">
                     <input
                       type="checkbox"
                       aria-label={
-                        revert
-                          ? `Select ${revertChange(row)}: ${row.path}`
-                          : `Select source ${sourceWord(row)}: ${row.path}`
+                        isFolder(row)
+                          ? `Select ${folderChange(row)}: ${rowLabel(row)}`
+                          : revert
+                            ? `Select ${revertChange(row)}: ${row.path}`
+                            : `Select source ${sourceWord(row)}: ${row.path}`
                       }
                       checked={selected}
                       disabled={running || Boolean(row.identityBlock)}
@@ -689,27 +729,41 @@ function ApplyPreviewBody({
                         setSelection(row, event.target.checked)
                       }
                     />
-                    <strong className="file-path">{row.path}</strong>
+                    <strong className="file-path">{rowLabel(row)}</strong>
+                    {isFolder(row) ? <StatusBadge status="Folder" /> : null}
                   </label>
                   <StatusBadge
                     status={
-                      row.kind === "conflict"
-                        ? "Conflict"
-                        : revert
-                          ? revertChange(row)
-                          : `Source ${sourceWord(row)}`
+                      isFolder(row)
+                        ? folderChange(row)
+                        : row.kind === "conflict"
+                          ? "Conflict"
+                          : revert
+                            ? revertChange(row)
+                            : `Source ${sourceWord(row)}`
                     }
                   />
                 </div>
                 {row.identityBlock ? <Notice type="error">{row.identityBlock}</Notice> : null}
-                {row.source === null ? (
+                {isFolder(row) ? (
+                  <p className="muted small">
+                    {row.sourceChange === "added"
+                      ? revert
+                        ? `This folder is in ${sourceLabel}. Selected to create it again in the working files.`
+                        : "Source adds this folder (empty folders included). Select to create it."
+                      : revert
+                        ? `This folder is not in ${sourceLabel}. It can be removed only if it is empty after the selected deletions; otherwise untick it. It stays in saved history.`
+                        : "Source removes this folder. Select to remove it; it can be removed only if it is empty after the selected deletions, otherwise untick it."}
+                  </p>
+                ) : null}
+                {!isFolder(row) && row.source === null ? (
                   <p className="preview-deletion">
                     {revert
                       ? `This file is not in ${sourceLabel}. It would be removed from the working files; it stays in saved history.`
                       : "Source deletes this file. Choosing source state would DELETE it from the proposed destination."}
                   </p>
                 ) : null}
-                {row.kind === "conflict" ? (
+                {isFolder(row) ? null : row.kind === "conflict" ? (
                   <>
                     <p className="small">
                       Source and Destination differ from Base and from each
@@ -756,10 +810,23 @@ function ApplyPreviewBody({
                       : `Destination matches Base. Select to include this source ${sourceWord(row)}.`}
                   </p>
                 )}
-                {stateAndNotes(row)}
+                {isFolder(row) ? null : stateAndNotes(row)}
               </article>
             );
           })}
+          {keptFolders.map((row) => (
+            <article
+              className="comparison-file"
+              key={row.path}
+              aria-label={`Kept folder: ${rowLabel(row)}`}
+            >
+              <div className="comparison-file-heading">
+                <strong className="file-path">{rowLabel(row)}</strong>
+                <StatusBadge status="Folder" />
+              </div>
+              <p className="muted small">{FOLDER_KEPT_MESSAGE}</p>
+            </article>
+          ))}
         </section>
         <details className="disclosure">
           <summary>
@@ -777,15 +844,18 @@ function ApplyPreviewBody({
           ))}
           {matching.map((row) => (
             <div key={row.path} className="preview-retained">
-              <strong className="file-path">{row.path}</strong>
+              <strong className="file-path">{rowLabel(row)}</strong>
+              {isFolder(row) ? <StatusBadge status="Folder" /> : null}
               <span>Already matches Source — no application needed.</span>
-              {stateAndNotes(row)}
+              {isFolder(row) ? null : stateAndNotes(row)}
             </div>
           ))}
         </details>
         <details className="disclosure">
-          <summary>Selected actions ({plan.actions.length})</summary>
-          {!plan.actions.length ? (
+          <summary>
+            Selected actions ({plan.actions.length + plan.folderActions.length})
+          </summary>
+          {!plan.actions.length && !plan.folderActions.length ? (
             <p>No changes selected.</p>
           ) : (
             <ul>
@@ -803,16 +873,20 @@ function ApplyPreviewBody({
                           : "Replace with Source file"}
                 </li>
               ))}
+              {plan.folderActions.map((action) => (
+                <li key={`folder:${action.path}`}>
+                  <strong className="file-path">{action.path}/</strong>{" "}
+                  <StatusBadge status="Folder" /> ·{" "}
+                  {action.operation === "create" ? "Create folder" : "Remove folder"}
+                </li>
+              ))}
             </ul>
           )}
         </details>
         <details className="disclosure">
           <summary>Proposed files ({plan.resultFiles.length})</summary>
           <p className="muted small">
-            Unselected and unresolved paths retain Destination. Existing
-            destination directories, including empty folders, are retained; only
-            required parent folders are added. Empty-folder-only changes are not
-            selected in this file preview.
+            Unselected and unresolved paths retain Destination.
           </p>
           <ul className="preview-result-files">
             {plan.resultFiles.map((file) => (
@@ -827,6 +901,13 @@ function ApplyPreviewBody({
                   <summary>Proposed content hash</summary>
                   <code>{file.sha256}</code>
                 </details>
+              </li>
+            ))}
+            {foldersCreated.map((action) => (
+              <li key={`folder:${action.path}`}>
+                <strong className="file-path">{action.path}/</strong>
+                <StatusBadge status="Folder" />
+                <span>Folder to be created</span>
               </li>
             ))}
           </ul>
