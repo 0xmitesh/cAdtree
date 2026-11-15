@@ -105,21 +105,17 @@ for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {
     });
   });
 }
-test("recovery review and native dialog keyboard focus", async ({ page }) => {
+test("export for review dialog keyboard focus", async ({ page }) => {
   await page.goto("/tests/preview.html?scenario=single");
-  await page.getByRole("button", { name: "Restore project copy" }).click();
-  await expect(page.getByRole("dialog")).toContainText("5 files");
+  const trigger = page.getByRole("button", {
+    name: "Export for review",
+    exact: true,
+  });
+  await trigger.click();
+  await expect(
+    page.getByRole("dialog", { name: "Export revision for review" }),
+  ).toContainText("Complete project");
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("button", { name: "Restore project copy" }),
-  ).toBeFocused();
-  await page
-    .getByRole("checkbox", { name: "Select Parts/Housing.SLDPRT for recovery" })
-    .check();
-  await page.getByRole("button", { name: "Copy selected files (1)" }).click();
-  await expect(page.getByRole("dialog")).toContainText("1 file");
-  await page.getByRole("button", { name: "Choose destination" }).click();
-  await expect(
-    page.getByText("Selected copy requested: r1 · Parts/Housing.SLDPRT"),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(trigger).toBeFocused();
 });

@@ -14,13 +14,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
     { timeout: 90_000 },
   );
   await page
-    .getByRole("button", { name: /Return to cAdtree Synthetic Preview v2/ })
-    .click();
-  await page
-    .getByRole("textbox", { name: "Cadtree home folder address" })
-    .fill("D:\\Cadtree");
-  await page
-    .getByRole("button", { name: "Complete setup", exact: true })
+    .getByRole("button", { name: /Return to cAdtree Synthetic Preview v\d+/ })
     .click();
   const tree = page.getByRole("tree", { name: "Workspace explorer" });
   await tree
@@ -41,7 +35,14 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(active).toHaveCount(1);
   await expect(active).toHaveValue("branch-main");
   const historyModes = page.locator(".history-page .project-heading-controls");
-  const modesBeforeBranchSwitch = (await historyModes.boundingBox())!;
+  // Document coordinates: clicking lower in the page may scroll the window,
+  // which must not count as the heading controls moving.
+  const documentBox = async () => {
+    const box = (await historyModes.boundingBox())!;
+    const scroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+    return { x: box.x + scroll.x, y: box.y + scroll.y };
+  };
+  const modesBeforeBranchSwitch = await documentBox();
   const filePicker = page.getByRole("combobox", {
     name: "File history",
     exact: true,
@@ -93,7 +94,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   // The drawing summary must describe the actual changed document, not a part.
   await expect(
     page.getByRole("checkbox", {
-      name: "Select Drawings/Assembly.SLDDRW for recovery",
+      name: "Select Drawings/Assembly.SLDDRW for export",
       exact: true,
     }),
   ).toBeVisible();
@@ -133,7 +134,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     }),
   ).toHaveAttribute("aria-selected", "true");
-  const modesAfterBranchSwitch = (await historyModes.boundingBox())!;
+  const modesAfterBranchSwitch = await documentBox();
   expect(modesAfterBranchSwitch.y).toBe(modesBeforeBranchSwitch.y);
   expect(modesAfterBranchSwitch.x).toBe(modesBeforeBranchSwitch.x);
   await expect(active.locator("option:checked")).toHaveText("Lightweight concept");
@@ -188,7 +189,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(resize).toHaveAttribute("aria-valuenow", "256");
   await page.reload();
   await page
-    .getByRole("button", { name: /Return to cAdtree Synthetic Preview v2/ })
+    .getByRole("button", { name: /Return to cAdtree Synthetic Preview v\d+/ })
     .click();
   await expect(resize).toHaveAttribute("aria-valuenow", "256");
   await tree

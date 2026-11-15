@@ -123,6 +123,9 @@ function Preview() {
               statusBanner={null}
               onVerifySingleRevisionObjects={noop}
               onCancelOperation={() => {}}
+              onExportForReview={async () => {
+                throw new Error("Synthetic preview does not export");
+              }}
               onGoToChanges={() => setView("changes")}
             />
           </div>
