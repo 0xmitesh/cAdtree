@@ -149,7 +149,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
   - Each commit must pass lint and tests on its own.
 - **Before every merge:**
   1. Fast-forward the local `main` checkout to the current GitHub `main`. Never test against a stale copy.
-  2. Test the piece on top of it.
+  2. Test the piece on top of it, and check that the PR's CI checks (GitHub Actions `CI`) are green. They come in addition to the orchestrator's own runs, not instead of them.
   3. After merging, confirm the GitHub tree equals the tested tree.
   4. Fast-forward the local checkout again.
 - **Never commit, push, open a PR or merge without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
@@ -194,6 +194,7 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 - **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
 - **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
+- **CI:** `.github/workflows/ci.yml` (workflow `CI`) runs lint, `npm test`, `npm run test:knowledge-lab` and `npm run build` on every push to `main` and on every PR, and the Playwright browser tests (Playwright's Chromium, `LC_ALL=C.UTF-8`) on PRs and manual runs. It never deploys.
 - **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards. Give every bundle a unique file name (e.g. `main-<short sha>.bundle`) and check `git bundle list-heads` on the device before fetching: re-sending a file under the same name has delivered a stale copy.
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
 - **Git writes need delete permission:** git has to delete its own lock files and replace files in the connected folder. Request delete permission at the first git write of each session **and again after the desktop app reconnects** (the grant doesn't survive a reconnect). Before any git write, check that a test delete works and **stop if it fails**: without permission a fast-forward half-applies, leaving `.git/index.lock` and partly written files.
