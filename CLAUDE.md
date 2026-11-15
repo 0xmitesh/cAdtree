@@ -126,7 +126,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 ## 4. How we work
 
 **Approval and scope**
-- **One feature or fix at a time.** If anything is uncertain, ask or counter-question before executing.
+- **One feature or fix at a time** (related small cleanups may be batched, see Batching in Roles and process). If anything is uncertain, ask or counter-question before executing.
 - **Name work by its title or problem** (e.g. "Remove Restore copy"), not by a bare item number, in reports, briefs and PR titles.
 - **For each item:**
   1. Read the actual code.
@@ -134,14 +134,16 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
   3. Get the founder's approval before writing code.
 
 **Roles and process**
-- **Orchestrator and reviewer** (Opus): writes the design notes and the final review, and runs the tests itself.
-- **Executors** (Sonnet subagents): implement small pieces from precise briefs. Each brief states the files in scope, the rules, the required tests, and asks for a report back in under 20 lines.
-- **Independent review:** every piece is reviewed by an agent that didn't write it before it's merged.
-- **Haiku:** only mechanical tasks, never engine code.
+- **Orchestrator** (the main chat, Opus): reads the code, writes the design notes, briefs the subagents, does the final review of every diff, runs all checks itself on the final head, opens and merges the PRs, updates the local checkout and the status doc. It keeps its own context small: broad code searches go to a read-only Explore subagent, not into the main chat.
+- **Executor** (subagent, model Sonnet 5.5, effort high): implements one piece from a precise brief. Each brief states the problem, the files in scope, the rules (cite CLAUDE.md sections), the required tests, the verification commands and the commit message; it asks for a report back in under 20 lines. Executors commit on the feature branch but never push.
+- **Independent reviewer** (subagent, model Opus 5.5, effort medium): reviews every piece before it's merged. It never edits, commits or pushes. Its brief says what to check (correctness, every write path, invariants, whether the tests fail without the fix) and asks for a verdict with blocker/should/nit findings in under 20–25 lines. Should-fix findings go back to the same executor as a follow-up commit; the orchestrator checks the follow-up diff itself.
+- **Haiku:** not used for reviews or engine code; at most for purely mechanical chores.
+- **Batching:** small, related cleanups may share one PR, with one commit each. Anything touching identity, writes or invariants gets its own PR.
+- **Standing approval:** once the founder approves an item (or its design note), the orchestrator may commit, push, open the PR and merge it when the review has no open blockers or should-fix items and all checks pass on the final head. It reports after each merge.
 
 **Git and PRs**
 - **Branches:** `main` is the development line for everything, including the Knowledge Lab (since 2026-11-13). `cadtree-knowledge-lab` is frozen at `3fc4fdf`, the same tree as `main` when development moved; nothing new goes there.
-- **One PR per reviewed piece:**
+- **One PR per reviewed piece** (small related cleanups may be batched, see Batching above):
   - Use stacked branches named `item<N>/p<k>-…`, based on `main` (`housekeeping/p<k>-…` or `docs/p<k>-…` for work outside an item).
   - Merge with **merge commits, not squash**.
   - Each commit must pass lint and tests on its own.
@@ -150,7 +152,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
   2. Test the piece on top of it.
   3. After merging, confirm the GitHub tree equals the tested tree.
   4. Fast-forward the local checkout again.
-- **Never commit, push, open a PR, merge or deploy without the founder's explicit approval.**
+- **Never commit, push, open a PR or merge without the founder's explicit approval** (an approved item carries standing approval to merge it, see above). Never deploy.
 
 **Verification:**
 - Run real checks: `npm run lint`, `npm test`, `npm run test:knowledge-lab` and `npm run build`. Use hands-on Chrome checks on disposable homes where relevant.
@@ -176,7 +178,7 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 
 **Environment notes**
 - **Requirements:** Node 24 LTS, version 24.12 or newer (pinned by `.nvmrc` and `engines` in `package.json`; `engine-strict` is off).
-- **Flaky tests:** `src/components/navigation-cleanup.test.tsx`, `home-setup.test.tsx` and `branches.test.tsx` sometimes fail under full-suite load. If they fail, rerun them on their own and rerun the full suite.
+- **Flaky tests:** `home-setup.test.tsx` and `branches.test.tsx` may still fail under full-suite load (each passes alone). If one fails, rerun it on its own and rerun the full suite. `navigation-cleanup.test.tsx` was a focus race, fixed in #75; if it fails now, treat it as real.
 - **AI Studio leftovers (kept on purpose):** the repo still syncs with Google AI Studio, so the package name `react-example`, `metadata.json` and the Gemini placeholder in `.env.example` stay. The unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) were removed, and the stale status-doc copy in `public/assets/aistudio/` is gone.
 
 **Local checkouts**
@@ -191,7 +193,7 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 - **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server in macOS Terminal.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
 - **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
-- **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards.
+- **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards. Give every bundle a unique file name (e.g. `main-<short sha>.bundle`) and check `git bundle list-heads` on the device before fetching: re-sending a file under the same name has delivered a stale copy.
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
 - **Git writes need delete permission:** git has to delete its own lock files and replace files in the connected folder. Request delete permission at the first git write of each session **and again after the desktop app reconnects** (the grant doesn't survive a reconnect). Before any git write, check that a test delete works and **stop if it fails**: without permission a fast-forward half-applies, leaving `.git/index.lock` and partly written files.
 
@@ -240,4 +242,4 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - One stable `CLAUDE.md` in the repo plus one living status doc in the Project; no new handoff documents (2026-11-10).
 - Every item: read the code, write a design note, get the founder's approval, then deliver in small reviewed PRs into `main` with merge commits, each tested on top of the current GitHub head (2026-11-10).
 - All development, including the Knowledge Lab, happens on `main`; `cadtree-knowledge-lab` is frozen (2026-11-13).
-- Cost-aware orchestration: Opus orchestrates and reviews; Sonnet executes and gives the independent review (§4); Haiku only for mechanical chores, never engine code.
+- Cost-aware orchestration (2026-11-13, updated 2026-11-15): the main chat orchestrates; Sonnet 5.5 (high) implements; Opus 5.5 (medium) gives the independent review; the orchestrator runs the checks and merges approved items (§4).
