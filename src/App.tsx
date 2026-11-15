@@ -24,16 +24,12 @@ import {
   isUserActivationError,
   resolveAuthAdapter,
 } from "./auth/firebase-auth";
-import {
-  AccountSignInModal,
-  AccountStatusControl,
-} from "./components/AccountControls";
+import { AccountStatusControl } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
 } from "./engine/path-shortcuts";
 import { presentPathBudgetError, pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
-  FolderAddressDialog,
   rememberFolderAddress,
   type HomeAddress,
 } from "./components/FolderAddressDialog";
@@ -83,37 +79,14 @@ import { ReferencesView } from './components/ReferencesView';
 import { retrieveReferenceAttachment, referenceWriteBlock, type ReferenceReview } from './engine/references';
 import { HistoryRecoveryView } from "./components/HistoryRecoveryView";
 import { ProjectContextHeader } from "./components/ProjectContextHeader";
-import { ProjectLearningModal } from "./components/ProjectLearningModal";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
-import {
-  SidebarResizeHandle,
-  useSidebarWidth,
-} from "./components/SidebarResize";
+import { useSidebarWidth } from "./components/SidebarResize";
 import { DiagnosticsView } from "./components/DiagnosticsView";
 import type { CreateBranchParams } from "./components/CreateBranchDialog";
-import {
-  FolderOpen,
-  BookOpen,
-  History,
-  Settings,
-  ScanLine,
-  HardDrive,
-  GraduationCap,
-} from "lucide-react";
-import {
-  IntegrityNotice,
-  Notice,
-  MessageLines,
-  OperationProgress,
-  Modal,
-} from "./components/ui";
 import { assertFolderAccess, pickDirectory, folderPermissionError } from "./utils/folder-access";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
-import {
-  WorkspaceTree,
-  type WorkspaceTreeProps,
-} from "./components/WorkspaceTree";
+import type { WorkspaceTreeProps } from "./components/WorkspaceTree";
 import {
   createHome,
   openHome,
@@ -134,7 +107,18 @@ import {
   type ManagedProject,
   type WorkspaceProjectEntry,
 } from "./engine/workspace-service";
-import type { ActiveTab, Context, Operation, PendingAuthAction } from "./app/types";
+import { AppDialogs } from "./app/AppDialogs";
+import { AppNotices } from "./app/AppNotices";
+import { NavigationRail } from "./app/NavigationRail";
+import type {
+  ActiveTab,
+  Context,
+  Operation,
+  PendingAuthAction,
+  PendingHome,
+  SignInPrompt,
+  StatusBanner,
+} from "./app/types";
 import {
   PROJECT_NEEDS_ATTENTION,
   ProjectRenamedNotice,
@@ -162,13 +146,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   });
   const authStateRef = useRef<AuthSnapshot>(authState);
   authStateRef.current = authState;
-  const [signInPrompt, setSignInPrompt] = useState<{
-    step: "sign-in" | "continue-picker";
-    action: PendingAuthAction;
-    signingIn: boolean;
-    error: string | null;
-    info?: string | null;
-  } | null>(null);
+  const [signInPrompt, setSignInPrompt] = useState<SignInPrompt | null>(null);
   const [signOutPending, setSignOutPending] = useState(false);
   const pendingSignOutRef = useRef(false);
   const pendingAccountSnapshotRef = useRef<AuthSnapshot | null>(null);
@@ -179,13 +157,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   );
   const [homeView, setHomeView] = useState(true);
   const [introView, setIntroView] = useState(false);
-  const [pendingHome, setPendingHome] = useState<{
-    root: RealFileSystemAdapter;
-    next?: HomeState;
-    create: boolean;
-    saved?: RememberedHome;
-    requestId: string;
-  } | null>(null);
+  const [pendingHome, setPendingHome] = useState<PendingHome | null>(null);
   const [homeAddress, setHomeAddress] = useState<HomeAddress | null>(null);
   const homeAddressCache = useRef<HomeAddress[]>([]);
   const cacheHomeAddress = (address: HomeAddress) => {
@@ -245,10 +217,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [isScanStale, setIsScanStale] = useState(false);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
-  const [statusBanner, setStatusBanner] = useState<{
-    type: "success" | "error" | "info";
-    message: string;
-  } | null>(null);
+  const [statusBanner, setStatusBanner] = useState<StatusBanner | null>(null);
   // Synchronous guards also cover rapid double clicks before React renders disabled controls.
   const operationRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
@@ -2194,138 +2163,33 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       onHomeAddressChange={cacheHomeAddress}
     >
       <div className="app-shell" style={sidebar.style}>
-        <aside className="navigation-rail">
-          <button
-            type="button"
-            className="wordmark"
-            aria-label="cAdtree introduction"
-            aria-current={homeView && (introView || !home) ? "page" : undefined}
-            disabled={busy}
-            onClick={() => {
-              if (operationRef.current) return;
-              if (!authStateRef.current.user) {
-                setHomeView(true);
-                setIntroView(true);
-                return;
-              }
+        <NavigationRail
+          sidebar={sidebar}
+          home={home}
+          workspace={workspace}
+          homeView={homeView}
+          introView={introView}
+          busy={busy}
+          activeTab={activeTab}
+          vaultState={vaultState}
+          scanResult={scanResult}
+          treeProps={treeProps}
+          navigate={navigate}
+          onWordmarkClick={() => {
+            if (operationRef.current) return;
+            if (!authStateRef.current.user) {
               setHomeView(true);
               setIntroView(true);
-              setLearningOpen(false);
-            }}
-          >
-            <svg
-              width="29"
-              height="31"
-              viewBox="0 0 29 31"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M8 25V7M8 18C8 12 21 18 21 7"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <circle cx="8" cy="25" r="3" fill="currentColor" />
-              <circle cx="8" cy="6" r="3" fill="currentColor" />
-              <circle cx="21" cy="6" r="3" fill="currentColor" />
-            </svg>
-            <span>
-              cAdtree<span className="wordmark-dot">.</span>
-            </span>
-          </button>
-          <p className="rail-caption">CREATE. ADAPT. DEFINE.</p>
-          <nav aria-label="Primary navigation" className="rail-navigation">
-            <button
-              aria-label="My workspaces"
-              disabled={busy}
-              aria-current={homeView && !introView && home ? "page" : undefined}
-              onClick={allWorkspaces}
-            >
-              <FolderOpen size={18} />
-              <span>My workspaces</span>
-            </button>
-            {home || workspace ? (
-              <button
-                className="mobile-tree-toggle"
-                aria-label="Browse folders"
-                disabled={busy}
-                onClick={() => setExplorerOpen(true)}
-              >
-                <FolderOpen size={18} />
-                <span>Browse folders</span>
-              </button>
-            ) : null}
-            <div className="desktop-workspace-tree">
-              <WorkspaceTree {...treeProps} />
-            </div>
-            {/* Always rendered so the Explorer above keeps its height; hidden and inert until a project is open. */}
-            <div
-              className={`project-navigation${!homeView && vaultState ? " has-project" : ""}`}
-              inert={homeView || !vaultState}
-              aria-hidden={homeView || !vaultState ? true : undefined}
-            >
-              <p className="rail-section-label">PROJECT</p>
-              <button
-                aria-label="History"
-                disabled={!vaultState || busy}
-                aria-current={
-                  activeTab === "history" ? "page" : undefined
-                }
-                onClick={() => navigate("history")}
-              >
-                <History size={18} />
-                <span>History</span>
-              </button>
-              <button
-                aria-label="Changes"
-                disabled={!vaultState || busy}
-                aria-current={
-                  activeTab === "changes" ? "page" : undefined
-                }
-                onClick={() => navigate("changes")}
-              >
-                <ScanLine size={18} />
-                <span>Changes</span>
-                {scanResult?.hasChanges ? (
-                  <i className="nav-change-dot" />
-                ) : null}
-              </button>
-              <button aria-label="References" disabled={busy || !vaultState} aria-current={activeTab === 'references' ? 'page' : undefined} onClick={() => navigate('references')}><BookOpen size={18} /><span>References</span></button>
-              <button
-                aria-label="Settings"
-                disabled={!vaultState || busy}
-                aria-current={
-                  activeTab === "diagnostics" ? "page" : undefined
-                }
-                onClick={() => navigate("diagnostics")}
-              >
-                <Settings size={18} />
-                <span>Settings</span>
-              </button>
-              <button
-                aria-label="Learn cAdtree"
-                aria-haspopup="dialog"
-                disabled={busy}
-                onClick={() => setLearningOpen(true)}
-              >
-                <GraduationCap size={18} />
-                <span>Learn cAdtree</span>
-              </button>
-            </div>
-          </nav>
-          <div className="rail-bottom">
-            <HardDrive size={17} />
-            <div>
-              <strong>Local by design</strong>
-              <p>Your files. Your storage.</p>
-            </div>
-          </div>
-          <SidebarResizeHandle
-            width={sidebar.width}
-            max={sidebar.max}
-            onChange={sidebar.change}
-          />
-        </aside>
+              return;
+            }
+            setHomeView(true);
+            setIntroView(true);
+            setLearningOpen(false);
+          }}
+          onAllWorkspaces={allWorkspaces}
+          onBrowseFolders={() => setExplorerOpen(true)}
+          onLearn={() => setLearningOpen(true)}
+        />
         <div className="workspace-shell">
           <div className="shell-top-bar">
             <AccountStatusControl
@@ -2342,83 +2206,24 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             </span>
           </div>
           <main id="main-content" aria-busy={busy}>
-            {progress &&
-            (isVerifyingAll || (isScanning && activeTab !== "changes")) ? (
-              <div className="global-feedback">
-                <OperationProgress
-                  progress={progress}
-                  onCancel={handleCancelOperation}
-                />
-              </div>
-            ) : null}
-            {statusBanner && (projectView || bannerScope === "workspace") ? (
-              <div className="global-feedback app-status-feedback">
-                <Notice
-                  type={statusBanner.type}
-                  onDismiss={() => setStatusBanner(null)}
-                >
-                  <MessageLines text={statusBanner.message} />
-                  {statusBanner.type === "error" &&
-                  /permission|reconnect|access|notallowed/i.test(
-                    statusBanner.message,
-                  ) &&
-                  projectView ? (
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={handleReattachWorkingFolder}
-                    >
-                      {managedProject
-                        ? "Reconnect workspace"
-                        : "Connect folder"}
-                    </button>
-                  ) : null}
-                </Notice>
-              </div>
-            ) : null}
-            {projectView && vaultState ? (
-              <div className="global-integrity">
-                <IntegrityNotice state={vaultState} />
-                {vaultState.incompleteAttempts.length ? (
-                  <Notice>
-                    {vaultState.incompleteAttempts.length} incomplete or
-                    interrupted operation(s) retained. These are not committed
-                    revisions.
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => navigate("diagnostics")}
-                    >
-                      Review in Settings
-                    </button>
-                  </Notice>
-                ) : null}
-                {managedBlockReason ? (
-                  <Notice type="error">{managedBlockReason}</Notice>
-                ) : null}
-                {missingConnections.length ? (
-                  <Notice>
-                    {managedProject
-                      ? "Reconnect the workspace to resolve these recorded branch locations: "
-                      : "Connect the working folders for "}
-                    {missingConnections.join(", ")} before saving or creating
-                    branches.{" "}
-                    {managedProject
-                      ? "Missing or moved folders will stay disconnected until their recorded location is restored."
-                      : "Select each branch, then Connect folder."}
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={handleReattachWorkingFolder}
-                    >
-                      {managedProject
-                        ? "Reconnect workspace"
-                        : "Connect folder"}
-                    </button>
-                  </Notice>
-                ) : null}
-              </div>
-            ) : null}
+            <AppNotices
+              progress={progress}
+              isVerifyingAll={isVerifyingAll}
+              isScanning={isScanning}
+              activeTab={activeTab}
+              statusBanner={statusBanner}
+              setStatusBanner={setStatusBanner}
+              bannerScope={bannerScope}
+              projectView={projectView}
+              busy={busy}
+              vaultState={vaultState}
+              managedProject={managedProject}
+              managedBlockReason={managedBlockReason}
+              missingConnections={missingConnections}
+              navigate={navigate}
+              onCancelOperation={handleCancelOperation}
+              onReattachWorkingFolder={handleReattachWorkingFolder}
+            />
             {homeView ? (
               <HomeWorkspacesView
                 home={authState.ready && authState.user ? home : null}
@@ -2669,80 +2474,32 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               </div>
             ) : null}
           </main>
-          {pendingHome ? (
-            <FolderAddressDialog
-              key={pendingHome.requestId}
-              home
-              folderName={pendingHome.root.name}
-              onSave={completeHomeSetup}
-              onCancel={() => setPendingHome(null)}
-              onBack={() => {
-                const create = pendingHome.create;
-                setPendingHome(null);
-                void connectHome(create).catch((error) => {
-                  setBannerScope("workspace");
-                  setStatusBanner({ type: "error", message: String(error) });
-                });
-              }}
-            />
-          ) : null}
-          {addressPrompt && home ? (
-            <FolderAddressDialog
-              home
-              folderName={home.root.name}
-              title="Add your Cadtree home address"
-              intro="cAdtree needs the full address to keep paths within Windows' limit; the browser can't read it."
-              onSave={saveHomeAddressFromPrompt}
-              onCancel={() => {
-                settleAddressPrompt(false);
-              }}
-            />
-          ) : null}
-          {learningOpen && !homeView && vaultState ? (
-            <ProjectLearningModal busy={busy} onClose={() => setLearningOpen(false)} />
-          ) : null}
-          {explorerOpen ? (
-            <Modal
-              title="Browse folders"
-              busy={busy}
-              onClose={() => setExplorerOpen(false)}
-            >
-              <div className="mobile-workspace-tree">
-                <WorkspaceTree {...treeProps} />
-              </div>
-            </Modal>
-          ) : null}
-          {signInPrompt ? (
-            <AccountSignInModal
-              step={signInPrompt.step}
-              createHomePicker={
-                signInPrompt.action.kind === "connect-home"
-                  ? signInPrompt.action.create
-                  : undefined
-              }
-              signingIn={signInPrompt.signingIn}
-              error={signInPrompt.error}
-              info={signInPrompt.info}
-              onContinueWithGoogle={() => {
-                void handleContinueWithGoogle();
-              }}
-              onSubmitEmail={(mode, email, password) => {
-                void handleSubmitEmailAuth(mode, email, password);
-              }}
-              onForgotPassword={(email) => {
-                void handleForgotPassword(email);
-              }}
-              onClearFeedback={() => {
-                setSignInPrompt((prev) =>
-                  prev ? { ...prev, error: null, info: null } : null,
-                );
-              }}
-              onContinuePicker={handleContinuePickerAfterSignIn}
-              onCancel={() => {
-                if (!signInPrompt.signingIn) setSignInPrompt(null);
-              }}
-            />
-          ) : null}
+          <AppDialogs
+            busy={busy}
+            home={home}
+            homeView={homeView}
+            vaultState={vaultState}
+            treeProps={treeProps}
+            pendingHome={pendingHome}
+            setPendingHome={setPendingHome}
+            connectHome={connectHome}
+            setBannerScope={setBannerScope}
+            setStatusBanner={setStatusBanner}
+            onCompleteHomeSetup={completeHomeSetup}
+            addressPrompt={addressPrompt}
+            settleAddressPrompt={settleAddressPrompt}
+            onSaveHomeAddressFromPrompt={saveHomeAddressFromPrompt}
+            learningOpen={learningOpen}
+            setLearningOpen={setLearningOpen}
+            explorerOpen={explorerOpen}
+            setExplorerOpen={setExplorerOpen}
+            signInPrompt={signInPrompt}
+            setSignInPrompt={setSignInPrompt}
+            handleContinueWithGoogle={handleContinueWithGoogle}
+            handleSubmitEmailAuth={handleSubmitEmailAuth}
+            handleForgotPassword={handleForgotPassword}
+            onContinuePickerAfterSignIn={handleContinuePickerAfterSignIn}
+          />
         </div>
       </div>
     </FilePathShortcutsProvider>
