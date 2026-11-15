@@ -1039,6 +1039,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               /* Convenience storage does not control publication. */
             }
           }
+          // My workspaces keeps the last project in memory; a new workspace must not open it.
+          leaveProject();
           setHome(next);
           setWorkspace(result.workspace);
           setHomeView(false);
