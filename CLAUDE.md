@@ -93,8 +93,8 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Knowledge Lab:** `src/knowledge/` (index, retrieval, persisted `records/`), test vault and Explorer under `tests/knowledge-lab`.
 - **UI shell:** `src/App.tsx` (shared state; home/workspace/project open and leave, `leaveProject` / `resetActiveSessionUi`; the home-address prompt; Back/Forward wiring; home and workspace views) and `src/app/`:
   - shell components: `NavigationRail`, `AppNotices`, `AppDialogs`, `ProjectViews` (the project tabs inside App's keyed container);
-  - `useOperation` (`perform`: busy, progress, banners, cancellation and the `context.current()` guard every write goes through) and `useAuthSession` (sign-in/out);
-  - action hooks per concern: `useCaptureActions`, `useApplicationActions`, `useBranchActions`, `useDiagnosticsActions`, `useReviewActions`. Each takes the current render's values and setters, calls `assertProjectWritable` before writes and runs them through `perform`;
+  - `useOperation` (`perform`: one operation at a time, busy state, progress, banners, cancellation via `context.signal`; `context.current()` stops updates from an operation that has been replaced or unmounted) and `useAuthSession` (sign-in/out);
+  - action hooks per concern: `useCaptureActions`, `useApplicationActions`, `useBranchActions`, `useDiagnosticsActions`, `useReviewActions`. Each takes the current render's values and setters and runs its work through `perform`; hooks that write project files (all except `useDiagnosticsActions`) call `assertProjectWritable(context)` first;
   - `types.ts` (shared types incl. `Perform`, `AssertProjectWritable`), `project-lookup.ts`.
   - New UI concerns get their own hook or component here; reusable views stay in `src/components/`.
 
@@ -244,7 +244,7 @@ These are decided. Build on them; don't redesign around them. The full decision 
   - keep working from it → **Create design case**.
 - "Restore copy" and `recoveries/` are gone and must not come back as a parallel path. Existing `recoveries/` folders are left untouched; cAdtree never deletes user data.
 - Apply (merge or Bring back) only changes working files; the user saves a revision afterwards. Nothing creates a revision automatically.
-- Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files is kept and not selectable; a folder to remove that holds only untracked OS clutter stops the Apply before any write (cAdtree never deletes those files); recovery undoes folder changes too. Case-only renames stay blocked at review.
+- Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files or a subfolder that stays is kept and not selectable; a folder to remove that holds only untracked OS clutter stops the Apply before any write (a deliberate exception to skipping untracked clutter: cAdtree never deletes it, so the user deletes it or unticks the folder); recovery undoes folder changes too. Case-only renames stay blocked at review.
 - Design cases are archived, never auto-deleted. Duplicated IDs become read-only, never merged.
 
 **How we work**
