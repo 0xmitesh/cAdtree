@@ -2,7 +2,7 @@ import "../../tests/dom";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { ApplyPreviewDialog, type ApplicationController } from "./ApplyPreviewDialog";
+import { ApplyPreviewDialog, reconcileChoices, type ApplicationController } from "./ApplyPreviewDialog";
 import {
   HistoryRecoveryView,
   type HistoryRecoveryViewProps,
@@ -382,7 +382,7 @@ test("Refresh saved states pre-selects a newly selectable folder row in Bring ba
   const before = folderState();
   before.revisions[0].manifest.directories = before.revisions[0].manifest.directories.filter((d) => d !== "Empty one");
   ui = render(bringBack(before, controller));
-  assert.equal(ui.queryByRole("checkbox", { name: "Select Create folder: Empty one/" }), null);
+  assert.equal(ui.queryByRole("checkbox", { name: "Select Create folder: Empty one/" }) === null, true);
   fireEvent.click(ui.getByRole("checkbox", { name: "Select Remove folder: Added later/" }));
   fireEvent.click(ui.getByRole("button", { name: "Refresh saved states" }));
   await waitFor(() => ui.getByRole("checkbox", { name: "Select Create folder: Empty one/" }));
@@ -401,8 +401,44 @@ test("a removal the destination's own files make impossible is shown as kept, no
   );
   const kept = within(ui.getByRole("article", { name: "Kept folder: Shared/" }));
   assert.ok(kept.getByText("Kept: still holds files"));
-  assert.equal(kept.queryByRole("checkbox"), null);
+  assert.equal(kept.queryByRole("checkbox") === null, true);
   assert.equal(ui.getAllByRole("checkbox").some((e) => (e as HTMLInputElement).checked), false);
+});
+
+test("when only kept folders remain the empty state says nothing can be applied", () => {
+  const state = scenarioState("branches");
+  state.revisions[7].manifest.files = state.revisions[1].manifest.files.map((f) => ({ ...f }));
+  state.revisions[1].manifest.directories.push("Shared");
+  state.revisions[5].manifest.directories.push("Shared");
+  state.revisions[5].manifest.files.push({ path: "Shared/Main.txt", sha256: "7".repeat(8), size: 3, lastModified: 0 });
+  const ui = render(
+    <ApplyPreviewDialog state={state} sourceId="p2" destinationBranchId="branch-main" onClose={() => {}} />,
+  );
+  assert.ok(ui.getByRole("article", { name: "Kept folder: Shared/" }));
+  assert.ok(ui.getByText("No source changes can be applied against this destination."));
+});
+
+test("merge offers an available folder row but leaves it unselected", () => {
+  const state = scenarioState("branches");
+  state.revisions[7].manifest.directories.push("Case folder");
+  const ui = render(
+    <ApplyPreviewDialog state={state} sourceId="p2" destinationBranchId="branch-main" onClose={() => {}} />,
+  );
+  const box = ui.getByRole("checkbox", { name: "Select Create folder: Case folder/" }) as HTMLInputElement;
+  assert.equal(box.checked, false);
+  assert.ok(ui.getByText(/Select to create it/));
+  assert.equal(ui.getAllByRole("checkbox").some((e) => (e as HTMLInputElement).checked), false);
+});
+
+test("reconciliation treats a path that switched between file and folder as a new row", () => {
+  const prep = prepareApplyPreview(folderState(), "r1", "branch-main", "revert");
+  if (prep.status !== "available") throw new Error(prep.reason);
+  const rows = prep.context.rows;
+  const asFile = rows.map((r) => (r.path === "Empty one" ? { ...r, entry: "file" as const } : r));
+  const chosen = { selected: false, decision: "use-source" as const };
+  const next = reconcileChoices({ "Empty one": chosen, "Added later": chosen }, asFile, rows, true);
+  assert.deepEqual(next["Empty one"], { selected: true, decision: "use-source" });
+  assert.equal(next["Added later"], chosen);
 });
 
 test("a selected folder removal that would still hold files shows the blocker in the readiness list", () => {
@@ -422,8 +458,8 @@ test("a selected folder removal that would still hold files shows the blocker in
 
 test("the old empty-folder disclaimer is gone", () => {
   const ui = render(bringBack(folderState()));
-  assert.equal(ui.queryByText(/Empty-folder-only changes are not selected/), null);
-  assert.equal(ui.queryByText(/including empty folders, are retained/), null);
+  assert.equal(ui.queryByText(/Empty-folder-only changes are not selected/) === null, true);
+  assert.equal(ui.queryByText(/including empty folders, are retained/) === null, true);
 });
 
 test("the 'holds only system files' error from prepare shows in the dialog's error area and nothing is written", async () => {

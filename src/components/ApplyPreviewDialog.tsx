@@ -87,12 +87,16 @@ export function reconcileChoices(
   rows: PreviewFileRow[],
   revert: boolean,
 ): Record<string, PreviewChoice> {
-  const before = new Map(previousRows.map((row) => [row.path, row.kind]));
+  const before = new Map(
+    previousRows.map((row) => [row.path, `${row.entry}:${row.kind}`]),
+  );
   const next: Record<string, PreviewChoice> = {};
   for (const row of rows) {
     if (!isSelectable(row)) continue;
     const kept =
-      before.get(row.path) === row.kind ? previous[row.path] : undefined;
+      before.get(row.path) === `${row.entry}:${row.kind}`
+        ? previous[row.path]
+        : undefined;
     if (kept) next[row.path] = kept;
     else if (revert && row.kind === "available")
       next[row.path] = { selected: true, decision: "use-source" };
@@ -695,7 +699,9 @@ function ApplyPreviewBody({
           </p>
           {!candidates.length ? (
             <Notice>
-              No source changes need application against this destination.
+              {keptFolders.length
+                ? "No source changes can be applied against this destination."
+                : "No source changes need application against this destination."}
             </Notice>
           ) : null}
           {candidates.map((row) => {
@@ -746,8 +752,8 @@ function ApplyPreviewBody({
                         ? `This folder is in ${sourceLabel}. Selected to create it again in the working files.`
                         : "Source adds this folder (empty folders included). Select to create it."
                       : revert
-                        ? `This folder is not in ${sourceLabel}. It is removed from the working files once it is empty; it stays in saved history.`
-                        : "Source removes this folder. It is removed only once it is empty after the selected deletions."}
+                        ? `This folder is not in ${sourceLabel}. It can be removed only if it is empty after the selected deletions; otherwise untick it. It stays in saved history.`
+                        : "Source removes this folder. Select to remove it; it can be removed only if it is empty after the selected deletions, otherwise untick it."}
                   </p>
                 ) : null}
                 {!isFolder(row) && row.source === null ? (
