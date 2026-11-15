@@ -56,8 +56,11 @@ function countsLine(
   ].join(" · ");
 }
 
+// Folder rows are not shown or pre-selected yet (a separate change adds them).
 const isSelectable = (row: PreviewFileRow) =>
-  (row.kind === "available" || row.kind === "conflict") && !row.identityBlock;
+  row.entry !== "folder" &&
+  (row.kind === "available" || row.kind === "conflict") &&
+  !row.identityBlock;
 
 /** Carries the user's choices across a refresh of the saved states. A choice
  * survives only while its row still exists, with the same kind, and can still
@@ -213,13 +216,12 @@ function ApplyPreviewBody({
         { side: "Source", revision: context.source },
         { side: "Destination", revision: context.destination },
       ];
-  const candidates = context.rows.filter(
+  const fileRows = context.rows.filter((row) => row.entry !== "folder");
+  const candidates = fileRows.filter(
     (row) => row.kind === "available" || row.kind === "conflict",
   );
-  const matching = context.rows.filter((row) => row.kind === "already-matches");
-  const retained = context.rows.filter(
-    (row) => row.kind === "no-source-change",
-  );
+  const matching = fileRows.filter((row) => row.kind === "already-matches");
+  const retained = fileRows.filter((row) => row.kind === "no-source-change");
   const reasonLabel = revert
     ? "Engineering reason for bringing this back"
     : "Engineering reason for proposed application";
