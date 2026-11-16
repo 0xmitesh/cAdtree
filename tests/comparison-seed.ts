@@ -12,6 +12,7 @@ import {
   inventorySignature,
   readVerifiedInventory,
 } from "../src/engine/copy-service";
+import { isHomeGuideFile } from "./offline-guide-files";
 
 export async function seedComparisonReview() {
   if (!import.meta.env.DEV)
@@ -158,5 +159,10 @@ export async function comparisonFixtureFingerprint(rootName: string) {
   const root = new RealFileSystemAdapter(
     await storage.getDirectoryHandle(rootName),
   );
-  return inventorySignature(await readVerifiedInventory(root));
+  // Opening a writable home writes its Readme and Index; nothing else may change.
+  const inventory = await readVerifiedInventory(root);
+  return inventorySignature({
+    ...inventory,
+    files: inventory.files.filter((file) => !isHomeGuideFile(file.path)),
+  });
 }

@@ -7,6 +7,7 @@ import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import type { ScanResult, VaultState } from "../engine/types";
 import { openExistingVault } from "../engine/vault-service";
 import { createManagedBranch, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
+import { projectGuideTarget, refreshGuidesAfter } from "./offline-guide-refresh";
 import { pathBudgetWarnSentence } from "../utils/path-budget-message";
 import type { AssertProjectWritable, Perform, StatusBanner } from "./types";
 import type { useApplicationActions } from "./useApplicationActions";
@@ -159,6 +160,8 @@ export function useBranchActions({
             },
             applicationOptions(context),
           );
+          // Archived or reopened: update the Map's case status.
+          refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
           if (context.current()) {
             applyVaultState(result.state);
             setStatusBanner({
@@ -203,6 +206,8 @@ export function useBranchActions({
               budget: { workspaceAddress: await budgetWorkspaceAddress() },
             },
           );
+          // The case is published: update the Map (the new case and its folder).
+          refreshGuidesAfter({ project: projectGuideTarget(workspace, current) });
           if (!context.current()) return;
           setManagedProject(current);
           setVaultState(current.vaultState);

@@ -4,6 +4,7 @@ import {
   inventorySignature,
   readVerifiedInventory,
 } from "../src/engine/copy-service";
+import { isHomeGuideFile, isProjectGuideFile } from "./offline-guide-files";
 import { openExistingVault } from "../src/engine/vault-service";
 import { getBranchBaseline } from "../src/engine/branch-state";
 import {
@@ -29,8 +30,10 @@ export async function readLifecycleFixture(fixture: {
     state: await openExistingVault(await root.getDirectory(fixture.vaultPath)),
     unchangedFingerprint: inventorySignature({
       ...inventory,
+      // Archiving or reopening also refreshes the derived offline guide (Map, revision listings, home files).
       files: inventory.files.filter(
-        (file) => !file.path.startsWith(`${lifecycle}/`),
+        (file) =>
+          !file.path.startsWith(`${lifecycle}/`) && !isHomeGuideFile(file.path) && !isProjectGuideFile(file.path),
       ),
       directories: inventory.directories.filter(
         (path) => path !== lifecycle && !path.startsWith(`${lifecycle}/`),
