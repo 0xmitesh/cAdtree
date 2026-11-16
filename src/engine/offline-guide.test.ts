@@ -126,7 +126,7 @@ test('revision listing: header, identity, notes, folders, files with object path
     'Do not edit files inside the vault folder. Copy them elsewhere first.',
   ]);
   assert.ok(!text.includes('Generated:'), 'a listing carries no generation time');
-  assert.equal(OFFLINE_GUIDE_FORMAT_VERSION, 1);
+  assert.equal(OFFLINE_GUIDE_FORMAT_VERSION, 2);
   assertPlainText(text);
   const manifest = state.revisions.find((r) => r.manifest.revisionId === f.revisionIds[1])!.manifest;
   assert.ok(lines.includes('Project: Packaging Gripper'));
@@ -161,7 +161,12 @@ test('revision listing: header, identity, notes, folders, files with object path
   assert.match(refText, /Object file: vault\/objects\/[0-9a-f]{2}\/[0-9a-f]{64}\.bin/);
   assert.match(refText, /Explanation: Max load 40 N/);
   // Rebuild instructions.
-  assert.match(text, /HOW TO REBUILD THIS REVISION BY HAND/);
+  assert.match(text, /HOW TO REBUILD THIS REVISION\r\n/);
+  // The restore page first, then the manual steps, which begin with the Windows file name extension tip.
+  assert.ok(text.indexOf('Easiest: open _RESTORE cAdtree.html') > text.indexOf('HOW TO REBUILD THIS REVISION'));
+  assert.ok(text.indexOf('Easiest: open _RESTORE cAdtree.html') < text.indexOf('By hand (without the page)'));
+  assert.ok(text.includes('1. On Windows, turn on View → Show → File name extensions first; the renamed copy must not end in .bin.'));
+  assert.ok(text.indexOf('File name extensions') < text.indexOf('2. Make an empty folder'));
   assert.match(text, /certutil -hashfile "<file>" SHA256/);
   assert.match(text, /shasum -a 256 "<file>"/);
   assert.match(text, /whole folder tree/);
@@ -240,6 +245,9 @@ test('project map: header, latest files, branches, revisions, references, integr
   // Integrity and recovery.
   assert.match(text, /INTEGRITY\r\n/);
   assert.match(text, /HOW TO RECOVER WITHOUT cAdtree/);
+  const recover = text.slice(text.indexOf('HOW TO RECOVER WITHOUT cAdtree'));
+  assert.ok(recover.indexOf('Easiest: open _RESTORE cAdtree.html') > 0 && recover.indexOf('Easiest') < recover.indexOf('By hand:'));
+  assert.match(recover, /View → Show → File name extensions first; the renamed copy must not end in \.bin\./);
   assert.match(text, /certutil -hashfile "<file>" SHA256/);
   assert.match(text, /shasum -a 256 "<file>"/);
   // Engine-supplied detail sentences are quoted as they are; everything cAdtree lays out stays within 120.

@@ -28,7 +28,7 @@ import { formatRevisionNumber } from './vault-service';
 import { openWorkspace, resolveManagedProject, type ManagedProject } from './workspace-service';
 import { openHome, type HomeWorkspaceEntry } from './home-service';
 import {
-  OFFLINE_GUIDE_FORMAT_VERSION, PROJECT_MAP_FILENAME, homeIndexPath, homeReadmePath, projectMapPath, restorePagePath,
+  OFFLINE_GUIDE_FORMAT_VERSION, PROJECT_MAP_FILENAME, PROJECT_RESTORE_PAGE_FILENAME, homeIndexPath, homeReadmePath, projectMapPath, restorePagePath,
   revisionListingPath,
 } from './offline-guide-paths';
 import { buildRestorePage, restorePageWithoutGenerated } from './offline-restore-page';
@@ -209,16 +209,21 @@ export function buildRevisionListing(input: RevisionListingInput): string {
 
   referenceLines(doc, state, manifest.revisionId);
 
-  doc.section('HOW TO REBUILD THIS REVISION BY HAND');
-  doc.line('Object file paths above are relative to the project folder (the folder that contains "vault").', 4);
-  doc.line('1. Make an empty folder somewhere outside the vault.', 4);
-  doc.line('2. Inside it, create every folder listed under FOLDERS.', 4);
-  doc.line('3. For each file under FILES, copy its object file to the listed relative path in your new folder,', 4);
+  doc.section('HOW TO REBUILD THIS REVISION');
+  doc.line(`Easiest: open ${PROJECT_RESTORE_PAGE_FILENAME} in the project folder (the folder that contains "vault") in Google`, 4);
+  doc.line('Chrome or Microsoft Edge, choose "Rebuild a whole revision" and pick this revision. It rebuilds every', 4);
+  doc.line('folder and file and checks each one.', 4);
+  doc.line();
+  doc.line('By hand (without the page): object file paths above are relative to the project folder.', 4);
+  doc.line('1. On Windows, turn on View → Show → File name extensions first; the renamed copy must not end in .bin.', 4);
+  doc.line('2. Make an empty folder somewhere outside the vault.', 4);
+  doc.line('3. Inside it, create every folder listed under FOLDERS.', 4);
+  doc.line('4. For each file under FILES, copy its object file to the listed relative path in your new folder,', 4);
   doc.line('   then rename the copy to the file name in that path.', 4);
-  doc.line('4. Check each file:', 4);
+  doc.line('5. Check each file:', 4);
   checkInstructions(doc, 7);
   doc.line('   If a result differs from the listed SHA-256, do not use that file.', 4);
-  doc.line('5. Rebuild the whole folder tree, not single files: assemblies and drawings find their parts by name', 4);
+  doc.line('6. Rebuild the whole folder tree, not single files: assemblies and drawings find their parts by name', 4);
   doc.line('   and relative path.', 4);
   return doc.text();
 }
@@ -353,9 +358,15 @@ export function buildProjectMap(input: ProjectMapInput): string {
   }
 
   doc.section('HOW TO RECOVER WITHOUT cAdtree');
+  doc.line(`Easiest: open ${PROJECT_RESTORE_PAGE_FILENAME} (next to this file) in Google Chrome or Microsoft Edge. It rebuilds a`, 4);
+  doc.line('whole revision into an empty folder, or saves single files from the vault under their original names,', 4);
+  doc.line('with every checksum checked. It works offline.', 4);
+  doc.line();
+  doc.line('By hand:', 4);
   doc.line('Latest files: copy the working folders listed under YOUR LATEST FILES.', 4);
   doc.line('An older revision: open its listing (path under REVISIONS). It lists every folder and file with the', 4);
-  doc.line('object file to copy and the SHA-256 to check, and explains how to rebuild it.', 4);
+  doc.line('object file to copy and the SHA-256 to check, and explains how to rebuild it. On Windows, turn on', 4);
+  doc.line('View → Show → File name extensions first; the renamed copy must not end in .bin.', 4);
   checkInstructions(doc, 4);
   doc.line('Always rebuild the whole folder tree of a revision, not single files: assemblies and drawings find their', 4);
   doc.line('parts by name and relative path.', 4);
@@ -415,7 +426,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'can still do all of this with only a file browser (File Explorer or Finder) and a text editor:',
   );
   doc.para('copy your latest files (section 4);', 4, '- ');
-  doc.para('rebuild any older revision from the saved history (section 5);', 4, '- ');
+  doc.para('rebuild any older revision, or get single files back, with the restore page or by hand (section 5);', 4, '- ');
   doc.para('read the engineering notes and find the reference documents (section 6).', 4, '- ');
   doc.line().para(
     'Before you try anything, copy this whole home folder to a safe place, so that every step below works on a copy. ' +
@@ -436,6 +447,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     ['    projects/', ''],
     ['      <Project>/', 'one project'],
     ['        _MAP cAdtree.txt', "the project's Map: branches, revisions, references"],
+    ['        _RESTORE cAdtree.html', 'restores files or a revision (use Chrome or Edge)'],
     ['        working/', ''],
     ['          main/', "Main's latest files: ordinary CAD folders and files"],
     ['          <Design case>/', "one design case's latest files, apart from Main"],
@@ -449,7 +461,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   doc.line().para(
     'Folder names are the readable names chosen in cAdtree. cAdtree identifies workspaces and projects by IDs stored ' +
       'in their records, not by their folder names. Each project also has its own short guide: the Map (_MAP ' +
-      'cAdtree.txt) lists its branches, every revision and its references, and repeats how to recover without cAdtree.',
+      'cAdtree.txt) lists its branches, every revision and its references, and repeats how to recover without cAdtree. ' +
+      'The restore page (_RESTORE cAdtree.html) does the recovery for you in a web browser.',
   );
 
   doc.heading('4. Get your latest files');
@@ -462,11 +475,22 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   doc.line().para(
     'The working folders hold the files as you last left them, including edits that were not yet saved as a ' +
       'revision. Copy the whole folder, not single files: assemblies and drawings find their parts by name and ' +
-      'relative path. To get the exact state of a saved revision instead, see section 5.',
+      'relative path. To get the exact state of a saved revision instead, or if the working folders are damaged or ' +
+      'gone, use the restore page described in section 5.',
   );
 
-  doc.heading('5. Get an older revision');
-  steps(doc, 'Rebuild a revision by hand', [
+  doc.heading('5. Get an older revision, or single files back');
+  doc.para(
+    'The easiest way is the restore page. Open the project folder and double-click _RESTORE cAdtree.html: it opens in ' +
+      'your web browser, needs no internet and installs nothing. It has two parts. "Rebuild a whole revision" (Google ' +
+      "Chrome or Microsoft Edge on a computer) asks for the project's vault folder, lists the saved revisions, asks for " +
+      'a new empty folder outside the vault and rebuilds every folder and file under its original name, checking every ' +
+      'checksum. "Restore single files" works in any modern browser: drag a file from vault/objects onto the page and it ' +
+      'saves a copy under its original name. A web page cannot open a folder from a typed path, so choose or drag the ' +
+      'folder or file instead. If the page disagrees with the vault, the vault is correct.',
+  );
+  steps(doc, 'Rebuild a revision by hand (if the restore page is not available)', [
+    'On Windows, turn on View → Show → File name extensions in File Explorer first; the renamed copy must not end in .bin.',
     "Open the project's Map, _MAP cAdtree.txt. Under REVISIONS, find the revision by its number, date and summary. " +
       "Revision numbers count across the whole project and all of its design cases, so one branch's revisions can skip numbers. Each " +
       'revision names its branch (Main or a design case).',
@@ -500,7 +524,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     "Reference documents: the Map's REFERENCES section lists every reference document with its original file name " +
       'and the object file that holds it. Each revision listing has a section REFERENCES CAPTURED WITH THIS REVISION ' +
       'with the explanation that was written for it. Reference files are stored under their checksum like every ' +
-      'other saved file, so copy the object file and rename the copy to its recorded original file name. A checksum ' +
+      'other saved file, so drag the object file onto the restore page, or copy it and rename the copy to its recorded ' +
+      'original file name (with Windows file name extensions turned on). A checksum ' +
       'shows that a reference file is the one that was saved; it does not show that what the document says is right.',
   );
 
@@ -512,7 +537,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     '- ',
   );
   doc.para(
-    'The guide files (_README, _INDEX, _MAP and the revision listings) are generated by cAdtree. If one disagrees with ' +
+    'The guide files (_README, _INDEX, _MAP, _RESTORE and the revision listings) are generated by cAdtree. If one disagrees with ' +
       'the records in the vault, the vault is correct. Edits you make to a guide file are overwritten.',
     0,
     '- ',

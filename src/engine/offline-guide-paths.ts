@@ -5,7 +5,7 @@
  */
 
 /** Version of the guide text layout. Bump when the layout changes. */
-export const OFFLINE_GUIDE_FORMAT_VERSION = 1;
+export const OFFLINE_GUIDE_FORMAT_VERSION = 2;
 
 /** File name of a project's Map, directly inside the project folder (the leading `_` sorts it first). */
 export const PROJECT_MAP_FILENAME = '_MAP cAdtree.txt';
