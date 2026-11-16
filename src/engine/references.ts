@@ -301,7 +301,11 @@ async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultSta
   throwIfCancelled(signal);
   await commitDirectory(vault, referenceCatalogMarkerPath(record.catalogId, recordSha256));
 }
-/** Writes one reference object through its own staging session; the empty session folder is removed only after the write succeeds. */
+/**
+ * Writes one reference object through its own staging session; the empty session folder is removed only after the write
+ * succeeds. Cleanup is per object, not after catalog publication: a later failure leaves at most a verified object in
+ * objects/ (reused on retry), and an interrupted publication is still reported through its catalog record.
+ */
 async function storeReferenceObject(vault: FileSystemDirectoryAdapter, sha256: string, size: number, stream: () => ReadableStream<Uint8Array>, signal?: AbortSignal) {
   const sessionId = newRecordId();
   await writeAndVerifyObject(vault, sessionId, sha256, size, async () => stream(), signal);

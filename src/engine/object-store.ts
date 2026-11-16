@@ -18,8 +18,8 @@ export function getStagingSessionPathSegments(sessionId: string): string[] {
 }
 
 /**
- * Best-effort cleanup of a staging session folder after a successful write, mirroring the revision
- * capture path: a failed removal is ignored. The folder is removed only when it is empty (a surviving
+ * Best-effort cleanup of a staging session folder after a successful write. Like the revision capture
+ * path's cleanup, a failed removal is ignored; unlike it, nothing is removed recursively. The folder is removed only when it is empty (a surviving
  * .tmp from a failed attempt is kept and still reported); nothing else is ever deleted.
  */
 export async function removeEmptyStagingSession(vaultDir: FileSystemDirectoryAdapter, sessionId: string): Promise<void> {
