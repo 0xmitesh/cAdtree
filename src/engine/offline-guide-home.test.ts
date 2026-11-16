@@ -126,6 +126,15 @@ test('home Readme: header, every section, the checksum commands and the format r
   assert.match(flat, /parentRevisionId/);
   assert.match(flat, /A revision counts only when this file exists/);
   assert.match(flat, /Never infer order from an ID/);
+  assert.match(flat, /references\/completed\/ \(the code/);
+  assert.match(flat, /parent: \{catalogId, sha256\}/);
+  assert.match(flat, /<branchId>\.000001\.json/);
+  assert.match(flat, /older design cases may instead be stored as <branchId>\.json with no ready marker/);
+  assert.match(flat, /the case you are currently working on cannot be archived \(switch to another case first\)/);
+  assert.match(flat, /choose Changes on the left/);
+  assert.match(flat, /one branch's revisions can skip numbers/);
+  assert.match(flat, /the one checkbox that confirms your CAD documents are closed and the destination is right/);
+  assert.match(flat, /Main revisions before the case started/);
 });
 
 test('home Readme: tutorials use the real button names and describe no feature that does not exist', () => {

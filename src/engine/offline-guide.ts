@@ -465,7 +465,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   doc.heading('5. Get an older revision');
   steps(doc, 'Rebuild a revision by hand', [
     "Open the project's Map, _MAP cAdtree.txt. Under REVISIONS, find the revision by its number, date and summary. " +
-      'Revision numbers count across the whole project and all of its design cases, so gaps are normal. Each ' +
+      "Revision numbers count across the whole project and all of its design cases, so one branch's revisions can skip numbers. Each " +
       'revision names its branch (Main or a design case).',
     'Open the listing named under that revision: vault/revisions/<revision ID>.txt. It lists every folder and ' +
       'every file of the revision with its path, size, SHA-256 checksum and the object file that holds its bytes ' +
@@ -533,7 +533,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'Button names are shown as they appear on screen.',
   );
   steps(doc, 'Save a revision', [
-    'Close your CAD documents, then choose Changes in the PROJECT menu and choose Scan for changes.',
+    'Close your CAD documents, then choose Changes on the left and choose Scan for changes.',
     'Check the changed files. Enter a Revision summary (required). Optionally choose + Add overall engineering notes ' +
       '(Problem or intent, Engineering change, Observations) or + Attach reference files.',
     'Choose Save revision. The new revision appears in History.',
@@ -548,7 +548,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   steps(doc, 'Bring an older revision back onto a branch (Bring back)', [
     'Save any unsaved working changes as a revision first (they block Bring back). Select the branch in the Explorer ' +
       'so that it is the active branch.',
-    'In History, select an earlier revision of that branch and choose Bring back onto <branch>… (for example ' +
+    "In History, select an earlier revision from that branch's history (for a design case this includes the Main revisions " +
+      'before the case started) and choose Bring back onto <branch>… (for example ' +
       '"Bring back onto Main…").',
     'The dialog "Make <branch> match <revision>" lists every difference, all selected. Deselect any you do not ' +
       'want, enter the Engineering reason for bringing this back, and choose Prepare bring-back.',
@@ -561,8 +562,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'In History, select a revision of the design case and choose Review changes to apply.',
     'Nothing is selected at first: choose the changes to apply. For a file changed on both sides, choose Keep ' +
       'destination, Use source state or Leave unresolved. Enter the Engineering reason for proposed application.',
-    'Choose Prepare application, check the confirmation, tick that your CAD documents are closed, and choose Apply ' +
-      'confirmed changes.',
+    'Choose Prepare application, check the confirmation, tick the one checkbox that confirms your CAD documents are closed and the ' +
+      'destination is right, and choose Apply confirmed changes.',
     'Only the working files change. Check them in your CAD program, then choose Changes and Save revision. The design ' +
       'case is not deleted.',
   ]);
@@ -575,7 +576,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   ]);
   steps(doc, 'Archive a design case', [
     'Choose History. The Design cases panel lists each case.',
-    'Choose Archive case next to the case. Main cannot be archived, a case that is active cannot be archived, and a ' +
+    'Choose Archive case next to the case. Main cannot be archived, the case you are currently working on cannot be ' +
+      'archived (switch to another case first), and a ' +
       'case with unsaved working changes must be saved first.',
     'Read the confirmation and choose Archive case. The working folder and all saved history stay in place. To use ' +
       'the case again, open Archived cases and choose Reopen case.',
@@ -634,6 +636,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'One branch: Main, or a design case. A design case counts only when <branchId>.ready.json exists too; Main has no marker.',
     [
       'branchId, projectId, name, reason, createdAt, isMain',
+      'older design cases may instead be stored as <branchId>.json with no ready marker, like Main',
       'startingRevisionId: the revision a design case started from (null for Main)',
       '.ready.json: branchId, projectId and recordSha256 (the SHA-256 of the branch record)',
     ],
@@ -656,17 +659,20 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'content-addressed: one object serves every revision and reference that has the same bytes',
   ]);
   record('references/catalogs/<catalogId>.json', 'The reference documents known at some point.', [
-    'catalogId, parent (the previous catalog, or null)',
+    'A catalog counts only once its publication marker exists: a folder named <catalogId>.<code>.done in ' +
+      'references/completed/ (the code is a short form of the catalog file\'s checksum).',
+    'catalogId, parent: {catalogId, sha256} of the previous catalog, or null for the first catalog',
+    'The current catalog is the last one in the chain of parents (no other catalog names it as its parent).',
     'references: a list of referenceId, title, description, tags, removed, projectVersionId and versions',
     'each version: versionId, originalFilename, fileType, size, sha256 (its object), importedAt',
   ]);
   record('references/contexts/<revisionId>.json', 'Which references applied to one revision, and why.', [
-    'revisionId, branchId, catalogId (the catalog in force; null when there is none)',
+    'revisionId, branchId, catalogId and catalogSha256 (the catalog in force for it; null when there is none)',
     'links: a list of referenceId, versionId, origin ("project" for a project-wide reference, "revision" for one ' +
       'added for this revision), locator, explanation, componentPath',
   ]);
   record('case-lifecycle/<branchId>.<sequence>.json', 'The history of a design case being archived or reopened.', [
-    'branchId, sequence (1, 2, ...), status ("active" or "archived"), changedAt, previousSha256',
+    'branchId, sequence (1, 2, ...; the file name carries it as six digits: <branchId>.000001.json), status ("active" or "archived"), changedAt, previousSha256',
     'The record with the highest sequence is current. A case without records is active.',
   ]);
   record('applications/<branchId>/<operationId>/', 'One Apply operation (a merge, or Bring back) onto a branch.', [
