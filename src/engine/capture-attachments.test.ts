@@ -94,3 +94,31 @@ test('a lost attachment publication acknowledgement is reconciled, while cancell
     assert.equal(final.references!.contexts[final.revisions[0].manifest.revisionId].record!.links.length, 1);
   }
 });
+
+const stagingEntries = async (vault: InMemoryFileSystemAdapter) => (await vault.hasDirectory(['staging'])) ? (await (await vault.getDirectory(['staging'])).listEntries()).map(e => e.name) : [];
+
+test('a capture with a new reference file and a standalone reference import leave no staging folder and no incomplete attempt', async () => {
+  const f = await fixture();
+  const saved = await captureRevision(f.working, f.vault, f.input);
+  assert.deepEqual(await stagingEntries(f.vault), []);
+  assert.deepEqual((await openExistingVault(f.vault)).incompleteAttempts, []);
+  await importReferenceAttachment(f.vault, f.state.project.projectId, new File(['Another new file'], 'Other.txt'), { title: 'Other', description: '', tags: [] });
+  assert.deepEqual(await stagingEntries(f.vault), []);
+  const reopened = await openExistingVault(f.vault);
+  assert.deepEqual(reopened.incompleteAttempts, []);
+  assert.equal(reopened.references!.library.length, 2);
+  assert.equal(saved.vaultState.references!.library.length, 1);
+});
+
+test('a failed reference import keeps its staging folder, which is reported as an incomplete attempt', async () => {
+  const f = await fixture(), write = f.vault.writeFileStream.bind(f.vault);
+  // Fail while publishing the verified staged bytes into objects/: the .tmp file survives.
+  f.vault.writeFileStream = async (path, stream, signal) => { if (path[0] === 'objects') throw new Error('Interrupted object write'); return write(path, stream, signal); };
+  await assert.rejects(importReferenceAttachment(f.vault, f.state.project.projectId, new File(['Doomed'], 'Doomed.txt'), { title: 'Doomed', description: '', tags: [] }), /Interrupted object write/);
+  const left = await stagingEntries(f.vault);
+  assert.equal(left.length, 1);
+  assert.equal((await (await f.vault.getDirectory(['staging', left[0]])).listEntries()).filter(e => e.name.endsWith('.tmp')).length, 1);
+  assert.deepEqual((await openExistingVault(f.vault)).incompleteAttempts.map(a => a.id), left);
+  await assert.rejects(captureRevision(f.working, f.vault, f.input), /Interrupted object write/);
+  assert.equal((await stagingEntries(f.vault)).length, 2);
+});

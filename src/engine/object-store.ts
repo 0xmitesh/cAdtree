@@ -17,6 +17,22 @@ export function getStagingSessionPathSegments(sessionId: string): string[] {
   return ['staging', compactHex(hashString(sessionId)).slice(0, STAGING_SESSION_FOLDER_CHARS)];
 }
 
+/**
+ * Best-effort cleanup of a staging session folder after a successful write, mirroring the revision
+ * capture path: a failed removal is ignored. The folder is removed only when it is empty (a surviving
+ * .tmp from a failed attempt is kept and still reported); nothing else is ever deleted.
+ */
+export async function removeEmptyStagingSession(vaultDir: FileSystemDirectoryAdapter, sessionId: string): Promise<void> {
+  try {
+    const sessionPath = getStagingSessionPathSegments(sessionId);
+    if (!(await vaultDir.hasDirectory(sessionPath))) return;
+    if ((await (await vaultDir.getDirectory(sessionPath)).listEntries()).length > 0) return;
+    await vaultDir.removeEntry(sessionPath);
+  } catch {
+    // Ignore staging cleanup failure
+  }
+}
+
 export function getStagingObjectPathSegments(sessionId: string, sha256: string): string[] {
   // Bound temporary path length for both CAD captures and reference imports,
   // including the extra sibling filename used by browser writable streams.

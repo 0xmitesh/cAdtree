@@ -2,7 +2,7 @@ import { FileConflictError, type FileSystemDirectoryAdapter } from './fs-adapter
 import { isRecordId, newRecordId } from './ids';
 import { hashStream, hashString } from './hash';
 import { compactHex, expandHex } from './path-encoding';
-import { getObjectPathSegments, verifyStoredObject, writeAndVerifyObject } from './object-store';
+import { getObjectPathSegments, removeEmptyStagingSession, verifyStoredObject, writeAndVerifyObject } from './object-store';
 import { withProjectWriterLock } from './locks';
 import { throwIfCancelled, type CopyOptions } from './copy-service';
 import type { ComponentFile } from './component-identity';
@@ -301,6 +301,12 @@ async function publishCatalog(vault: FileSystemDirectoryAdapter, state: VaultSta
   throwIfCancelled(signal);
   await commitDirectory(vault, referenceCatalogMarkerPath(record.catalogId, recordSha256));
 }
+/** Writes one reference object through its own staging session; the empty session folder is removed only after the write succeeds. */
+async function storeReferenceObject(vault: FileSystemDirectoryAdapter, sha256: string, size: number, stream: () => ReadableStream<Uint8Array>, signal?: AbortSignal) {
+  const sessionId = newRecordId();
+  await writeAndVerifyObject(vault, sessionId, sha256, size, async () => stream(), signal);
+  await removeEmptyStagingSession(vault, sessionId);
+}
 export interface ReferenceMetadata { title: string; description: string; tags: string[] }
 function cleanMetadata(input: ReferenceMetadata): ReferenceMetadata { return { title: input.title.trim(), description: input.description, tags: [...new Set(input.tags.map(t => t.trim()).filter(Boolean))] }; }
 export interface AttachmentSource { name: string; type: string; size: number; stream: () => ReadableStream<Uint8Array> }
@@ -329,7 +335,7 @@ export async function importReferenceAttachment(vault: FileSystemDirectoryAdapte
     else library.push({ referenceId: id, ...cleanMetadata(metadata), versions: [version], projectVersionId: null, removed: false });
     validateLibrary(library, state.references?.library);
     options.onProgress?.({ phase: 'writing_objects', processedFiles: 0, totalFiles: 1, processedBytes: 0, totalBytes: measured.size, message: 'Copying and verifying the original reference attachment.' });
-    await writeAndVerifyObject(vault, newRecordId(), measured.sha256, measured.size, async () => source.stream(), options.signal);
+    await storeReferenceObject(vault, measured.sha256, measured.size, () => source.stream(), options.signal);
     throwIfCancelled(options.signal);
     await publishCatalog(vault, state, library, options.signal, [version], options.newRecordId);
     return openExistingVault(vault);
@@ -359,7 +365,7 @@ export async function storeCaptureReferenceAttachments(vault: FileSystemDirector
   prepareReferenceContext(proposed, scan, files, createReferenceReview(proposed, scan, explicit));
   for (const [index, version] of versions.entries()) {
     options.onProgress?.({ phase: 'writing_objects', currentFile: version.originalFilename, processedFiles: index, totalFiles: versions.length, processedBytes: 0, totalBytes: version.size, message: `Saving reference file ${version.originalFilename}…` });
-    await writeAndVerifyObject(vault, newRecordId(), version.sha256, version.size, async () => attachments[index].source.stream(), options.signal);
+    await storeReferenceObject(vault, version.sha256, version.size, () => attachments[index].source.stream(), options.signal);
   }
   const { openExistingVault } = await import('./vault-service');
   try { await publishCatalog(vault, state, library, options.signal, versions, options.newRecordId); }
