@@ -85,7 +85,7 @@ test('home Readme: header, every section, the checksum commands and the format r
     '2. If cAdtree is unavailable',
     '3. Folder layout of a Cadtree home',
     '4. Get your latest files',
-    '5. Get an older revision',
+    '5. Get an older revision, or single files back',
     '6. Notes and references',
     '7. Rules',
     '8. Short tutorials (when cAdtree is available)',
@@ -104,11 +104,17 @@ test('home Readme: header, every section, the checksum commands and the format r
   const flat = text.replace(/\s+/g, ' ');
   assert.match(flat, /does not show that the design is correct/);
   assert.match(flat, /whole folder tree of the revision, not single files/);
+  // The restore page comes first, with the manual steps as the fallback, and the manual steps start with the Windows extension tip.
+  assert.ok(flat.indexOf('double-click _RESTORE cAdtree.html') > 0);
+  assert.ok(flat.indexOf('double-click _RESTORE cAdtree.html') < flat.indexOf('Rebuild a revision by hand'));
+  assert.match(flat, /Rebuild a revision by hand \(if the restore page is not available\) -+ 1\. On Windows, turn on View → Show → File name extensions in File Explorer first; the renamed copy must not end in \.bin\./);
+  assert.match(flat, /Chrome or Microsoft Edge/);
+  assert.match(flat, /cannot open a folder from a typed path/);
   assert.match(flat, /Never edit, move, rename or delete anything inside a vault folder/);
   assert.match(flat, /the vault is correct/);
   assert.match(flat, /Deleting guide files is harmless/);
   // The folder diagram names every part of the layout.
-  for (const part of [README, INDEX, '.cadtree-home.json', '.cadtree-home/workspaces/', '.cadtree-workspace.json', '_MAP cAdtree.txt',
+  for (const part of [README, INDEX, '.cadtree-home.json', '.cadtree-home/workspaces/', '.cadtree-workspace.json', '_MAP cAdtree.txt', '_RESTORE cAdtree.html',
     'working/', 'main/', '<Design case>/', 'vault/', 'objects/<xx>/<sha256>.bin', 'revisions/<id>.txt', '.cadtree/']) {
     assert.ok(text.includes(part), `layout mentions ${part}`);
   }
@@ -319,7 +325,7 @@ test('a deleted or hand-edited guide file is written again; a correct one is lef
   assert.equal(await read(f, README), readme);
   assert.equal(await read(f, INDEX), index);
   // A Readme that differs (an older format) is replaced.
-  await f.home.writeFileText([README], readme.replace('Guide format: 1', 'Guide format: 0'));
+  await f.home.writeFileText([README], readme.replace('Guide format: 2', 'Guide format: 0'));
   f.writes.length = 0;
   assert.deepEqual((await refreshHomeGuide(f.home)).written, [README]);
   assert.equal(await read(f, README), readme);

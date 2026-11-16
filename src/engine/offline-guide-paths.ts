@@ -5,10 +5,13 @@
  */
 
 /** Version of the guide text layout. Bump when the layout changes. */
-export const OFFLINE_GUIDE_FORMAT_VERSION = 1;
+export const OFFLINE_GUIDE_FORMAT_VERSION = 2;
 
 /** File name of a project's Map, directly inside the project folder (the leading `_` sorts it first). */
 export const PROJECT_MAP_FILENAME = '_MAP cAdtree.txt';
+
+/** File name of a project's restore page, directly inside the project folder, next to the Map. */
+export const PROJECT_RESTORE_PAGE_FILENAME = '_RESTORE cAdtree.html';
 
 /** File names of the home-level guide files, directly inside the home folder. */
 export const HOME_README_FILENAME = '_README cAdtree.txt';
@@ -20,6 +23,7 @@ export const homeIndexPath = (): string[] => [HOME_INDEX_FILENAME];
 
 /** Relative to the project folder. */
 export const projectMapPath = (): string[] => [PROJECT_MAP_FILENAME];
+export const restorePagePath = (): string[] => [PROJECT_RESTORE_PAGE_FILENAME];
 
 /** Relative to the vault folder, next to `<revisionId>.manifest.json` (same style as revisionManifestPath). */
 export const revisionListingPath = (revisionId: string): string[] => ['revisions', `${revisionId}.txt`];

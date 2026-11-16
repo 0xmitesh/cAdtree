@@ -266,7 +266,7 @@ test('drift: every path written by a full workflow is covered by a template and 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
   // The deepest templates must actually be reached by this workflow.
-  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'vault revision listing']) {
+  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'project offline restore page', 'vault revision listing']) {
     assert.ok(used.has(label), `workflow did not exercise: ${label}`);
   }
 });

@@ -20,6 +20,7 @@ const noNotes = { problem: '', modification: '', observations: '' };
 const notes = { problem: 'Grip too heavy', modification: 'Lighter collar', observations: 'Synthetic only\nsecond line   ' };
 const GENERATED = '2026-11-16T09:30:00.000Z';
 const MAP = '_MAP cAdtree.txt';
+const RESTORE = '_RESTORE cAdtree.html';
 const bytes = (text: string) => new Uint8Array(new TextEncoder().encode(text));
 
 interface Fixture {
@@ -78,7 +79,8 @@ async function fixture(options: { archive?: boolean } = {}): Promise<Fixture> {
 
 const readText = async (f: Fixture, path: string[]) => (await f.root.getDirectory(f.containerPath.split('/'))).readFileText(path);
 const listingPath = (id: string) => ['vault', ...revisionListingPath(id)];
-const guideWrites = (f: Fixture) => f.writes.filter((w) => w.endsWith('.txt') && (w.includes('/vault/revisions/') || w.endsWith(MAP)));
+const guideWrites = (f: Fixture) =>
+  f.writes.filter((w) => (w.endsWith('.txt') && (w.includes('/vault/revisions/') || w.endsWith(MAP))) || w.endsWith(RESTORE));
 
 function listing(f: Fixture, state: VaultState, index: number) {
   return buildRevisionListing({
@@ -124,7 +126,7 @@ test('revision listing: header, identity, notes, folders, files with object path
     'Do not edit files inside the vault folder. Copy them elsewhere first.',
   ]);
   assert.ok(!text.includes('Generated:'), 'a listing carries no generation time');
-  assert.equal(OFFLINE_GUIDE_FORMAT_VERSION, 1);
+  assert.equal(OFFLINE_GUIDE_FORMAT_VERSION, 2);
   assertPlainText(text);
   const manifest = state.revisions.find((r) => r.manifest.revisionId === f.revisionIds[1])!.manifest;
   assert.ok(lines.includes('Project: Packaging Gripper'));
@@ -159,7 +161,12 @@ test('revision listing: header, identity, notes, folders, files with object path
   assert.match(refText, /Object file: vault\/objects\/[0-9a-f]{2}\/[0-9a-f]{64}\.bin/);
   assert.match(refText, /Explanation: Max load 40 N/);
   // Rebuild instructions.
-  assert.match(text, /HOW TO REBUILD THIS REVISION BY HAND/);
+  assert.match(text, /HOW TO REBUILD THIS REVISION\r\n/);
+  // The restore page first, then the manual steps, which begin with the Windows file name extension tip.
+  assert.ok(text.indexOf('Easiest: open _RESTORE cAdtree.html') > text.indexOf('HOW TO REBUILD THIS REVISION'));
+  assert.ok(text.indexOf('Easiest: open _RESTORE cAdtree.html') < text.indexOf('By hand (without the page)'));
+  assert.ok(text.includes('1. On Windows, turn on View → Show → File name extensions first; the renamed copy must not end in .bin.'));
+  assert.ok(text.indexOf('File name extensions') < text.indexOf('2. Make an empty folder'));
   assert.match(text, /certutil -hashfile "<file>" SHA256/);
   assert.match(text, /shasum -a 256 "<file>"/);
   assert.match(text, /whole folder tree/);
@@ -238,6 +245,9 @@ test('project map: header, latest files, branches, revisions, references, integr
   // Integrity and recovery.
   assert.match(text, /INTEGRITY\r\n/);
   assert.match(text, /HOW TO RECOVER WITHOUT cAdtree/);
+  const recover = text.slice(text.indexOf('HOW TO RECOVER WITHOUT cAdtree'));
+  assert.ok(recover.indexOf('Easiest: open _RESTORE cAdtree.html') > 0 && recover.indexOf('Easiest') < recover.indexOf('By hand:'));
+  assert.match(recover, /View → Show → File name extensions first; the renamed copy must not end in \.bin\./);
   assert.match(text, /certutil -hashfile "<file>" SHA256/);
   assert.match(text, /shasum -a 256 "<file>"/);
   // Engine-supplied detail sentences are quoted as they are; everything cAdtree lays out stays within 120.
@@ -289,7 +299,7 @@ test('refresh writes the Map and one listing per revision; a second refresh rewr
   assert.deepEqual(first.failed, []);
   assert.deepEqual(
     [...first.written].sort(),
-    [MAP, ...f.revisionIds.map((id) => `vault/revisions/${id}.txt`)].sort(),
+    [MAP, RESTORE, ...f.revisionIds.map((id) => `vault/revisions/${id}.txt`)].sort(),
   );
   const map = await readText(f, [MAP]);
   assert.match(map, /Generated: 2026-11-16T10:00:00\.000Z/);
@@ -307,24 +317,25 @@ test('refresh writes the Map and one listing per revision; a second refresh rewr
     assertPlainText(text);
   }
   assertPlainText(map);
-  assert.equal(guideWrites(f).length, 3);
+  assert.equal(guideWrites(f).length, 4);
 
   f.writes.length = 0;
   const second = await refreshProjectGuide(f.root, f.containerPath, { now: () => new Date('2026-11-16T11:00:00.000Z') });
   assert.equal(second.status, 'written');
+  // The restore page is not rewritten for a new generated time alone.
   assert.deepEqual(second.written, [MAP]);
   assert.deepEqual(guideWrites(f).map((w) => w.split('/').pop()), [MAP]);
   assert.match(await readText(f, [MAP]), /Generated: 2026-11-16T11:00:00\.000Z/);
 });
 
-test('refresh never writes outside the Map and vault/revisions', async () => {
+test('refresh never writes outside the Map, the restore page and vault/revisions', async () => {
   const f = await fixture();
   f.writes.length = 0;
   await refreshProjectGuide(f.root, f.containerPath);
-  assert.equal(f.writes.length, 3);
+  assert.equal(f.writes.length, 4);
   for (const write of f.writes) {
     const relative = write.slice(`Workspace/${f.containerPath}/`.length);
-    assert.ok(relative === MAP || /^vault\/revisions\/[^/]+\.txt$/.test(relative), relative);
+    assert.ok(relative === MAP || relative === RESTORE || /^vault\/revisions\/[^/]+\.txt$/.test(relative), relative);
   }
 });
 
@@ -411,7 +422,7 @@ test('a read-back mismatch is a failure, and a Map failure is reported', async (
   }
   assert.equal(result.status, 'partial');
   assert.deepEqual(result.failed.map((item) => item.path), [MAP]);
-  assert.equal(result.written.length, 2);
+  assert.equal(result.written.length, 3);
 });
 
 test('a duplicated project is skipped without any write, and the skip is logged', async () => {
