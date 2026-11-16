@@ -39,13 +39,15 @@ async function fixture() {
 
 test('actual App exports the inspected older branch snapshot without switching Main or modifying project history/working files', async () => {
   const f = await fixture();
-  const before = await fingerprint(f.home);
   Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(f.parent) });
   const ui = render(<App />);
   await openHomeWorkspace(ui, f.home);
   fireEvent.click(ui.getByRole('button', { name: 'Open project' }));
   await waitFor(() => assert.equal(appBusy(ui), false));
   assert.equal(currentBranchId(ui), 'branch-main');
+  // Opening a writable home writes its offline guide (fire-and-forget); the export must change nothing beyond that.
+  await waitFor(async () => assert.equal(await f.home.hasFile(['_INDEX cAdtree.txt']), true));
+  const before = await fingerprint(f.home);
   fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'History' }));
   fireEvent.click(ui.getByRole('button', { name: /Rev 002:/ }));
   fireEvent.click(ui.getByRole('button', { name: 'Export for review' }));

@@ -67,6 +67,7 @@ import {
 } from "./engine/workspace-service";
 import { AppDialogs } from "./app/AppDialogs";
 import { AppNotices } from "./app/AppNotices";
+import { refreshGuidesAfter, workspaceGuideTargets } from "./app/offline-guide-refresh";
 import { NavigationRail } from "./app/NavigationRail";
 import { ProjectViews } from "./app/ProjectViews";
 import { useAuthSession } from "./app/useAuthSession";
@@ -373,6 +374,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     saved?: RememberedHome,
     warning = "",
   ) => {
+    // A home was created or opened: give it its Readme and Index (skipped when it is read-only).
+    refreshGuidesAfter({ homeRoot: root });
     leaveProject();
     setWorkspace(null);
     setManagedWorkspaceKey(null);
@@ -656,6 +659,12 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 onProgress: context.progress,
                 budget: { homeAddress: budgetHomeAddress() },
               });
+          // The workspace is published: update the home's Index. A copied workspace carries its old Maps, so
+          // rewrite those too (the engine skips projects that are not writable).
+          refreshGuidesAfter({
+            homeRoot: home.root,
+            projects: source ? workspaceGuideTargets(result.workspace) : undefined,
+          });
           const next = await openHome(home.root);
           if (!context.current()) return;
           if (source instanceof RealFileSystemAdapter) {
@@ -1054,6 +1063,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         const project = source
           ? await importProject(workspace.root, source, name, options)
           : await createProject(workspace.root, name, options);
+        // Created, imported or adopted: write the project's Map and update the home's Index.
+        refreshGuidesAfter({
+          project: { workspaceRoot: workspace.root, containerPath: project.record.containerPath },
+          homeRoot: home?.root,
+        });
         if (!context.current()) return;
         const current = {
           ...workspace,

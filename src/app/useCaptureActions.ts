@@ -13,6 +13,7 @@ import { scanBranchChanges } from "../engine/scanner";
 import type { FileSpecificNote, ScanResult, VaultState } from "../engine/types";
 import { formatRevisionNumber, openExistingVault } from "../engine/vault-service";
 import { resolveManagedProject, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
+import { projectGuideTarget, refreshGuidesAfter } from "./offline-guide-refresh";
 import { renamedNotice, type OpenProjectLookup } from "./project-lookup";
 import type { AssertProjectWritable, Context, Perform, StatusBanner } from "./types";
 
@@ -217,6 +218,8 @@ export function useCaptureActions({
             signal: context.signal,
             onProgress: context.progress,
           });
+          // The revision is published and its lock released: update the Map and the revision listing.
+          refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
           if (!context.current()) return;
           setVaultState(result.vaultState);
           setScanResult(null);
