@@ -17,7 +17,7 @@ import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { createHome, createHomeWorkspace, openHome } from "../engine/home-service";
 import { captureRevision } from "../engine/revision-service";
 import { openExistingVault } from "../engine/vault-service";
-import { createProject, openWorkspace } from "../engine/workspace-service";
+import { createProject, createWorkspace, openWorkspace } from "../engine/workspace-service";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 
 // The app refreshes the offline guide (CLAUDE.md §2) after each successful operation, fire-and-forget, so every
@@ -187,4 +187,31 @@ test("creating a design case and archiving it refresh the Map", async () => {
   fireEvent.click(within(ui.getByRole("dialog", { name: "Archive design case" })).getByRole("button", { name: "Archive case" }));
   await waitFor(async () => assert.match(await readText(f.root, f.mapPath), /Status: archived/));
   await idle(ui);
+});
+
+test("bringing a workspace into the home rewrites the Maps its projects were copied with", async () => {
+  const home = new InMemoryFileSystemAdapter("Cadtree");
+  await createHome(home);
+  const original = new InMemoryFileSystemAdapter("cam 2");
+  await createWorkspace(original);
+  const project = await createProject(original, "Actuator");
+  const main = project.workingFolders["branch-main"]!;
+  await main.writeFileBytes(["Part.SLDPRT"], new Uint8Array([1]));
+  await captureRevision(main, project.vaultDir, { branchId: "branch-main", summary: "Original", notes, workingFolders: project.workingFolders });
+  const container = project.record.containerPath.split("/");
+  await original.writeFileText([...container, MAP], "STALE MAP FROM THE ORIGINAL\r\n");
+
+  const ui = render(<App />);
+  await openTestHome(ui, home);
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(original) });
+  fireEvent.click(ui.getByText("Home options"));
+  fireEvent.click(ui.getByRole("button", { name: "Import existing workspace" }));
+  fireEvent.click(ui.getByRole("button", { name: "Choose workspace folder" }));
+  await waitFor(() => assert.match(ui.container.textContent!, /Original workspace retained unchanged/));
+  await idle(ui);
+  const copy = (await openHome(home)).workspaces[0].workspace!.root as InMemoryFileSystemAdapter;
+  const copied = (await openWorkspace(copy)).projects[0].containerPath.split("/");
+  await waitFor(async () => assert.match(await readText(copy, [...copied, MAP]), /Project: Actuator/));
+  assert.doesNotMatch(await readText(copy, [...copied, MAP]), /STALE/);
+  assert.match(await readText(original, [...container, MAP]), /STALE/, "the original is never touched");
 });

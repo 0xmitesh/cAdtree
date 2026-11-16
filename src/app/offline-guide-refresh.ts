@@ -12,6 +12,13 @@ export function projectGuideTarget(
   return workspace && project ? { workspaceRoot: workspace.root, containerPath: project.record.containerPath } : null;
 }
 
+/** Every ready project of a workspace, e.g. one just copied into the home, whose copied Maps are stale. */
+export function workspaceGuideTargets(workspace: WorkspaceState): GuideProjectTarget[] {
+  return workspace.projects
+    .filter((entry) => entry.status === "ready")
+    .map((entry) => ({ workspaceRoot: workspace.root, containerPath: entry.containerPath }));
+}
+
 /**
  * Brings the offline guide files up to date (project Map and revision listings, home Readme and Index) after an
  * operation has SUCCEEDED. Call it only on success, never on failure or cancellation, and after the operation has
@@ -23,11 +30,14 @@ export function projectGuideTarget(
  */
 export function refreshGuidesAfter({
   project,
+  projects,
   homeRoot,
 }: {
   project?: GuideProjectTarget | null;
+  projects?: readonly GuideProjectTarget[];
   homeRoot?: FileSystemDirectoryAdapter | null;
 }): void {
   if (project) void refreshProjectGuide(project.workspaceRoot, project.containerPath).catch(() => undefined);
+  for (const target of projects ?? []) void refreshProjectGuide(target.workspaceRoot, target.containerPath).catch(() => undefined);
   if (homeRoot) void refreshHomeGuide(homeRoot).catch(() => undefined);
 }

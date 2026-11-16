@@ -67,7 +67,7 @@ import {
 } from "./engine/workspace-service";
 import { AppDialogs } from "./app/AppDialogs";
 import { AppNotices } from "./app/AppNotices";
-import { refreshGuidesAfter } from "./app/offline-guide-refresh";
+import { refreshGuidesAfter, workspaceGuideTargets } from "./app/offline-guide-refresh";
 import { NavigationRail } from "./app/NavigationRail";
 import { ProjectViews } from "./app/ProjectViews";
 import { useAuthSession } from "./app/useAuthSession";
@@ -659,8 +659,12 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 onProgress: context.progress,
                 budget: { homeAddress: budgetHomeAddress() },
               });
-          // The workspace is published: update the home's Index.
-          refreshGuidesAfter({ homeRoot: home.root });
+          // The workspace is published: update the home's Index. A copied workspace carries its old Maps, so
+          // rewrite those too (the engine skips projects that are not writable).
+          refreshGuidesAfter({
+            homeRoot: home.root,
+            projects: source ? workspaceGuideTargets(result.workspace) : undefined,
+          });
           const next = await openHome(home.root);
           if (!context.current()) return;
           if (source instanceof RealFileSystemAdapter) {
