@@ -25,7 +25,7 @@ import { branchAttemptPath, branchReadyPath, branchRecordPath } from './branch-s
 import { RECOVERY_MARKER_FILENAME as CASE_INCOMPLETE_MARKER } from './recovery-service';
 import { revisionCompletionPath, revisionManifestPath } from './revision-service';
 import { componentRecordPath } from './component-identity';
-import { projectMapPath, revisionListingPath } from './offline-guide-paths';
+import { projectMapPath, restorePagePath, revisionListingPath } from './offline-guide-paths';
 import {
   referenceCatalogMarkerPath, referenceCatalogPath, referenceContextPath, referenceEnrollmentMarkerPath,
   referenceEnrollmentRecordPath,
@@ -118,6 +118,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('branch location record', 'file', ['.cadtree', 'branches', `${CASE_ID}.json`], '.cadtree/branches/{caseId}.json'),
   // Offline guide (derived plain-text files, never read by cAdtree).
   template('project offline map', 'file', projectMapPath(), '_MAP cAdtree.txt'),
+  template('project offline restore page', 'file', restorePagePath(), '_RESTORE cAdtree.html'),
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
   // Incomplete marker written into a design-case working folder when case creation fails.

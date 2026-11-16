@@ -5,6 +5,7 @@
  *   _README cAdtree.txt                     (home root) how to find and recover files without cAdtree
  *   _INDEX cAdtree.txt                      (home root) the home's workspaces and projects and their folders
  *   projects/<P>/_MAP cAdtree.txt           the project's Map (branches, revisions, references, integrity)
+ *   projects/<P>/_RESTORE cAdtree.html      a self-contained page that restores files or a whole revision (offline-restore-page.ts)
  *   projects/<P>/vault/revisions/<id>.txt   one revision in full (every file, size, SHA-256, object path)
  *
  * Derived, never authoritative: cAdtree never reads these files to decide anything, and they can be deleted
@@ -27,10 +28,12 @@ import { formatRevisionNumber } from './vault-service';
 import { openWorkspace, resolveManagedProject, type ManagedProject } from './workspace-service';
 import { openHome, type HomeWorkspaceEntry } from './home-service';
 import {
-  OFFLINE_GUIDE_FORMAT_VERSION, PROJECT_MAP_FILENAME, homeIndexPath, homeReadmePath, projectMapPath, revisionListingPath,
+  OFFLINE_GUIDE_FORMAT_VERSION, PROJECT_MAP_FILENAME, homeIndexPath, homeReadmePath, projectMapPath, restorePagePath,
+  revisionListingPath,
 } from './offline-guide-paths';
+import { buildRestorePage, restorePageWithoutGenerated } from './offline-restore-page';
 
-export { OFFLINE_GUIDE_FORMAT_VERSION, homeIndexPath, homeReadmePath, projectMapPath, revisionListingPath };
+export { OFFLINE_GUIDE_FORMAT_VERSION, homeIndexPath, homeReadmePath, projectMapPath, restorePagePath, revisionListingPath };
 
 const EOL = '\r\n';
 const SUMMARY_LIMIT = 80;
@@ -888,6 +891,18 @@ async function writeGuide(
       result.written.push(mapPath.join('/'));
     } catch (error) {
       record(mapPath.join('/'), error);
+    }
+    // The restore page sits next to the Map. Like the Index it is rewritten only when it differs apart from its generated time.
+    const restorePath = restorePagePath();
+    try {
+      const html = buildRestorePage({ generatedAt, projectName: project.record.name, state });
+      const current = await readIfPresent(container, restorePath);
+      if (current === undefined || restorePageWithoutGenerated(current) !== restorePageWithoutGenerated(html)) {
+        await writeChecked(container, restorePath, html);
+        result.written.push(restorePath.join('/'));
+      }
+    } catch (error) {
+      record(restorePath.join('/'), error);
     }
   } catch (error) {
     record('(offline guide)', error);
