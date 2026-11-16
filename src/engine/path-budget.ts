@@ -25,6 +25,7 @@ import { branchAttemptPath, branchReadyPath, branchRecordPath } from './branch-s
 import { RECOVERY_MARKER_FILENAME as CASE_INCOMPLETE_MARKER } from './recovery-service';
 import { revisionCompletionPath, revisionManifestPath } from './revision-service';
 import { componentRecordPath } from './component-identity';
+import { projectMapPath, revisionListingPath } from './offline-guide-paths';
 import {
   referenceCatalogMarkerPath, referenceCatalogPath, referenceContextPath, referenceEnrollmentMarkerPath,
   referenceEnrollmentRecordPath,
@@ -115,6 +116,8 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('project ready marker', 'file', ['.cadtree', 'ready.json'], '.cadtree/ready.json'),
   template('project creation attempt', 'file', ['.cadtree', 'attempt.json'], '.cadtree/attempt.json'),
   template('branch location record', 'file', ['.cadtree', 'branches', `${CASE_ID}.json`], '.cadtree/branches/{caseId}.json'),
+  // Offline guide (derived plain-text files, never read by cAdtree).
+  template('project offline map', 'file', projectMapPath(), '_MAP cAdtree.txt'),
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
   // Incomplete marker written into a design-case working folder when case creation fails.
@@ -126,6 +129,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('vault branch ready marker', 'file', below(V, branchReadyPath(CASE_ID)), 'vault/branches/{caseId}.ready.json'),
   template('vault revision manifest', 'file', below(V, revisionManifestPath(REV)), 'vault/revisions/{rev}.manifest.json'),
   template('vault revision completion marker', 'file', below(V, revisionCompletionPath(REV)), 'vault/completed/{recordId}.done.json'),
+  template('vault revision listing', 'file', below(V, revisionListingPath(REV)), 'vault/revisions/{rev}.txt'),
   template('vault cache index', 'file', [V, 'cache', 'index.json'], 'vault/cache/index.json'),
   template('vault content object', 'file', below(V, getObjectPathSegments(SHA)), 'vault/objects/{sha2}/{sha}.bin'),
   template('vault staged object', 'file', below(V, getStagingObjectPathSegments('sample-session', SHA)), 'vault/staging/{b64uuid}/{b64}.tmp'),
