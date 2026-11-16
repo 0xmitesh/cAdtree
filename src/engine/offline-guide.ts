@@ -562,8 +562,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'In History, select a revision of the design case and choose Review changes to apply.',
     'Nothing is selected at first: choose the changes to apply. For a file changed on both sides, choose Keep ' +
       'destination, Use source state or Leave unresolved. Enter the Engineering reason for proposed application.',
-    'Choose Prepare application, check the confirmation, tick the one checkbox that confirms your CAD documents are closed and the ' +
-      'destination is right, and choose Apply confirmed changes.',
+    'Choose Prepare application, tick the confirmation checkbox (it confirms that your CAD documents are closed and the ' +
+      'destination is right), and choose Apply confirmed changes.',
     'Only the working files change. Check them in your CAD program, then choose Changes and Save revision. The design ' +
       'case is not deleted.',
   ]);

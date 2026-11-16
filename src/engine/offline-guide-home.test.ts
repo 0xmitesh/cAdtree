@@ -133,7 +133,7 @@ test('home Readme: header, every section, the checksum commands and the format r
   assert.match(flat, /the case you are currently working on cannot be archived \(switch to another case first\)/);
   assert.match(flat, /choose Changes on the left/);
   assert.match(flat, /one branch's revisions can skip numbers/);
-  assert.match(flat, /the one checkbox that confirms your CAD documents are closed and the destination is right/);
+  assert.match(flat, /tick the confirmation checkbox \(it confirms that your CAD documents are closed and the destination is right\)/);
   assert.match(flat, /Main revisions before the case started/);
 });
 
