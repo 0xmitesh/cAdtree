@@ -14,6 +14,7 @@ import { importReferenceAttachment } from './references';
 import { caseLifecycle } from './case-lifecycle';
 import { changeCaseLifecycle } from './case-lifecycle-service';
 import { createKnowledgeRecord } from '../knowledge/records';
+import { refreshProjectGuide } from './offline-guide';
 import {
   BLOCK_PATH_CHARS, CASE_ALLOWANCE, CRSWAP_CHARS, INTERNAL_PATH_TEMPLATES, MAX_NAME_BYTES, PROJECT_NAME_ALLOWANCE,
   WARN_PATH_CHARS, classifyPathLength, deepestInternalTemplate, internalReserve, internalReserveLabel,
@@ -227,6 +228,11 @@ test('drift: every path written by a full workflow is covered by a template and 
   }, options);
   await snapshot();
 
+  // Step 8b: the offline guide writes the Map and one listing per revision.
+  const guide = await refreshProjectGuide(root, containerPath);
+  assert.equal(guide.status, 'written', JSON.stringify(guide.failed));
+  await snapshot();
+
   // Step 9: a design case whose creation fails part-way keeps its folder and writes the incomplete marker.
   failCaseFile = true;
   await assert.rejects(
@@ -260,7 +266,7 @@ test('drift: every path written by a full workflow is covered by a template and 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
   // The deepest templates must actually be reached by this workflow.
-  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker']) {
+  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'vault revision listing']) {
     assert.ok(used.has(label), `workflow did not exercise: ${label}`);
   }
 });
