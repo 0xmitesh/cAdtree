@@ -31,11 +31,12 @@ North star: *the freedom to experiment, the ability to recover, and a trustworth
 ## 2. Conceptual model
 
 ```
-Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree-home/workspaces/<registrationId>.json (+ .ready.json)
+Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree-home/workspaces/<registrationId>.json (+ .ready.json);
+│                            offline guide: _README cAdtree.txt, _INDEX cAdtree.txt (derived text)
 └── <Workspace>/             .cadtree-workspace.json (workspaceId), projects/
-    └── projects/<Project>/  .cadtree/{project.json, ready.json, attempt.json, branches/<branchId>.json}
-        ├── vault/           objects/<2>/<sha256>.bin, revisions/, branches/, completed/, components/, references/,
-        │                    applications/, case-lifecycle/, staging/  (immutable, verified history)
+    └── projects/<Project>/  .cadtree/{project.json, ready.json, attempt.json, branches/<branchId>.json}; _MAP cAdtree.txt (derived text)
+        ├── vault/           objects/<2>/<sha256>.bin, revisions/ (<rev>.manifest.json + derived <rev>.txt listing), branches/, completed/,
+        │                    components/, references/, applications/, case-lifecycle/, staging/  (immutable, verified history)
         ├── working/main     Main's working files (the user edits these in CAD)
         └── working/<Case>   one independent working folder per design case (branch)
 ```
@@ -90,6 +91,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Apply (merge and Bring back):** `apply-preview` (read-only plan, both modes), `application-service` (prepare, write, recover, abandon), `application-records` (sealed records).
 - **Restore primitive and Export:** `recovery-service` (`restoreRevisionToFolder`, used by design-case creation; the name is historical), `review-export` (Export for review).
 - **Identity and references:** `component-identity`, `references`.
+- **Offline guide:** `offline-guide` (pure text builders for the home Readme and Index, project Map and revision listings; `refreshProjectGuide` / `refreshHomeGuide`, the only writers; best-effort, never throw) and `offline-guide-paths` (file names and paths, shared with `path-budget`). The app calls them after successful operations through `src/app/offline-guide-refresh.ts` (`refreshGuidesAfter`, fire-and-forget, no React state).
 - **Knowledge Lab:** `src/knowledge/` (index, retrieval, persisted `records/`), test vault and Explorer under `tests/knowledge-lab`.
 - **UI shell:** `src/App.tsx` (shared state; home/workspace/project open and leave, `leaveProject` / `resetActiveSessionUi`; the home-address prompt; Back/Forward wiring; home and workspace views) and `src/app/`:
   - shell components: `NavigationRail`, `AppNotices`, `AppDialogs`, `ProjectViews` (the project tabs inside App's keyed container);
@@ -246,6 +248,9 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - Apply (merge or Bring back) only changes working files; the user saves a revision afterwards. Nothing creates a revision automatically.
 - Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files or a subfolder that stays is kept and not selectable; a folder to remove that holds only untracked OS clutter stops the Apply before any write (a deliberate exception to skipping untracked clutter: cAdtree never deletes it, so the user deletes it or unticks the folder); recovery undoes folder changes too. Case-only renames stay blocked at review.
 - Design cases are archived, never auto-deleted. Duplicated IDs become read-only, never merged.
+
+**Offline guide**
+- Offline guide (2026-11-16): `_README cAdtree.txt` and `_INDEX cAdtree.txt` at the home root, `_MAP cAdtree.txt` per project and `vault/revisions/<rev>.txt` per revision let a user recover files without cAdtree. They are derived and never read back, so the vault always wins. They are written best-effort after successful operations (revision saved, case created or archived, project created or imported, workspace created or brought in, writable home opened), never on failure, never by opening or browsing a project, only into writable projects and homes, never into strict vault folders (`staging/`, `components/`, `references/`, `case-lifecycle/`, `applications/`), and listings are written once. The two project paths have templates in `path-budget`; the reserve stays 110.
 
 **How we work**
 - One stable `CLAUDE.md` in the repo plus one living status doc in the Project; no new handoff documents (2026-11-10).

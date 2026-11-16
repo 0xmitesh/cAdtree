@@ -332,6 +332,19 @@ Success appears only after the exported files, summary and directory structure h
 
 Exports are ordinary review copies. They do not create revisions or branches, change the active branch, alter working files, rewrite CAD references or change component metadata. No files are sent automatically.
 
+## If cAdtree is unavailable: the offline guide
+
+Your files stay yours. If the internet is down, the hosted app is gone, or cAdtree no longer exists, you can still find and recover everything with a file browser and a text editor. cAdtree writes four kinds of plain-text files for that:
+
+- **`_README cAdtree.txt`** in the home folder: what cAdtree is, how the folders are laid out, how to recover the latest files or any older revision by hand, how to check a file with `certutil -hashfile <file> SHA256` (Windows) or `shasum -a 256 <file>` (Mac), and a description of the on-disk records.
+- **`_INDEX cAdtree.txt`** in the home folder: your workspaces and projects, with their folders and the path to each project's Map.
+- **`_MAP cAdtree.txt`** in each project folder: the project's branches and design cases (with their working folders and whether they are active or archived), every revision (number, date, summary, parent), references, any interrupted attempts, and a short "how to recover" section, so a project folder copied on its own still explains itself.
+- **`<revision ID>.txt`** in the project's `vault/revisions/` folder, next to that revision's `.manifest.json`: one revision in full, with every folder and file, its size, SHA-256 and the object file to copy.
+
+The newest files are ordinary folders (`working/main`, `working/<case>`). Older revisions live in `vault/objects` under hash names; the revision listing tells you which object is which file. Rebuild the whole folder tree of a revision, not single files, because assemblies and drawings find their parts by name and relative path.
+
+cAdtree refreshes these files after a revision is saved, a design case is created, archived or reopened, a project is created, imported or adopted, and a workspace is created or brought in. It also writes the home files when a writable home is opened. Opening or browsing a project never writes to it, so an older project gets its Map after its next save or other change. A read-only or duplicated project or home is not written. Each file shows when it was generated. If a guide file ever disagrees with the records in the vault, the vault is correct. Never edit anything in the vault by hand. You can delete the guide files at any time; cAdtree writes them again after the next change, and never reads them back.
+
 ## Real-device checklist: macOS and Linux
 
 Run separately on a real Mac and a real Linux desktop with current Chrome or Edge over HTTPS/localhost. Use disposable folders and record OS, browser version, CAD/file types and results. Windows-host simulations of POSIX addresses do not establish native compatibility.
