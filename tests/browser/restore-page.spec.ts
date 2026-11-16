@@ -139,6 +139,7 @@ test.describe("restore page, Mode 1: single files from a file:// page", () => {
     const errors: string[] = [];
     const outbound: string[] = [];
     viewer.on("pageerror", (e) => errors.push(e.message));
+    viewer.on("console", (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) errors.push(m.text()); });
     viewer.on("request", (r) => { if (!r.url().startsWith("file:") && !r.url().startsWith("blob:") && !r.url().startsWith("data:")) outbound.push(r.url()); });
     await viewer.goto(pathToFileURL(pagePath).href);
     expect(await viewer.evaluate(() => [window.isSecureContext, typeof crypto.subtle?.digest])).toEqual([true, "function"]);
@@ -286,6 +287,7 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
     test.setTimeout(120000);
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => { if (/Content Security Policy|Refused to/i.test(m.text())) errors.push(m.text()); });
     const built = await buildProject(page);
     await openRestorePage(page, built.html);
     expect(await page.evaluate(() => typeof (window as any).showDirectoryPicker)).toBe("function");
@@ -481,6 +483,66 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
     await expect(page.locator("#revision-list label")).toHaveCount(1);
     await expect(page.locator("#revision-list")).toContainText(`Revision ${built.revisions[1]!.id} is not listed`);
   });
+});
+
+test("the page's checksum of a manifest agrees with the engine's, and revisions failing the integrity rule are listed but cannot be rebuilt", async ({ page }) => {
+  test.setTimeout(120000);
+  const built = await buildProject(page);
+  // Real manifests, through the engine's own function (on the app page) and the page's port of it (on the restore page).
+  const engine = await page.evaluate(async ({ baseName, containerPath }) => {
+    const path = "/src/engine/vault-service.ts";
+    const { computeManifestPayloadChecksum } = await import(/* @vite-ignore */ path);
+    let dir = await navigator.storage.getDirectory();
+    for (const part of [baseName, "Workspace", ...containerPath.split("/"), "vault", "revisions"]) dir = await dir.getDirectoryHandle(part);
+    const out: { manifest: unknown; checksum: string }[] = [];
+    for await (const [name, handle] of (dir as any).entries()) {
+      if (!name.endsWith(".manifest.json")) continue;
+      const manifest = JSON.parse(await (await handle.getFile()).text());
+      out.push({ manifest, checksum: computeManifestPayloadChecksum(manifest) });
+    }
+    return out;
+  }, built);
+  await openRestorePage(page, built.html);
+  const ported: string[] = await page.evaluate(
+    (manifests) => Promise.all(manifests.map((m) => (window as any).__cadtreePayloadChecksum(m))),
+    engine.map((entry) => entry.manifest),
+  );
+  const agreement = engine.map((entry, index) => [entry.checksum, ported[index]!]);
+  expect(agreement.length).toBe(2);
+  for (const [engine, ported] of agreement) expect(ported).toBe(engine);
+
+  // Tamper with Rev 002's number inside its manifest and re-seal the file checksum in its completion record,
+  // so only the payload checksum and the completion record's number can catch it.
+  const secondId = built.revisions[1]!.id;
+  await page.evaluate(async ({ baseName, containerPath, id }) => {
+    let vault = await navigator.storage.getDirectory();
+    for (const part of [baseName, "Workspace", ...containerPath.split("/"), "vault"]) vault = await vault.getDirectoryHandle(part);
+    const revisions = await vault.getDirectoryHandle("revisions");
+    const completed = await vault.getDirectoryHandle("completed");
+    const manifestHandle = await revisions.getFileHandle(`${id}.manifest.json`);
+    const manifest = JSON.parse(await (await manifestHandle.getFile()).text());
+    manifest.displayNumber = 7;
+    const text = JSON.stringify(manifest);
+    let writer = await manifestHandle.createWritable();
+    await writer.write(text);
+    await writer.close();
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
+    const doneHandle = await completed.getFileHandle(`${id}.done.json`);
+    const done = JSON.parse(await (await doneHandle.getFile()).text());
+    done.manifestSha256 = [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+    writer = await doneHandle.createWritable();
+    await writer.write(JSON.stringify(done));
+    await writer.close();
+  }, { baseName: built.baseName, containerPath: built.containerPath, id: secondId });
+  await queueVault(page, built);
+  await page.locator("#choose-vault").click();
+  await expect(page.locator("#vault-status")).toContainText("Vault found: 1 complete revision(s) and 1 damaged");
+  const damaged = page.locator("#revision-list label", { hasText: "damaged" });
+  await expect(damaged).toHaveCount(1);
+  await expect(damaged).toContainText("cannot rebuild");
+  await expect(damaged).toContainText("does not match");
+  await expect(damaged.locator("input")).toBeDisabled();
+  await expect(page.locator("#revision-list label", { hasText: "Rev 001" }).locator("input")).toBeEnabled();
 });
 
 test("a browser without the folder picker still offers single files and explains Mode 2", async ({ page, context }) => {

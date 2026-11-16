@@ -18,6 +18,7 @@
 import type { ReferenceVersion } from './references';
 import type { VaultState } from './types';
 import { OFFLINE_GUIDE_FORMAT_VERSION } from './offline-guide-paths';
+import { hashBytes } from './hash';
 import { RESTORE_PAGE_SCRIPT } from './offline-restore-page-script';
 
 /** Where a saved file's bytes appear, for the page's Mode 1 result. */
@@ -165,8 +166,14 @@ const escapeHtml = (text: string): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-export const RESTORE_PAGE_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
+/** The page's own script is allowed by its SHA-256 hash, not by 'unsafe-inline'. */
+export function restorePageScriptHash(script: string = RESTORE_PAGE_SCRIPT): string {
+  const hex = hashBytes(new TextEncoder().encode(script));
+  return `sha256-${btoa(String.fromCharCode(...(hex.match(/../g) ?? []).map((pair) => parseInt(pair, 16))))}`;
+}
+
+export const restorePageCsp = (script: string = RESTORE_PAGE_SCRIPT): string =>
+  `default-src 'none'; script-src '${restorePageScriptHash(script)}'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'`;
 
 const STYLE = `
 :root { color-scheme: light dark; --bg: #f7f7f4; --card: #ffffff; --text: #1f2933; --muted: #5f6b76; --line: #d8dbd5; --accent: #0f6b5f; --accent-text: #ffffff; --good: #14633f; --warn: #8a5a00; --bad: #a12323; }
@@ -213,7 +220,7 @@ const BODY = `
 <p class="lead">Project <strong id="project-name"></strong></p>
 <p>This page gets files back out of this project's saved history (the <code>vault</code> folder) with only a web browser. It runs on your computer: it loads nothing from the internet and sends nothing anywhere. It only reads the vault.</p>
 <p>A matching checksum shows that a file holds exactly the bytes that were saved. It does not show that the design is right. An assembly or a drawing needs the whole revision, with its folders and names, so use the second option below for those and open the result in your CAD program to check it.</p>
-<p class="fine">A web page cannot open a file or folder from a typed path. Drag files onto the page, or use the buttons to choose them.</p>
+<p class="fine">A web page cannot open a file or folder from a typed path. Drag files onto the page, or use the buttons to choose them. Each file is loaded into memory to check it, so a file larger than about 2 GB cannot be handled by this page: use the manual steps in the <code>_MAP cAdtree.txt</code> file for those.</p>
 
 <section id="mode1">
 <h2>1. Restore single files</h2>
@@ -259,7 +266,7 @@ export function buildRestorePage(input: RestorePageInput): string {
     '<html lang="en">',
     '<head>',
     '<meta charset="utf-8">',
-    `<meta http-equiv="Content-Security-Policy" content="${RESTORE_PAGE_CSP}">`,
+    `<meta http-equiv="Content-Security-Policy" content="${restorePageCsp()}">`,
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>Your files without cAdtree: ${escapeHtml(input.projectName)}</title>`,
     `<style>${STYLE}</style>`,

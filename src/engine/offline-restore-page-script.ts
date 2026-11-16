@@ -214,6 +214,25 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
     return { value: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(read.bytes)), bytes: read.bytes };
   }
 
+  // Port of computeManifestPayloadChecksum (vault-service.ts): same fields, same order, same JSON.
+  async function payloadChecksum(m) {
+    var base = {
+      schemaVersion: m.schemaVersion, projectId: m.projectId, revisionId: m.revisionId, branchId: m.branchId,
+      parentRevisionId: m.parentRevisionId, displayNumber: m.displayNumber,
+      captureStartedAt: m.captureStartedAt, captureCompletedAt: m.captureCompletedAt, summary: m.summary,
+      notes: { problem: m.notes.problem, modification: m.notes.modification, observations: m.notes.observations }
+    };
+    if (Array.isArray(m.fileNotes) && m.fileNotes.length > 0) {
+      base.fileNotes = m.fileNotes.slice().sort(function (a, b) { return a.path.localeCompare(b.path); }).map(function (fn) {
+        return { path: fn.path, problem: fn.problem, modification: fn.modification, observations: fn.observations };
+      });
+    }
+    base.directories = m.directories.slice();
+    base.files = m.files.map(function (f) { return { path: f.path, size: f.size, sha256: f.sha256, lastModified: f.lastModified }; });
+    return sha256Hex(new TextEncoder().encode(JSON.stringify(base)));
+  }
+  window.__cadtreePayloadChecksum = payloadChecksum;
+
   function isHash(value) { return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value); }
   function isCount(value) { return typeof value === 'number' && isFinite(value) && value >= 0 && Math.floor(value) === value && value <= Number.MAX_SAFE_INTEGER; }
 
@@ -254,15 +273,22 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
         if (!done || done.revisionId !== id || !isHash(done.manifestSha256)) throw new Error('the completion record is not valid');
         var read = await readJson(revisionsDir, id + '.manifest.json');
         var manifest = read.value;
-        if (await sha256Hex(read.bytes) !== done.manifestSha256) throw new Error("the revision record's checksum does not match its completion record");
-        if (!manifest || manifest.revisionId !== id || !isCount(manifest.displayNumber) || !Array.isArray(manifest.files) || !Array.isArray(manifest.directories)) {
+        if (!manifest || typeof manifest !== 'object' || manifest.revisionId !== id || !isCount(manifest.displayNumber) || !Array.isArray(manifest.files) || !Array.isArray(manifest.directories) || !manifest.notes || typeof manifest.notes !== 'object') {
           throw new Error('the revision record is not valid');
         }
         manifest.files.forEach(function (file) {
           if (!file || typeof file.path !== 'string' || !isHash(file.sha256) || !isCount(file.size)) throw new Error('a file entry is not valid');
         });
         manifest.directories.forEach(function (dir) { if (typeof dir !== 'string') throw new Error('a folder entry is not valid'); });
+        // The same integrity rule as cAdtree itself (vault-service). A revision that fails any check is listed but cannot be rebuilt.
+        var damage = [];
+        if (manifest.projectId !== DATA.projectId) damage.push("it belongs to a different project");
+        if (manifest.branchId !== done.branchId) damage.push("its branch does not match its completion record");
+        if (manifest.displayNumber !== done.displayNumber) damage.push("its revision number does not match its completion record");
+        if (manifest.manifestPayloadSha256 !== await payloadChecksum(manifest)) damage.push("its internal checksum does not match");
+        if (await sha256Hex(read.bytes) !== done.manifestSha256) damage.push("its checksum does not match its completion record");
         list.push({
+          damaged: damage.length ? damage.join('; ') : null,
           id: id,
           number: manifest.displayNumber,
           branch: Object.prototype.hasOwnProperty.call(branchNames, manifest.branchId) ? branchNames[manifest.branchId] : 'Unknown branch',
@@ -286,11 +312,13 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
       var radio = document.createElement('input');
       radio.type = 'radio';
       radio.name = 'revision';
+      if (revision.damaged) radio.disabled = true;
       radio.addEventListener('change', function () { selected = revision; clear(report); progress2.textContent = ''; updateButtons(); });
       label.appendChild(radio);
       var text = el('span', null, 'choice-text');
       text.appendChild(el('strong', formatRevision(revision.number)));
       text.appendChild(document.createTextNode(' · ' + revision.branch + ' · ' + formatDate(revision.completedAt) + ' · ' + revision.manifest.files.length + ' file(s)'));
+      if (revision.damaged) text.appendChild(el('span', 'damaged \u2014 cannot rebuild (' + revision.damaged + ')', 'status bad'));
       if (revision.summary) text.appendChild(el('span', revision.summary, 'summary'));
       label.appendChild(text);
       revisionList.appendChild(label);
@@ -331,7 +359,8 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
     vault = handle;
     revisions = loaded.revisions;
     vaultStatus.className = 'status good';
-    vaultStatus.textContent = 'Vault found: ' + revisions.length + ' complete revision(s). It is opened read-only; nothing is written to it.';
+    var damagedCount = revisions.filter(function (r) { return r.damaged; }).length;
+    vaultStatus.textContent = 'Vault found: ' + (revisions.length - damagedCount) + ' complete revision(s)' + (damagedCount ? ' and ' + damagedCount + ' damaged' : '') + '. It is opened read-only; nothing is written to it.';
     renderRevisions(loaded.problems);
     updateButtons();
   });
@@ -372,14 +401,18 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
     updateButtons();
   });
 
-  function safeSegments(path) {
-    if (typeof path !== 'string' || !path) return null;
+  var NOT_SAFE = 'the path is not safe to write';
+  var NOT_WINDOWS = 'not a valid Windows file name';
+  // Returns { segments } or { error }. Windows rules apply everywhere so a rebuilt folder can be copied to any computer.
+  function checkPath(path) {
+    if (typeof path !== 'string' || !path) return { error: NOT_SAFE };
     var segments = path.split('/');
     for (var i = 0; i < segments.length; i++) {
       var s = segments[i];
-      if (!s || s === '.' || s === '..' || /[\\\u0000-\u001f]/.test(s)) return null;
+      if (!s || s === '.' || s === '..' || /[\\\u0000-\u001f]/.test(s)) return { error: NOT_SAFE };
+      if (/[:*?"<>|]/.test(s) || /[. ]$/.test(s) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i.test(s)) return { error: NOT_WINDOWS + ': "' + s + '"' };
     }
-    return segments;
+    return { segments: segments };
   }
 
   async function rebuild(revision) {
@@ -406,17 +439,18 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
 
     for (var d = 0; d < manifest.directories.length; d++) {
       var dirPath = manifest.directories[d];
-      var dirSegments = safeSegments(dirPath);
-      if (!dirSegments) { counts.failed++; rows.push({ state: 'failed', path: dirPath, detail: 'Folder skipped: its path is not safe to create.' }); continue; }
-      try { await ensureDir(dirSegments); } catch (error) { counts.failed++; rows.push({ state: 'failed', path: dirPath, detail: 'Could not create the folder: ' + errorText(error) }); }
+      var dirCheck = checkPath(dirPath);
+      if (!dirCheck.segments) { counts.failed++; rows.push({ state: 'failed', path: dirPath, detail: 'Folder skipped: ' + dirCheck.error + '.' }); continue; }
+      try { await ensureDir(dirCheck.segments); } catch (error) { counts.failed++; rows.push({ state: 'failed', path: dirPath, detail: 'Could not create the folder: ' + errorText(error) }); }
     }
 
     var total = manifest.files.length;
     for (var i = 0; i < total; i++) {
       var file = manifest.files[i];
       progress2.textContent = 'Rebuilding ' + (i + 1) + ' of ' + total + ': ' + file.path;
-      var segments = safeSegments(file.path);
-      if (!segments) { counts.failed++; rows.push({ state: 'failed', path: file.path, detail: 'Skipped: the path is not safe to write.' }); continue; }
+      var pathCheck = checkPath(file.path);
+      if (!pathCheck.segments) { counts.failed++; rows.push({ state: 'failed', path: file.path, detail: 'Skipped: ' + pathCheck.error + '.' }); continue; }
+      var segments = pathCheck.segments;
       var lower = segments.join('/').toLowerCase();
       if (seen.has(lower)) { counts.failed++; rows.push({ state: 'failed', path: file.path, detail: 'Skipped: another file in this revision has the same name apart from capital letters.' }); continue; }
       seen.add(lower);
@@ -469,6 +503,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
           continue;
         }
         var handle = await parent.getFileHandle(name, { create: true });
+        var createdByUs = true; // it was NotFound just above, so this run created it
         var writable = await handle.createWritable();
         try {
           await writable.write(buffer);
@@ -479,7 +514,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
         }
         var back = await (await handle.getFile()).arrayBuffer();
         if (await sha256Hex(back) !== file.sha256) {
-          try { await parent.removeEntry(name); } catch (ignored) { /* reported below */ }
+          if (createdByUs) { try { await parent.removeEntry(name); } catch (ignored) { /* reported below */ } }
           counts.failed++;
           rows.push({ state: 'failed', path: file.path, detail: 'The file was written but reading it back did not match its checksum, so the copy was removed.' });
           continue;

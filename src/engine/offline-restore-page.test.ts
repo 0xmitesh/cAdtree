@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { InMemoryFileSystemAdapter } from './fs-adapter';
 import { captureRevision } from './revision-service';
 import { createProject, createWorkspace, type ManagedProject } from './workspace-service';
@@ -7,7 +8,7 @@ import { createReferenceReview } from './references';
 import { scanBranchChanges } from './scanner';
 import { refreshProjectGuide } from './offline-guide';
 import {
-  NAME_CAP, OCCURRENCE_CAP, RESTORE_PAGE_CSP, buildRestoreData, buildRestorePage, escapeJsonForScript, restorePageWithoutGenerated,
+  NAME_CAP, OCCURRENCE_CAP, restorePageCsp, restorePageScriptHash, buildRestoreData, buildRestorePage, escapeJsonForScript, restorePageWithoutGenerated,
   type RestoreData,
 } from './offline-restore-page';
 import { RESTORE_PAGE_SCRIPT } from './offline-restore-page-script';
@@ -184,8 +185,17 @@ test('escaping: no name or title can break out of the data block, and the data r
 
 test('the page is self-contained: a strict CSP, no network references, no eval or HTML injection in its script', () => {
   const html = buildRestorePage({ generatedAt: 'x', projectName: 'P', state: fakeState([{ id: 'r1', number: 1, files: [{ path: 'a.bin', sha256: sha(1) }] }]) });
-  assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="${RESTORE_PAGE_CSP}">`));
-  assert.equal(RESTORE_PAGE_CSP, "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'");
+  assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="${restorePageCsp()}">`));
+  // The inline script is allowed by its hash only; the hash is of exactly the text between the script tags.
+  const inline = /<script>([\s\S]*?)<\/script>/.exec(html)![1]!;
+  assert.equal(inline, RESTORE_PAGE_SCRIPT);
+  const expectedHash = `sha256-${createHash('sha256').update(inline, 'utf8').digest('base64')}`;
+  assert.equal(restorePageScriptHash(), expectedHash);
+  assert.equal(
+    restorePageCsp(),
+    `default-src 'none'; script-src '${expectedHash}'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'`,
+  );
+  assert.ok(!/script-src[^;]*unsafe-inline/.test(restorePageCsp()));
   assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('<script'), 'the policy comes before any script');
   assert.ok(!/https?:\/\//i.test(html), 'no http(s) URL anywhere');
   assert.ok(!/\b(src|href)=/i.test(html), 'no src or href attribute (the download link is made by the script from a blob URL)');
