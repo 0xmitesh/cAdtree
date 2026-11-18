@@ -61,10 +61,15 @@ for (const width of [1366, 390])
       if (await page.locator('.history-design-cases').getAttribute('open') === null)
         await page.locator('.history-design-cases > summary').click();
     };
-    const select = page.getByRole("combobox", {
-      name: "Working case",
-      exact: true,
-    });
+    // The Explorer is the only case switcher: the sidebar tree on wide screens, "Browse folders" on narrow ones.
+    const select = {
+      selectOption: async (branchId: string) => {
+        const row = page.locator(`[role="treeitem"][data-branch-id="${branchId}"]:visible`);
+        if (!(await row.count()))
+          await nav.getByRole("button", { name: "Browse folders", exact: true }).click();
+        await row.click();
+      },
+    };
     const archiveButton = page.getByRole("button", {
       name: "Archive case Part-X redesign",
       exact: true,
@@ -170,7 +175,7 @@ for (const width of [1366, 390])
     await archive();
     await expect(page.getByRole("region", { name: "Project context"})).toHaveAttribute('data-branch-id', 'branch-main');
     await expect(
-      page.locator(`.settings-page option[value="${fixture.safeCaseId}"]`),
+      page.locator(`[role="treeitem"][data-branch-id="${fixture.safeCaseId}"]`),
     ).toHaveCount(0);
     if (width === 1366) {
       await reopen();

@@ -285,7 +285,7 @@ export function ChangesCaptureView({
       {damaged ? (
         <Notice type="error">
           Saving is blocked because the branch history needs attention. Open
-          Settings → Storage and verification.
+          Settings → Troubleshooting.
         </Notice>
       ) : null}
       {scan?.errors.length ? (

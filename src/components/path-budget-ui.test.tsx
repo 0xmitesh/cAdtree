@@ -218,7 +218,8 @@ async function openSampleProject() {
 async function forgetAddresses(ui: RenderResult) {
   const nav = within(ui.getByRole("navigation", { name: "Primary navigation" }));
   fireEvent.click(nav.getByRole("button", { name: "Settings" }));
-  fireEvent.click(ui.getByText("Browser troubleshooting"));
+  fireEvent.click(within(ui.container.querySelector<HTMLElement>(".settings-page")!).getByText("Troubleshooting", { selector: "summary" }));
+  fireEvent.click(ui.getByText("Reset folder connections"));
   fireEvent.click(ui.getByRole("button", { name: "Reset all remembered folder connections in this browser" }));
   const dialog = within(ui.getByRole("dialog", { name: "Reset all remembered folder connections?" }));
   fireEvent.click(dialog.getByRole("button", { name: "Reset all remembered folder connections" }));

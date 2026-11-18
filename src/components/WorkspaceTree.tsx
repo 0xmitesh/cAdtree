@@ -54,6 +54,8 @@ interface TreeNode {
   issue?: string;
   count?: number;
   readOnly?: boolean;
+  /** Set on case rows, so a row can be found by its case ID. */
+  branchId?: string;
 }
 /**
  * Expanded and focus state is keyed by project ID so it survives a folder rename.
@@ -137,6 +139,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             label: vault ? caseLabel(vault, branch.branchId) : branch.name,
             accessibleLabel: `${vault ? caseLabel(vault, branch.branchId) : branch.name}, ${entry.name}, ${workspace.identity.name}`,
             kind: "branch",
+            branchId: branch.branchId,
             children: [],
             unavailable:
               unavailable ||
@@ -315,6 +318,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
               }}
               role="treeitem"
               aria-label={node.accessibleLabel ?? node.label}
+              data-branch-id={node.branchId}
               aria-describedby={
                 !node.unavailable && node.count !== undefined
                   ? `${descriptionId}-${index}`

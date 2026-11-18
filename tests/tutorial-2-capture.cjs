@@ -49,7 +49,7 @@ async function start(){
     while(await dismiss.count())await dismiss.first().click();
     const revision=page.getByRole('button',{name:/Rev 001: Finalize bracket mounting flange/});
     await revision.click();
-    assert.equal(await page.getByRole('combobox',{name:'Working case',exact:true}).inputValue(),'branch-main');
+    assert.equal(await page.locator('.project-context-header').getAttribute('data-branch-id'),'branch-main');
     const layout=await page.locator('.history-layout').boundingBox();
     const node=await revision.boundingBox();
     const detail=await page.locator('.revision-detail .detail-header').boundingBox();

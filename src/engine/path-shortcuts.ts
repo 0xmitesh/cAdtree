@@ -44,6 +44,7 @@ async function existingFile(
   root: FileSystemDirectoryAdapter,
   directory: FileSystemDirectoryAdapter,
   location: FilePathLocation,
+  checkFile = true,
 ) {
   const segments = splitAndValidatePath(location.filePath);
   if ((await directory.queryPermission("read")) !== "granted")
@@ -55,6 +56,7 @@ async function existingFile(
     throw new Error(
       "File path unavailable. The folder no longer matches its recorded workspace location. Reconnect the workspace.",
     );
+  if (!checkFile) return location;
   try {
     await directory.statFile(segments);
   } catch {
@@ -93,4 +95,34 @@ export async function resolveWorkingFilePath(
     relativeDirectory,
     filePath,
   });
+}
+
+/** The folder of a branch's working copy (read-only). The placeholder file name is never read or shown. */
+export async function resolveWorkingFolderPath(
+  root: FileSystemDirectoryAdapter,
+  workspaceId: string,
+  containerPath: string,
+  branchId: string,
+): Promise<FilePathLocation> {
+  const project = await resolveManagedProject(root, containerPath);
+  if (
+    project.record.workspaceId !== workspaceId ||
+    !project.ready ||
+    project.issues.length
+  )
+    throw new Error(
+      "File path unavailable. Project locations need attention; reconnect the workspace and inspect its connection details.",
+    );
+  const directory = project.workingFolders[branchId];
+  const relativeDirectory = project.workingPaths[branchId];
+  if (!directory || !relativeDirectory)
+    throw new Error(
+      "File path unavailable. This branch folder is not connected. Reconnect the workspace.",
+    );
+  return existingFile(
+    root,
+    directory,
+    { workspaceId, relativeDirectory, filePath: "folder" },
+    false,
+  );
 }

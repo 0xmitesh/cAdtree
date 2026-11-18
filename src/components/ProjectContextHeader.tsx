@@ -1,17 +1,14 @@
 import type { VaultState } from "../engine/types";
-import { ActiveBranchPicker } from "./ActiveBranchPicker";
+import { caseLabel } from "../engine/case-lifecycle";
 
+/** Project name and the current case. Switching cases happens in the Explorer. */
 export function ProjectContextHeader({
   state,
   activeBranchId,
-  busy,
-  onSelect,
   showWorkingCase = true,
 }: {
   state: VaultState;
   activeBranchId: string;
-  busy: boolean;
-  onSelect: (branchId: string) => Promise<void>;
   showWorkingCase?: boolean;
 }) {
   return (
@@ -21,12 +18,11 @@ export function ProjectContextHeader({
       data-branch-id={activeBranchId}
     >
       <strong className="project-context-name">{state.project.name}</strong>
-      {showWorkingCase ? <ActiveBranchPicker
-        state={state}
-        activeBranchId={activeBranchId}
-        busy={busy}
-        onSelect={onSelect}
-      /> : null}
+      {showWorkingCase ? (
+        <span className="project-context-case">
+          Case: <strong>{caseLabel(state, activeBranchId)}</strong>
+        </span>
+      ) : null}
     </section>
   );
 }

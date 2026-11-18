@@ -201,7 +201,7 @@ export function IntegrityNotice({ state }: { state: VaultState }) {
       {damaged > 0 ? `${damaged} damaged record(s). ` : ""}
       {conflicts ? "Competing branch heads. " : ""}
       {blocked ? "The branch baseline is damaged. " : ""}Check Settings →
-      Storage and verification. Unsafe saves and restores remain blocked.
+      Troubleshooting. Unsafe saves and restores remain blocked.
     </Notice>
   );
 }

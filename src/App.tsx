@@ -23,6 +23,7 @@ import {
 import { AccountStatusControl } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
+  resolveWorkingFolderPath,
 } from "./engine/path-shortcuts";
 import { pathBudgetWarnSentence } from "./utils/path-budget-message";
 import {
@@ -1334,6 +1335,21 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       ? resolveHomeFilePath(shortcutHome, homeEntry, location)
       : location;
   };
+  const workingFolderResolver = (branchId: string) => async () => {
+    if (!workspace || !managedProject)
+      throw new Error(
+        "Full local folder paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
+      );
+    const location = await resolveWorkingFolderPath(
+      workspace.root,
+      workspace.identity.workspaceId,
+      managedProject.record.containerPath,
+      branchId,
+    );
+    return shortcutHome && homeEntry?.directory
+      ? resolveHomeFilePath(shortcutHome, homeEntry, location)
+      : location;
+  };
   const treeProps: WorkspaceTreeProps = {
     home,
     workspace: homeView ? null : workspace,
@@ -1350,7 +1366,16 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setExplorerOpen(false);
     },
     onProject: async (entry, project, branch) => {
-      await openTreeProject(entry, project, branch);
+      // A case of the project that is already open is switched in place, on the same page.
+      if (
+        branch &&
+        projectView &&
+        project.projectId !== undefined &&
+        project.projectId === managedProject?.record.projectId &&
+        (entry?.key ?? null) === managedWorkspaceKey
+      )
+        await handleSelectBranch(branch);
+      else await openTreeProject(entry, project, branch);
       setExplorerOpen(false);
     },
   };
@@ -1541,8 +1566,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   missingConnections={missingConnections}
                   navigate={navigate}
                   workingFileResolver={workingFileResolver}
+                  workingFolderResolver={workingFolderResolver}
                   handleCancelOperation={handleCancelOperation}
-                  handleSelectBranch={handleSelectBranch}
                   handleCaseLifecycle={handleCaseLifecycle}
                   handleReattachWorkingFolder={handleReattachWorkingFolder}
                   handleCreateBranch={handleCreateBranch}

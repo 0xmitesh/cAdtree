@@ -15,11 +15,15 @@ export const currentBranchId = (ui: RenderResult) =>
     .querySelector(".project-context-header")
     ?.getAttribute("data-branch-id");
 
-/** The shared working-case control is available on every project view. */
+/** Cases are switched in the Explorer tree (the only case switcher), from any project view. */
 export async function selectBranch(ui: RenderResult, branchId: string) {
-  fireEvent.change(ui.getByRole("combobox", { name: "Working case" }), {
-    target: { value: branchId },
-  });
+  const find = () =>
+    ui.container.querySelector<HTMLElement>(
+      `.desktop-workspace-tree [role="treeitem"][data-branch-id="${branchId}"]`,
+    );
+  // The tree expands the open project when the page switches to it, a moment after the project opens.
+  await waitFor(() => assert.ok(find(), `Explorer has no row for case ${branchId}`));
+  fireEvent.click(find()!);
   await waitFor(() => assert.equal(appBusy(ui), false));
 }
 

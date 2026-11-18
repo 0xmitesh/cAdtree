@@ -422,6 +422,19 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   );
   await idle(ui);
   assert.ok(!ui.queryByRole("dialog"));
+  // Settings copies the full working folder address, like the file rows do.
+  fireEvent.click(settings.getByRole("button", { name: "Copy path" }));
+  await waitFor(() => assert.equal(copied.length, 1));
+  assert.equal(
+    copied[0],
+    composeWindowsFilePaths(`D:\\Cadtree\\${created.directory}`, {
+      workspaceId: ws.identity.workspaceId,
+      relativeDirectory: project.workingPaths[MAIN_BRANCH_ID],
+      filePath: "folder",
+    }).folder,
+  );
+  assert.match(copied[0], /^D:\\Cadtree\\/);
+  copied.length = 0;
   nav(ui, "Changes");
   fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
   await idle(ui);

@@ -50,9 +50,9 @@ export type ProjectViewsProps = {
   managedBlockReason: string | undefined;
   missingConnections: string[];
   navigate: (tab: ActiveTab) => void;
+  workingFolderResolver: (branchId: string) => () => ReturnType<typeof resolveWorkingFilePath>;
   workingFileResolver: (branchId: string, path: string) => () => ReturnType<typeof resolveWorkingFilePath>;
   handleCancelOperation: () => void;
-  handleSelectBranch: BranchActions["handleSelectBranch"];
   handleCaseLifecycle: BranchActions["handleCaseLifecycle"];
   handleReattachWorkingFolder: BranchActions["handleReattachWorkingFolder"];
   handleCreateBranch: BranchActions["handleCreateBranch"];
@@ -103,8 +103,8 @@ export function ProjectViews({
   missingConnections,
   navigate,
   workingFileResolver,
+  workingFolderResolver,
   handleCancelOperation,
-  handleSelectBranch,
   handleCaseLifecycle,
   handleReattachWorkingFolder,
   handleCreateBranch,
@@ -128,8 +128,6 @@ export function ProjectViews({
       <ProjectContextHeader
         state={vaultState}
         activeBranchId={activeBranchId}
-        busy={busy}
-        onSelect={handleSelectBranch}
         showWorkingCase={activeTab !== 'references'}
       />
       <ApplicationStatus
@@ -280,6 +278,8 @@ export function ProjectViews({
           }
           vaultFolderName={vaultDir.name}
           onReattachWorkingFolder={handleReattachWorkingFolder}
+          missingConnections={missingConnections}
+          resolveFolderPath={workingFolderResolver(activeBranchId)}
         />
       </div>
     </>

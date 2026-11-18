@@ -29,11 +29,12 @@ test("current App: compact headings, branch context, bounded resizing and mobile
       exact: true,
     })
     .click();
-  const active = page.getByRole("combobox", { name: "Working case" });
+  const active = page.locator(".project-context-case");
+  await expect(page.getByRole("combobox", { name: "Working case" })).toHaveCount(0);
   const current = page.getByRole("region", { name: "Project context" });
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(active).toHaveCount(1);
-  await expect(active).toHaveValue("branch-main");
+  await expect(active).toHaveText("Case: Main");
   const historyModes = page.locator(".history-page .project-heading-controls");
   // Document coordinates: clicking lower in the page may scroll the window,
   // which must not count as the heading controls moving.
@@ -137,7 +138,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   const modesAfterBranchSwitch = await documentBox();
   expect(modesAfterBranchSwitch.y).toBe(modesBeforeBranchSwitch.y);
   expect(modesAfterBranchSwitch.x).toBe(modesBeforeBranchSwitch.x);
-  await expect(active.locator("option:checked")).toHaveText("Lightweight concept");
+  await expect(active).toHaveText("Case: Lightweight concept");
   await tree
     .getByRole("treeitem", {
       name: "Main, Camera Mount, Personal SolidWorks",
@@ -151,20 +152,35 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await nav.getByRole("button", { name: "Changes", exact: true }).click();
   const summary = page.getByRole("textbox", { name: /Revision summary/ });
   await summary.fill("Main scoped layout review");
-  await active.selectOption({ label: "Lightweight concept" });
+  await tree
+    .getByRole("treeitem", {
+      name: "Lightweight concept, Camera Mount, Personal SolidWorks",
+      exact: true,
+    })
+    .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(summary).toHaveValue("");
   await summary.fill("Lightweight scoped layout review");
-  await active.selectOption({ label: "Main" });
+  await tree
+    .getByRole("treeitem", {
+      name: "Main, Camera Mount, Personal SolidWorks",
+      exact: true,
+    })
+    .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(summary).toHaveValue("Main scoped layout review");
   await nav.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(active).toHaveValue("branch-main");
+  await expect(active).toHaveText("Case: Main");
+  await expect(page.getByText("All folders are connected.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reconnect workspace", exact: true }),
+  ).toBeHidden();
+  await page.locator(".settings-troubleshooting > summary").click();
   await expect(
     page.getByRole("button", { name: "Reconnect workspace", exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator(".settings-page .settings-row").first(),
+    page.locator(".settings-page .settings-row", { hasText: "Working folder" }),
   ).toContainText("working/main");
   await nav.getByRole("button", { name: "History", exact: true }).click();
 

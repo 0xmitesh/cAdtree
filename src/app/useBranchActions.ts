@@ -1,7 +1,7 @@
+import { assertCaseWritable } from "../engine/case-lifecycle";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { CreateBranchParams } from "../components/CreateBranchDialog";
 import type { WorkingFolderBindings } from "../engine/branch-state";
-import { assertCaseWritable } from "../engine/case-lifecycle";
 import { changeCaseLifecycle } from "../engine/case-lifecycle-service";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import type { ScanResult, VaultState } from "../engine/types";

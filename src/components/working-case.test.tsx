@@ -6,6 +6,9 @@ import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-libra
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
 import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
+import { WorkspaceTree } from "./WorkspaceTree";
+import { openWorkspace } from "../engine/workspace-service";
+import type { VaultState } from "../engine/types";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 
@@ -26,7 +29,7 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("References uses its branch filter while the other project views retain Working case without changing inspection, drafts or files", async () => {
+test("References uses its branch filter while the other project views show the current case as text, without changing inspection, drafts or files", async () => {
   const { sample, ui, nav } = await openSample();
   const header = ui.getByRole("region", { name: "Project context" });
   const before = inventorySignature(await readVerifiedInventory(sample.home));
@@ -42,13 +45,11 @@ test("References uses its branch filter while the other project views retain Wor
     fireEvent.click(nav.getByRole("button", { name: view }));
     assert.equal(ui.getByRole("region", { name: "Project context" }), header);
     if (view === "References") {
-      assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
-      assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 0);
+      assert.equal(header.querySelector(".project-context-case"), null);
       fireEvent.change(ui.getByRole("combobox", { name: "Branch" }), { target: { value: sample.caseId } });
       assert.equal(currentBranchId(ui), "branch-main");
     } else {
-      assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 1);
-      assert.equal((ui.getByRole("combobox", { name: "Working case" }) as HTMLSelectElement).value, "branch-main");
+      assert.equal(header.querySelector(".project-context-case")!.textContent, "Case: Main");
     }
     assert.equal(ui.container.querySelector('.current-branch-indicator'), null);
   }
@@ -58,16 +59,17 @@ test("References uses its branch filter while the other project views retain Wor
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)), before);
 });
 
-test("Working case switches from History, Changes and Settings through existing guards, and is disabled during a scan", async () => {
+test("The Explorer switches the case from History, Changes and Settings, the header shows it as text, and the Explorer is locked during a scan", async () => {
   const { sample, ui, nav } = await openSample();
-  const selector = ui.getByRole("combobox", { name: "Working case" }) as HTMLSelectElement;
+  const caseRows = () => Array.from(ui.container.querySelectorAll<HTMLElement>('.desktop-workspace-tree [data-branch-id]'));
+  assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
   const before = inventorySignature(await readVerifiedInventory(sample.home));
   for (const view of ["History", "Changes", "Settings"]) {
     fireEvent.click(nav.getByRole("button", { name: view }));
     for (const id of [sample.caseId, "branch-main"]) {
       await selectBranch(ui, id);
-      assert.equal(selector.value, id);
       assert.equal(currentBranchId(ui), id);
+      assert.match(ui.getByRole("region", { name: "Project context" }).querySelector(".project-context-case")!.textContent!, id === "branch-main" ? /^Case: Main$/ : /^Case: Lightweight bracket$/);
       assert.ok(ui.getByRole("heading", { name: `${view}.` }));
     }
   }
@@ -78,9 +80,43 @@ test("Working case switches from History, Changes and Settings through existing 
   sample.home.setHooks({ onBeforeListEntries: async () => { await gate; } });
   fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
   await waitFor(() => assert.equal(appBusy(ui), true));
-  assert.equal(selector.disabled, true);
+  assert.ok(caseRows().length >= 2);
+  for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), "true");
+  fireEvent.click(caseRows().find(row => row.dataset.branchId === sample.caseId)!);
   await act(async () => release());
   await waitFor(() => assert.equal(appBusy(ui), false));
-  assert.equal(selector.disabled, false);
+  for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), null);
   assert.equal(currentBranchId(ui), "branch-main");
+});
+
+test("An Explorer case row with unavailable lifecycle evidence is disabled and cannot be picked", async () => {
+  const sample = await compareApplyRecoverSample();
+  const workspace = await openWorkspace(sample.workspace.root);
+  const entry = workspace.projects[0];
+  const vault = {
+    ...entry.project!.vaultState,
+    caseLifecycles: { [sample.caseId]: { status: "unavailable", version: null, sequence: 0, error: "Lifecycle checksum mismatch" } },
+  } as VaultState;
+  const picked: Array<string | undefined> = [];
+  const ui = render(
+    <WorkspaceTree
+      home={null}
+      workspace={workspace}
+      managedWorkspaceKey={null}
+      projectId={entry.projectId}
+      activeVault={vault}
+      activeBranchId="branch-main"
+      projectView
+      busy={false}
+      onWorkspace={() => {}}
+      onProject={async (_workspace, _project, branchId) => { picked.push(branchId); }}
+    />,
+  );
+  const row = (id: string) => ui.container.querySelector<HTMLElement>(`[role="treeitem"][data-branch-id="${id}"]`)!;
+  await waitFor(() => assert.ok(row(sample.caseId)));
+  assert.equal(row(sample.caseId).getAttribute("aria-disabled"), "true");
+  fireEvent.click(row(sample.caseId));
+  assert.deepEqual(picked, []);
+  fireEvent.click(row("branch-main"));
+  assert.deepEqual(picked, ["branch-main"]);
 });
