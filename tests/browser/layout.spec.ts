@@ -95,6 +95,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(
     page
       .getByRole("complementary", { name: "Revision details" })
+      .locator(".detail-files")
       .getByText("Drawings/Assembly.SLDDRW", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Rev 004: Explore lighter/ }).click();

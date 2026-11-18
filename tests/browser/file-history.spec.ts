@@ -121,6 +121,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(
     page
       .getByRole("complementary", { name: "Revision details" })
+      .locator(".detail-files")
       .getByText("Parts/Pin.SLDPRT", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Export for review", exact: true }).click();
