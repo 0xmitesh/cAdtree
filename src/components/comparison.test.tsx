@@ -1,4 +1,5 @@
 import "../../tests/dom";
+import { pickFile } from "../../tests/file-picker";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { render, cleanup, fireEvent, within } from "@testing-library/react";
@@ -112,9 +113,7 @@ test("file-scoped comparison expands to all files, labels endpoint notes and bra
     },
   ];
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
     ui.getByRole("dialog", { name: "Compare saved revisions" }),
@@ -286,9 +285,7 @@ test("comparison includes overall and individual notes in file scope, labels end
     },
   ];
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
     ui.getByRole("dialog", { name: "Compare saved revisions" }),

@@ -36,6 +36,9 @@ export async function seedFileHistoryReview() {
     source,
     "Synthetic actuator",
   );
+  // This review covers path history, as in a project saved before component tracking:
+  // deleting and re-adding a file would otherwise create two tracked files.
+  await project.vaultDir.removeEntry(["components"], { recursive: true });
   const ids: string[] = [];
   async function capture(branchId: string, summary: string) {
     const result = await captureRevision(

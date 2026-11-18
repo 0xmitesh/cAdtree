@@ -18,7 +18,8 @@ import {
   formatRevisionNumber,
 } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
-import { fileHistory, historicalFilePaths, historicalComponents } from "../history/file-history";
+import { fileHistory, fileHistoryEntries } from "../history/file-history";
+import { FilePicker } from "./FilePicker";
 import { layoutRevisions } from "../history/layout";
 import {
   ApplyPreviewDialog,
@@ -87,12 +88,11 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   );
   const [filePath, setFilePath] = useState("");
   const componentId = filePath.startsWith('component:') ? filePath.slice(10) : null;
-  const components = useMemo(() => historicalComponents(vaultState), [vaultState]);
   const [highlightBranchId, setHighlightBranchId] = useState<string | null>(
     null,
   );
   const [contextId, setContextId] = useState<string | null>(null);
-  const paths = useMemo(() => historicalFilePaths(vaultState), [vaultState]);
+  const fileEntries = useMemo(() => fileHistoryEntries(vaultState), [vaultState]);
   const projection = useMemo(
     () =>
       filePath
@@ -245,23 +245,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           </h1>
           <div className="history-description">
             <span>A clear view of how your design evolved.</span>
-            <label className="history-file-picker">
-              <span>File history</span>
-              <select
-                aria-label="File history"
-                value={filePath}
-                title={filePath || "All files"}
-                onChange={(event) => changeFile(event.target.value)}
-              >
-                <option value="">All files</option>
-                {components.length ? <optgroup label="Components (confirmed identity)">{components.map(c => <option key={c.componentId} value={`component:${c.componentId}`}>{c.label}</option>)}</optgroup> : null}
-                <optgroup label="Path history (no identity inferred)">{paths.map((path) => (
-                  <option key={path} value={path}>
-                    {path}
-                  </option>
-                ))}</optgroup>
-              </select>
-            </label>
+            <FilePicker entries={fileEntries} value={filePath} onChange={changeFile} />
           </div>
         </div>
         <div className="project-heading-controls">
@@ -291,9 +275,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           {props.caseControls}
         </details>
       ) : null}
-      {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Path history and snapshot comparison remain available.</Notice> : null}
-      {filePath && !componentId ? <p className="muted small">Path history: renames and reused filenames are not linked in this view.</p> : null}
-      {componentId ? <p className="muted small">Component {componentId}. Older history before its registration boundary is available separately by path.</p> : null}
+      {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Files are listed by path and snapshot comparison remains available.</Notice> : null}
+      {filePath && !componentId ? <p className="muted small">Renames are not followed for this file.</p> : null}
+      {componentId ? <p className="muted small">Follows this file across renames. Revisions saved before it was tracked show as history unavailable.</p> : null}
       {activeBranch && !activeBranch.isMain ? (
         <section className="branch-origin">
           <strong>{activeBranch.name}</strong>

@@ -1,3 +1,4 @@
+import { pickFile } from "./file-picker";
 import { test, expect } from "@playwright/test";
 for (const width of [1366, 390])
   test(`actual App: archive, discover, inspect, reload and reopen a case at ${width}px`, async ({
@@ -246,9 +247,7 @@ for (const width of [1366, 390])
         exact: true,
       }),
     ).toBeVisible();
-    await page
-      .getByRole("combobox", { name: "File history", exact: true })
-      .selectOption("Parts/Part-X.SLDPRT");
+    await pickFile(page, "Parts/Part-X.SLDPRT");
     await page
       .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })
       .press("Enter");

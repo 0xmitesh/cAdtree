@@ -1,3 +1,4 @@
+import { pickComponent } from './file-picker';
 import { test, expect } from '@playwright/test';
 
 // Disposable origin-private folders. This qualifies browser workflow, not native CAD references.
@@ -44,7 +45,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('heading', { name: '0 changed files' })).toBeVisible();
   await page.getByRole('navigation').getByRole('button', { name: 'History', exact: true }).click();
-  await page.getByRole('combobox', { name: 'File history' }).selectOption(`component:${info.componentId}`);
+  await pickComponent(page, info.componentId, 'parts/cliper.SLDPRT');
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('Confirmed rename: parts/caliper.SLDPRT → parts/cliper.SLDPRT')).toBeVisible();
   await page.getByRole('button', { name: /^Rev 001: Original component/ }).click();
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('parts/caliper.SLDPRT', { exact: true })).toBeVisible();
@@ -72,9 +73,9 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Open project', exact: true }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'History', exact: true }).click();
-  await page.getByRole('combobox', { name: 'File history' }).selectOption(`component:${replacementId}`);
+  await pickComponent(page, replacementId, 'parts/cliper.SLDPRT');
   await expect(page.getByRole('heading', { name: 'Unrelated replacement' })).toBeVisible();
-  await page.getByRole('combobox', { name: 'File history' }).selectOption(`component:${info.componentId}`);
+  await pickComponent(page, info.componentId, 'parts/cliper.SLDPRT');
   await expect(page.getByRole('button', { name: 'Select file for export', exact: true })).toBeDisabled();
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   expect(errors).toEqual([]);

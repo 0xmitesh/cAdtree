@@ -44,10 +44,10 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   };
   const modesBeforeBranchSwitch = await documentBox();
   const filePicker = page.getByRole("combobox", {
-    name: "File history",
+    name: "File",
     exact: true,
   });
-  expect((await filePicker.boundingBox())!.width).toBeLessThanOrEqual(180);
+  expect((await filePicker.boundingBox())!.width).toBeLessThanOrEqual(240);
   await expect(filePicker).toHaveCSS("border-top-style", "solid");
   await expect(filePicker).toHaveCSS("border-top-width", "1px");
   await expect(page.locator(".project-context-name")).toHaveText(

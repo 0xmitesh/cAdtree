@@ -1,4 +1,5 @@
 import "../../tests/dom";
+import { pickFile, filePicker } from "../../tests/file-picker";
 import { indexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +26,7 @@ test('History owns the existing case activity/Compare panel without changing ins
   const summary=ui.getByRole('textbox',{name:/Revision summary/});
   fireEvent.change(summary,{target:{value:'Keep this engineering draft'}});
   fireEvent.click(nav.getByRole('button',{name:'History'}));
-  fireEvent.change(ui.getByRole('combobox',{name:'File history'}),{target:{value:'Bracket.SLDPRT'}});
+  pickFile(ui, 'Bracket.SLDPRT');
   fireEvent.click(ui.getByRole('button',{name:/Rev 003: Reviewed baseline/}));
   const details=ui.container.querySelector('.revision-detail')!;
   const inspection=details.textContent;
@@ -51,7 +52,7 @@ test('History owns the existing case activity/Compare panel without changing ins
   s.home.setHooks({onBeforeListEntries:undefined,onBeforeRead:undefined,onBeforeWrite:undefined});
   assert.equal(details.textContent,inspection);
   assert.equal(currentBranchId(ui),'branch-main');
-  assert.equal((ui.getByRole('combobox',{name:'File history'}) as HTMLSelectElement).value,'Bracket.SLDPRT');
+  assert.equal(filePicker(ui).value,'Bracket.SLDPRT');
   assert.equal(inventorySignature(await readVerifiedInventory(s.home)),before);
   fireEvent.click(nav.getByRole('button',{name:'Settings'}));
   assert.equal(ui.queryByRole('region',{name:'Design cases'}),null);

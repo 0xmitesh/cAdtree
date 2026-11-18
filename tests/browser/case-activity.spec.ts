@@ -1,3 +1,4 @@
+import { pickFile, fileInput } from "./file-picker";
 import { test, expect } from "@playwright/test";
 for (const width of [1366, 390])
   test(`actual App: inspect archived case activity and Compare with Main without writes or context loss at ${width}px`, async ({
@@ -71,11 +72,8 @@ for (const width of [1366, 390])
       })
       .fill("Part session draft");
     await nav.getByRole("button", { name: "History", exact: true }).click();
-    const filePicker = page.getByRole("combobox", {
-      name: "File history",
-      exact: true,
-    });
-    await filePicker.selectOption("Parts/Part-X.SLDPRT");
+    const filePicker = fileInput(page);
+    await pickFile(page, "Parts/Part-X.SLDPRT");
     await page
       .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })
       .press("Enter");

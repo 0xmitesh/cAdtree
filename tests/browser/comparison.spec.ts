@@ -1,3 +1,4 @@
+import { pickFile, fileInput } from "./file-picker";
 import { test, expect } from "@playwright/test";
 
 test("actual App: arbitrary saved comparisons, scoped history, Swap and read-only 5-to-20 snapshots on desktop/mobile", async ({
@@ -34,10 +35,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   const current = page.getByRole("region", { name: "Project context" });
-  const file = page.getByRole("combobox", {
-    name: "File history",
-    exact: true,
-  });
+  const file = fileInput(page);
   const compare = page.getByRole("button", { name: "Compare", exact: true });
   const dialog = page.getByRole("dialog", { name: "Compare saved revisions" });
   const from = dialog.getByRole("combobox", { name: "From revision" });
@@ -156,7 +154,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     "true",
   );
   // A selected historical file narrows initial scope, without changing graph/list inspection.
-  await file.selectOption("Parts/Pin.SLDPRT");
+  await pickFile(page, "Parts/Pin.SLDPRT");
   await page.getByRole("button", { name: /Rev 002:/ }).click();
   await page.getByRole("button", { name: "List", exact: true }).click();
   await compare.click();
@@ -183,7 +181,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     "Rev 002",
   );
   // A path absent in both selected snapshots is explained, not hidden.
-  await file.selectOption("MainOnly/Part01.SLDPRT");
+  await pickFile(page, "MainOnly/Part01.SLDPRT");
   await compare.click();
   await from.selectOption(fixture.ids[0]);
   await to.selectOption(fixture.ids[2]);
@@ -208,7 +206,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
     "data-branch-id",
     fixture.alternativeId,
   );
-  await file.selectOption("Parts/Pin.SLDPRT");
+  await pickFile(page, "Parts/Pin.SLDPRT");
   await compare.click();
   await from.selectOption(fixture.ids[2]);
   await to.selectOption(fixture.ids[3]);

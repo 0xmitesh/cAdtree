@@ -1,4 +1,5 @@
 import "../../tests/dom";
+import { pickFile, showAllFiles, filePicker } from "../../tests/file-picker";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { render, cleanup, fireEvent, within } from "@testing-library/react";
@@ -32,9 +33,7 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
   });
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Prototype" }));
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   assert.equal(
     ui.container.querySelectorAll('.graph-row[data-file-history-kind="change"]')
       .length,
@@ -63,9 +62,7 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
   );
   fireEvent.click(ui.getByRole("button", { name: "List" }));
   assert.equal(ui.container.querySelectorAll(".revision-list-row").length, 2);
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: "" },
-  });
+  showAllFiles(ui);
   assert.equal(ui.container.querySelectorAll(".revision-list-row").length, 8);
   assert.equal(
     ui.getByRole("button", { name: "Prototype" }).getAttribute("aria-pressed"),
@@ -80,9 +77,7 @@ test("deleted file selection cannot export absence; parent inspection and select
     (f) => f.path !== path,
   );
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   assert.equal(
     (
       ui.getByRole("checkbox", {
@@ -136,9 +131,7 @@ test("empty branch scope is explained and project switching resets file and bran
   });
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Prototype" }));
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   assert.ok(ui.getByText(/No recorded history for this file within Prototype/));
   assert.equal(
     ui.queryByRole("complementary", { name: "Revision details" }),
@@ -148,8 +141,7 @@ test("empty branch scope is explained and project switching resets file and bran
   next.project.projectId = "another-project";
   ui.rerender(<HistoryRecoveryView {...props({ vaultState: next })} />);
   assert.equal(
-    (ui.getByRole("combobox", { name: "File history" }) as HTMLSelectElement)
-      .value,
+    filePicker(ui).value,
     "",
   );
   assert.equal(
@@ -161,9 +153,7 @@ test("file filtering keeps damaged evidence visible and preserves export blockin
   const state = historyState(2);
   state.revisions[1].integrityStatus = "corrupted";
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: /Rev 002:/ }));
   assert.ok(
     ui
