@@ -199,7 +199,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                     >
                       <p>
                         {entry.containerPath} ·{" "}
-                        {entry.project?.ready
+                        {entry.status === "ready"
                           ? "Ready"
                           : "Needs attention"}
                       </p>

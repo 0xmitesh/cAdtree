@@ -216,6 +216,12 @@ export function HomeWorkspacesView(props: {
                               {e.directory ?? "Folder not recorded"} ·{" "}
                               {statusWord(e)}
                             </p>
+                            {e.recordedDirectory && e.recordedDirectory !== e.directory ? (
+                              <p>
+                                Registered as {e.recordedDirectory} (renamed or
+                                moved)
+                              </p>
+                            ) : null}
                             {e !== entry && e.issues.length ? (
                               <p>{e.issues.join(" ")}</p>
                             ) : null}

@@ -7,6 +7,7 @@ import App from "../App";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { createHome, createHomeWorkspace } from "../engine/home-service";
 import { createProject } from "../engine/workspace-service";
+import { copyVerifiedTree } from "../engine/copy-service";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { openTestHome, openHomeWorkspace } from "../../tests/app-controls";
 
@@ -81,4 +82,17 @@ test("Home: a healthy workspace shows no location details; a missing one does", 
   assert.ok(gone.getByText("Unavailable"));
   for (const word of ["Connected", "Registration needs repair", "damaged", "duplicate"])
     assert.equal(ui.container.textContent!.includes(word), false, word);
+});
+
+test("Home: a ready workspace whose folder was renamed still shows location details, with the registered name", async () => {
+  const f = await healthyHome();
+  const target = await f.home.getDirectory(["Engineering renamed"], { create: true });
+  await copyVerifiedTree(await f.home.getDirectory(["Engineering"]), target);
+  await f.home.removeEntry(["Engineering"], { recursive: true });
+  const ui = render(<App />);
+  await openTestHome(ui, f.home);
+  const card = within(row(ui, "Engineering"));
+  assert.ok(card.getByText("1 project · Ready"));
+  assert.ok(card.getByText(/Location details/));
+  assert.ok(card.getByText(/Registered as Engineering \(renamed or moved\)/));
 });
