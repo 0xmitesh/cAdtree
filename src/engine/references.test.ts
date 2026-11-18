@@ -429,7 +429,38 @@ test('when every reference attachment is skipped no References folder is created
   assert.equal(output.referencesCount, 0);
   const folder = await parent.getDirectory([output.folderName]);
   assert.deepEqual((await folder.listEntries()).map(e => e.name).sort(), ['_CADTREE_REVIEW.txt', 'part']);
-  assert.match(await folder.readFileText([output.summaryName]), /Not included: "客户 requirement\.pdf"/);
+  const summary = await folder.readFileText([output.summaryName]);
+  assert.match(summary, /Not included: "客户 requirement\.pdf"/);
+  assert.doesNotMatch(summary, /copied to/);
+});
+
+test('reserved device names with several dots get the standard counter and never block the export', async () => {
+  const f = await fixture();
+  for (const name of ['CON.tar.gz', 'aux.v2.pdf', 'con.tar.gz']) {
+    const imported = await importReferenceAttachment(f.vault, f.projectId, attachment(name, new Uint8Array([name.length])), { ...metadata, title: name });
+    const ref = imported.references!.library.find(r => r.title === name)!;
+    await updateProjectReference(f.vault, f.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
+  }
+  await f.working.writeFileText(['part'], 'geometry'); const saved = await f.save();
+  const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'complete', selectedPaths: [], labelFilenames: false, includeReferences: true });
+  assert.deepEqual(plan.references.map(r => r.exportedPath.toLowerCase()).sort(), ['references/aux (2).v2.pdf', 'references/con (2).tar.gz', 'references/con (3).tar.gz']);
+  const parent = new InMemoryFileSystemAdapter('Reviews');
+  const output = await exportRevisionForReview({ vaultDir: f.vault, parent, plan, folderName: plan.folderName, workingFolders: f.folders });
+  assert.equal(output.referencesCount, 3); assert.deepEqual(output.referencesSkipped, []);
+});
+
+test('a reference attached only to another revision stays out of this revision\'s export', async () => {
+  const f = await fixture();
+  await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
+  await f.working.writeFileText(['part'], 'one'); const first = await f.save();
+  const imported = await importReferenceAttachment(f.vault, f.projectId, attachment('later.pdf', new Uint8Array([5])), { ...metadata, title: 'Later' });
+  const later = imported.references!.library.find(r => r.title === 'Later')!;
+  await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: null });
+  await updateProjectReference(f.vault, f.projectId, later.referenceId, { projectVersionId: later.versions[0].versionId });
+  await f.working.writeFileText(['part'], 'two'); const second = await f.save();
+  const names = (state: VaultState, id: string) => prepareReviewExport(state, id, { kind: 'complete', selectedPaths: [], labelFilenames: false, includeReferences: true }).references.map(r => r.originalFilename);
+  assert.deepEqual(names(second.vaultState, first.revision.manifest.revisionId), ['客户 requirement.pdf']);
+  assert.deepEqual(names(second.vaultState, second.revision.manifest.revisionId), ['later.pdf']);
 });
 
 test('context equality ignores display path but preserves exact version, origin, locator and permanent identity', () => {

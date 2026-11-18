@@ -129,8 +129,10 @@ function referenceFileName(original: string): string {
 function freeReferenceFileName(name: string, taken: Set<string>): string {
   const dot = name.lastIndexOf('.');
   const stem = dot > 0 ? name.slice(0, dot) : name, extension = dot > 0 ? name.slice(dot) : '';
+  // A reserved device name ("CON.tar.gz") takes the standard counter before its first dot; others before the extension.
+  const reserved = isReservedFolderName(name);
   for (let n = 1; n <= 10000; n++) {
-    const candidate = n === 1 ? name : `${stem} (${n})${extension}`;
+    const candidate = reserved ? withCounter(name, n) : n === 1 ? name : `${stem} (${n})${extension}`;
     if (isReservedFolderName(candidate) || taken.has(clashKey(candidate))) continue;
     taken.add(clashKey(candidate));
     return candidate;
@@ -143,7 +145,7 @@ function referencesSection(plan: Pick<ReviewExportPlan, 'references' | 'referenc
   const included = plan.references.filter(r => !skipped.some(s => s.versionId === r.versionId));
   const quote = (value: unknown) => JSON.stringify(value);
   return [
-    '', plan.referencesDirectory ? `Reference attachments (copied to ${quote(plan.referencesDirectory + '/')}; content verified against the saved hash):` : 'Reference attachments:',
+    '', plan.referencesDirectory && included.length ? `Reference attachments (copied to ${quote(plan.referencesDirectory + '/')}; content verified against the saved hash):` : 'Reference attachments:',
     ...(!included.length && !missing.length ? ['None apply to this saved revision.'] : []),
     ...included.flatMap(ref => [
       `${quote(ref.originalFilename)} -> ${quote(ref.exportedPath)}`,
@@ -185,7 +187,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
   if (manifest.projectId !== state.project.projectId || computeManifestPayloadChecksum(manifest) !== manifest.manifestPayloadSha256) throw new Error('The saved revision manifest is invalid.');
   const branch = state.branches.find(b => b.branchId === manifest.branchId);
   if (!branch) throw new Error('The selected revision’s recorded branch is unavailable; its review label cannot be established.');
-  if (!['complete', 'selected'].includes(request.kind) || (request.kind === 'complete' && request.labelFilenames)) throw new Error('Filename labels are available only for selected-file review copies.');
+  if (!['complete', 'selected'].includes(request.kind) || (request.kind === 'complete' && request.labelFilenames)) throw new Error('Filename labels are available only for selected-file copies.');
   if (request.kind === 'selected' && (!request.selectedPaths.length || new Set(request.selectedPaths).size !== request.selectedPaths.length)) throw new Error('Select at least one file, with each path selected once.');
   const selected = request.kind === 'complete' ? manifest.files : request.selectedPaths.map(path => {
     splitAndValidatePath(path);
@@ -217,7 +219,12 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     for (let n = 1; !referencesDirectory; n++) { const candidate = withCounter(REFERENCES_FOLDER, n); if (!topLevel.has(clashKey(candidate))) referencesDirectory = candidate; }
   }
   const taken = new Set<string>();
-  const references: ReviewExportReference[] = planned.references.map(ref => ({ ...ref, exportedPath: `${referencesDirectory}/${freeReferenceFileName(referenceFileName(ref.originalFilename), taken)}` }));
+  const references: ReviewExportReference[] = [], referencesSkipped = [...planned.skipped];
+  for (const ref of planned.references) {
+    // A name that cannot be made portable leaves that attachment out; it never blocks the export.
+    try { references.push({ ...ref, exportedPath: `${referencesDirectory}/${freeReferenceFileName(referenceFileName(ref.originalFilename), taken)}` }); }
+    catch (e) { referencesSkipped.push({ label: ref.originalFilename, reason: e instanceof Error ? e.message : String(e), versionId: ref.versionId }); }
+  }
   const paths = [...directories, ...(referencesDirectory ? [referencesDirectory] : []), ...files.map(f => f.exportedPath), ...references.map(r => r.exportedPath)];
   const collisions = checkCaseInsensitiveCollisions(paths);
   if (collisions.length) throw new Error(`Export naming collision: ${collisions.join('; ')}. Change the selection or filename option; nothing was exported.`);
@@ -229,7 +236,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
   const markerName = metadataName('_CADTREE_EXPORT_INCOMPLETE', [...paths, summaryName]);
   const quote = (value: unknown) => JSON.stringify(value);
   const summaryBase = [
-    'cAdtree review copy',
+    'cAdtree exported copy',
     request.kind === 'selected' ? 'PARTIAL — selected files only. CAD dependencies are not discovered or included automatically.' : 'COMPLETE — all files and directories recorded in this saved snapshot. External CAD dependencies are not discovered automatically.',
     `Project: ${quote(state.project.name)} (${state.project.projectId})`,
     `Branch: ${quote(branch.name)} (${branch.branchId})`,
@@ -237,8 +244,8 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     `Saved date: ${manifest.captureCompletedAt}`,
     `Revision summary: ${quote(manifest.summary)}`,
     ...noteLines(manifest.notes, 'Description'),
-    'These are ordinary review copies. Editing them does not update saved history.',
-    ...(includeReferences ? [] : ['Project reference attachments are not included in this review export.']),
+    'These are ordinary copies of the saved files. Editing them does not update saved history.',
+    ...(includeReferences ? [] : ['Project reference attachments are not included in this exported copy.']),
     request.labelFilenames ? 'Filenames were labelled for standalone review. Other documents may require reference repair. Native references were not rewritten.' : 'Original internal filenames and relative paths were preserved.',
     '', 'Exported files (original -> exported; content verified against the saved hash):',
     ...files.flatMap(file => [
@@ -248,9 +255,9 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     ]),
     '', 'Recorded export directories:', ...directories.map(quote), '',
   ].join('\n');
-  const referenceParts = { references, referencesDirectory, referencesSkipped: planned.skipped, request: { ...request, includeReferences } };
+  const referenceParts = { references, referencesDirectory, referencesSkipped, request: { ...request, includeReferences } };
   const summaryText = composeSummary({ summaryBase, ...referenceParts }, []);
-  return { projectId: state.project.projectId, revisionId, manifestSha256: revision.completion.manifestSha256, projectName: state.project.name, branchId: branch.branchId, branchName: branch.name, revisionLabel, folderName, request: { ...request, includeReferences, selectedPaths: request.kind === 'selected' ? [...request.selectedPaths].sort() : [] }, directories, files, summaryName, summaryText, summaryBase, markerName, references, referencesDirectory, referencesSkipped: planned.skipped };
+  return { projectId: state.project.projectId, revisionId, manifestSha256: revision.completion.manifestSha256, projectName: state.project.name, branchId: branch.branchId, branchName: branch.name, revisionLabel, folderName, request: { ...request, includeReferences, selectedPaths: request.kind === 'selected' ? [...request.selectedPaths].sort() : [] }, directories, files, summaryName, summaryText, summaryBase, markerName, references, referencesDirectory, referencesSkipped };
 }
 
 /** Read-only proposal. Execution never silently changes the name confirmed here. */
@@ -296,8 +303,8 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
         if (insideParent?.[0]?.toLowerCase() === folderName.toLowerCase()) throw new Error('The proposed export folder overlaps a protected project location. Choose another destination.');
       }
       if ((await parent.listEntries()).some(e => e.name.toLowerCase() === folderName.toLowerCase())) throw new Error('The proposed folder already exists. Choose the destination again for a fresh proposal.');
-      const totalBytes = plan.files.reduce((sum, file) => sum + file.size, 0);
-      const progress = (phase: 'verifying_objects' | 'restoring_directories' | 'restoring_files' | 'verifying_restored_files', message: string, processedFiles = 0, processedBytes = 0, currentFile?: string) => onProgress?.({ phase, message, processedFiles, processedBytes, totalFiles: plan.files.length, totalBytes, ...(currentFile ? { currentFile } : {}) });
+      const totalBytes = plan.files.reduce((sum, file) => sum + file.size, 0) + plan.references.reduce((sum, ref) => sum + ref.size, 0);
+      const progress = (phase: 'verifying_objects' | 'restoring_directories' | 'restoring_files' | 'verifying_restored_files', message: string, processedFiles = 0, processedBytes = 0, currentFile?: string) => onProgress?.({ phase, message, processedFiles, processedBytes, totalFiles: plan.files.length + plan.references.length, totalBytes, ...(currentFile ? { currentFile } : {}) });
       for (const [index, file] of plan.files.entries()) {
         progress('verifying_objects', 'Verifying saved content before export.', index, 0, file.path);
         throwIfCancelled(signal);
@@ -319,8 +326,8 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       throwIfCancelled(signal);
       creationAttempted = true;
       destination = await parent.getDirectory([folderName], { create: true, exclusiveCreate: true });
-      for (const root of protectedRoots) await validateDirectoryIsolation(destination, root, 'Review export', 'Protected project folder');
-      const markerText = `INCOMPLETE cAdtree review export: ${plan.revisionLabel} (${plan.revisionId}).\nDo not distribute or use this folder. Retry into a fresh labelled child folder.\n`;
+      for (const root of protectedRoots) await validateDirectoryIsolation(destination, root, 'Export a copy', 'Protected project folder');
+      const markerText = `INCOMPLETE cAdtree exported copy: ${plan.revisionLabel} (${plan.revisionId}).\nDo not distribute or use this folder. Retry into a fresh labelled child folder.\n`;
       await destination.writeFileText([plan.markerName], markerText, { exclusive: true });
       progress('restoring_directories', 'Creating review-copy directories.');
       for (const directory of plan.directories) {
@@ -336,15 +343,16 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
         if (written.bytesWritten !== file.size) throw new Error(`Incomplete exported file: ${file.exportedPath}`);
         writtenBytes += written.bytesWritten;
       }
-      for (const ref of references) {
-        progress('restoring_files', 'Exporting verified reference attachments.', plan.files.length, writtenBytes, ref.exportedPath);
+      for (const [index, ref] of references.entries()) {
+        progress('restoring_files', 'Exporting verified reference attachments.', plan.files.length + index, writtenBytes, ref.exportedPath);
         throwIfCancelled(signal);
         const written = await destination.writeFileStream(splitAndValidatePath(ref.exportedPath), await vaultDir.readFileStream(getObjectPathSegments(ref.sha256)), { exclusive: true, signal });
         if (written.bytesWritten !== ref.size) throw new Error(`Incomplete exported reference attachment: ${ref.exportedPath}`);
+        writtenBytes += written.bytesWritten;
       }
       throwIfCancelled(signal);
       await destination.writeFileText([plan.summaryName], summaryText, { exclusive: true });
-      progress('verifying_restored_files', 'Verifying exported bytes, summary and complete directory structure.', plan.files.length, writtenBytes);
+      progress('verifying_restored_files', 'Verifying exported bytes, summary and complete directory structure.', plan.files.length + references.length, writtenBytes);
       const rawInventory = await readVerifiedInventory(destination, { signal });
       const expected = new Map([
         ...plan.files.map(f => [f.exportedPath, { sha256: f.sha256, size: f.size }] as const),
@@ -357,11 +365,11 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       throwIfCancelled(signal);
       await destination.removeEntry([plan.markerName]);
       if (await destination.hasFile([plan.markerName]) || await destination.hasDirectory([plan.markerName])) throw new Error('The incomplete marker could not be cleared after verification.');
-      return { folderName, filesCount: plan.files.length, verifiedBytes: totalBytes, summaryName: plan.summaryName, referencesCount: references.length, referencesSkipped: [...plan.referencesSkipped, ...skipped] };
+      return { folderName, filesCount: plan.files.length, verifiedBytes: plan.files.reduce((sum, file) => sum + file.size, 0) + references.reduce((sum, ref) => sum + ref.size, 0), summaryName: plan.summaryName, referencesCount: references.length, referencesSkipped: [...plan.referencesSkipped, ...skipped] };
     } catch (error) {
       if (destination) {
         try {
-          if (!await destination.hasFile([plan.markerName]) && !await destination.hasDirectory([plan.markerName])) await destination.writeFileText([plan.markerName], 'INCOMPLETE cAdtree review export. Do not distribute or use. Retry into a fresh folder.\n', { exclusive: true });
+          if (!await destination.hasFile([plan.markerName]) && !await destination.hasDirectory([plan.markerName])) await destination.writeFileText([plan.markerName], 'INCOMPLETE cAdtree exported copy. Do not distribute or use. Retry into a fresh folder.\n', { exclusive: true });
         } catch { /* The retained folder is also identified in the caller's error. */ }
       }
       throw new ReviewExportError(error instanceof Error ? error.message : String(error), creationAttempted ? folderName : undefined, Boolean(signal?.aborted) || (error instanceof DOMException && error.name === 'AbortError'));
