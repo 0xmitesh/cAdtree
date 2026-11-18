@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { HardDrive, ShieldCheck } from "lucide-react";
 import type { VaultState } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
@@ -29,6 +29,8 @@ export function DiagnosticsView({
   missingConnections = [],
 }: DiagnosticsViewProps) {
   const [troubleshootingOpen, setTroubleshootingOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const troubleshootingSummary = useRef<HTMLElement>(null);
   const [error, setError] = useState("");
   const [clear, setClear] = useState(false);
   const checked = state.revisions.filter(
@@ -50,37 +52,56 @@ export function DiagnosticsView({
     Object.keys(state.damagedBranchHeads).length > 0 ||
     Object.values(state.competingHeads).some((heads) => heads.length > 0) ||
     Boolean(state.references?.reason);
-  const connectionRows = (
-    <>
-      <div className="settings-row">
-        <div>
-          <strong>Working folder</strong>
-          <p className="file-path">{workingFolderName ?? "Not connected"}</p>
-          <p>
-            Open this branch’s folder in your CAD application before editing or
-            saving.
-          </p>
-        </div>
-        <button
-          className="button secondary"
-          disabled={isVerifyingAll}
-          onClick={onReattachWorkingFolder}
-        >
-          {managed
-            ? "Reconnect workspace"
-            : workingFolderName
-              ? "Change folder"
-              : "Connect folder"}
-        </button>
+  const copyFolderPath = async () => {
+    try {
+      await navigator.clipboard.writeText(workingFolderName ?? "");
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  const workingFolderRow = (reconnect: boolean) => (
+    <div className="settings-row">
+      <div>
+        <strong>Working folder</strong>
+        <p className="file-path">{workingFolderName ?? "Not connected"}</p>
+        <p>
+          Open this branch’s folder in your CAD application before editing or
+          saving.
+        </p>
+        {copied ? <p className="muted" role="status">Path copied</p> : null}
       </div>
-      <div className="settings-row">
-        <div>
-          <strong>Revision vault</strong>
-          <p>{vaultFolderName ?? "Connected vault"}</p>
-        </div>
-        <span className="connection-dot">Connected</span>
+      <div className="settings-row-actions">
+        {workingFolderName ? (
+          <button className="button secondary" onClick={copyFolderPath}>
+            Copy path
+          </button>
+        ) : null}
+        {reconnect ? reconnectButton : null}
       </div>
-    </>
+    </div>
+  );
+  const reconnectButton = (
+    <button
+      className="button secondary"
+      disabled={isVerifyingAll}
+      onClick={onReattachWorkingFolder}
+    >
+      {managed
+        ? "Reconnect workspace"
+        : workingFolderName
+          ? "Change folder"
+          : "Connect folder"}
+    </button>
+  );
+  const vaultRow = (
+    <div className="settings-row">
+      <div>
+        <strong>Revision vault</strong>
+        <p>{vaultFolderName ?? "Connected vault"}</p>
+      </div>
+      <span className="connection-dot">Connected</span>
+    </div>
   );
   return (
     <div className="page settings-page">
@@ -99,11 +120,17 @@ export function DiagnosticsView({
           <HardDrive size={18} />
         </div>
         {needsFolderRepair ? (
-          connectionRows
+          <>
+            {workingFolderRow(true)}
+            {vaultRow}
+          </>
         ) : (
-          <div className="settings-row">
-            <p>All folders are connected.</p>
-          </div>
+          <>
+            <div className="settings-row">
+              <p>All folders are connected.</p>
+            </div>
+            {workingFolderRow(false)}
+          </>
         )}
         {managed ? <WorkspaceLocationSetting /> : null}
       </section>
@@ -113,7 +140,10 @@ export function DiagnosticsView({
           <button
             type="button"
             className="text-button"
-            onClick={() => setTroubleshootingOpen(true)}
+            onClick={() => {
+              setTroubleshootingOpen(true);
+              troubleshootingSummary.current?.focus();
+            }}
           >
             open Troubleshooting
           </button>
@@ -125,8 +155,19 @@ export function DiagnosticsView({
           open={troubleshootingOpen}
           onToggle={(event) => setTroubleshootingOpen(event.currentTarget.open)}
         >
-          <summary>Troubleshooting</summary>
-          {!needsFolderRepair ? connectionRows : null}
+          <summary ref={troubleshootingSummary}>Troubleshooting</summary>
+          {!needsFolderRepair ? (
+            <>
+              <div className="settings-row">
+                <div>
+                  <strong>Folder connections</strong>
+                  <p>Reconnect the folders if they stop responding.</p>
+                </div>
+                {reconnectButton}
+              </div>
+              {vaultRow}
+            </>
+          ) : null}
           <div className="form-body">
             <p>
               Metadata checks validate revision records. File content checks

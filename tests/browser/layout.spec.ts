@@ -180,7 +180,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
     page.getByRole("button", { name: "Reconnect workspace", exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator(".settings-troubleshooting .settings-row").first(),
+    page.locator(".settings-page .settings-row", { hasText: "Working folder" }),
   ).toContainText("working/main");
   await nav.getByRole("button", { name: "History", exact: true }).click();
 

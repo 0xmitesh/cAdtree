@@ -57,11 +57,10 @@ async function start(){
     await open.click();
     await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings',exact:true}).click();
     while(await dismiss.count())await dismiss.first().click();
-    await page.locator('.settings-troubleshooting > summary').click();
-    await page.locator('.settings-troubleshooting').screenshot({path:path.join(root,'public/tutorials/bring-existing-work/step-6-managed-main.png')});
+    await page.locator('.settings-page > .panel').first().screenshot({path:path.join(root,'public/tutorials/bring-existing-work/step-6-managed-main.png')});
     // Tutorial 2 step 2 reuses the same real Settings panel (Main only, no saved revision) at the wider 1280px layout it was first captured at.
     await page.setViewportSize({width:1280,height:1200});
-    const folders=page.locator('.settings-troubleshooting');
+    const folders=page.locator('.settings-page > .panel').first();
     assert.equal(await folders.getByText('projects/Bracket Assembly/working/main').first().isVisible(),true);
     await folders.screenshot({path:path.join(root,'public/tutorials/save-first-revision/step-2-working-folder.png')});
     assert.deepEqual(errors,[]);

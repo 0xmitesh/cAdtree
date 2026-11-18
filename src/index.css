@@ -3513,3 +3513,8 @@ input::placeholder {
   margin-top: 0;
   padding: 15px 20px;
 }
+.settings-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

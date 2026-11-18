@@ -42,8 +42,7 @@ async function main(){
   const settingsClip = async name => {
     await page.setViewportSize({ width: 1024, height: 1200 });
     const heading = page.getByRole('region', { name: 'Project context', exact: true });
-    if (!(await page.locator('.settings-troubleshooting').evaluate(el => el.open))) await page.locator('.settings-troubleshooting > summary').click();
-    const location = page.locator('.settings-troubleshooting .settings-row').first();
+    const location = page.locator('.settings-page > .panel').first().locator('.settings-row', { hasText: 'Working folder' });
     await heading.scrollIntoViewIfNeeded();
     const top = await heading.boundingBox(), bottom = await location.boundingBox();
     await page.screenshot({ path: path.join(assets, name + '.png'), clip: { x: top.x, y: top.y, width: top.width, height: bottom.y + bottom.height - top.y } });
@@ -103,9 +102,8 @@ async function main(){
     await nav.getByRole('button', { name: 'Settings', exact: true }).click();
     // The Explorer tree is the only case switcher; the header shows the current case as text.
     const selector = { selectOption: id => page.locator(`[role="treeitem"][data-branch-id="${id}"]:visible`).click() };
-    const caseLabel = page.locator('.project-context-case');
-    await selector.selectOption('branch-main'); await idle(); await focus(caseLabel); await settingsClip('step-5-main-active');
-    await selector.selectOption(afterCreate.branchId); await idle(); await focus(caseLabel); await settingsClip('step-5-case-active');
+    await selector.selectOption('branch-main'); await idle(); await settingsClip('step-5-main-active');
+    await selector.selectOption(afterCreate.branchId); await idle(); await settingsClip('step-5-case-active');
     await nav.getByRole('button', { name: 'History', exact: true }).click();
     const header = page.getByRole('region', { name: 'Project context', exact: true }), origin = page.locator('.branch-origin');
     await header.scrollIntoViewIfNeeded();

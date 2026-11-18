@@ -49,6 +49,10 @@ test("Settings with everything connected shows one status line and a closed Trou
   assert.ok(inside.getByText(/Incomplete or interrupted attempts/));
   assert.ok(inside.getByText("Branch records"));
   assert.equal(ui.container.querySelectorAll("details.settings-troubleshooting").length, 1);
+  // The working folder path and its Copy path button stay visible outside Troubleshooting.
+  const copyButton = ui.getByRole("button", { name: "Copy path" });
+  assert.equal(troubleshooting(ui).contains(copyButton), false);
+  assert.ok(ui.getByText("working/main"));
   assert.equal(ui.container.querySelectorAll(".settings-page > .panel > details").length, 1);
 });
 
@@ -72,6 +76,7 @@ test("Incomplete attempts and damaged records show a hint that opens Troubleshoo
   assert.ok(ui.getByText(/Something needs attention/));
   fireEvent.click(ui.getByRole("button", { name: "open Troubleshooting" }));
   assert.equal(troubleshooting(ui).open, true);
+  assert.equal(document.activeElement, troubleshooting(ui).querySelector("summary"));
   assert.ok(ui.getByText("staging/attempt-1"));
   const damaged = view({ ...state, corruptedRecords: [{ recordPath: "vault/revisions/x", reason: "Bad checksum" }] as VaultState["corruptedRecords"] });
   assert.ok(damaged.getAllByText(/Something needs attention/).length >= 1);
