@@ -12,6 +12,10 @@ import { pathBudgetBlockSentence, workspaceNameHint } from "../utils/path-budget
 import { HomeFolderAddressSetting } from "./FilePathShortcuts";
 import { HomeWelcome } from "./HomeWelcome";
 
+/** Every status other than "ready" (damaged, incomplete, duplicate) is shown as "Needs attention"; the reason stays on the card. */
+const statusWord = (entry: HomeWorkspaceEntry) =>
+  entry.status === "ready" ? "Ready" : "Needs attention";
+
 export function HomeWorkspacesView(props: {
   home: HomeState | null;
   /** Absolute address of the Cadtree home, when known (drives the name hint). */
@@ -167,11 +171,16 @@ export function HomeWorkspacesView(props: {
                         <h3>{entry.name}</h3>
                         <p>
                           {entry.workspace
-                            ? `${entry.workspace.projects.length} project${entry.workspace.projects.length === 1 ? "" : "s"} · ${entry.status === "ready" ? "Connected" : "Needs attention"}`
-                            : entry.status === "incomplete"
-                              ? "Incomplete · Destination retained"
-                              : "Unavailable · Needs attention"}
+                            ? `${entry.workspace.projects.length} project${entry.workspace.projects.length === 1 ? "" : "s"} · ${statusWord(entry)}`
+                            : statusWord(entry)}
                         </p>
+                        {entry.status !== "ready" && !entry.workspace ? (
+                          <p className="small">
+                            {entry.status === "incomplete"
+                              ? "Incomplete · Destination retained"
+                              : "Unavailable"}
+                          </p>
+                        ) : null}
                       </div>
                       {entry.workspace ? (
                         <button
@@ -204,8 +213,8 @@ export function HomeWorkspacesView(props: {
                           <div key={e.key}>
                             <p className="file-path">
                               {props.home!.root.name}/
-                              {e.directory ?? "Registration needs repair"} ·{" "}
-                              {e.status}
+                              {e.directory ?? "Folder not recorded"} ·{" "}
+                              {statusWord(e)}
                             </p>
                             {e !== entry && e.issues.length ? (
                               <p>{e.issues.join(" ")}</p>

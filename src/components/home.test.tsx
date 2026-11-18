@@ -408,7 +408,9 @@ test("home groups retained migration attempts and opens the managed workspace wh
   await ready(ui, "Open workspace");
   assert.equal(ui.getAllByRole("article").length, 2);
   assert.ok(ui.getByText("Location details · 2 retained locations"));
-  assert.ok(ui.getByText("Unavailable · Needs attention"));
+  assert.ok(ui.getByText("Needs attention"));
+  assert.ok(ui.getByText("Unavailable"));
+  assert.ok(ui.getByText(/^\d+ projects? · Ready$/));
   fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "cam 2." })));
   await ready(ui, "Create project");

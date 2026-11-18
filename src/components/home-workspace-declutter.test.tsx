@@ -46,6 +46,8 @@ test("Workspace page: a healthy project shows no Managed project line and no loc
   assert.equal(card.queryByText("Location details"), null);
   assert.equal(card.queryByRole("button", { name: "Choose location" }), null);
   assert.equal(card.queryByRole("button", { name: "Inspect project" }), null);
+  assert.ok(card.getByText("Ready"));
+  assert.equal(card.queryByText("Needs attention"), null);
 });
 
 test("Workspace page: a project that needs attention shows its location details and Inspect project", async () => {
@@ -57,6 +59,9 @@ test("Workspace page: a project that needs attention shows its location details 
   const damaged = within(row(ui, "Gripper"));
   assert.ok(damaged.getByText("Location details"));
   assert.ok(damaged.getByRole("button", { name: "Inspect project" }));
+  assert.ok(damaged.getByText("Needs attention"));
+  assert.ok(damaged.getByText(/Connections or records need attention/));
+  assert.equal(damaged.queryByText("Ready"), null);
 });
 
 test("Home: a healthy workspace shows no location details; a missing one does", async () => {
@@ -68,7 +73,12 @@ test("Home: a healthy workspace shows no location details; a missing one does", 
   const healthy = within(row(ui, "Engineering"));
   assert.equal(healthy.queryByText(/Location details/), null);
   assert.ok(healthy.getByRole("button", { name: "Open workspace" }));
+  assert.ok(healthy.getByText("1 project · Ready"));
   const gone = within(row(ui, "Missing workspace"));
   assert.ok(gone.getByText(/Location details/));
   assert.equal(gone.queryByRole("button", { name: "Open workspace" }), null);
+  assert.ok(gone.getByText("Needs attention"));
+  assert.ok(gone.getByText("Unavailable"));
+  for (const word of ["Connected", "Registration needs repair", "damaged", "duplicate"])
+    assert.equal(ui.container.textContent!.includes(word), false, word);
 });

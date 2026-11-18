@@ -138,6 +138,11 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                 <div className="project-copy">
                   <h3>{locations[0].name}</h3>
                   {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
+                  <p className="small">
+                    {locations.length === 1 && locations[0].status === "ready"
+                      ? "Ready"
+                      : "Needs attention"}
+                  </p>
                   {locations.length > 1 || locations[0].status !== "ready" ? (
                     <p className="small">
                       {locations.length > 1
@@ -195,8 +200,8 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                       <p>
                         {entry.containerPath} ·{" "}
                         {entry.project?.ready
-                          ? "Published"
-                          : "Incomplete/damaged"}
+                          ? "Ready"
+                          : "Needs attention"}
                       </p>
                       <button
                         className="button secondary"
