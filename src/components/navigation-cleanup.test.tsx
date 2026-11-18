@@ -8,7 +8,7 @@ import { ReferencesView } from "./ReferencesView";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
 import { nativeDirectory } from "../../tests/native-fs";
 import { DEFAULT_TEST_USER } from "../../tests/test-auth";
-import { appBusy, openHomeWorkspace } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace } from "../../tests/app-controls";
 import { clearAllConvenienceMetadata, getWorkspacePath, saveWorkspacePath, setConvenienceAccountScope } from "../engine/idb-store";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
@@ -149,4 +149,36 @@ test("A status banner stays on the page that raised it: another tab, Back/Forwar
   await waitFor(() => assert.ok(banner(ui)));
   fireEvent.click(nav.getByRole("button", { name: "My workspaces" }));
   assert.equal(banner(ui), null);
+});
+
+test("Switching case in the Explorer keeps the current page; Back and Forward still work across the switch", async () => {
+  const { sample, ui, nav } = await openSample();
+  const tree = within(ui.getByRole("tree", { name: "Workspace explorer" }));
+  const caseItem = () => tree.getByRole("treeitem", { name: /^Lightweight bracket, Bracket Assembly/ });
+  fireEvent.click(nav.getByRole("button", { name: "References" }));
+  assert.equal(page(nav), "References");
+  fireEvent.click(caseItem());
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  assert.equal(currentBranchId(ui), sample.caseId);
+  assert.equal(page(nav), "References", "References stays open");
+  fireEvent.click(nav.getByRole("button", { name: "Changes" }));
+  fireEvent.click(tree.getByRole("treeitem", { name: /^Main, Bracket Assembly/ }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  assert.equal(currentBranchId(ui), "branch-main");
+  assert.equal(page(nav), "Changes", "Changes stays open");
+  fireEvent.click(caseItem());
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  assert.equal(page(nav), "Changes");
+  fireEvent.click(nav.getByRole("button", { name: "Settings" }));
+  fireEvent.click(tree.getByRole("treeitem", { name: /^Main, Bracket Assembly/ }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  assert.equal(page(nav), "Settings");
+  // Back and Forward walk the pages visited, whichever case is current.
+  await traverse("back");
+  assert.equal(page(nav), "Changes");
+  await traverse("back");
+  assert.equal(page(nav), "References");
+  await traverse("forward");
+  assert.equal(page(nav), "Changes");
+  assert.equal(currentBranchId(ui), "branch-main");
 });

@@ -818,6 +818,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     )
       ? preferred!
       : MAIN_BRANCH_ID;
+    // Switching case inside the open project keeps the page the user is on; opening a project starts at its default.
+    const keepTab =
+      projectView &&
+      managedProject?.record.projectId === project.record.projectId &&
+      workspace?.identity.workspaceId === current.identity.workspaceId;
     setManagedProject(project);
     setProjectUnavailable(null);
     setBannerScope("project");
@@ -826,6 +831,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       project.vaultDir,
       project.workingFolders,
       branchId,
+      keepTab,
     );
     const warning = await persistWorkspace(
       current,
@@ -1122,6 +1128,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     vault: FileSystemDirectoryAdapter,
     folders: WorkingFolderBindings,
     branchId: string,
+    keepTab = false,
   ) => {
     setProjectSession((previous) => previous + 1);
     setVaultDir(vault);
@@ -1130,7 +1137,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setActiveBranchId(branchId);
     setWorkingDir(folders[branchId] ?? null);
     setScanResult(null);
-    setActiveTab(state.revisions.length ? "history" : "changes");
+    if (!keepTab) setActiveTab(state.revisions.length ? "history" : "changes");
   };
   const {
     applicationOptions,
