@@ -179,7 +179,8 @@ export function useBranchActions({
           }
         }
       },
-      true,
+      // The archive/reopen dialog shows a failure itself: no second copy in the page banner.
+      { rethrow: true, banner: false },
     );
   };
   const handleReattachWorkingFolder = async () => {
