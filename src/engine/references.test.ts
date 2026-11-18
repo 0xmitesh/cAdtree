@@ -265,6 +265,31 @@ test('interrupted and cancelled imports publish no reference identity and allow 
   }
 });
 
+test('applyToProject publishes the reference and its project version in one catalog write, and a failure leaves no reference', async () => {
+  const f = await fixture();
+  const catalogsBefore = (await f.vault.getDirectory(['references', 'catalogs']).then(d => d.listEntries())).length;
+  const state = await importReferenceAttachment(f.vault, f.projectId, attachment('Standard.pdf', new Uint8Array([9, 8, 7])), { title: 'Standard.pdf', description: 'Applies everywhere', tags: [] }, undefined, { applyToProject: true });
+  const added = state.references!.library.find(ref => ref.title === 'Standard.pdf')!;
+  assert.equal(added.projectVersionId, added.versions[0].versionId);
+  assert.equal(f.ref.projectVersionId, null, 'other references are untouched');
+  assert.equal((await f.vault.getDirectory(['references', 'catalogs']).then(d => d.listEntries())).length, catalogsBefore + 1, 'exactly one catalog was published');
+  // The very first published catalog already carries the project link: the next revision inherits it.
+  await f.working.writeFileText(['Part.SLDPRT'], 'geometry');
+  const saved = await f.save();
+  assert.deepEqual(context(saved.vaultState, saved.revision.manifest.revisionId).links.map(link => [link.origin, link.referenceId]), [['project', added.referenceId]]);
+  // A failed publication publishes neither the reference nor its project link.
+  const g = await fixture();
+  const originalDirectory = g.vault.getDirectory.bind(g.vault);
+  g.vault.getDirectory = async (path, options) => {
+    if (options?.exclusiveCreate && path[0] === 'references' && path[1] === 'completed') throw new Error('Interrupted reference publication');
+    return originalDirectory(path, options);
+  };
+  await assert.rejects(importReferenceAttachment(g.vault, g.projectId, attachment('Standard.pdf'), metadata, undefined, { applyToProject: true }), /Interrupted/);
+  const failed = await openExistingVault(g.vault);
+  assert.equal(failed.references!.library.length, 1);
+  assert.ok(failed.references!.library.every(ref => ref.projectVersionId === null));
+});
+
 test('interrupted revision publication does not commit context; retry uses a fresh revision and keeps exact links', async () => {
   const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'geometry');

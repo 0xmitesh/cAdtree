@@ -29,7 +29,7 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("References uses its branch filter while the other project views show the current case as text, without changing inspection, drafts or files", async () => {
+test("References has no case selector while the other project views show the current case as text, without changing inspection, drafts or files", async () => {
   const { sample, ui, nav } = await openSample();
   const header = ui.getByRole("region", { name: "Project context" });
   const before = inventorySignature(await readVerifiedInventory(sample.home));
@@ -46,7 +46,8 @@ test("References uses its branch filter while the other project views show the c
     assert.equal(ui.getByRole("region", { name: "Project context" }), header);
     if (view === "References") {
       assert.equal(header.querySelector(".project-context-case"), null);
-      fireEvent.change(ui.getByRole("combobox", { name: "Branch" }), { target: { value: sample.caseId } });
+      assert.equal(ui.queryByRole("combobox", { name: "Branch" }), null);
+      fireEvent.change(ui.getByRole("searchbox", { name: "Search references" }), { target: { value: "bracket" } });
       assert.equal(currentBranchId(ui), "branch-main");
     } else {
       assert.equal(header.querySelector(".project-context-case")!.textContent, "Case: Main");

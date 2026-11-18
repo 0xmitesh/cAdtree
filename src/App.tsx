@@ -77,6 +77,7 @@ import { useBranchActions } from "./app/useBranchActions";
 import { useCaptureActions } from "./app/useCaptureActions";
 import { useDiagnosticsActions } from "./app/useDiagnosticsActions";
 import { useOperation } from "./app/useOperation";
+import { useReferenceActions } from "./app/useReferenceActions";
 import { useReviewActions } from "./app/useReviewActions";
 import type {
   ActiveTab,
@@ -1192,6 +1193,17 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setScanResult,
     setStatusBanner,
   });
+  const { handleAddReferences, handleStopApplyingReference } = useReferenceActions({
+    vaultDir,
+    vaultState,
+    managedProject,
+    workspace,
+    authStateRef,
+    perform,
+    assertProjectWritable,
+    setVaultState,
+    setStatusBanner,
+  });
   const { handleExportForReview, handleRetrieveReference } = useReviewActions({
     vaultDir,
     vaultState,
@@ -1580,6 +1592,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleAbandonApplication={handleAbandonApplication}
                   handleExportForReview={handleExportForReview}
                   handleRetrieveReference={handleRetrieveReference}
+                  handleAddReferences={handleAddReferences}
+                  handleStopApplyingReference={handleStopApplyingReference}
                   handleVerifySingleRevisionObjects={handleVerifySingleRevisionObjects}
                   handleVerifyAllObjects={handleVerifyAllObjects}
                   handleSimulateClearMetadataAndReopenVault={handleSimulateClearMetadataAndReopenVault}

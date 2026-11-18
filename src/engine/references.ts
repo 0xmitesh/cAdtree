@@ -316,6 +316,8 @@ function cleanMetadata(input: ReferenceMetadata): ReferenceMetadata { return { t
 export interface AttachmentSource { name: string; type: string; size: number; stream: () => ReadableStream<Uint8Array> }
 export interface ReferenceImportOptions extends CopyOptions {
   savedBy?: ReferenceAuthor;
+  /** Also make the new version the reference's project version (it applies to the whole project), in the same catalog write. */
+  applyToProject?: boolean;
   /** Test seam: supplies each candidate record ID for the enrollment and catalog files (the exclusive claims). Defaults to newRecordId(). */
   newRecordId?: () => string;
 }
@@ -335,8 +337,9 @@ export async function importReferenceAttachment(vault: FileSystemDirectoryAdapte
     const taken = libraryIds(library);
     const id = existing?.referenceId ?? freshLibraryId(taken);
     const version: ReferenceVersion = { referenceId: id, versionId: freshLibraryId(taken), originalFilename: source.name, fileType: source.type || 'application/octet-stream', size: measured.size, sha256: measured.sha256, importedAt: new Date().toISOString(), ...(savedBy ? { savedBy } : {}) };
-    if (existing) { existing.versions.push(version); Object.assign(existing, cleanMetadata(metadata)); }
-    else library.push({ referenceId: id, ...cleanMetadata(metadata), versions: [version], projectVersionId: null, removed: false });
+    const projectVersionId = options.applyToProject ? version.versionId : null;
+    if (existing) { existing.versions.push(version); Object.assign(existing, cleanMetadata(metadata)); if (projectVersionId && !existing.removed) existing.projectVersionId = projectVersionId; }
+    else library.push({ referenceId: id, ...cleanMetadata(metadata), versions: [version], projectVersionId, removed: false });
     validateLibrary(library, state.references?.library);
     options.onProgress?.({ phase: 'writing_objects', processedFiles: 0, totalFiles: 1, processedBytes: 0, totalBytes: measured.size, message: 'Copying and verifying the original reference attachment.' });
     await storeReferenceObject(vault, measured.sha256, measured.size, () => source.stream(), options.signal);

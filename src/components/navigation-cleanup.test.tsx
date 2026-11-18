@@ -94,7 +94,7 @@ test("Reference browsing keeps every stored version downloadable without editing
   const ui = render(<ReferencesView {...props()} />);
   assert.equal(ui.queryByRole("button", { name: "Import reference" }), null);
   assert.ok(ui.getByRole("searchbox", { name: "Search references" }));
-  assert.equal(ui.getAllByRole("combobox").length, 2);
+  assert.equal(ui.queryAllByRole("combobox").length, 0);
   assert.ok(ui.getByText(/No references yet/));
   state = await importReferenceAttachment(sample.project.vaultDir, state.project.projectId, new File(["One"], "Requirements.txt"), metadata);
   const reference = state.references!.library[0];
