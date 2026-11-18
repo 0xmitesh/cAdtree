@@ -25,17 +25,60 @@ export function historicalFilePaths(state: VaultState): string[] {
   ].sort();
 }
 
-export function historicalComponents(state: VaultState): { componentId: string; paths: string[]; label: string }[] {
+export function historicalComponents(state: VaultState): { componentId: string; paths: string[]; latestPath: string; label: string }[] {
   if (state.components?.status !== 'available') return [];
   const components = new Map<string, string[]>();
+  // state.revisions is ordered by display number, so the last path seen is the latest known one.
   for (const revision of state.revisions) {
     for (const file of state.components.revisions[revision.manifest.revisionId]?.files ?? []) {
       const paths = components.get(file.componentId) ?? [];
-      if (!paths.includes(file.path)) paths.push(file.path);
+      if (paths[paths.length - 1] !== file.path) paths.push(file.path);
       components.set(file.componentId, paths);
     }
   }
-  return [...components].map(([componentId, paths]) => ({ componentId, paths, label: `${paths[paths.length - 1]} · ${componentId.slice(10, 18)}` })).sort((a,b) => a.label.localeCompare(b.label));
+  return [...components]
+    .map(([componentId, paths]) => {
+      const latestPath = paths[paths.length - 1];
+      return { componentId, paths, latestPath, label: latestPath };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label) || a.componentId.localeCompare(b.componentId));
+}
+
+export interface FileHistoryEntry {
+  /** `component:<id>` for a tracked file, otherwise the project-relative path. */
+  value: string;
+  /** What the picker shows: the latest known path, plus a short ID only when two entries would otherwise look the same. */
+  label: string;
+  /** Latest known project-relative path. */
+  path: string;
+  componentId?: string;
+}
+
+/** One entry per file for the File picker: every tracked component by its latest known path, plus the
+ * paths that no component covers (before component tracking, or when component evidence is unreadable). */
+export function fileHistoryEntries(state: VaultState): FileHistoryEntry[] {
+  const components = historicalComponents(state);
+  const covered = new Set(components.flatMap((c) => c.paths));
+  const entries: FileHistoryEntry[] = [
+    ...components.map((c) => ({
+      value: `component:${c.componentId}`,
+      label: c.latestPath,
+      path: c.latestPath,
+      componentId: c.componentId,
+    })),
+    ...historicalFilePaths(state)
+      .filter((path) => !covered.has(path))
+      .map((path) => ({ value: path, label: path, path })),
+  ];
+  const counts = new Map<string, number>();
+  for (const entry of entries) counts.set(entry.label, (counts.get(entry.label) ?? 0) + 1);
+  return entries
+    .map((entry) =>
+      entry.componentId && (counts.get(entry.label) ?? 0) > 1
+        ? { ...entry, label: `${entry.label} · ${entry.componentId.slice(10, 18)}` }
+        : entry,
+    )
+    .sort((a, b) => a.label.localeCompare(b.label) || a.value.localeCompare(b.value));
 }
 
 /** A read-only projection of complete snapshots. Only validated parent edges from

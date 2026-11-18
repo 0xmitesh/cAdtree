@@ -1,3 +1,4 @@
+import { pickFile, showAllFiles, fileInput } from "./file-picker";
 import { test, expect } from "@playwright/test";
 test("actual App: file history follows parents across branches, retains deleted paths, and preserves working context", async ({
   page,
@@ -34,20 +35,22 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   const current = page.getByRole("region", { name: "Project context" });
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
-  const file = page.getByRole("combobox", {
-    name: "File history",
-    exact: true,
-  });
+  const file = fileInput(page);
   await expect(file).toHaveValue("");
   await expect(page.locator(".graph-row")).toHaveCount(14);
-  await expect(file.locator("option")).toContainText([
+  await file.click();
+  await expect(
+    page.getByRole("listbox", { name: "Files" }).getByRole("option"),
+  ).toHaveText([
     "All files",
     "AlternativeOnly.txt",
     "Obsolete/Retired.SLDPRT",
     "Other/Pin.SLDPRT",
     "Parts/Pin.SLDPRT",
   ]);
-  await file.selectOption("Parts/Pin.SLDPRT");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox", { name: "Files" })).toHaveCount(0);
+  await pickFile(page, "Parts/Pin.SLDPRT");
   await expect(
     page.locator('.graph-row[data-file-history-kind="change"]'),
   ).toHaveCount(7);
@@ -88,7 +91,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
   await page.getByRole("button", { name: "List", exact: true }).click();
   await expect(page.locator(".revision-list-row")).toHaveCount(3);
-  await file.selectOption("AlternativeOnly.txt");
+  await pickFile(page, "AlternativeOnly.txt");
   await page.getByRole("button", { name: "Main", exact: true }).click();
   await expect(
     page.getByText(/No recorded history for this file within Main/),
@@ -96,10 +99,10 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(
     page.getByRole("complementary", { name: "Revision details" }),
   ).toHaveCount(0);
-  await file.selectOption("");
+  await showAllFiles(page);
   await expect(page.locator(".revision-list-row")).toHaveCount(14);
   await page.getByRole("button", { name: "Graph", exact: true }).click();
-  await file.selectOption("Obsolete/Retired.SLDPRT");
+  await pickFile(page, "Obsolete/Retired.SLDPRT");
   await expect(
     page.locator('.graph-row[data-file-history-kind="change"]'),
   ).toHaveCount(2);
@@ -109,7 +112,7 @@ test("actual App: file history follows parents across branches, retains deleted 
       name: "Select Obsolete/Retired.SLDPRT for export",
     }),
   ).toBeDisabled();
-  await file.selectOption("Parts/Pin.SLDPRT");
+  await pickFile(page, "Parts/Pin.SLDPRT");
   await page.getByRole("button", { name: /Rev 013:/ }).click();
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
@@ -144,7 +147,7 @@ test("actual App: file history follows parents across branches, retains deleted 
     "data-branch-id",
     fixture.alternativeId,
   );
-  await file.selectOption("Parts/Pin.SLDPRT");
+  await pickFile(page, "Parts/Pin.SLDPRT");
   await page.getByRole("button", { name: /Rev 001:/ }).focus();
   await page.keyboard.press("ArrowUp");
   await expect(page.getByRole("button", { name: /Rev 002:/ })).toBeFocused();

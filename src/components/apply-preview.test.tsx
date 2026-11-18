@@ -1,4 +1,5 @@
 import "../../tests/dom";
+import { pickFile, filePicker } from "../../tests/file-picker";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
@@ -286,9 +287,7 @@ test("unavailable shared ancestry stays explicit while ordinary Compare keeps it
 test("closing preview preserves History inspection, file filter and export selection; project changes close it", () => {
   const state = fixture();
   const ui = render(<HistoryRecoveryView {...props(state)} />);
-  fireEvent.change(ui.getByRole("combobox", { name: "File history" }), {
-    target: { value: path },
-  });
+  pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
   fireEvent.click(
     ui.getByRole("checkbox", { name: `Select ${path} for export` }),
@@ -304,8 +303,7 @@ test("closing preview preserves History inspection, file filter and export selec
     true,
   );
   assert.equal(
-    (ui.getByRole("combobox", { name: "File history" }) as HTMLSelectElement)
-      .value,
+    filePicker(ui).value,
     path,
   );
   assert.equal(

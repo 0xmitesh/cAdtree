@@ -2700,25 +2700,91 @@ input::placeholder {
   max-width: 100%;
   font-size: 12px;
 }
-.history-file-picker > span {
+.history-file-picker > label {
   white-space: nowrap;
 }
-.history-file-picker select {
-  width: 180px;
+.file-picker-box {
+  position: relative;
+  min-width: 0;
+}
+.file-picker-input {
+  width: 220px;
   max-width: 100%;
   min-width: 0;
   min-height: 32px;
-  padding: 5px 8px;
+  padding: 5px 28px 5px 8px;
   border: 1px solid #b7cfc8;
   border-radius: 5px;
   background-color: #fff;
   color: #23443f;
-  cursor: pointer;
   font-size: 12px;
+  text-overflow: ellipsis;
 }
-.history-file-picker select:focus-visible {
+.file-picker-input:focus-visible,
+.file-picker-clear:focus-visible {
   outline: 2px solid #087f80;
   outline-offset: 2px;
+}
+.file-picker-clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+.file-picker-clear:hover {
+  background: #eef4f2;
+  color: #23443f;
+}
+.file-picker-popup {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max(100%, 320px);
+  max-width: min(520px, 90vw);
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid #b7cfc8;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgb(35 68 63 / 14%);
+}
+.file-picker-popup ul {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+}
+.file-picker-popup li {
+  padding: 5px 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: #23443f;
+  cursor: pointer;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-picker-popup li.active {
+  background: #eef4f2;
+}
+.file-picker-popup li[aria-selected="true"] {
+  color: var(--teal);
+  font-weight: 600;
+}
+.file-picker-empty {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .history-description > span:first-child {
   flex-basis: 100%;

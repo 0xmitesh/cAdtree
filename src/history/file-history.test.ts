@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { historyState, revision } from "../../tests/history-data";
 import { layoutRevisions } from "./layout";
-import { fileHistory, historicalFilePaths } from "./file-history";
+import { fileHistory, fileHistoryEntries, historicalFilePaths } from "./file-history";
 const path = "Parts/Pin.SLDPRT";
 function stateWithHashes(hashes: (string | null)[]) {
   const state = historyState(hashes.length);
@@ -175,4 +175,64 @@ test("an addition on a case connects to inherited absence before Main introduced
   assert.equal(result.records.get("alt1")?.status, "Added");
   state.revisions[2].manifest.files = [];
   assert.equal(view(state, "branch-main").graph.nodes.length, 0);
+});
+
+const idA = "component-aaaaaaaa-1111-4111-8111-111111111111";
+const idB = "component-bbbbbbbb-2222-4222-8222-222222222222";
+function trackedState(perRevision: { path: string; componentId: string }[][]) {
+  const state = historyState(perRevision.length);
+  state.revisions.forEach((r, i) => {
+    r.manifest.files = perRevision[i].map((f, n) => ({ path: f.path, sha256: String(n), size: 1, lastModified: 0 }));
+  });
+  state.components = {
+    status: "available",
+    revisions: Object.fromEntries(
+      state.revisions.map((r, i) => [r.manifest.revisionId, { files: perRevision[i], renames: [], payloadSha256: "f".repeat(64) }]),
+    ),
+  };
+  return state;
+}
+test("file entries: one per file, a component by its latest path, uncovered paths as paths", () => {
+  const state = trackedState([
+    [{ path: "old.SLDPRT", componentId: idA }],
+    [{ path: "mid.SLDPRT", componentId: idA }],
+    [{ path: "new.SLDPRT", componentId: idA }],
+  ]);
+  state.revisions[0].manifest.files.push({ path: "legacy.SLDPRT", sha256: "z", size: 1, lastModified: 0 });
+  assert.deepEqual(
+    fileHistoryEntries(state).map(({ value, label }) => [value, label]),
+    [
+      ["legacy.SLDPRT", "legacy.SLDPRT"],
+      [`component:${idA}`, "new.SLDPRT"],
+    ],
+  );
+});
+test("file entries: a component that returns to an earlier name is listed by its newest name", () => {
+  const state = trackedState([
+    [{ path: "a.SLDPRT", componentId: idA }],
+    [{ path: "b.SLDPRT", componentId: idA }],
+    [{ path: "a.SLDPRT", componentId: idA }],
+  ]);
+  assert.deepEqual(fileHistoryEntries(state).map((e) => e.label), ["a.SLDPRT"]);
+});
+test("file entries: a short ID is added only when two entries would share a label", () => {
+  // A component was deleted, and a different component later took over the same path.
+  const state = trackedState([
+    [{ path: "same.SLDPRT", componentId: idA }],
+    [{ path: "other.SLDPRT", componentId: idB }],
+    [{ path: "same.SLDPRT", componentId: idB }],
+  ]);
+  state.revisions[2].manifest.files = [{ path: "same.SLDPRT", sha256: "1", size: 1, lastModified: 0 }];
+  state.components!.revisions.r3.files = [{ path: "same.SLDPRT", componentId: idB }];
+  assert.deepEqual(
+    fileHistoryEntries(state).map((e) => e.label),
+    ["same.SLDPRT · aaaaaaaa", "same.SLDPRT · bbbbbbbb"],
+  );
+});
+test("file entries: without readable component evidence every path is listed", () => {
+  const state = trackedState([[{ path: "x.SLDPRT", componentId: idA }], [{ path: "y.SLDPRT", componentId: idA }]]);
+  state.components = { status: "unavailable", reason: "damaged", revisions: {} };
+  assert.deepEqual(fileHistoryEntries(state).map((e) => e.value), ["x.SLDPRT", "y.SLDPRT"]);
+  state.components = { status: "legacy", revisions: {} };
+  assert.deepEqual(fileHistoryEntries(state).map((e) => e.value), ["x.SLDPRT", "y.SLDPRT"]);
 });
