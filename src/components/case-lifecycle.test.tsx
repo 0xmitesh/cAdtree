@@ -10,7 +10,6 @@ import {
 } from "@testing-library/react";
 import { scenarioState } from "../../tests/history-data";
 import { DesignCases } from "./DesignCases";
-import { ActiveBranchPicker } from "./ActiveBranchPicker";
 import { layoutRevisions } from "../history/layout";
 afterEach(cleanup);
 test("current-case archive is disabled; Archive/Reopen require explicit confirmation and retain complete state", async () => {
@@ -98,12 +97,6 @@ test("unavailable lifecycle evidence stays explicit and does not become an activ
         onChange={async () => {}}
         onCancel={() => {}}
       />
-      <ActiveBranchPicker
-        state={state}
-        activeBranchId="branch-main"
-        busy={false}
-        onSelect={async () => {}}
-      />
     </>,
   );
   assert.match(ui.container.textContent!, /Lifecycle checksum mismatch/);
@@ -111,7 +104,6 @@ test("unavailable lifecycle evidence stays explicit and does not become an activ
     ui.queryByRole("button", { name: `Archive case ${branch.name}` }),
     null,
   );
-  assert.equal(ui.queryByRole("option", { name: branch.name }), null);
   const graph = layoutRevisions(state, "branch-main");
   assert.ok(
     graph.nodes.some((node) =>

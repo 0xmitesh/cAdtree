@@ -131,7 +131,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       await expect(projectDialog).toHaveCount(0);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await expect(page.getByRole("heading", { name: "0 changed files" })).toBeVisible();
-      await expect(page.getByRole("combobox", { name: "Working case" })).toHaveValue("branch-main");
+      await expect(page.getByRole("region", { name: "Project context" })).toHaveAttribute("data-branch-id", "branch-main");
     }
     await page
       .getByRole("navigation")

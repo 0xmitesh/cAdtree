@@ -5,7 +5,7 @@ import { indexedDB } from "fake-indexeddb";
 import { act, render, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
-import { appBusy, currentBranchId, openHomeWorkspace } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import { copyVerifiedTree } from "../engine/copy-service";
 import { createProject } from "../engine/workspace-service";
@@ -74,7 +74,7 @@ async function openOther(ui: ReturnType<typeof render>) {
 test("Capture draft and last-used case survive renaming the project folder", async () => {
   const { sample, ui, nav } = await setup();
   await sample.caseFolder.writeFileText(["Bracket.SLDPRT"], "Pending experiment");
-  fireEvent.change(ui.getByRole("combobox", { name: "Working case" }), { target: { value: sample.caseId } });
+  await selectBranch(ui, sample.caseId);
   await idle(ui);
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
   fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));

@@ -42,7 +42,7 @@ async function main(){
   const settingsClip = async name => {
     await page.setViewportSize({ width: 1024, height: 1200 });
     const heading = page.getByRole('region', { name: 'Project context', exact: true });
-    await page.locator('.settings-troubleshooting > summary').click();
+    if (!(await page.locator('.settings-troubleshooting').evaluate(el => el.open))) await page.locator('.settings-troubleshooting > summary').click();
     const location = page.locator('.settings-troubleshooting .settings-row').first();
     await heading.scrollIntoViewIfNeeded();
     const top = await heading.boundingBox(), bottom = await location.boundingBox();
@@ -101,9 +101,11 @@ async function main(){
     const copy = page.getByRole('button', { name: /Copy folder path.*Bracket\.SLDPRT/ });
     await focus(copy); await copy.hover(); await capture(page.locator('.changes-files:visible'), 'step-4-copy-folder-path');
     await nav.getByRole('button', { name: 'Settings', exact: true }).click();
-    const selector = page.getByRole('combobox', { name: 'Working case', exact: true });
-    await selector.selectOption('branch-main'); await idle(); await focus(selector); await settingsClip('step-5-main-active');
-    await selector.selectOption(afterCreate.branchId); await idle(); await focus(selector); await settingsClip('step-5-case-active');
+    // The Explorer tree is the only case switcher; the header shows the current case as text.
+    const selector = { selectOption: id => page.locator(`[role="treeitem"][data-branch-id="${id}"]:visible`).click() };
+    const caseLabel = page.locator('.project-context-case');
+    await selector.selectOption('branch-main'); await idle(); await focus(caseLabel); await settingsClip('step-5-main-active');
+    await selector.selectOption(afterCreate.branchId); await idle(); await focus(caseLabel); await settingsClip('step-5-case-active');
     await nav.getByRole('button', { name: 'History', exact: true }).click();
     const header = page.getByRole('region', { name: 'Project context', exact: true }), origin = page.locator('.branch-origin');
     await header.scrollIntoViewIfNeeded();

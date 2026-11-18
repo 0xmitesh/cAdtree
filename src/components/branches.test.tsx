@@ -118,10 +118,12 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     await openHomeWorkspace(ui, ctx.home);
     fireEvent.click(ui.getByRole("button", { name: "Inspect project" }));
     await waitFor(() => assert.equal(appBusy(ui), false));
-    assert.ok(
-      within(
-        ui.getByRole("region", {name: "Project context"}),
-      ).getByRole("option", { name: "Case A", hidden: true }),
+    await waitFor(() =>
+      assert.ok(
+        ui.container.querySelector(
+          `.desktop-workspace-tree [role="treeitem"][data-branch-id="${branch.branchId}"]`,
+        ),
+      ),
     );
     assert.ok(ui.getByText("History needs attention."));
     await selectBranch(ui, branch.branchId);
@@ -283,9 +285,10 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   await waitFor(() =>
     assert.ok(ctx.ui.getByText("Metadata and file contents verified")),
   );
+  // The Explorer reopens the project from disk, so the session's verification mark is not kept.
   await selectBranch(ctx.ui, "branch-main");
   await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.ok(ctx.ui.getByText("Metadata and file contents verified"));
+  assert.equal(currentBranchId(ctx.ui), "branch-main");
 });
 
 test("App rejects branch switching during an asynchronous scan", async () => {
@@ -303,43 +306,21 @@ test("App rejects branch switching during an asynchronous scan", async () => {
       await gate;
     },
   });
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Working case" }), {
-    target: { value: "branch-main" },
-  });
+  const row = (id: string) =>
+    ctx.ui.container.querySelector<HTMLElement>(`.desktop-workspace-tree [data-branch-id="${id}"]`)!;
+  assert.equal(currentBranchId(ctx.ui), branch.branchId);
+  fireEvent.click(row("branch-main"));
   await waitFor(() => assert.equal(scanning, true));
-  assert.equal(
-    (
-      ctx.ui.getByRole("combobox", {
-        name: "Working case",
-      }) as HTMLSelectElement
-    ).disabled,
-    true,
-  );
-  // Programmatic event also tests the synchronous operation guard.
-  fireEvent.change(ctx.ui.getByRole("combobox", { name: "Working case" }), {
-    target: { value: branch.branchId },
-  });
+  assert.equal(row("branch-main").getAttribute("aria-disabled"), "true");
+  assert.equal(row(branch.branchId).getAttribute("aria-disabled"), "true");
+  // A click on the other case during the operation is ignored.
+  fireEvent.click(row(branch.branchId));
   await act(async () => {
     release();
   });
-  await waitFor(() =>
-    assert.equal(
-      (
-        ctx.ui.getByRole("combobox", {
-          name: "Working case",
-        }) as HTMLSelectElement
-      ).disabled,
-      false,
-    ),
-  );
-  assert.equal(
-    (
-      ctx.ui.getByRole("combobox", {
-        name: "Working case",
-      }) as HTMLSelectElement
-    ).value,
-    "branch-main",
-  );
+  await waitFor(() => assert.equal(row("branch-main").getAttribute("aria-disabled"), null));
+  await waitFor(() => assert.equal(appBusy(ctx.ui), false));
+  assert.equal(currentBranchId(ctx.ui), "branch-main");
   ctx.main.setHooks({ onBeforeRead: undefined });
 });
 

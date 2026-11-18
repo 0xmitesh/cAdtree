@@ -1161,7 +1161,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setStatusBanner,
   });
   const {
-    handleSelectBranch,
     handleCaseLifecycle,
     handleReattachWorkingFolder,
     handleCreateBranch,
@@ -1542,7 +1541,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   navigate={navigate}
                   workingFileResolver={workingFileResolver}
                   handleCancelOperation={handleCancelOperation}
-                  handleSelectBranch={handleSelectBranch}
                   handleCaseLifecycle={handleCaseLifecycle}
                   handleReattachWorkingFolder={handleReattachWorkingFolder}
                   handleCreateBranch={handleCreateBranch}

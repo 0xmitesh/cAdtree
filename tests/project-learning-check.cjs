@@ -38,7 +38,9 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:'Open project',exact:true}).click();
       const nav=page.getByRole('navigation',{name:'Primary navigation'});
       await nav.getByRole('button',{name:'Settings',exact:true}).click();
-      await page.getByRole('combobox',{name:'Working case',exact:true}).selectOption(await page.evaluate(()=>window.sample.caseId));
+      // The Explorer (sidebar tree, or Browse folders on narrow screens) is the only case switcher.
+      const pickCase=async id=>{const row=page.locator(`[role="treeitem"][data-branch-id="${id}"]:visible`);if(!(await row.count()))await nav.getByRole('button',{name:'Browse folders',exact:true}).click();await row.click();};
+      await pickCase(await page.evaluate(()=>window.sample.caseId));
       await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
       await page.getByRole('button',{name:'Scan for changes',exact:true}).click();
@@ -50,13 +52,12 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       const before=await page.evaluate(()=>window.sample.signature());
       const selected=await page.locator('.revision-detail').innerText();
       // R5: one stable working destination across project views, distinct from inspection.
-      const working=page.getByRole('combobox',{name:'Working case',exact:true});
-      const workingNode=await working.elementHandle();
+      const working=page.locator('.project-context-case');
       for(const view of ['Changes','References','Settings','History']) {
         await nav.getByRole('button',{name:view,exact:true}).click();
-        assert.equal(await working.evaluate((el,node)=>el===node,workingNode),true);
-        assert.equal(await page.locator('select[aria-label="Working case"]').count(),1);
-        assert.equal(await working.inputValue(),await page.evaluate(()=>window.sample.caseId));
+        assert.equal(await page.getByRole('combobox',{name:'Working case',exact:true}).count(),0);
+        assert.equal(await page.locator('.project-context-header').getAttribute('data-branch-id'),await page.evaluate(()=>window.sample.caseId));
+        assert.equal(await working.count(),view==='References'?0:1);
         assert.equal(await page.getByRole('region',{name:'Project context',exact:true}).isVisible(),true);
         if(view==='References') {
           assert.equal(await page.getByRole('textbox',{name:'Search references',exact:true}).count(),0);
@@ -140,7 +141,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:'Open project',exact:true}).click();
       await page.evaluate(()=>window.sample.cleanCase());
       await nav.getByRole('button',{name:'Settings',exact:true}).click();
-      await page.getByRole('combobox',{name:'Working case',exact:true}).selectOption('branch-main');
+      await pickCase('branch-main');
       await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
       await nav.getByRole('button',{name:'History',exact:true}).click();
       await page.getByRole('heading',{name:'History.',exact:true}).waitFor();

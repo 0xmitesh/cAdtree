@@ -52,7 +52,6 @@ export type ProjectViewsProps = {
   navigate: (tab: ActiveTab) => void;
   workingFileResolver: (branchId: string, path: string) => () => ReturnType<typeof resolveWorkingFilePath>;
   handleCancelOperation: () => void;
-  handleSelectBranch: BranchActions["handleSelectBranch"];
   handleCaseLifecycle: BranchActions["handleCaseLifecycle"];
   handleReattachWorkingFolder: BranchActions["handleReattachWorkingFolder"];
   handleCreateBranch: BranchActions["handleCreateBranch"];
@@ -104,7 +103,6 @@ export function ProjectViews({
   navigate,
   workingFileResolver,
   handleCancelOperation,
-  handleSelectBranch,
   handleCaseLifecycle,
   handleReattachWorkingFolder,
   handleCreateBranch,
@@ -128,8 +126,6 @@ export function ProjectViews({
       <ProjectContextHeader
         state={vaultState}
         activeBranchId={activeBranchId}
-        busy={busy}
-        onSelect={handleSelectBranch}
         showWorkingCase={activeTab !== 'references'}
       />
       <ApplicationStatus

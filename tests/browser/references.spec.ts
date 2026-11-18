@@ -51,7 +51,7 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
   const workingBranch = await page.locator('.project-context-header').getAttribute('data-branch-id');
   await page.getByRole('navigation').getByRole('button', { name: 'References', exact: true }).click();
   const view = page.locator('.references-page');
-  await expect(page.getByRole('combobox', { name: 'Working case', exact: true })).toHaveCount(0);
+  await expect(page.locator('.project-context-case')).toHaveCount(0);
   await expect(view.getByRole('combobox')).toHaveCount(2);
   await expect(view.locator('.reference-card')).toHaveCount(4);
   for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future revisions']) await expect(view.getByRole('button', { name, exact: true })).toHaveCount(0);

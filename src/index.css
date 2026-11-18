@@ -261,21 +261,6 @@ h3 {
   font-size: 12px;
   flex-shrink: 0;
 }
-.branch-picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.branch-picker select {
-  font: inherit;
-  color: #253338;
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: 5px;
-  padding: 7px 9px;
-  max-width: 210px;
-}
 .workspace-folder-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2080,22 +2065,6 @@ input::placeholder {
   }
 }
 @media (max-width: 760px) {
-  .workspace-header:has(.branch-picker) {
-    min-height: 60px;
-    height: auto;
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-  .current-branch:has(.branch-picker) {
-    flex-shrink: 1;
-    max-width: 100%;
-  }
-  .branch-picker {
-    flex-wrap: wrap;
-  }
-  .branch-picker select {
-    max-width: 170px;
-  }
   .workspace-folder-bar {
     padding: 12px 18px;
   }
@@ -2599,12 +2568,14 @@ input::placeholder {
   color: var(--muted);
   font-size: 13px;
 }
-.project-context-header .project-branch-picker {
+.project-context-case {
   min-width: 0;
-  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 13px;
 }
-.project-context-header select {
-  min-height: 40px;
+.project-context-case strong {
+  color: #253338;
 }
 .changes-page .project-heading-controls {
   align-items: flex-end;
@@ -2620,18 +2591,6 @@ input::placeholder {
 }
 .page-heading .eyebrow {
   overflow-wrap: anywhere;
-}
-.project-branch-picker {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.project-branch-picker select {
-  width: 210px;
-  max-width: 100%;
-  font-size: 13px;
 }
 .workspace-tree {
   font-size: 13px;
@@ -2667,9 +2626,6 @@ input::placeholder {
   .project-heading-controls {
     justify-content: flex-start;
     width: 100%;
-  }
-  .project-branch-picker {
-    flex: 1 1 150px;
   }
   .compact-local-indicator {
     right: 18px;

@@ -10,7 +10,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
       summary: "Main is your primary design direction. A Design Case lets you explore an alternative without changing Main.",
       points: [
         "Create a case to test a lighter bracket or a different mounting arrangement.",
-        "This example starts Lightweight bracket from the reviewed Main baseline, Rev 003. Working case identifies the direction you are editing.",
+        "This example starts Lightweight bracket from the reviewed Main baseline, Rev 003. The current case, shown above each project page, identifies the direction you are editing.",
       ],
       visuals: [{
         src: "/tutorials/explore-design-alternatives/step-1-design-directions.svg",
@@ -90,10 +90,10 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
     {
       id: "switch-directions",
       title: "Switch between design directions",
-      summary: "Use Working case above History, Changes, References or Settings to choose Main or Lightweight bracket. Check the selected name before working.",
+      summary: "Choose Main or Lightweight bracket in the Explorer. The current case is named above History, Changes and Settings; check it before working.",
       points: [
-        "cAdtree scans and saves from the selected case's working folder. The shared selector stays visible across project views; inspecting an old revision does not change the working case.",
-        "Switch back to Main with the same selector. Each direction keeps its own files; switching does not replace the other folder's contents.",
+        "cAdtree scans and saves from the selected case's working folder. The current case stays named above the project views; inspecting an old revision does not change the working case.",
+        "Switch back to Main in the Explorer. Each direction keeps its own files; switching does not replace the other folder's contents.",
       ],
       note: "Save and close CAD documents before moving to the other working location, then open its files manually. cAdtree does not launch CAD or change which documents CAD has open.",
       visuals: [
@@ -106,7 +106,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
         {
           src: "/tutorials/explore-design-alternatives/step-5-case-active.png",
           alt: "Real shared Working case selector has Lightweight bracket selected; Settings shows its separate Working folder.",
-          caption: "2. Choose Lightweight bracket in Working case to work on the alternative.",
+          caption: "2. Choose Lightweight bracket in the Explorer to work on the alternative.",
           kind: "cadtree",
         },
         {

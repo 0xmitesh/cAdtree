@@ -26,7 +26,7 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("References uses its branch filter while the other project views retain Working case without changing inspection, drafts or files", async () => {
+test("References uses its branch filter while the other project views show the current case as text, without changing inspection, drafts or files", async () => {
   const { sample, ui, nav } = await openSample();
   const header = ui.getByRole("region", { name: "Project context" });
   const before = inventorySignature(await readVerifiedInventory(sample.home));
@@ -42,13 +42,11 @@ test("References uses its branch filter while the other project views retain Wor
     fireEvent.click(nav.getByRole("button", { name: view }));
     assert.equal(ui.getByRole("region", { name: "Project context" }), header);
     if (view === "References") {
-      assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
-      assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 0);
+      assert.equal(header.querySelector(".project-context-case"), null);
       fireEvent.change(ui.getByRole("combobox", { name: "Branch" }), { target: { value: sample.caseId } });
       assert.equal(currentBranchId(ui), "branch-main");
     } else {
-      assert.equal(ui.container.querySelectorAll('select[aria-label="Working case"]').length, 1);
-      assert.equal((ui.getByRole("combobox", { name: "Working case" }) as HTMLSelectElement).value, "branch-main");
+      assert.equal(header.querySelector(".project-context-case")!.textContent, "Case: Main");
     }
     assert.equal(ui.container.querySelector('.current-branch-indicator'), null);
   }
@@ -58,16 +56,17 @@ test("References uses its branch filter while the other project views retain Wor
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)), before);
 });
 
-test("Working case switches from History, Changes and Settings through existing guards, and is disabled during a scan", async () => {
+test("The Explorer switches the case from History, Changes and Settings, the header shows it as text, and the Explorer is locked during a scan", async () => {
   const { sample, ui, nav } = await openSample();
-  const selector = ui.getByRole("combobox", { name: "Working case" }) as HTMLSelectElement;
+  const caseRows = () => Array.from(ui.container.querySelectorAll<HTMLElement>('.desktop-workspace-tree [data-branch-id]'));
+  assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
   const before = inventorySignature(await readVerifiedInventory(sample.home));
   for (const view of ["History", "Changes", "Settings"]) {
     fireEvent.click(nav.getByRole("button", { name: view }));
     for (const id of [sample.caseId, "branch-main"]) {
       await selectBranch(ui, id);
-      assert.equal(selector.value, id);
       assert.equal(currentBranchId(ui), id);
+      assert.match(ui.getByRole("region", { name: "Project context" }).querySelector(".project-context-case")!.textContent!, id === "branch-main" ? /^Case: Main$/ : /^Case: Lightweight bracket$/);
       assert.ok(ui.getByRole("heading", { name: `${view}.` }));
     }
   }
@@ -78,9 +77,11 @@ test("Working case switches from History, Changes and Settings through existing 
   sample.home.setHooks({ onBeforeListEntries: async () => { await gate; } });
   fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
   await waitFor(() => assert.equal(appBusy(ui), true));
-  assert.equal(selector.disabled, true);
+  assert.ok(caseRows().length >= 2);
+  for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), "true");
+  fireEvent.click(caseRows().find(row => row.dataset.branchId === sample.caseId)!);
   await act(async () => release());
   await waitFor(() => assert.equal(appBusy(ui), false));
-  assert.equal(selector.disabled, false);
+  for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), null);
   assert.equal(currentBranchId(ui), "branch-main");
 });

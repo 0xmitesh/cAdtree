@@ -184,9 +184,11 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
   );
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
-  assert.equal(
-    ui.container.querySelectorAll(".project-context-header option").length,
-    4,
+  await waitFor(() =>
+    assert.equal(
+      ui.container.querySelectorAll('.desktop-workspace-tree [role="treeitem"][data-branch-id]').length,
+      4,
+    ),
   );
   assert.equal(picker.calls(), reopenCount);
   const caseA = project.vaultState.branches.find(
