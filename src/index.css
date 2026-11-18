@@ -1486,10 +1486,6 @@ summary {
 .file-path-actions {
   flex-wrap: nowrap;
 }
-.file-path-actions.historical {
-  margin-top: 8px;
-  align-items: flex-start;
-}
 .file-path-menu {
   position: relative;
 }
@@ -1518,10 +1514,6 @@ summary {
   border: 1px solid var(--border);
   border-radius: 6px;
   text-align: left;
-}
-.file-path-actions.historical .file-path-menu-items {
-  right: auto;
-  left: 0;
 }
 .file-path-menu-items > button {
   padding: 8px 10px;

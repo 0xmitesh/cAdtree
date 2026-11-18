@@ -53,6 +53,8 @@ for (const width of [1366, 390])
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     const summary = page.getByRole("textbox", { name: /Revision summary/ });
     await summary.fill("Main draft stays intact during case review");
+    // The scan-complete message floats over the form until dismissed.
+    await page.getByRole("button", { name: "Dismiss message" }).click();
     await page
       .getByRole("button", { name: /Add a description/ })
       .click();

@@ -370,12 +370,10 @@ let openFileMenu: HTMLDetailsElement | null = null;
 export function FilePathActions({
   filePath,
   resolve,
-  historicalBranch,
   extraItems,
 }: {
   filePath: string;
   resolve?: ResolveFilePath;
-  historicalBranch?: string;
   extraItems?: FileMenuItem[];
 }) {
   const context = useContext(Shortcuts);
@@ -405,8 +403,7 @@ export function FilePathActions({
   const canCopy = Boolean(context && resolve);
   const extras = extraItems ?? [];
   if (!canCopy && !extras.length) return null;
-  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : ""}${filePath}`;
-  const suffix = historicalBranch ? ` · Current file on ${historicalBranch}` : "";
+  const description = filePath;
   const choose = (
     event: React.MouseEvent<HTMLButtonElement>,
     action: () => void,
@@ -418,7 +415,7 @@ export function FilePathActions({
   };
   return (
     <div
-      className={`file-path-actions${historicalBranch ? " historical" : ""}`}
+      className="file-path-actions"
     >
       <details
         className="file-path-menu"
@@ -451,7 +448,7 @@ export function FilePathActions({
                   )
                 }
               >
-                Copy file path{suffix}
+                Copy file path
               </button>
               <button
                 type="button"
@@ -463,7 +460,7 @@ export function FilePathActions({
                   )
                 }
               >
-                Copy folder path{suffix}
+                Copy folder path
               </button>
             </>
           ) : null}

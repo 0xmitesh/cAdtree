@@ -99,6 +99,8 @@ for (const width of [1366, 390])
       await page
         .getByRole("textbox", { name: /Revision summary/ })
         .fill("Keep this case-scoped engineering draft");
+      // The scan-complete message floats over the form until dismissed.
+      await page.getByRole("button", { name: "Dismiss message" }).click();
       await page
         .getByRole("button", { name: /Add a description/ })
         .click();

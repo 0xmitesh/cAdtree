@@ -73,8 +73,10 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   }, { branchId, original, renamed });
   await nav('Changes');
   await page.getByRole('button', { name: 'Scan for changes', exact: true }).click();
-  await page.getByRole('combobox', { name: `New path for ${original}` }).selectOption(renamed);
-  await page.getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  await page.getByLabel(new RegExp(`^File actions — ${original.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`)).click();
+  await page.getByRole('button', { name: /^Match to a new file/ }).click();
+  await page.getByRole('dialog', { name: 'Match to a new file' }).getByRole('combobox').selectOption(renamed);
+  await page.getByRole('dialog', { name: 'Match to a new file' }).getByRole('button', { name: 'Confirm rename', exact: true }).click();
   await save('Confirmed rename');
   const showUnchanged = page.getByRole('button', { name: /Show 1 unchanged files/ });
   if (await showUnchanged.isVisible()) await showUnchanged.click();
