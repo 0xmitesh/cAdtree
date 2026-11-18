@@ -3,7 +3,8 @@ import { HardDrive, ShieldCheck } from "lucide-react";
 import type { VaultState } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { Modal, Notice } from "./ui";
-import { WorkspaceLocationSetting } from "./FilePathShortcuts";
+import type { ResolveFilePath } from "../utils/folder-path";
+import { CopyFolderPathButton, WorkspaceLocationSetting } from "./FilePathShortcuts";
 
 export interface DiagnosticsViewProps {
   vaultState: VaultState;
@@ -16,6 +17,8 @@ export interface DiagnosticsViewProps {
   managed?: boolean;
   /** Names of cases whose working folder is not connected. */
   missingConnections?: string[];
+  /** Resolves the active case's working folder for the full-address copy. */
+  resolveFolderPath?: ResolveFilePath;
 }
 export function DiagnosticsView({
   vaultState: state,
@@ -27,9 +30,9 @@ export function DiagnosticsView({
   onReattachWorkingFolder,
   managed,
   missingConnections = [],
+  resolveFolderPath,
 }: DiagnosticsViewProps) {
   const [troubleshootingOpen, setTroubleshootingOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const troubleshootingSummary = useRef<HTMLElement>(null);
   const [error, setError] = useState("");
   const [clear, setClear] = useState(false);
@@ -52,14 +55,6 @@ export function DiagnosticsView({
     Object.keys(state.damagedBranchHeads).length > 0 ||
     Object.values(state.competingHeads).some((heads) => heads.length > 0) ||
     Boolean(state.references?.reason);
-  const copyFolderPath = async () => {
-    try {
-      await navigator.clipboard.writeText(workingFolderName ?? "");
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
   const workingFolderRow = (reconnect: boolean) => (
     <div className="settings-row">
       <div>
@@ -69,13 +64,10 @@ export function DiagnosticsView({
           Open this branch’s folder in your CAD application before editing or
           saving.
         </p>
-        {copied ? <p className="muted" role="status">Path copied</p> : null}
       </div>
       <div className="settings-row-actions">
-        {workingFolderName ? (
-          <button className="button secondary" onClick={copyFolderPath}>
-            Copy path
-          </button>
+        {workingFolderName && resolveFolderPath ? (
+          <CopyFolderPathButton resolve={resolveFolderPath} />
         ) : null}
         {reconnect ? reconnectButton : null}
       </div>

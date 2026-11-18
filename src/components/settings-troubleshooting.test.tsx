@@ -49,10 +49,8 @@ test("Settings with everything connected shows one status line and a closed Trou
   assert.ok(inside.getByText(/Incomplete or interrupted attempts/));
   assert.ok(inside.getByText("Branch records"));
   assert.equal(ui.container.querySelectorAll("details.settings-troubleshooting").length, 1);
-  // The working folder path and its Copy path button stay visible outside Troubleshooting.
-  const copyButton = ui.getByRole("button", { name: "Copy path" });
-  assert.equal(troubleshooting(ui).contains(copyButton), false);
-  assert.ok(ui.getByText("working/main"));
+  // The working folder row stays visible outside Troubleshooting (its Copy path button needs the path-shortcuts provider; see path-shortcuts.test).
+  assert.equal(troubleshooting(ui).contains(ui.getByText("working/main")), false);
   assert.equal(ui.container.querySelectorAll(".settings-page > .panel > details").length, 1);
 });
 
