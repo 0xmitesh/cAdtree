@@ -40,7 +40,7 @@ test("Troubleshooting's reset explains its cross-account scope, cancels without 
   assert.equal(await foreignPath(), "D:\\Other");
   const before = await signature(sample.home);
   fireEvent.click(nav.getByRole("button", { name: "Settings" }));
-  fireEvent.click(ui.getByText("Troubleshooting", { selector: "summary" }));
+  fireEvent.click(within(ui.container.querySelector<HTMLElement>(".settings-page")!).getByText("Troubleshooting", { selector: "summary" }));
   fireEvent.click(ui.getByText("Reset folder connections"));
   const reset = ui.getByRole("button", { name: "Reset all remembered folder connections in this browser" });
   assert.equal(reset.closest("details")!.querySelector("summary")!.textContent, "Reset folder connections");

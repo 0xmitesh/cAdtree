@@ -175,7 +175,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(
     page.getByRole("button", { name: "Reconnect workspace", exact: true }),
   ).toBeHidden();
-  await page.getByText("Troubleshooting", { exact: true }).click();
+  await page.locator(".settings-troubleshooting > summary").click();
   await expect(
     page.getByRole("button", { name: "Reconnect workspace", exact: true }),
   ).toBeVisible();
