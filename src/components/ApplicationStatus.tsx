@@ -211,6 +211,24 @@ export function ApplicationStatus({
     </>
   );
 }
+function capturedOperations(state: VaultState, revisionId: string) {
+  return (state.applicationOperations ?? []).filter(
+    (op) =>
+      op.status === "captured" &&
+      op.capturedRevisionId === revisionId &&
+      op.record,
+  );
+}
+function sourceNumber(state: VaultState, sourceRevisionId: string) {
+  const source = state.revisions.find(
+    (r) => r.manifest.revisionId === sourceRevisionId,
+  );
+  return source
+    ? formatRevisionNumber(source.manifest.displayNumber)
+    : sourceRevisionId;
+}
+const REASON_INLINE_MAX = 60;
+/** One plain line saying where a revision's files were copied from. */
 export function AppliedFrom({
   state,
   revisionId,
@@ -218,32 +236,57 @@ export function AppliedFrom({
   state: VaultState;
   revisionId: string;
 }) {
-  const operations = (state.applicationOperations ?? []).filter(
-    (op) => op.status === "captured" && op.capturedRevisionId === revisionId,
-  );
   return (
     <>
+      {capturedOperations(state, revisionId).map((op) => {
+        const record = op.record!;
+        const number = sourceNumber(state, record.plan.sourceRevisionId);
+        return (
+          <p className="applied-from" key={op.operationId}>
+            {record.plan.mode === "revert"
+              ? `Brought back ${number}`
+              : `Copied from ${number} on ${caseLabel(state, record.sourceBranchId)}`}
+            {record.plan.reason.length <= REASON_INLINE_MAX ? (
+              <> — {record.plan.reason}</>
+            ) : (
+              <span className="applied-from-reason muted small">
+                {record.plan.reason}
+              </span>
+            )}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+/** The reason, file decisions, bytes and record identities behind that line.
+ * Shown inside the revision's Troubleshooting disclosure. */
+export function AppliedFromDetails({
+  state,
+  revisionId,
+}: {
+  state: VaultState;
+  revisionId: string;
+}) {
+  const operations = capturedOperations(state, revisionId);
+  if (!operations.length) return null;
+  return (
+    <>
+      <h3>Copied files</h3>
       {operations.map((op) => {
         const record = op.record!;
-        const source = state.revisions.find(
-          (r) => r.manifest.revisionId === record.plan.sourceRevisionId,
-        );
-        const sourceName = caseLabel(state, record.sourceBranchId);
         const reverted = record.plan.mode === "revert";
         const capture = op.events.find(
           (e) => e.kind === "capture" && e.revisionId === revisionId,
         )!;
         return (
-          <details className="disclosure applied-from" key={op.operationId}>
-            <summary>
-              {reverted ? "Brought back from" : "Applied from"}{" "}
-              {source
-                ? formatRevisionNumber(source.manifest.displayNumber)
-                : record.plan.sourceRevisionId}{" "}
-              {reverted ? null : <>· {sourceName}</>}
-            </summary>
+          <div className="applied-from-details" key={op.operationId}>
             <p>
-              <strong>Engineering reason:</strong> {record.plan.reason}
+              <strong>
+                {reverted ? "Brought back" : "Copied from"}{" "}
+                {sourceNumber(state, record.plan.sourceRevisionId)}
+              </strong>
+              {reverted ? null : <> · {caseLabel(state, record.sourceBranchId)}</>}
             </p>
             <p className="small">
               {reverted
@@ -304,7 +347,7 @@ export function AppliedFrom({
                 </p>
               )}
             </details>
-          </details>
+          </div>
         );
       })}
     </>

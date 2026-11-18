@@ -90,3 +90,80 @@ test("disconnected records use distinct lanes rather than appearing on an unrela
     ],
   );
 });
+function withCopy(
+  state: ReturnType<typeof scenarioState>,
+  child: string,
+  source: string,
+  mode: "merge" | "revert" = "merge",
+  status = "captured",
+  sourceBranchId = "prototype",
+) {
+  state.applicationOperations = [
+    ...(state.applicationOperations ?? []),
+    {
+      operationId: `apply-${child}-${source}`,
+      destinationBranchId: "branch-main",
+      relativePath: "applications/branch-main/x",
+      status,
+      capturedRevisionId: child,
+      events: [],
+      record: { sourceBranchId, plan: { sourceRevisionId: source, mode } },
+    } as any,
+  ];
+  return state;
+}
+test("a captured copy adds a secondary link without touching parents, lanes or rows", () => {
+  const plain = layoutRevisions(scenarioState("branches"), "branch-main");
+  const graph = layoutRevisions(
+    withCopy(scenarioState("branches"), "r6", "p2"),
+    "branch-main",
+  );
+  assert.deepEqual(plain.copies, []);
+  assert.deepEqual(graph.copies, [
+    { child: "r6", source: "p2", mode: "merge", sourceBranchName: "Prototype" },
+  ]);
+  assert.deepEqual(graph.edges, plain.edges);
+  assert.deepEqual(
+    graph.nodes.map((n) => [n.id, n.lane, n.row]),
+    plain.nodes.map((n) => [n.id, n.lane, n.row]),
+  );
+  assert.equal(graph.lanes, plain.lanes);
+  // Copies are not ancestry.
+  assert.equal(ancestryOf(graph, "r6").has("p2"), false);
+});
+test("a bring back links to the earlier revision of the same branch", () => {
+  const graph = layoutRevisions(
+    withCopy(scenarioState("branches"), "r6", "r3", "revert", "captured", "branch-main"),
+    "branch-main",
+  );
+  assert.deepEqual(
+    graph.copies.map((c) => [c.child, c.source, c.mode]),
+    [["r6", "r3", "revert"]],
+  );
+});
+test("no recorded evidence, no link: uncaptured, missing, damaged or self sources are ignored", () => {
+  for (const state of [
+    withCopy(scenarioState("branches"), "r6", "p2", "merge", "applied"),
+    withCopy(scenarioState("branches"), "r6", "gone"),
+    withCopy(scenarioState("branches"), "gone", "p2"),
+    withCopy(scenarioState("branches"), "r6", "r6"),
+  ]) {
+    assert.deepEqual(layoutRevisions(state, "branch-main").copies, []);
+  }
+  const damaged = withCopy(scenarioState("branches"), "r6", "p2");
+  damaged.revisions.find((r) => r.manifest.revisionId === "p2")!.integrityStatus =
+    "corrupted";
+  assert.deepEqual(layoutRevisions(damaged, "branch-main").copies, []);
+  const unreadable = scenarioState("branches");
+  unreadable.applicationOperations = [
+    {
+      operationId: "x",
+      destinationBranchId: "*",
+      relativePath: "applications",
+      status: "unavailable",
+      events: [],
+      error: "unreadable",
+    } as any,
+  ];
+  assert.deepEqual(layoutRevisions(unreadable, "branch-main").copies, []);
+});

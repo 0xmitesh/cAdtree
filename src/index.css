@@ -885,6 +885,19 @@ progress {
   inset: 0;
   pointer-events: none;
 }
+.graph-copy-line {
+  stroke: #7d8c82;
+  stroke-width: 1.75;
+  opacity: 0.85;
+}
+.graph-copy-arrow {
+  fill: none;
+  stroke: #7d8c82;
+  stroke-width: 1.75;
+}
+.copy-note {
+  font-size: 12px;
+}
 .graph-row {
   position: absolute;
   left: 12px;
@@ -3029,6 +3042,9 @@ input::placeholder {
 .applied-from {
   margin: 0 22px 12px;
   overflow-wrap: anywhere;
+}
+.applied-from-reason {
+  display: block;
 }
 .modal:has(.apply-preview) {
   width: min(960px, calc(100vw - 32px));

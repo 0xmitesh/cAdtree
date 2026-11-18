@@ -20,6 +20,12 @@ export interface GraphNode {
   latest: boolean;
   warnings: string[];
 }
+export interface GraphCopy {
+  child: string;
+  source: string;
+  mode: "merge" | "revert";
+  sourceBranchName: string;
+}
 export interface RevisionGraph {
   nodes: GraphNode[];
   branches: {
@@ -31,6 +37,10 @@ export interface RevisionGraph {
     available?: boolean;
   }[];
   edges: { child: string; parent: string; color: string }[];
+  /** Secondary provenance links, never topology: a revision saved after files
+   * were copied from `source` (merge mode) or brought back from an earlier
+   * revision of its own branch (revert mode). Recorded evidence only. */
+  copies: GraphCopy[];
   warnings: string[];
   lanes: number;
   latestId: string | null;
@@ -187,6 +197,30 @@ export function layoutRevisions(
     };
   });
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  // Applied provenance: only a captured operation with a readable, unambiguous
+  // revision at both ends yields a link. It never changes lanes, rows or parents.
+  const usable = (id: string | undefined): id is string =>
+    Boolean(
+      id &&
+        records.has(id) &&
+        !duplicate.has(id) &&
+        records.get(id)!.integrityStatus !== "corrupted",
+    );
+  const copies: GraphCopy[] = [];
+  for (const op of state.applicationOperations ?? []) {
+    if (op.status !== "captured" || !op.record) continue;
+    const child = op.capturedRevisionId;
+    const source = op.record.plan?.sourceRevisionId;
+    const mode = op.record.plan?.mode === "revert" ? "revert" : "merge";
+    if (!usable(child) || !usable(source) || child === source) continue;
+    if (copies.some((c) => c.child === child && c.source === source)) continue;
+    copies.push({
+      child,
+      source,
+      mode,
+      sourceBranchName: caseLabel(state, op.record.sourceBranchId),
+    });
+  }
   return {
     nodes,
     branches: branches.map((branch, index) => ({
@@ -208,6 +242,7 @@ export function layoutRevisions(
       parent: pid,
       color: nodeById.get(child)!.color,
     })),
+    copies,
     warnings,
     lanes: Math.max(1, ...nodes.map((n) => n.lane + 1)),
     latestId: records.has(latestId ?? "") ? latestId : null,

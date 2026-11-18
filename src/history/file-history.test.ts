@@ -236,3 +236,43 @@ test("file entries: without readable component evidence every path is listed", (
   state.components = { status: "legacy", revisions: {} };
   assert.deepEqual(fileHistoryEntries(state).map((e) => e.value), ["x.SLDPRT", "y.SLDPRT"]);
 });
+test("file history keeps a copy link only when both ends stay in the filtered graph", () => {
+  const state = stateWithHashes(["a", "a", "b", "b"]);
+  state.applicationOperations = [
+    {
+      operationId: "apply-x",
+      destinationBranchId: "branch-main",
+      relativePath: "applications/branch-main/x",
+      status: "captured",
+      capturedRevisionId: "r4",
+      events: [],
+      record: { sourceBranchId: "branch-main", plan: { sourceRevisionId: "r2", mode: "revert" } },
+    } as any,
+  ];
+  const full = layoutRevisions(state, "branch-main");
+  assert.equal(full.copies.length, 1);
+  // r2 and r4 are unchanged states of this file, so they drop out of the view.
+  const filtered = view(state).graph;
+  const kept = new Set(filtered.nodes.map((n) => n.id));
+  for (const c of filtered.copies) assert.ok(kept.has(c.child) && kept.has(c.source));
+});
+test("file history keeps the copy link when both ends survive the filter", () => {
+  // r1 adds the file, r2 changes it, r3 changes it again; r3 was brought back from r1.
+  const state = stateWithHashes(["a", "b", "c"]);
+  state.applicationOperations = [
+    {
+      operationId: "apply-y",
+      destinationBranchId: "branch-main",
+      relativePath: "applications/branch-main/y",
+      status: "captured",
+      capturedRevisionId: "r3",
+      events: [],
+      record: { sourceBranchId: "branch-main", plan: { sourceRevisionId: "r1", mode: "revert" } },
+    } as any,
+  ];
+  const filtered = view(state).graph;
+  assert.deepEqual(
+    filtered.copies.map((c) => [c.child, c.source, c.mode]),
+    [["r3", "r1", "revert"]],
+  );
+});

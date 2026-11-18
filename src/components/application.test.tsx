@@ -12,7 +12,7 @@ import {
   ApplyPreviewDialog,
   type ApplicationController,
 } from "./ApplyPreviewDialog";
-import { ApplicationStatus, AppliedFrom } from "./ApplicationStatus";
+import { ApplicationStatus, AppliedFromDetails } from "./ApplicationStatus";
 import { scenarioState } from "../../tests/history-data";
 import {
   prepareApplyPreview,
@@ -245,7 +245,7 @@ test("pending status is branch scoped; abandonment is explicit and recovery requ
   await waitFor(() => assert.equal(recovers, 1));
   assert.equal(cancels, 0);
 });
-test("Applied from details distinguish originally applied and final captured bytes without replacing engineering notes", () => {
+test("Copied files details distinguish originally applied and final captured bytes without replacing engineering notes", () => {
   const f = fixture();
   f.operation.status = "captured";
   f.operation.capturedRevisionId = "final";
@@ -274,8 +274,8 @@ test("Applied from details distinguish originally applied and final captured byt
     },
   ];
   f.state.applicationOperations = [f.operation];
-  const ui = render(<AppliedFrom state={f.state} revisionId="final" />);
-  assert.match(ui.container.textContent!, /Reuse reviewed design/);
+  const ui = render(<AppliedFromDetails state={f.state} revisionId="final" />);
+  assert.doesNotMatch(ui.container.textContent!, /Engineering reason/);
   assert.match(
     ui.container.textContent!,
     /Adjusted after application before saving/,

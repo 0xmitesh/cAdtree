@@ -257,9 +257,10 @@ for (const width of [1366, 390])
     await page
       .getByRole("button", { name: /Rev 006: Reuse case Part-X/ })
       .press("Enter");
-    await page
-      .getByText("Applied from Rev 003 · Part-X redesign", { exact: true })
-      .click();
+    await expect(
+      page.getByText(/^Copied from Rev 003 on Part-X redesign/),
+    ).toBeVisible();
+    await page.locator(".revision-troubleshooting > summary").click();
     await expect(
       page.getByText("Adjusted after application before saving", {
         exact: true,
@@ -274,7 +275,7 @@ for (const width of [1366, 390])
     await expect(
       page.getByRole("region", { name: "Project context" }),
     ).toHaveAttribute("data-branch-id", "branch-main");
-    await page.locator(".applied-from").scrollIntoViewIfNeeded();
+    await page.locator(".applied-from-details").scrollIntoViewIfNeeded();
     await page.screenshot({
       path: `artifacts/screenshots/application-provenance-${width}.png`,
     });

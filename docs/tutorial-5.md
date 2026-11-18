@@ -138,7 +138,7 @@ Asset: [step-5-applied-working-files.png](../public/tutorials/compare-apply-reco
 
 Visual 4 (cAdtree): **4. After the CAD check, save the reviewed Main state; its application origin is retained.**
 
-Alt text: Real History shows Main Rev 007, Adopt lightweight bracket after review, and Applied from Rev 005 on Lightweight bracket.
+Alt text: Real History shows Main Rev 007, Adopt lightweight bracket after review, and Copied from Rev 005 on Lightweight bracket.
 
 Asset: [step-5-saved-main.png](../public/tutorials/compare-apply-recover/step-5-saved-main.png)
 
@@ -148,7 +148,7 @@ A saved revision gives you a known design state to return to. Bring back onto Ma
 
 - Save your current work first; unsaved working changes block a bring-back. Select Rev 003 in History and choose Bring back onto Main…. cAdtree lists every difference between Main's latest saved state and Rev 003, all pre-selected: Bring back, Replace with Rev 003's version, or Remove (not in Rev 003).
 - Deselect any file you want to keep as it is, enter the Engineering reason for bringing this back and click Prepare bring-back. Check the counts in the confirmation, acknowledge that CAD documents are saved and closed, then click Bring back confirmed changes.
-- Only Main's working files change, and no revision is saved yet. Check the files in CAD, then save a revision; History shows Brought back from Rev 003. Files that were replaced or removed are kept with the operation and Rev 007 stays in history, so nothing is lost.
+- Only Main's working files change, and no revision is saved yet. Check the files in CAD, then save a revision; History shows Brought back Rev 003. Files that were replaced or removed are kept with the operation and Rev 007 stays in history, so nothing is lost.
 - To get a separate copy to look at or share instead, use Export a copy on the revision. Renamed files cannot be brought back yet; export them or create a design case from the revision.
 
 Visual 1 (cAdtree): **1. Select the earlier revision in History, then choose Bring back onto Main….**
@@ -216,7 +216,7 @@ Prepare application checks the bound destination, read/write permission for work
 
 Confirm working-file application identifies project, destination, exact connected location, saved baseline, source, reason and exact additions/replacements/deletions. Apply confirmed changes remains disabled until the saved/closed-CAD acknowledgement is checked. Applying revalidates under the project writer lock, verifies staged source content and preserves before-state evidence. It cannot lock CAD/sync writers or provide an atomic transaction over multiple file writes.
 
-Application completed explicitly reports Applied to working files — revision not yet saved. The engineer opens the destination manually in CAD, checks native references/rebuild and adjusts as needed, saves/closes, then scans/reviews/saves a normal revision in Changes. That revision retains the destination parent and Applied from source provenance. Apply does not save a revision automatically, delete/archive the source or imply CAD compatibility.
+Application completed explicitly reports Applied to working files — revision not yet saved. The engineer opens the destination manually in CAD, checks native references/rebuild and adjusts as needed, saves/closes, then scans/reviews/saves a normal revision in Changes. That revision retains the destination parent and Copied from source provenance. Apply does not save a revision automatically, delete/archive the source or imply CAD compatibility.
 
 Sources inspected: `src/components/ApplyPreviewDialog.tsx`, `src/components/ApplicationStatus.tsx`, `src/engine/apply-preview.ts`, `src/engine/application-service.ts`, `src/App.tsx`.
 
@@ -224,7 +224,7 @@ Sources inspected: `src/components/ApplyPreviewDialog.tsx`, `src/components/Appl
 
 Restore copy no longer exists. The lesson teaches History → select an earlier revision of the active branch → Bring back onto Main… → Make Main match Rev 003 (every difference pre-selected; deselect to bring back only some files; an Engineering reason for bringing this back is required) → Prepare bring-back → Confirm bringing back into working files → Bring back confirmed changes. The dialog ends with Bring back completed: Brought back into working files — revision not yet saved. Unsaved working changes block the operation, and renamed files cannot be brought back yet.
 
-The engineer checks the files in CAD and saves a revision; History then shows Brought back from Rev 003. Replaced and removed files are kept with the operation, and the latest revision stays in history. The capture script stops after the completion dialog and does not save the revision.
+The engineer checks the files in CAD and saves a revision; History then shows Brought back Rev 003 with your reason. Replaced and removed files are kept with the operation, and the latest revision stays in history. The capture script stops after the completion dialog and does not save the revision.
 
 Export writes a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`) from any revision, whole or selected files, including files deleted later. It is mentioned briefly as the way to get a copy to look at or share. Create design case from this revision remains the distinct alternative-workflow action taught in Tutorial 4. The product also uses Recover for an interrupted working-file application’s retained before-state, which is separate from Bring back. No destructive historical Rollback action exists.
 
@@ -254,7 +254,7 @@ The fixture is Tutorial Workspace / Bracket Assembly / Lightweight bracket. It u
 | Rev 006 | Main | Mounting detail refined |
 | Rev 007 | Main | Adopt lightweight bracket after review |
 
-Revision numbers are project-wide. Case creation adds no revision. Applying Rev 005 to Main at Rev 006 leaves six saved revisions; the later normal save creates Rev 007 with Main Rev 006 as its parent and Applied from Rev 005 provenance. Bringing back Rev 003 changes Main's working files to match its four files and writes no revision. Archive retains all seven revisions and the unchanged source case files.
+Revision numbers are project-wide. Case creation adds no revision. Applying Rev 005 to Main at Rev 006 leaves six saved revisions; the later normal save creates Rev 007 with Main Rev 006 as its parent and Copied from Rev 005 provenance. Bringing back Rev 003 changes Main's working files to match its four files and writes no revision. Archive retains all seven revisions and the unchanged source case files.
 
 Capture assertions passed: Compare and Swap make no storage changes; no initial review selection; confirmation requires acknowledgement; exact three apply actions; Main’s independent Mount hash survives; source case signature stays unchanged; no automatic revision; expected Rev 007 parent/provenance; after Bring back, Main's working files exactly match Rev 003 with no new revision and the case unchanged; archive retains history/files. One picker is used only to open the disposable home in the capture harness. Tutorial playback itself invokes no picker.
 

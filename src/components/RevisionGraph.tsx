@@ -6,6 +6,20 @@ import type { FileHistoryRecord } from "../history/file-history";
 import { formatTimestamp } from "../utils/format";
 
 const NODE_RADIUS = 22;
+const revisionName = (graph: Graph, id: string) => {
+  const node = graph.nodes.find((n) => n.id === id);
+  return node ? formatRevisionNumber(node.revision.manifest.displayNumber) : null;
+};
+/** Plain wording for a recorded copy, e.g. "copied from Rev 010". */
+function copyNotes(graph: Graph, childId: string): string[] {
+  return graph.copies
+    .filter((c) => c.child === childId)
+    .flatMap((c) => {
+      const name = revisionName(graph, c.source);
+      if (!name) return [];
+      return [c.mode === "revert" ? `brought back ${name}` : `copied from ${name}`];
+    });
+}
 
 export function RevisionGraph({
   graph,
@@ -235,7 +249,45 @@ export function RevisionGraph({
                       <path d="M 0 0 L 10 5 L 0 10 Z" fill={color} />
                     </marker>
                   ))}
+                  <marker
+                    id={`${markerPrefix}-copy`}
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="8"
+                    markerHeight="8"
+                    orient="auto"
+                    markerUnits="userSpaceOnUse"
+                  >
+                    <path d="M 1 1 L 9 5 L 1 9" className="graph-copy-arrow" />
+                  </marker>
                 </defs>
+                {graph.copies.map((copy) => {
+                  const from = positions.get(copy.child);
+                  const to = positions.get(copy.source);
+                  if (!from || !to) return null;
+                  // Leave the copy's dot on its right side, run down the gutter
+                  // between lanes (clear of parent lines, dots and labels) and
+                  // arrive at the right side of the source's dot.
+                  const dir = to.y > from.y ? 1 : -1;
+                  const runX = Math.max(from.x, to.x) + 38;
+                  const startX = from.x + NODE_RADIUS + 2;
+                  const endX = to.x + NODE_RADIUS + 8;
+                  const corner = 14;
+                  return (
+                    <path
+                      key={`${copy.child}:${copy.source}`}
+                      className="graph-copy-line"
+                      data-copy-child={copy.child}
+                      data-copy-source={copy.source}
+                      data-copy-mode={copy.mode}
+                      d={`M ${startX} ${from.y} Q ${runX} ${from.y} ${runX} ${from.y + dir * corner} V ${to.y - dir * corner} Q ${runX} ${to.y} ${endX} ${to.y}`}
+                      fill="none"
+                      strokeDasharray="5 5"
+                      markerEnd={`url(#${markerPrefix}-copy)`}
+                    />
+                  );
+                })}
                 {graph.edges.map((edge) => {
                   const child = positions.get(edge.child)!;
                   const parent = positions.get(edge.parent)!;
@@ -284,7 +336,8 @@ export function RevisionGraph({
                       ref={(element) => register(node.id, element)}
                       className="graph-hit"
                       aria-pressed={selected}
-                      aria-label={`${formatRevisionNumber(node.revision.manifest.displayNumber)}: ${node.revision.manifest.summary}${fileRecords ? `, ${fileRecords.get(node.id)?.status}` : ""}${node.latest ? (fileRecords ? ", current branch file state" : ", latest on current branch") : ""}${node.warnings.length ? ", needs attention" : ""}`}
+                      aria-label={`${formatRevisionNumber(node.revision.manifest.displayNumber)}: ${node.revision.manifest.summary}${fileRecords ? `, ${fileRecords.get(node.id)?.status}` : ""}${node.latest ? (fileRecords ? ", current branch file state" : ", latest on current branch") : ""}${node.warnings.length ? ", needs attention" : ""}${copyNotes(graph, node.id).map((note) => `, ${note}`).join("")}`}
+                      title={copyNotes(graph, node.id).join(" · ") || undefined}
                       onClick={() => onSelect(node.id)}
                       onKeyDown={(event) => keyboard(event, index)}
                       tabIndex={
@@ -420,6 +473,11 @@ export function RevisionGraph({
                 <time dateTime={node.revision.manifest.captureCompletedAt}>
                   {formatTimestamp(node.revision.manifest.captureCompletedAt)}
                 </time>
+                {copyNotes(graph, node.id).map((note) => (
+                  <span key={note} className="copy-note muted small">
+                    {note}
+                  </span>
+                ))}
                 {node.warnings.length ? (
                   <span className="attention-label">
                     {node.warnings.join(" · ")}
@@ -444,7 +502,10 @@ export function RevisionGraph({
           )}
         </span>
         {mode === "graph" ? (
-          <span className="graph-direction">↓ Arrows point to parents</span>
+          <span className="graph-direction">
+            ↓ Arrows point to parents
+            {graph.copies.length ? " · Dashed lines point to where files were copied or brought back from" : ""}
+          </span>
         ) : null}
       </div>
     </section>
