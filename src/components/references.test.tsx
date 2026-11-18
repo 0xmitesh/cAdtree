@@ -65,6 +65,78 @@ test('reference browsing combines branch, file and search without mutation contr
   assert.equal(inventorySignature(await readVerifiedInventory(f.vault)), before);
 });
 
+async function openReferences(f: Awaited<ReturnType<typeof fixture>>) {
+  const ui = render(<App />);
+  await openHomeWorkspace(ui, f.home); fireEvent.click(ui.getByRole('button', { name: 'Open project' }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'References' }));
+  return ui;
+}
+
+test('Add reference stores files without saving a revision, applies them to the whole project and refreshes the list', async () => {
+  const f = await fixture();
+  const ui = await openReferences(f);
+  assert.ok(ui.getByText(/No references yet/));
+  fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source(), new File(['Customer brief'], 'Brief.txt')] } });
+  fireEvent.change(ui.getByRole('textbox', { name: 'Note for the new references' }), { target: { value: 'From the customer' } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add' }));
+  await waitFor(() => assert.ok(ui.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' })));
+  assert.ok(ui.getByRole('button', { name: 'Download Brief.txt (Brief.txt)' }));
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 2);
+  assert.equal(ui.getAllByText('From the customer').length, 2);
+  assert.equal(ui.getAllByText(/Applies to the whole project/).length, 2, 'both cards say they apply to the whole project');
+  assert.equal(ui.queryByRole('region', { name: 'Add reference' }), null, 'the panel closes after adding');
+  await waitFor(() => assert.ok(ui.getByText(/Added 2 references to the project/)));
+  const saved = await openExistingVault(f.project.vaultDir);
+  assert.equal(saved.revisions.length, 1, 'no revision was saved');
+  const library = saved.references!.library;
+  assert.deepEqual(library.map(ref => ref.title), ['Requirement.pdf', 'Brief.txt']);
+  assert.ok(library.every(ref => ref.projectVersionId === ref.versions[0].versionId && ref.description === 'From the customer'));
+  assert.deepEqual(await retrieveReferenceAttachment(f.project.vaultDir, saved.project.projectId, library[0].referenceId, library[0].versions[0].versionId).then(r => r.bytes), new Uint8Array(await source().arrayBuffer()));
+  // Whole-project references are carried into the next saved revision.
+  const next = await captureRevision(f.working, f.project.vaultDir, { branchId, summary: 'Second', notes, workingFolders: f.project.workingFolders });
+  assert.equal(next.vaultState.references!.contexts[next.revision.manifest.revisionId].record!.links.filter(link => link.origin === 'project').length, 2);
+  // The Map in the project folder is refreshed in the background.
+  const guide = async () => { try { return await (await f.home.getDirectory(['Engineering', 'projects', 'Actuator'])).readFileText(['_MAP cAdtree.txt']); } catch { return ''; } };
+  await waitFor(async () => assert.match(await guide(), /Requirement\.pdf/));
+});
+
+test('Add reference: cancelling writes nothing and choosing nothing keeps Add disabled', async () => {
+  const f = await fixture();
+  const ui = await openReferences(f);
+  const before = inventorySignature(await readVerifiedInventory(f.home));
+  fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
+  assert.equal((ui.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled, true);
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source()] } });
+  assert.equal((ui.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled, false);
+  fireEvent.click(ui.getByRole('button', { name: 'Cancel' }));
+  assert.equal(ui.queryByLabelText('Reference files'), null);
+  assert.ok(ui.getByRole('button', { name: 'Add reference…' }));
+  assert.equal(inventorySignature(await readVerifiedInventory(f.home)), before);
+  assert.equal((await openExistingVault(f.project.vaultDir)).references?.library.length ?? 0, 0);
+});
+
+test('Add reference is disabled with a reason when the project is read-only, and a failed add keeps the panel and the choice', async () => {
+  const f = await fixture();
+  const state = await openExistingVault(f.project.vaultDir);
+  const calls: unknown[] = [];
+  let ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onAdd={async (...args) => { calls.push(args); }} addBlockReason="Managed project is read-only. Reconnect it." />);
+  assert.equal((ui.getByRole('button', { name: 'Add reference…' }) as HTMLButtonElement).disabled, true);
+  assert.ok(ui.getByText('Managed project is read-only. Reconnect it.'));
+  assert.equal(calls.length, 0);
+  ui.unmount();
+  ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onAdd={async () => { throw new Error('Nothing was written.'); }} />);
+  fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source()] } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add' }));
+  await waitFor(() => assert.ok(ui.getByText('Nothing was written.')));
+  assert.ok(ui.getByText(/Requirement\.pdf/), 'the chosen file stays listed for another try');
+  ui.unmount();
+  ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} />);
+  assert.equal(ui.queryByRole('button', { name: 'Add reference…' }), null, 'no add control without an add action');
+});
+
 test('actual App browses and downloads saved references and reopens entirely from disk', async () => {
   const f = await fixture();
   const imported = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirement.pdf', description: 'Customer discussion', tags: ['clearance', 'customer'] }, undefined, { savedBy: { id: 'test-engineer-1', displayName: 'Test Engineer' } });

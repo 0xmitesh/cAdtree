@@ -19,12 +19,14 @@ import type { useApplicationActions } from "./useApplicationActions";
 import type { useBranchActions } from "./useBranchActions";
 import type { useCaptureActions } from "./useCaptureActions";
 import type { useDiagnosticsActions } from "./useDiagnosticsActions";
+import type { useReferenceActions } from "./useReferenceActions";
 import type { useReviewActions } from "./useReviewActions";
 
 type BranchActions = ReturnType<typeof useBranchActions>;
 type CaptureActions = ReturnType<typeof useCaptureActions>;
 type ApplicationActions = ReturnType<typeof useApplicationActions>;
 type ReviewActions = ReturnType<typeof useReviewActions>;
+type ReferenceActions = ReturnType<typeof useReferenceActions>;
 type DiagnosticsActions = ReturnType<typeof useDiagnosticsActions>;
 
 export type ProjectViewsProps = {
@@ -65,6 +67,7 @@ export type ProjectViewsProps = {
   handleAbandonApplication: ApplicationActions["handleAbandonApplication"];
   handleExportForReview: ReviewActions["handleExportForReview"];
   handleRetrieveReference: ReviewActions["handleRetrieveReference"];
+  handleAddReferences: ReferenceActions["handleAddReferences"];
   handleVerifySingleRevisionObjects: DiagnosticsActions["handleVerifySingleRevisionObjects"];
   handleVerifyAllObjects: DiagnosticsActions["handleVerifyAllObjects"];
   handleSimulateClearMetadataAndReopenVault: DiagnosticsActions["handleSimulateClearMetadataAndReopenVault"];
@@ -117,6 +120,7 @@ export function ProjectViews({
   handleAbandonApplication,
   handleExportForReview,
   handleRetrieveReference,
+  handleAddReferences,
   handleVerifySingleRevisionObjects,
   handleVerifyAllObjects,
   handleSimulateClearMetadataAndReopenVault,
@@ -197,7 +201,8 @@ export function ProjectViews({
       ))}
       <div hidden={activeTab !== 'references'}>
         <ReferencesView state={vaultState} busy={busy} progress={progress} onCancel={handleCancelOperation}
-          onRetrieve={handleRetrieveReference} />
+          onRetrieve={handleRetrieveReference} onAdd={handleAddReferences}
+          addBlockReason={referenceWriteBlock(vaultState) ?? managedBlockReason} />
       </div>
       <div hidden={activeTab !== "history"}>
         <HistoryRecoveryView

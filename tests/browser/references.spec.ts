@@ -122,4 +122,18 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
   await expect(view).toContainText('Part: B.SLDPRT');
   await expect(view).toContainText('Maintain the bearing clearance');
   await expect(view.getByRole('button', { name: 'Download Clearance.pdf (Clearance.pdf)', exact: true })).toBeVisible();
+  // Add a reference from the References page without saving a revision.
+  await view.getByRole('searchbox', { name: 'Search references' }).fill('');
+  await view.getByRole('combobox', { name: 'Branch', exact: true }).selectOption('');
+  await view.getByRole('combobox', { name: 'Part / file' }).selectOption('');
+  const cardsBefore = await view.locator('.reference-card').count();
+  await view.getByRole('button', { name: 'Add reference…', exact: true }).click();
+  await view.getByLabel('Reference files', { exact: true }).setInputFiles({ name: 'Standard.pdf', mimeType: 'application/pdf', buffer: Buffer.from([1, 2, 3, 4]) });
+  await view.getByRole('textbox', { name: 'Note for the new references', exact: true }).fill('Applicable standard');
+  expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await view.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(view.getByRole('button', { name: 'Download Standard.pdf (Standard.pdf)', exact: true })).toBeVisible();
+  await expect(view.locator('.reference-card')).toHaveCount(cardsBefore + 1);
+  await expect(view).toContainText('Applies to the whole project');
+  await expect(page.getByRole('navigation').getByRole('button', { name: 'History', exact: true })).toBeVisible();
 });
