@@ -1490,10 +1490,6 @@ summary {
   margin-top: 8px;
   align-items: flex-start;
 }
-.file-path-actions.historical > .text-button {
-  text-align: left;
-  white-space: normal;
-}
 .file-path-menu {
   position: relative;
 }
@@ -1508,18 +1504,29 @@ summary {
 .file-path-menu > summary::-webkit-details-marker {
   display: none;
 }
-.file-path-menu > button {
+.file-path-menu-items {
   position: absolute;
   z-index: 4;
   right: 0;
   top: 100%;
   min-width: 210px;
   max-width: 260px;
-  padding: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
   background: white;
   border: 1px solid var(--border);
   border-radius: 6px;
   text-align: left;
+}
+.file-path-actions.historical .file-path-menu-items {
+  right: auto;
+  left: 0;
+}
+.file-path-menu-items > button {
+  padding: 8px 10px;
+  text-align: left;
+  white-space: normal;
 }
 .path-feedback,
 .path-storage-warning {

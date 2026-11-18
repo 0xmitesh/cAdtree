@@ -245,9 +245,9 @@ test("configured homes provide one-click descendant copies and one canonical add
       "\\",
     );
   assert.equal(copied[0], expected);
-  fireEvent.click(ui.getByLabelText(`More path actions — ${file}`));
+  fireEvent.click(ui.getByLabelText(`File actions — ${file}`));
   fireEvent.click(
-    ui.getByRole("button", { name: `Copy full file path — ${file}` }),
+    ui.getByRole("button", { name: `Copy file path — ${file}` }),
   );
   await waitFor(() => assert.equal(copied[1], `${expected}\\Part.SLDPRT`));
   fireEvent.click(

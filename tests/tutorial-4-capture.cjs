@@ -97,6 +97,7 @@ async function main(){
     await settingsClip('step-4-case-location');
     await nav.getByRole('button', { name: 'Changes', exact: true }).click();
     await page.getByRole('button', { name: /Show 3 unchanged files/ }).click();
+    await page.getByLabel(/^File actions.*Bracket\.SLDPRT/).click();
     const copy = page.getByRole('button', { name: /Copy folder path.*Bracket\.SLDPRT/ });
     await focus(copy); await copy.hover(); await capture(page.locator('.changes-files:visible'), 'step-4-copy-folder-path');
     await nav.getByRole('button', { name: 'Settings', exact: true }).click();

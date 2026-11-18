@@ -50,6 +50,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await page.getByRole('button', { name: 'Scan for changes', exact: true }).click();
   await save('Initial component');
   await page.getByRole('button', { name: /Show 1 unchanged files/ }).click();
+  await page.getByLabel(/^File actions/).click();
   await page.getByRole('button', { name: /^Copy folder path/ }).click();
   await expect.poll(() => page.evaluate(() => (window as any).copiedPaths.at(-1))).toBe(folder(initial.prefix + '/Parts/工程'));
   await nav('History');
@@ -77,6 +78,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await save('Confirmed rename');
   const showUnchanged = page.getByRole('button', { name: /Show 1 unchanged files/ });
   if (await showUnchanged.isVisible()) await showUnchanged.click();
+  await page.getByLabel(/^File actions/).click();
   await page.getByRole('button', { name: /^Copy folder path/ }).click();
   await expect.poll(() => page.evaluate(() => (window as any).copiedPaths.at(-1))).toBe(folder(`${initial.workspaceDirectory}/${branch.relative}/Parts/工程`));
   await page.reload();

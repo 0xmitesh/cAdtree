@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Copy, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import {
   composeFilePaths,
   type ResolveFilePath,
@@ -357,58 +357,93 @@ export function HomeFolderAddressSetting() {
   );
 }
 
+export interface FileMenuItem {
+  label: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+/** One "…" menu per file row: Copy file path, Copy folder path and any extra items. */
 export function FilePathActions({
   filePath,
   resolve,
   historicalBranch,
+  extraItems,
 }: {
   filePath: string;
-  resolve: ResolveFilePath;
+  resolve?: ResolveFilePath;
   historicalBranch?: string;
+  extraItems?: FileMenuItem[];
 }) {
   const context = useContext(Shortcuts);
-  if (!context) return null;
-  const label = "Copy folder path";
+  const canCopy = Boolean(context && resolve);
+  const extras = extraItems ?? [];
+  if (!canCopy && !extras.length) return null;
   const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : ""}${filePath}`;
+  const suffix = historicalBranch ? ` · Current file on ${historicalBranch}` : "";
+  const choose = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    action: () => void,
+  ) => {
+    const disclosure = event.currentTarget.closest("details");
+    disclosure?.removeAttribute("open");
+    disclosure?.querySelector<HTMLElement>("summary")?.focus();
+    action();
+  };
   return (
     <div
       className={`file-path-actions${historicalBranch ? " historical" : ""}`}
     >
-      <button
-        type="button"
-        className={historicalBranch ? "text-button" : "icon-button"}
-        aria-label={`${label} — ${description}`}
-        title={`${label} — ${description}`}
-        onClick={() => context.copy({ resolve, containingFolder: true })}
-      >
-        <Copy size={15} aria-hidden="true" />
-        {historicalBranch ? (
-          <span>
-            {label} · Current file on {historicalBranch}
-          </span>
-        ) : null}
-      </button>
       <details className="file-path-menu">
         <summary
-          title={`More path actions — ${description}`}
-          aria-label={`More path actions — ${description}`}
+          title={`File actions — ${description}`}
+          aria-label={`File actions — ${description}`}
         >
           <MoreHorizontal size={16} aria-hidden="true" />
         </summary>
-        <button
-          type="button"
-          className="text-button"
-          aria-label={`Copy full file path — ${description}`}
-          onClick={(event) => {
-            const disclosure = event.currentTarget.closest("details");
-            disclosure?.removeAttribute("open");
-            disclosure?.querySelector<HTMLElement>("summary")?.focus();
-            context.copy({ resolve, containingFolder: false });
-          }}
-        >
-          Copy full file path
-          {historicalBranch ? ` · Current file on ${historicalBranch}` : ""}
-        </button>
+        <div className="file-path-menu-items">
+          {canCopy ? (
+            <>
+              <button
+                type="button"
+                className="text-button"
+                aria-label={`Copy file path — ${description}`}
+                onClick={(event) =>
+                  choose(event, () =>
+                    context!.copy({ resolve: resolve!, containingFolder: false }),
+                  )
+                }
+              >
+                Copy file path{suffix}
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                aria-label={`Copy folder path — ${description}`}
+                onClick={(event) =>
+                  choose(event, () =>
+                    context!.copy({ resolve: resolve!, containingFolder: true }),
+                  )
+                }
+              >
+                Copy folder path{suffix}
+              </button>
+            </>
+          ) : null}
+          {extras.map((item) => (
+            <button
+              type="button"
+              className="text-button"
+              key={item.label}
+              disabled={item.disabled}
+              aria-label={item.ariaLabel ?? item.label}
+              onClick={(event) => choose(event, item.onSelect)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </details>
     </div>
   );

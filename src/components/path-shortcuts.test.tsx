@@ -94,6 +94,16 @@ function harness(
 const copyButton = (ui: ReturnType<typeof render>) =>
   ui.getByRole("button", { name: `Copy folder path — ${filePath}` });
 
+test("each file row has a single path menu holding both copy actions", () => {
+  const ui = render(harness(workspace()));
+  assert.equal(ui.container.querySelectorAll(".file-path-actions > *").length, 1);
+  assert.equal(ui.container.querySelectorAll(".file-path-actions > :not(details)").length, 0);
+  const menu = within(ui.container.querySelector(".file-path-menu") as HTMLElement);
+  assert.ok(menu.getByRole("button", { name: `Copy file path — ${filePath}` }));
+  assert.ok(menu.getByRole("button", { name: `Copy folder path — ${filePath}` }));
+  assert.equal(ui.queryByRole("button", { name: /Copy full file path/ }), null);
+});
+
 test("a first path click offers setup, saves locally, rechecks the file, then completes that exact copy", async () => {
   await clearAllConvenienceMetadata();
   const copied: string[] = [];
@@ -128,9 +138,9 @@ test("a first path click offers setup, saves locally, rechecks the file, then co
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(copied.length, 2));
   assert.ok(ui.queryByRole("dialog") === null);
-  fireEvent.click(ui.getByLabelText(`More path actions — ${filePath}`));
+  fireEvent.click(ui.getByLabelText(`File actions — ${filePath}`));
   fireEvent.click(
-    ui.getByRole("button", { name: `Copy full file path — ${filePath}` }),
+    ui.getByRole("button", { name: `Copy file path — ${filePath}` }),
   );
   await waitFor(() => assert.equal(copied.length, 3));
   assert.equal(
@@ -164,9 +174,9 @@ test("a branch-root file copies its working folder; the secondary action include
     "D:\\CAD Workspace\\projects\\p\\working\\actual-leaf",
   );
   assert.ok(ui.getByText("Folder path copied"));
-  fireEvent.click(ui.getByLabelText(`More path actions — ${rootFile}`));
+  fireEvent.click(ui.getByLabelText(`File actions — ${rootFile}`));
   fireEvent.click(
-    ui.getByRole("button", { name: `Copy full file path — ${rootFile}` }),
+    ui.getByRole("button", { name: `Copy file path — ${rootFile}` }),
   );
   await waitFor(() => assert.equal(copied.length, 2));
   assert.equal(copied[1], copied[0] + "\\Assembly.SLDASM");
