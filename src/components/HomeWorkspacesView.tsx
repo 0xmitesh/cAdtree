@@ -187,26 +187,33 @@ export function HomeWorkspacesView(props: {
                     {entry.issues.length ? (
                       <Notice type="error">{entry.issues.join(" ")}</Notice>
                     ) : null}
-                    <details className="disclosure">
-                      <summary>
-                        Location details
-                        {entries.length > 1
-                          ? ` · ${entries.length} retained locations`
-                          : ""}
-                      </summary>
-                      {entries.map((e) => (
-                        <div key={e.key}>
-                          <p className="file-path">
-                            {props.home!.root.name}/
-                            {e.directory ?? "Registration needs repair"} ·{" "}
-                            {e.status}
-                          </p>
-                          {e !== entry && e.issues.length ? (
-                            <p>{e.issues.join(" ")}</p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </details>
+                    {entry.status !== "ready" ||
+                    entries.length > 1 ||
+                    entries.some(
+                      (e) =>
+                        e.recordedDirectory && e.recordedDirectory !== e.directory,
+                    ) ? (
+                      <details className="disclosure">
+                        <summary>
+                          Location details
+                          {entries.length > 1
+                            ? ` · ${entries.length} retained locations`
+                            : ""}
+                        </summary>
+                        {entries.map((e) => (
+                          <div key={e.key}>
+                            <p className="file-path">
+                              {props.home!.root.name}/
+                              {e.directory ?? "Registration needs repair"} ·{" "}
+                              {e.status}
+                            </p>
+                            {e !== entry && e.issues.length ? (
+                              <p>{e.issues.join(" ")}</p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </details>
+                    ) : null}
                   </article>
                 );
               })}

@@ -171,19 +171,21 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   </button>
                 ) : null}
               </div>
-              <details className="disclosure project-location-details">
-                <summary>Location details</summary>
-                {locations[0].projectId ? (
-                  <p className="file-path">
-                    Project identity: {locations[0].projectId}
-                  </p>
-                ) : null}
-                {locations.map((entry) => (
-                  <p className="file-path" key={entry.containerPath}>
-                    Workspace-relative location: {entry.containerPath}
-                  </p>
-                ))}
-              </details>
+              {locations.length > 1 || locations[0].status !== "ready" ? (
+                <details className="disclosure project-location-details">
+                  <summary>Location details</summary>
+                  {locations[0].projectId ? (
+                    <p className="file-path">
+                      Project identity: {locations[0].projectId}
+                    </p>
+                  ) : null}
+                  {locations.map((entry) => (
+                    <p className="file-path" key={entry.containerPath}>
+                      Workspace-relative location: {entry.containerPath}
+                    </p>
+                  ))}
+                </details>
+              ) : null}
               {locations.length > 1 && choosingLocation === id
                 ? locations.map((entry) => (
                     <div

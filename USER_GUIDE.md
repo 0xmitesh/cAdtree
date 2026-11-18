@@ -55,7 +55,7 @@ Choose **Create project**, enter a name, and confirm. cAdtree creates an empty m
 
 Choose **Import existing project**, then **Choose project folder**. Save and close CAD documents before selecting the original CAD folder. Its folder name becomes the project name; copying and verification begin after selection, without a second name or submit step. The original stays untouched. Continue editing the managed Main copy and check CAD references. Import creates no revision automatically.
 
-Project cards keep technical identities and paths under **Location details**. History, Changes, Settings, and branch controls belong to an opened project.
+A project or workspace shows **Location details** (technical identities and paths) only when it needs attention. History, Changes, Settings, and branch controls belong to an opened project.
 
 Typical layout, relative to the selected workspace:
 
