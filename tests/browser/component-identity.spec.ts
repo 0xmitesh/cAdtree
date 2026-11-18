@@ -33,12 +33,16 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await page.getByRole('button', { name: 'Open project', exact: true }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'Changes', exact: true }).click();
   const identity = page.getByRole('region', { name: 'Component identity' });
+  // Only identical-bytes pairs are suggested; an edited-and-renamed file is matched from the manual disclosure.
+  const manual = identity.getByText(/Match other missing files manually/);
+  if (width === 390) await manual.click();
   await expect(identity.getByText(width === 390 ? /Name and bytes may both have changed/ : /Possible rename:/)).toBeVisible();
   await identity.getByRole('combobox', { name: 'New path for parts/caliper.SLDPRT' }).selectOption('parts/cliper.SLDPRT');
   await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
   await expect(identity.getByText('Confirmed rename: parts/caliper.SLDPRT → parts/cliper.SLDPRT')).toBeVisible();
   await identity.getByRole('button', { name: 'Cancel association' }).click();
   await expect(identity.getByText(/Confirmed rename:/)).toHaveCount(0);
+  if (width === 390) await manual.click();
   await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
   await page.getByRole('textbox', { name: /Revision summary/ }).fill('Correct component filename');
   await page.getByRole('button', { name: 'Save revision', exact: true }).click();
@@ -53,8 +57,9 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('Initial design', { exact: true })).toBeVisible();
   await page.screenshot({ path: `artifacts/screenshots/component-history-${width}.png`, fullPage: true });
   await page.getByRole('navigation').getByRole('button', { name: 'Changes', exact: true }).click();
-  await identity.getByText('Replace a component identity', { exact: true }).click();
-  await identity.getByRole('button', { name: 'Treat as new component', exact: true }).click();
+  await page.getByRole('button', { name: /Show 1 unchanged files/ }).click();
+  await page.getByLabel(/^File actions — parts\/cliper\.SLDPRT/).click();
+  await page.getByRole('button', { name: /^Treat as new component/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Treat as new component' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Confirm new component' }).click();

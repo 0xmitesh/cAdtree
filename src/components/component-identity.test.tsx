@@ -51,20 +51,99 @@ test('changed scan does not silently renew old identity decisions', async()=>{
   fireEvent.click(ui.getByRole('button',{name:'Clear identity decisions'}));
   assert.equal(cleared,true);
 });
-test('legacy viewing never enables identity tracking without the explicit upgrade confirmation', async()=>{
+test('the panel renders nothing when the scan offers no rename and no decision is pending', async()=>{
+  const f = await fixture();
+  await f.working.removeEntry(['first']); await f.working.removeEntry(['second']); await f.working.writeFileText(['old'],'same');
+  const scan = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
+  const ui = render(<Controls state={f.state} scan={scan}/>);
+  assert.equal(ui.container.querySelector('.component-identity'),null);
+  assert.equal(ui.container.textContent,'');
+  cleanup();
+  // A deletion with nothing added is not a rename candidate either.
+  await f.working.removeEntry(['old']);
+  const deletedOnly = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
+  const other = render(<Controls state={f.state} scan={deletedOnly}/>);
+  assert.equal(other.container.textContent,'');
+});
+test('a single identical-bytes candidate is pre-selected and confirms directly', async()=>{
+  const f = await fixture(); await f.working.removeEntry(['second']);
+  const scan = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
+  let review:IdentityReview|undefined;
+  const ui = render(<Controls state={f.state} scan={scan} onChange={value=>review=value}/>);
+  assert.ok(ui.getByText(/Possible rename: first \(identical bytes\)/));
+  assert.equal((ui.getByRole('combobox',{name:'New path for old'}) as HTMLSelectElement).value,'first');
+  fireEvent.click(ui.getByRole('button',{name:'Confirm rename'}));
+  assert.deepEqual((review as IdentityReview|undefined)?.renames,[{from:'old',to:'first'}]);
+});
+test('files whose name and bytes both changed are not suggested; they stay available behind a manual disclosure', async()=>{
+  const f = await fixture(); await f.working.removeEntry(['second']); await f.working.writeFileText(['first'],'different bytes');
+  const scan = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
+  let review:IdentityReview|undefined;
+  const ui = render(<Controls state={f.state} scan={scan} onChange={value=>review=value}/>);
+  assert.equal(ui.queryByText(/Possible rename/),null);
+  const manual = ui.getByText(/Match other missing files manually/).closest('details') as HTMLDetailsElement;
+  assert.equal(manual.open,false);
+  const select = within(manual).getByRole('combobox',{name:'New path for old'}) as HTMLSelectElement;
+  assert.equal(select.value,'');
+  assert.equal((within(manual).getByRole('button',{name:'Confirm rename'}) as HTMLButtonElement).disabled,true);
+  fireEvent.change(select,{target:{value:'first'}});
+  fireEvent.click(within(manual).getByRole('button',{name:'Confirm rename'}));
+  assert.deepEqual((review as IdentityReview|undefined)?.renames,[{from:'old',to:'first'}]);
+});
+test('legacy projects show no identity controls and no enable-tracking button', async()=>{
   const f = await fixture(); await f.vault.removeEntry(['components'],{recursive:true});
-  const state = await openExistingVault(f.vault); let calls=0;
-  const ui = render(<ComponentIdentityControls state={state} scan={f.scan} busy={false} onChange={()=>{}} onEnable={async()=>{calls++;}}/>);
-  assert.equal(calls,0);
-  fireEvent.click(ui.getByRole('button',{name:'Enable component tracking'}));
-  assert.equal(calls,0);
-  let dialog=within(ui.getByRole('dialog',{name:'Enable component tracking'}));
+  const state = await openExistingVault(f.vault);
+  const ui = render(<Controls state={state} scan={f.scan}/>);
+  assert.equal(ui.container.textContent,'');
+  cleanup();
+  const changes = render(<ChangesCaptureView {...changesProps(state,f.scan)}/>);
+  assert.equal(changes.queryByRole('region',{name:'Component identity'}),null);
+  assert.equal(changes.queryByText(/Enable component tracking/),null);
+});
+function changesProps(state:VaultState,scan:ScanResult,extra:object={}) {
+  return {vaultState:state,activeBranchId:'branch-main',workingFolderName:'Main',vaultFolderName:'Vault',scanResult:scan,isScanStale:false,isScanning:false,isCapturing:false,progress:null,statusBanner:null,onScan:async()=>{},onCancelOperation:()=>{},onReattachWorkingFolder:async()=>{},onCapture:async()=>{},...extra};
+}
+test('Treat as new component lives in each modified or unchanged file menu and needs confirmation', async()=>{
+  const f = await fixture();
+  await f.working.removeEntry(['first']); await f.working.removeEntry(['second']); await f.working.writeFileText(['old'],'edited');
+  await f.working.writeFileText(['same.txt'],'kept');
+  const saved = await captureRevision(f.working,f.vault,{branchId:'branch-main',summary:'Second',notes:{problem:'',modification:'',observations:''},workingFolders:{'branch-main':f.working}});
+  await f.working.writeFileText(['old'],'edited again');
+  const state = saved.vaultState;
+  const scan = await scanBranchChanges(f.working,'branch-main',saved.revision.manifest);
+  const ui = render(<ChangesCaptureView {...changesProps(state,scan)}/>);
+  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null,'no panel until a decision exists');
+  assert.equal(ui.queryByText('Replace a component identity'),null);
+  fireEvent.click(ui.getByRole('button',{name:/Show 1 unchanged files/}));
+  assert.ok(ui.getByRole('button',{name:'Treat as new component — same.txt'}));
+  fireEvent.click(ui.getByRole('button',{name:'Treat as new component — old'}));
+  const dialog = within(ui.getByRole('dialog',{name:'Treat as new component'}));
   fireEvent.click(dialog.getByRole('button',{name:'Cancel'}));
-  assert.equal(calls,0);
-  fireEvent.click(ui.getByRole('button',{name:'Enable component tracking'}));
-  dialog=within(ui.getByRole('dialog',{name:'Enable component tracking'}));
-  fireEvent.click(dialog.getByRole('button',{name:'Enable tracking'}));
+  assert.equal(ui.queryByRole('dialog'),null);
+  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
+  fireEvent.click(ui.getByRole('button',{name:'Treat as new component — old'}));
+  fireEvent.click(within(ui.getByRole('dialog',{name:'Treat as new component'})).getByRole('button',{name:'Confirm new component'}));
+  const panel = within(ui.getByRole('region',{name:'Component identity'}));
+  assert.ok(panel.getByText('New component at old'));
+  assert.equal(ui.queryByRole('button',{name:'Treat as new component — old'}),null);
+  fireEvent.click(panel.getByRole('button',{name:'Cancel replacement'}));
+  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
+  assert.ok(ui.getByRole('button',{name:'Treat as new component — old'}));
+});
+test('only an incomplete enrollment offers a retry, inside the error notice', async()=>{
+  const f = await fixture(); await f.vault.removeEntry(['components','ready.json']);
+  const state = await openExistingVault(f.vault);
+  assert.equal(state.components?.enrollmentIncomplete,true);
+  let calls=0;
+  const ui = render(<ChangesCaptureView {...changesProps(state,f.scan,{onEnableComponentTracking:async()=>{calls++;}})}/>);
+  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
+  const alert = within(ui.getByRole('alert'));
+  assert.ok(alert.getByText(/Component enrollment is incomplete/));
+  fireEvent.click(alert.getByRole('button',{name:'Retry component enrollment'}));
   await waitFor(()=>assert.equal(calls,1));
+  cleanup();
+  const without = render(<ChangesCaptureView {...changesProps(state,f.scan)}/>);
+  assert.equal(without.queryByRole('button',{name:'Retry component enrollment'}),null);
 });
 
 test('Changes exposes an applied-addition rename conflict and allows saving after cancelling the association', async () => {
