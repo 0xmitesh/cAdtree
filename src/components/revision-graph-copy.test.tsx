@@ -92,3 +92,44 @@ test("a copy whose source is not in the history draws nothing and does not crash
   assert.equal(ui.container.querySelectorAll('.graph-copy-line[data-copy-source="p2"]').length, 0);
   assert.equal(ui.getByRole("button", { name: /^Rev 006:/ }).getAttribute("title"), null);
 });
+
+test("revision details: one plain line outside Troubleshooting, the byte and identity details inside it", () => {
+  const state = scenarioState("branches");
+  const file = (sha: string) => ({ path: "New.txt", size: 1, sha256: sha, lastModified: 0 });
+  state.applicationOperations = [
+    {
+      operationId: "apply-detail",
+      destinationBranchId: "branch-main",
+      relativePath: "applications/branch-main/apply-detail",
+      status: "captured",
+      capturedRevisionId: "r6",
+      events: [{ kind: "capture", revisionId: "r6", finalFiles: [{ path: "New.txt", file: file("final-sha") }] }],
+      record: {
+        sourceBranchId: "prototype",
+        plan: {
+          sourceRevisionId: "p2",
+          baseRevisionId: "r2",
+          destinationRevisionId: "r5",
+          mode: "merge",
+          reason: "Reuse reviewed design",
+          actions: [{ path: "New.txt", operation: "add", before: null, after: file("applied-sha") }],
+        },
+      },
+    } as any,
+  ];
+  const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: state })} />);
+  fireEvent.click(ui.getByRole("button", { name: /^Rev 006:/ }));
+  const troubleshooting = ui.container.querySelector<HTMLDetailsElement>(".revision-troubleshooting")!;
+  const line = ui.container.querySelector(".applied-from")!;
+  assert.equal(line.textContent, "Copied from Rev 008 on Prototype");
+  assert.equal(troubleshooting.contains(line), false);
+  assert.equal(troubleshooting.open, false);
+  for (const text of [/Before, applied and captured bytes/, /Application record identities/, /Reuse reviewed design/]) {
+    assert.ok(troubleshooting.textContent!.match(text), String(text));
+    assert.equal(line.parentElement!.textContent!.replace(troubleshooting.textContent!, "").match(text), null);
+  }
+  // Revisions without provenance show neither.
+  fireEvent.click(ui.getByRole("button", { name: /^Rev 004:/ }));
+  assert.equal(ui.container.querySelector(".applied-from"), null);
+  assert.equal(ui.container.querySelector(".applied-from-details"), null);
+});

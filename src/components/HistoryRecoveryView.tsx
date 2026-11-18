@@ -25,7 +25,7 @@ import {
   ApplyPreviewDialog,
   type ApplicationController,
 } from "./ApplyPreviewDialog";
-import { AppliedFrom } from "./ApplicationStatus";
+import { AppliedFrom, AppliedFromDetails } from "./ApplicationStatus";
 import { caseLabel } from "../engine/case-lifecycle";
 import { applyModeFor, type ApplyMode } from "../engine/apply-preview";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
@@ -615,6 +615,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 open={Boolean(damaged || diff.status === "unavailable")}
               >
                 <summary>Troubleshooting</summary>
+                <AppliedFromDetails
+                  state={vaultState}
+                  revisionId={rev.manifest.revisionId}
+                />
                 <h3>Record information</h3>
                 {diff.status === "unavailable" ? (
                   <Notice type="error">{diff.unavailableReason}</Notice>

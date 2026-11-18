@@ -7,7 +7,7 @@ import {
   reconcileChoices,
   type ApplicationController,
 } from "./ApplyPreviewDialog";
-import { AppliedFrom } from "./ApplicationStatus";
+import { AppliedFrom, AppliedFromDetails } from "./ApplicationStatus";
 import {
   HistoryRecoveryView,
   type HistoryRecoveryViewProps,
@@ -217,15 +217,20 @@ function capturedOperation(mode: "merge" | "revert") {
   return state;
 }
 
-test("AppliedFrom: a revert says Brought back from <rev> without Base; a merge keeps its wording", () => {
+test("AppliedFrom is one plain line: a revert says Brought back <rev>, a merge says Copied from <rev> on <case>; identities live in the details", () => {
   const revert = render(<AppliedFrom state={capturedOperation("revert")} revisionId="final" />);
-  assert.match(revert.container.textContent!, /Brought back from Rev 003/);
-  assert.doesNotMatch(revert.container.textContent!, /Applied from|Base:/);
-  assert.match(revert.container.textContent!, /Destination baseline:/);
+  assert.equal(revert.container.textContent, "Brought back Rev 003");
+  assert.equal(revert.container.querySelectorAll("details").length, 0);
   cleanup();
   const merge = render(<AppliedFrom state={capturedOperation("merge")} revisionId="final" />);
-  assert.match(merge.container.textContent!, /Applied from Rev 008 · Prototype/);
-  assert.match(merge.container.textContent!, /Base:/);
+  assert.equal(merge.container.textContent, "Copied from Rev 008 on Prototype");
+  cleanup();
+  const revertDetails = render(<AppliedFromDetails state={capturedOperation("revert")} revisionId="final" />);
+  assert.doesNotMatch(revertDetails.container.textContent!, /Base:/);
+  assert.match(revertDetails.container.textContent!, /Destination baseline:/);
+  cleanup();
+  const mergeDetails = render(<AppliedFromDetails state={capturedOperation("merge")} revisionId="final" />);
+  assert.match(mergeDetails.container.textContent!, /Base:/);
 });
 
 test("revert dialog: two endpoint cards, revert note and counts, Changes to review heading, no merge-only leftovers", () => {
