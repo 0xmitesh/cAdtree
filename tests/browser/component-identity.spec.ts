@@ -76,7 +76,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await pickComponent(page, replacementId, 'parts/cliper.SLDPRT');
   await expect(page.getByRole('heading', { name: 'Unrelated replacement' })).toBeVisible();
   await pickComponent(page, info.componentId, 'parts/cliper.SLDPRT');
-  await expect(page.getByRole('button', { name: 'Select file for export', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Select file for export', exact: true })).toHaveCount(0);
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   expect(errors).toEqual([]);
 });

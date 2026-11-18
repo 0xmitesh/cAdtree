@@ -69,7 +69,7 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
     "true",
   );
 });
-test("deleted file selection cannot export absence; parent inspection and selected-file export keep exact revision identity", () => {
+test("deleted file shows its absence and links to the parent revision; export is chosen inside the export dialog", () => {
   const state = historyState(3);
   state.revisions[1].manifest.files[1].sha256 =
     state.revisions[0].manifest.files[1].sha256;
@@ -78,35 +78,13 @@ test("deleted file selection cannot export absence; parent inspection and select
   );
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   pickFile(ui, path);
-  assert.equal(
-    (
-      ui.getByRole("checkbox", {
-        name: `Select ${path} for export`,
-      }) as HTMLInputElement
-    ).disabled,
-    true,
-  );
-  assert.equal(
-    (
-      ui.getByRole("button", {
-        name: "Select file for export",
-      }) as HTMLButtonElement
-    ).disabled,
-    true,
-  );
+  assert.equal(ui.container.querySelectorAll('input[type="checkbox"]').length, 0);
+  assert.equal(ui.queryByRole("button", { name: "Select file for export" }), null);
   fireEvent.click(ui.getByRole("button", { name: /View in parent revision/ }));
   assert.ok(
     ui
       .getByRole("region", { name: "Selected file history" })
       .textContent?.includes("Context only"),
-  );
-  assert.equal(
-    (
-      ui.getByRole("checkbox", {
-        name: `Select ${path} for export`,
-      }) as HTMLInputElement
-    ).checked,
-    true,
   );
   assert.equal(ui.queryByRole("button", { name: /Copy selected files/ }), null);
   assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
@@ -115,7 +93,24 @@ test("deleted file selection cannot export absence; parent inspection and select
   fireEvent.click(dialog.getByRole("radio", { name: /Selected files/ }));
   assert.equal(
     (dialog.getByRole("checkbox", { name: `Export ${path}` }) as HTMLInputElement).checked,
-    true,
+    false,
+  );
+});
+test("file history header counts changes plainly and mentions unavailable versions only when there are some", () => {
+  const state = historyState(3);
+  const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
+  pickFile(ui, path);
+  const bar = () => ui.container.querySelector(".canvas-bar")!.textContent!;
+  assert.match(bar(), /^\d+ changes? to this file/);
+  assert.doesNotMatch(bar(), /context markers|file change events|unavailable comparisons|could not be compared/);
+  cleanup();
+  const damaged = historyState(2);
+  damaged.revisions[1].integrityStatus = "corrupted";
+  const next = render(<HistoryRecoveryView {...props({ vaultState: damaged })} />);
+  pickFile(next, path);
+  assert.match(
+    next.container.querySelector(".canvas-bar")!.textContent!,
+    /to this file · 1 version could not be compared/,
   );
 });
 test("empty branch scope is explained and project switching resets file and branch scope", () => {

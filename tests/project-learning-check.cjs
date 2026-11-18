@@ -148,13 +148,11 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       const cases=page.getByRole('region',{name:'Design cases',exact:true});
       assert.equal(await page.locator('.settings-page .design-cases').count(),0);
       assert.equal(await cases.getByRole('button',{name:'Archive case Main',exact:true}).count(),0);
-      const activity=cases.getByLabel('Saved activity and divergence for Lightweight bracket',{exact:true});
-      await activity.click();assert.match(await cases.innerText(),/Started from/);
+      assert.equal(await cases.getByLabel('Saved activity and divergence for Lightweight bracket',{exact:true}).count(),0);
       await cases.getByRole('button',{name:'Compare Lightweight bracket with Main',exact:true}).click();
       const comparison=page.getByRole('dialog',{name:'Compare saved revisions',exact:true});
       assert.match(await comparison.innerText(),/All project files/);
       await comparison.getByRole('button',{name:'Close comparison',exact:true}).click();
-      await activity.click();
       assert.equal(await page.evaluate(()=>window.sample.signature()),reviewBefore);
       const workingBefore=await page.evaluate(()=>window.sample.working());
       await cases.getByRole('button',{name:'Archive case Lightweight bracket',exact:true}).click();

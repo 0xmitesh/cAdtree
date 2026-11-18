@@ -124,7 +124,7 @@ test("graph and list both list the newest revision first; there are no zoom or L
     assert.equal(ui.queryByRole("button", { name }), null);
   assert.equal(ui.container.querySelector(".zoom-controls"), null);
 });
-test("normal dates follow local day boundaries while Technical details preserve exact UTC", () => {
+test("normal dates follow local day boundaries while Troubleshooting preserves exact UTC", () => {
   const previousTimezone = process.env.TZ;
   const state = historyState(1);
   const iso = "2026-10-29T20:15:37.123Z";
@@ -152,7 +152,7 @@ test("normal dates follow local day boundaries while Technical details preserve 
           (time) => time.textContent === expected && time.dateTime === iso,
         ),
       );
-      fireEvent.click(ui.getByRole("button", { name: "Technical details" }));
+      fireEvent.click(ui.getByText("Troubleshooting"));
       assert.ok(ui.getByText("Capture completed (UTC)"));
       assert.ok(ui.getByText(iso));
       cleanup();
@@ -254,7 +254,7 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   );
   assert.equal(JSON.stringify(props.vaultState), before);
 });
-test("History offers no restore-copy buttons and Export receives the selected files", () => {
+test("History offers no restore-copy buttons or per-file export boxes; the export dialog lists its own files", () => {
   const ui = render(
     <HistoryRecoveryView
       {...historyProps({
@@ -267,20 +267,22 @@ test("History offers no restore-copy buttons and Export receives the selected fi
   assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
   assert.equal(ui.queryByRole("button", { name: /Copy selected files/ }), null);
   assert.equal(ui.queryByText(/Recovery creates a separate copy/), null);
-  fireEvent.click(
-    ui.getByRole("checkbox", {
-      name: "Select Parts/Housing.SLDPRT for export",
-    }),
-  );
+  assert.equal(ui.queryByRole("button", { name: "Select all snapshot files" }), null);
+  assert.equal(ui.queryByRole("button", { name: "Clear" }), null);
+  assert.equal(ui.container.querySelectorAll('input[type="checkbox"]').length, 0);
   fireEvent.click(ui.getByRole("button", { name: "Export for review" }));
   const dialog = within(ui.getByRole("dialog"));
+  assert.equal(
+    (dialog.getByRole("radio", { name: /Complete project/ }) as HTMLInputElement).checked,
+    true,
+  );
   fireEvent.click(dialog.getByRole("radio", { name: /Selected files/ }));
   assert.equal(
     (dialog.getByRole("checkbox", { name: "Export Parts/Housing.SLDPRT" }) as HTMLInputElement).checked,
-    true,
+    false,
   );
 });
-test("unchanged files are available; deleted files can only be exported from their earlier snapshot", () => {
+test("unchanged files are available; deleted files link to their earlier snapshot", () => {
   const state = historyState(2);
   state.revisions[1].manifest.files = state.revisions[1].manifest.files.filter(
     (f) => f.path !== "Parts/Output_shaft.SLDPRT",
@@ -288,34 +290,39 @@ test("unchanged files are available; deleted files can only be exported from the
   const ui = render(
     <HistoryRecoveryView {...historyProps({ vaultState: state })} />,
   );
-  assert.equal(
-    (
-      ui.getByRole("checkbox", {
-        name: "Select Parts/Output_shaft.SLDPRT for export",
-      }) as HTMLInputElement
-    ).disabled,
-    true,
-  );
-  assert.equal(
-    ui.queryByRole("checkbox", { name: "Select Actuator.SLDASM for export" }),
-    null,
-  );
+  const listed = () =>
+    [...ui.container.querySelectorAll(".detail-files .file-path")].map(
+      (element) => element.textContent,
+    );
+  assert.ok(listed().includes("Parts/Output_shaft.SLDPRT"));
+  assert.ok(!listed().includes("Actuator.SLDASM"));
   fireEvent.click(ui.getByRole("button", { name: /Show .* unchanged files/ }));
-  assert.ok(
-    ui.getByRole("checkbox", { name: "Select Actuator.SLDASM for export" }),
-  );
+  assert.ok(listed().includes("Actuator.SLDASM"));
   fireEvent.click(ui.getByRole("button", { name: /View in parent revision/ }));
-  assert.equal(
-    (
-      ui.getByRole("checkbox", {
-        name: "Select Parts/Output_shaft.SLDPRT for export",
-      }) as HTMLInputElement
-    ).checked,
-    true,
-  );
+  assert.ok(listed().includes("Parts/Output_shaft.SLDPRT"));
   assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
 });
-test("damaged records stay visible and block export; metadata does not claim content verification", () => {
+test("revision details put the record information in a closed Troubleshooting disclosure instead of a tab", () => {
+  const ui = render(<HistoryRecoveryView {...historyProps()} />);
+  assert.equal(ui.queryByRole("button", { name: "Technical details" }), null);
+  assert.deepEqual(
+    [...ui.container.querySelectorAll(".detail-tabs button")].map((b) => b.textContent),
+    ["Changed files", "Saved references", "Notes"],
+  );
+  const disclosure = ui
+    .getByText("Troubleshooting")
+    .closest("details") as HTMLDetailsElement;
+  assert.ok(disclosure);
+  assert.equal(disclosure.open, false);
+  assert.ok(disclosure.contains(ui.getByRole("button", { name: "Verify file contents" })));
+  assert.ok(disclosure.contains(ui.getByText(/File checksums \(\d+\)/)));
+  // It sits below the panel's action bar, i.e. at the bottom of the revision details.
+  const panel = ui.getByRole("complementary", { name: "Revision details" });
+  assert.equal(panel.lastElementChild, disclosure);
+  assert.equal(ui.queryByText(/Current working file shortcuts/), null);
+  assert.equal(ui.queryByRole("button", { name: /Copy folder path/ }), null);
+});
+test("damaged records stay visible and block export; healthy revisions show no verification badge", () => {
   const props = historyProps({ onExportForReview: async () => { throw new Error("no"); } });
   props.vaultState.revisions[1].integrityStatus = "corrupted";
   const ui = render(<HistoryRecoveryView {...props} />);
@@ -329,7 +336,8 @@ test("damaged records stay visible and block export; metadata does not claim con
     true,
   );
   fireEvent.click(ui.getByRole("button", { name: /Rev 001: Initial/ }));
-  assert.ok(ui.getByText("Metadata verified · contents not yet checked"));
+  assert.equal(ui.queryByText(/Metadata verified/), null);
+  assert.equal(ui.queryByText(/Damaged revision/), null);
 });
 const scan: ScanResult = {
   scannedAt: "2026-10-29T12:00:00Z",

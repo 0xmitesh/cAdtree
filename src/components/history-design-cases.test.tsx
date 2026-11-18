@@ -38,8 +38,7 @@ test('History owns the existing case activity/Compare panel without changing ins
   fireEvent.click(disclosure.querySelector('summary')!);
   assert.equal(disclosure.open,true);
   const cases=within(ui.getByRole('region',{name:'Design cases'}));
-  fireEvent.click(cases.getByLabelText('Saved activity and divergence for Lightweight bracket'));
-  assert.ok(cases.getByText('Started from'));
+  assert.equal(cases.queryByLabelText('Saved activity and divergence for Lightweight bracket'),null);
   const compare=cases.getByRole('button',{name:'Compare Lightweight bracket with Main'});
   compare.focus();fireEvent.click(compare);
   const comparison=within(ui.getByRole('dialog',{name:'Compare saved revisions'}));

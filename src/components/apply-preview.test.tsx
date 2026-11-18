@@ -284,24 +284,13 @@ test("unavailable shared ancestry stays explicit while ordinary Compare keeps it
   });
   assert.ok(ui.getByRole("status", { name: "Comparison counts" }));
 });
-test("closing preview preserves History inspection, file filter and export selection; project changes close it", () => {
+test("closing preview preserves History inspection and file filter; project changes close it", () => {
   const state = fixture();
   const ui = render(<HistoryRecoveryView {...props(state)} />);
   pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
-  fireEvent.click(
-    ui.getByRole("checkbox", { name: `Select ${path} for export` }),
-  );
   fireEvent.click(ui.getByRole("button", { name: "Review changes to apply" }));
   fireEvent.click(ui.getByRole("button", { name: "Close preview" }));
-  assert.equal(
-    (
-      ui.getByRole("checkbox", {
-        name: `Select ${path} for export`,
-      }) as HTMLInputElement
-    ).checked,
-    true,
-  );
   assert.equal(
     filePicker(ui).value,
     path,

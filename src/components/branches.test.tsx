@@ -278,7 +278,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   );
   fireEvent.click(ctx.ui.getByRole("button", { name: "List" }));
   assert.ok(ctx.ui.getByRole("heading", { name: "Original housing" }));
-  fireEvent.click(ctx.ui.getByRole("button", { name: "Technical details" }));
+  fireEvent.click(ctx.ui.getByText("Troubleshooting"));
   fireEvent.click(ctx.ui.getByRole("button", { name: "Verify file contents" }));
   await waitFor(() =>
     assert.ok(ctx.ui.getByText("Metadata and file contents verified")),

@@ -92,31 +92,18 @@ for (const width of [1366, 390])
       exact: true,
     });
     await cases.getByText("Archived cases (1)", { exact: true }).click();
-    const disclosure = cases.getByLabel(
-      "Saved activity and divergence for Part-X redesign",
-      { exact: true },
-    );
-    await disclosure.focus();
-    await disclosure.press("Enter");
-    const info = disclosure.locator("..");
-    await expect(info).toContainText("Rev 001 · Main");
-    await expect(info).toContainText("Rev 003 · Part-X redesign · Archived");
-    await expect(info).toContainText("Rev 002 · Main");
-    await expect(info).toContainText("Main: 1 revision since shared ancestor");
-    await expect(info).toContainText(
-      "Case history: 1 revision since shared ancestor",
-    );
-    await expect(info.locator("time")).toHaveAttribute(
-      "datetime",
-      fixture.caseSavedAt,
-    );
+    await expect(
+      cases.getByLabel("Saved activity and divergence for Part-X redesign", {
+        exact: true,
+      }),
+    ).toHaveCount(0);
     await expect(
       cases.getByRole("button", {
         name: "Reopen case Part-X redesign",
         exact: true,
       }),
     ).toBeVisible();
-    await info.scrollIntoViewIfNeeded();
+    await cases.scrollIntoViewIfNeeded();
     expect(
       await page
         .locator("body")
@@ -125,7 +112,7 @@ for (const width of [1366, 390])
     await page.screenshot({
       path: `artifacts/screenshots/case-activity-${width}.png`,
     });
-    const compare = info.getByRole("button", {
+    const compare = cases.getByRole("button", {
       name: "Compare Part-X redesign with Main",
       exact: true,
     });

@@ -119,6 +119,13 @@ export function RevisionGraph({
       reveal(head);
     }
   };
+  const changeCount = fileRecords
+    ? graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "change").length
+    : 0;
+  const unavailableCount = fileRecords
+    ? graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "unavailable")
+        .length
+    : 0;
   return (
     <section
       className="history-canvas"
@@ -132,13 +139,16 @@ export function RevisionGraph({
       <div className="canvas-bar">
         <span>
           {fileRecords
-            ? `${graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "change").length} file change events`
+            ? `${changeCount} ${changeCount === 1 ? "change" : "changes"} to this file`
             : `${graph.nodes.length} revisions`}{" "}
-          <span className="muted">
-            {fileRecords
-              ? `· ${graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "context").length} context markers · ${graph.nodes.filter((n) => fileRecords.get(n.id)?.kind === "unavailable").length} unavailable comparisons`
-              : "· complete project states"}
-          </span>
+          {fileRecords && unavailableCount > 0 ? (
+            <span className="muted">
+              {`· ${unavailableCount} ${unavailableCount === 1 ? "version" : "versions"} could not be compared`}
+            </span>
+          ) : null}
+          {!fileRecords ? (
+            <span className="muted">· complete project states</span>
+          ) : null}
         </span>
       </div>
       <div className="graph-toolbar">

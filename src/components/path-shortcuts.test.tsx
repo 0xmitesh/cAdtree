@@ -439,17 +439,12 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   nav(ui, "History");
   await selectBranch(ui, branch.createdBranchId);
   await idle(ui);
-  fireEvent.click(
-    ui.getByRole("button", {
-      name: `Copy folder path — Current file on Main · ${filePath}`,
-    }),
-  );
-  await waitFor(() => assert.equal(copied.length, 2));
-  assert.equal(copied[1], copied[0]); // inspecting Main while Case A is active
+  // History no longer offers current-file shortcuts for saved revision rows.
+  assert.equal(ui.queryByRole("button", { name: /Current file on/ }), null);
+  assert.equal(ui.queryByText(/Current working file shortcuts/), null);
   assert.equal(currentBranchId(ui), branch.createdBranchId);
-  assert.ok(ui.getByText(/Export this\s+revision for the exact historical bytes/));
   assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
-  assert.equal(copied.length, 2);
+  assert.equal(copied.length, 1);
   assert.equal(
     (await openWorkspace(root)).projects[0].project!.vaultState.revisions
       .length,

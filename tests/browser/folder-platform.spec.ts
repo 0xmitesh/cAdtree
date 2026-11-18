@@ -53,8 +53,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await page.getByRole('button', { name: /^Copy folder path/ }).click();
   await expect.poll(() => page.evaluate(() => (window as any).copiedPaths.at(-1))).toBe(folder(initial.prefix + '/Parts/工程'));
   await nav('History');
-  await page.getByRole('button', { name: /^Copy folder path/ }).click();
-  await expect.poll(() => page.evaluate(() => (window as any).copiedPaths.at(-1))).toBe(folder(initial.prefix + '/Parts/工程'));
+  await expect(page.getByRole('button', { name: /^Copy folder path/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create design case from this revision', exact: true }).click();
   await page.getByRole('textbox', { name: 'Case name' }).fill('Alternative');
   await page.getByRole('textbox', { name: 'Engineering reason' }).fill('Explore another fit');

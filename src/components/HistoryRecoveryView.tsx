@@ -35,8 +35,6 @@ import {
   type CreateBranchParams,
 } from "./CreateBranchDialog";
 import { Notice, NotesText, StatusBadge } from "./ui";
-import { FilePathActions } from "./FilePathShortcuts";
-import type { FilePathLocation } from "../utils/folder-path";
 import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialog';
 import { RevisionReferenceContext } from './RevisionReferenceContext';
 
@@ -61,10 +59,6 @@ export interface HistoryRecoveryViewProps {
   projectAddress?: string;
   operationsBlockedReason?: string;
   onPrepareWrite?: () => Promise<void>;
-  resolveWorkingFilePath?: (
-    branchId: string,
-    path: string,
-  ) => Promise<FilePathLocation>;
 }
 export function HistoryRecoveryView(props: HistoryRecoveryViewProps) {
   return (
@@ -112,8 +106,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     () => graph.latestId ?? graph.nodes[0]?.id ?? null,
   );
   const [mode, setMode] = useState<"graph" | "list">("graph");
-  const [tab, setTab] = useState<"changes" | "references" | "notes" | "technical">("changes");
-  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [tab, setTab] = useState<"changes" | "references" | "notes">("changes");
   const [showAll, setShowAll] = useState(false);
   const [comparison, setComparison] = useState<{
     inspectedId: string;
@@ -167,7 +160,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     setFilePath(path);
     setSelectedId(null);
     setContextId(null);
-    setSelectedPaths(new Set());
     setShowAll(false);
   };
   const changeHighlight = (id: string | null) => {
@@ -175,25 +167,17 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     if (filePath) {
       setSelectedId(null);
       setContextId(null);
-      setSelectedPaths(new Set());
-      }
+    }
   };
   const diff = useMemo(
     () => (rev ? computeRevisionDiff(rev, vaultState) : null),
     [rev, vaultState],
   );
-  const choose = (id: string, preselect?: string) => {
+  const choose = (id: string, showUnchanged?: boolean) => {
     setSelectedId(id);
     if (filePath && !graph.nodes.some((n) => n.id === id)) setContextId(id);
-    setSelectedPaths(new Set(preselect ? [preselect] : []));
-    setShowAll(Boolean(preselect));
+    setShowAll(Boolean(showUnchanged));
   };
-  const toggle = (path: string) =>
-    setSelectedPaths((prev) => {
-      const next = new Set(prev);
-      next.has(path) ? next.delete(path) : next.add(path);
-      return next;
-    });
   const projectRows: { file: FileEntry; status: string }[] =
     diff?.status === "unavailable"
       ? (rev?.manifest.files ?? []).map((file) => ({
@@ -403,14 +387,12 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     {formatTimestamp(rev.manifest.captureCompletedAt)}
                   </time>
                 </div>
-                <p className={damaged ? "integrity damaged" : "integrity"}>
-                  <ShieldCheck size={14} />
-                  {damaged
-                    ? "Damaged revision · export blocked"
-                    : rev.integrityStatus === "objects_verified"
-                      ? "Metadata and file contents verified"
-                      : "Metadata verified · contents not yet checked"}
-                </p>
+                {damaged ? (
+                  <p className="integrity damaged">
+                    <ShieldCheck size={14} />
+                    Damaged revision · export blocked
+                  </p>
+                ) : null}
                 {selected.warnings.length ? (
                   <Notice type="error">{selected.warnings.join(" · ")}</Notice>
                 ) : null}
@@ -435,18 +417,16 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 revisionId={rev.manifest.revisionId}
               />
               <div className="detail-tabs" aria-label="Revision sections">
-                {(["changes", "references", "notes", "technical"] as const).map((t) => (
+                {(["changes", "references", "notes"] as const).map((t) => (
                   <button
                     key={t}
                     aria-pressed={tab === t}
                     className={tab === t ? "active" : ""}
                     onClick={() => setTab(t)}
                   >
-                    {t === "technical"
-                      ? "Technical details"
-                      : t === "notes"
-                        ? "Notes"
-                        : t === "references" ? "Saved references" : "Changed files"}
+                    {t === "notes"
+                      ? "Notes"
+                      : t === "references" ? "Saved references" : "Changed files"}
                   </button>
                 ))}
               </div>
@@ -467,16 +447,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         {rev.manifest.files.length} in snapshot
                       </span>
                     </div>
-                    {props.resolveWorkingFilePath ? (
-                      <p className="muted small">
-                        Current working file shortcuts refer to{" "}
-                        {vaultState.branches.find(
-                          (branch) => branch.branchId === rev.manifest.branchId,
-                        )?.name ?? "the recorded branch"}
-                        , which may differ from this saved revision. Export this
-                        revision for the exact historical bytes.
-                      </p>
-                    ) : null}
                     {filePath ? (
                       fileRecord?.kind !== "unavailable" ? (
                         <p className="muted small">
@@ -496,7 +466,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       <Notice type="error">
                         Comparison is unavailable because this revision or its
                         recorded parent is missing or damaged. Snapshot files
-                        are listed below. See Technical details for the record
+                        are listed below. See Troubleshooting below for the record
                         information.
                       </Notice>
                     ) : (
@@ -509,60 +479,15 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         modified · {diff.deleted.length} deleted
                       </p>
                     )}
-                    <div className="file-selection-toolbar">
-                      <button
-                        className="text-button"
-                        disabled={
-                          damaged ||
-                          !componentPresent ||
-                          Boolean(
-                            filePath &&
-                            !rev.manifest.files.some(
-                                (f) => f.path === historicalPath,
-                            ),
-                          )
-                        }
-                        onClick={() => {
-                          setSelectedPaths(
-                            new Set(
-                              (filePath
-                                ? rev.manifest.files.filter(
-                                    (f) => f.path === historicalPath,
-                                  )
-                                : rev.manifest.files
-                              ).map((f) => f.path),
-                            ),
-                          );
-                          setShowAll(true);
-                        }}
-                      >
-                        {filePath
-                          ? "Select file for export"
-                          : "Select all snapshot files"}
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() => setSelectedPaths(new Set())}
-                      >
-                        Clear
-                      </button>
-                    </div>
                     <div className="detail-files">
                       {rows.map(({ file, status }) => (
                         <div className="detail-file" key={file.path}>
-                          <label className="file-choice">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select ${file.path} for export`}
-                              disabled={damaged || status === "Deleted" || !componentPresent}
-                              checked={selectedPaths.has(file.path)}
-                              onChange={() => toggle(file.path)}
-                            />
+                          <div className="file-choice">
                             <File size={16} />
                             <span className="file-path" title={file.path}>
                               {file.path}
                             </span>
-                          </label>
+                          </div>
                           <div className="file-subline">
                             <StatusBadge status={status} />
                             <span>{formatBytes(file.size)}</span>
@@ -577,23 +502,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                               </button>
                             ) : null}
                           </div>
-                          {props.resolveWorkingFilePath ? (
-                            <FilePathActions
-                              filePath={file.path}
-                              historicalBranch={
-                                vaultState.branches.find(
-                                  (branch) =>
-                                    branch.branchId === rev.manifest.branchId,
-                                )?.name ?? "Unknown branch"
-                              }
-                              resolve={() =>
-                                props.resolveWorkingFilePath!(
-                                  rev.manifest.branchId,
-                                  file.path,
-                                )
-                              }
-                            />
-                          ) : null}
                           {status === "Deleted" ? (
                             <div className="deleted-help">
                               {componentId ? 'This component is absent from this revision; a different component may use its old path.' : 'Absent from this revision.'}{" "}
@@ -606,7 +514,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                                 <button
                                   className="text-button"
                                   onClick={() =>
-                                    choose(diff.parentRevisionId!, file.path)
+                                    choose(diff.parentRevisionId!, true)
                                   }
                                 >
                                   View in parent revision ↗
@@ -671,72 +579,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       <p className="muted">No file notes recorded.</p>
                     )}
                   </>
-                ) : (
-                  <>
-                    <h3>Record information</h3>
-                    {diff.status === "unavailable" ? (
-                      <Notice type="error">{diff.unavailableReason}</Notice>
-                    ) : null}
-                    <dl className="technical-data">
-                      {Object.entries({
-                        Revision: rev.manifest.revisionId,
-                        Parent:
-                          rev.manifest.parentRevisionId ??
-                          "None — initial baseline",
-                        Branch: rev.manifest.branchId,
-                        Project: rev.manifest.projectId,
-                        Schema: rev.manifest.schemaVersion,
-                        "Manifest SHA-256": rev.manifest.manifestPayloadSha256,
-                        "Completion SHA-256": rev.completion.manifestSha256,
-                        "Record path": `revisions/${rev.manifest.revisionId}.manifest.json`,
-                        "Capture started (UTC)": rev.manifest.captureStartedAt,
-                        "Capture completed (UTC)":
-                          rev.manifest.captureCompletedAt,
-                      }).map(([k, v]) => (
-                        <div key={k}>
-                          <dt>{k}</dt>
-                          <dd>{v}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    {rev.integrityErrors.map((e) => (
-                      <Notice key={e} type="error">
-                        {e}
-                      </Notice>
-                    ))}
-                    <button
-                      className="button secondary"
-                      disabled={verifying || damaged}
-                      onClick={async () => {
-                        setVerifying(true);
-                        setError("");
-                        try {
-                          await onVerifySingleRevisionObjects(
-                            rev.manifest.revisionId,
-                          );
-                        } catch (e) {
-                          setError(e instanceof Error ? e.message : String(e));
-                        } finally {
-                          setVerifying(false);
-                        }
-                      }}
-                    >
-                      <ShieldCheck size={16} />
-                      {verifying ? "Verifying…" : "Verify file contents"}
-                    </button>
-                    <details className="disclosure">
-                      <summary>
-                        File checksums ({rev.manifest.files.length})
-                      </summary>
-                      {rev.manifest.files.map((f) => (
-                        <dl className="technical-data" key={f.path}>
-                          <dt>{f.path}</dt>
-                          <dd>{f.sha256}</dd>
-                        </dl>
-                      ))}
-                    </details>
-                  </>
-                )}
+                ) : null}
               </div>
               <div className="recovery-bar">
                 {props.onCreateBranch && props.managedDestination ? (
@@ -767,11 +610,82 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 ) : null}
                 {props.onExportForReview ? <button className="button secondary" disabled={damaged || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export for review</button> : null}
               </div>
+              <details
+                className="disclosure revision-troubleshooting"
+                key={rev.manifest.revisionId}
+              >
+                <summary>Troubleshooting</summary>
+                <h3>Record information</h3>
+                {diff.status === "unavailable" ? (
+                  <Notice type="error">{diff.unavailableReason}</Notice>
+                ) : null}
+                <dl className="technical-data">
+                  {Object.entries({
+                    Revision: rev.manifest.revisionId,
+                    Parent:
+                      rev.manifest.parentRevisionId ??
+                      "None — initial baseline",
+                    Branch: rev.manifest.branchId,
+                    Project: rev.manifest.projectId,
+                    Schema: rev.manifest.schemaVersion,
+                    "Manifest SHA-256": rev.manifest.manifestPayloadSha256,
+                    "Completion SHA-256": rev.completion.manifestSha256,
+                    "Record path": `revisions/${rev.manifest.revisionId}.manifest.json`,
+                    "Capture started (UTC)": rev.manifest.captureStartedAt,
+                    "Capture completed (UTC)": rev.manifest.captureCompletedAt,
+                  }).map(([k, v]) => (
+                    <div key={k}>
+                      <dt>{k}</dt>
+                      <dd>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {rev.integrityErrors.map((e) => (
+                  <Notice key={e} type="error">
+                    {e}
+                  </Notice>
+                ))}
+                {rev.integrityStatus === "objects_verified" ? (
+                  <p className="integrity">
+                    <ShieldCheck size={14} />
+                    Metadata and file contents verified
+                  </p>
+                ) : null}
+                <button
+                  className="button secondary"
+                  disabled={verifying || damaged}
+                  onClick={async () => {
+                    setVerifying(true);
+                    setError("");
+                    try {
+                      await onVerifySingleRevisionObjects(
+                        rev.manifest.revisionId,
+                      );
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : String(e));
+                    } finally {
+                      setVerifying(false);
+                    }
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  {verifying ? "Verifying…" : "Verify file contents"}
+                </button>
+                <details className="disclosure">
+                  <summary>File checksums ({rev.manifest.files.length})</summary>
+                  {rev.manifest.files.map((f) => (
+                    <dl className="technical-data" key={f.path}>
+                      <dt>{f.path}</dt>
+                      <dd>{f.sha256}</dd>
+                    </dl>
+                  ))}
+                </details>
+              </details>
             </aside>
           ) : null}
         </div>
       )}
-      {exportRevisionId && props.onExportForReview ? <ReviewExportDialog key={exportRevisionId} state={vaultState} revisionId={exportRevisionId} initialPaths={[...selectedPaths]} busy={props.isExporting ?? false} progress={progress} onExport={props.onExportForReview} onClose={() => setExportRevisionId(null)} onCancel={onCancelOperation} /> : null}
+      {exportRevisionId && props.onExportForReview ? <ReviewExportDialog key={exportRevisionId} state={vaultState} revisionId={exportRevisionId} busy={props.isExporting ?? false} progress={progress} onExport={props.onExportForReview} onClose={() => setExportRevisionId(null)} onCancel={onCancelOperation} /> : null}
       {previewSourceId ? (
         <ApplyPreviewDialog
           application={props.application}
