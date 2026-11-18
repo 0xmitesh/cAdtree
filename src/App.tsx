@@ -362,6 +362,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       requestSignIn({ kind: "my-workspaces" });
       return;
     }
+    setStatusBanner(null);
     setHomeView(true);
     setIntroView(false);
     setLearningOpen(false);
@@ -1225,6 +1226,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const isCreatingBranch = operation === "branch";
   const navigate = (tab: ActiveTab) => {
     if (!operationRef.current) {
+      // A status banner belongs to the page where it was raised: it does not follow the user to another one.
+      if (tab !== activeTab) setStatusBanner(null);
       setActiveTab(tab);
     }
   };
@@ -1257,6 +1260,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     onVisit: async (target) => {
       if (operationRef.current || pendingSignOutRef.current) return false;
       const uid = authStateRef.current.user?.uid;
+      // Back/Forward leaves the page too: its banner stays behind.
+      setStatusBanner(null);
       setLearningOpen(false);
       setExplorerOpen(false);
       if (target.view === "intro") {
@@ -1405,6 +1410,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           navigate={navigate}
           onWordmarkClick={() => {
             if (operationRef.current) return;
+            setStatusBanner(null);
             if (!authStateRef.current.user) {
               setHomeView(true);
               setIntroView(true);

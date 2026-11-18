@@ -2,7 +2,7 @@ import "../../tests/dom";
 import { indexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import App from "../App";
 import { ReferencesView } from "./ReferencesView";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
@@ -112,4 +112,41 @@ test("Reference browsing keeps every stored version downloadable without editing
   fireEvent.change(search, { target: { value: "Requirements.txt" } });
   fireEvent.click(ui.getByRole("button", { name: "Download Requirements (Requirements.txt)" }));
   await waitFor(() => assert.deepEqual(retrieved, new TextEncoder().encode("One")));
+});
+
+const banner = (ui: ReturnType<typeof render>) => ui.container.querySelector(".app-status-feedback");
+// The open project page: the primary navigation button marked as current.
+const page = (nav: ReturnType<typeof within>) => nav.getAllByRole("button").find((b: HTMLElement) => b.getAttribute("aria-current") === "page")?.getAttribute("aria-label");
+async function scanBanner(ui: ReturnType<typeof render>, nav: ReturnType<typeof within>) {
+  fireEvent.click(nav.getByRole("button", { name: "Changes" }));
+  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  await waitFor(() => assert.ok(banner(ui), "the scan outcome is shown on the page that raised it"));
+}
+async function traverse(direction: "back" | "forward") {
+  await act(async () => { window.history[direction](); await new Promise((resolve) => setTimeout(resolve, 30)); });
+}
+
+test("A status banner stays on the page that raised it: another tab, Back/Forward and leaving the project clear it", async () => {
+  const { ui, nav } = await openSample();
+  await scanBanner(ui, nav);
+  fireEvent.click(nav.getByRole("button", { name: "References" }));
+  assert.equal(banner(ui), null, "the Changes notice does not follow the user to References");
+  fireEvent.click(nav.getByRole("button", { name: "Changes" }));
+  assert.equal(banner(ui), null, "and does not come back when the user returns");
+  // Same tab again: the notice stays until the user leaves.
+  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitFor(() => assert.ok(banner(ui)));
+  fireEvent.click(nav.getByRole("button", { name: "Changes" }));
+  assert.ok(banner(ui), "re-selecting the current page keeps its notice");
+  // Back and Forward leave the page as well.
+  await traverse("back");
+  assert.equal(banner(ui), null);
+  await traverse("forward");
+  assert.equal(banner(ui), null);
+  // Leaving the project clears it too.
+  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitFor(() => assert.ok(banner(ui)));
+  fireEvent.click(nav.getByRole("button", { name: "My workspaces" }));
+  assert.equal(banner(ui), null);
 });
