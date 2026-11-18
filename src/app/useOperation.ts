@@ -15,6 +15,9 @@ export type UseOperationArgs = {
   applyAuthSnapshot: (next: AuthSnapshot) => void;
 };
 
+/** `rethrow`: pass a failure on to the caller. `banner: false`: the caller shows the failure itself, so no status banner. */
+export type PerformOptions = { rethrow?: boolean; banner?: boolean };
+
 /** The busy/progress/banner core: one operation at a time, cancellable, with its outcome in the status banner. */
 export function useOperation({
   activeTab,
@@ -43,8 +46,10 @@ export function useOperation({
   const perform = async <T,>(
     kind: Operation,
     action: (context: Context) => Promise<T>,
-    rethrow = false,
+    options: boolean | PerformOptions = false,
   ): Promise<T | undefined> => {
+    const { rethrow = false, banner = true } =
+      typeof options === "boolean" ? { rethrow: options } : options;
     if (operationRef.current || pendingSignOutRef.current || pendingAccountSnapshotRef.current) {
       if (rethrow)
         throw new Error("Finish or cancel the current operation first.");
@@ -72,7 +77,7 @@ export function useOperation({
       error = folderPermissionError(error);
       // Over the path limit: the same wording in the banner and in any dialog that shows the rethrown error.
       error = presentPathBudgetError(error);
-      if (current())
+      if (banner && current())
         setStatusBanner({
           type:
             (error instanceof DOMException && error.name === "AbortError") ||
