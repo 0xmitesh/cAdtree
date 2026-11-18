@@ -52,8 +52,9 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
       .textContent?.includes("Bore clearance increased"),
   );
   fireEvent.click(ui.getByRole("button", { name: /Rev 001:/ }));
+  // Newest first: the next newer revision is above.
   fireEvent.keyDown(ui.getByRole("button", { name: /Rev 001:/ }), {
-    key: "ArrowDown",
+    key: "ArrowUp",
   });
   assert.ok(
     ui

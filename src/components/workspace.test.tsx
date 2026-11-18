@@ -24,27 +24,105 @@ import { formatTimestamp } from "../utils/format";
 import { captureRevision, ReviewStaleError } from "../engine/revision-service";
 
 afterEach(cleanup);
-test("the inspected revision stays readable outside highlighted ancestry in both graph and list", () => {
+test("clicking a case chip selects that case's latest revision and fades nothing, in graph and list", () => {
   const ui = render(
     <HistoryRecoveryView
       {...historyProps({ vaultState: scenarioState("branches") })}
     />,
   );
-  fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /Rev 003:/ }));
+  fireEvent.click(ui.getByRole("button", { name: "Prototype" }));
+  assert.equal(
+    ui.getByRole("button", { name: /^Rev 008:/ }).getAttribute("aria-pressed"),
+    "true",
+  );
+  assert.equal(ui.container.querySelectorAll(".dimmed").length, 0);
+  // Only revisions saved on the case carry the accent, not the Main history it branched from.
+  const marked = () =>
+    [...ui.container.querySelectorAll(".graph-row.in-case .graph-hit")].map(
+      (hit) => /Rev (\d{3})/.exec(hit.getAttribute("aria-label")!)![1],
+    );
+  assert.deepEqual(marked().sort(), ["007", "008"]);
+  fireEvent.click(ui.getByRole("button", { name: "List" }));
+  fireEvent.click(ui.getByRole("button", { name: /^Rev 003 / }));
   fireEvent.click(ui.getByRole("button", { name: "Main" }));
   assert.equal(
     ui.container
-      .querySelector(".graph-row.selected")!
-      .classList.contains("dimmed"),
-    false,
-  );
-  fireEvent.click(ui.getByRole("button", { name: "List" }));
-  assert.equal(
-    ui.container
       .querySelector(".revision-list-row.selected")!
-      .classList.contains("dimmed"),
-    false,
+      .textContent!.includes("Rev 006"),
+    true,
   );
+  assert.equal(ui.container.querySelectorAll(".dimmed").length, 0);
+  const markedRows = [...ui.container.querySelectorAll(".revision-list-row.in-case")].map(
+    (row) => /Rev (\d{3})/.exec(row.textContent!)![1],
+  );
+  assert.deepEqual(markedRows.sort(), ["001", "002", "003", "004", "005", "006"]);
+  // Clicking the same chip again clears the emphasis.
+  fireEvent.click(ui.getByRole("button", { name: "Main" }));
+  assert.equal(ui.container.querySelectorAll(".in-case").length, 0);
+  assert.equal(
+    ui.getByRole("button", { name: "Main" }).getAttribute("aria-pressed"),
+    "false",
+  );
+});
+test("a case with no revisions of its own yet marks its starting revision when its chip is clicked", () => {
+  const state = scenarioState("branches");
+  state.branches.push({
+    ...state.branches[0],
+    branchId: "fresh",
+    name: "Fresh",
+    isMain: false,
+    startingRevisionId: "r3",
+  });
+  state.branchHeads.fresh = "r3";
+  const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: state })} />);
+  fireEvent.click(ui.getByRole("button", { name: "Fresh" }));
+  const marked = [...ui.container.querySelectorAll(".graph-row.in-case .graph-hit")].map(
+    (hit) => /Rev (\d{3})/.exec(hit.getAttribute("aria-label")!)![1],
+  );
+  assert.deepEqual(marked, ["003"]);
+  assert.equal(ui.getByRole("button", { name: /^Rev 003:/ }).getAttribute("aria-pressed"), "true");
+});
+test("graph and list both list the newest revision first; there are no zoom or Latest controls", () => {
+  const ui = render(
+    <HistoryRecoveryView {...historyProps({ vaultState: historyState(4) })} />,
+  );
+  const revisionNumbers = (selector: string) =>
+    [...ui.container.querySelectorAll(selector)].map(
+      (row) => /Rev (\d{3})/.exec(row.getAttribute("aria-label") ?? row.textContent!)![1],
+    );
+  assert.deepEqual(revisionNumbers(".graph-hit"), ["004", "003", "002", "001"]);
+  // Each edge runs from a child (higher row) down to its parent (lower row).
+  const rowOf = new Map(
+    [...ui.container.querySelectorAll(".graph-row")].map((row, index) => [
+      /Rev (\d{3})/.exec(row.querySelector(".graph-hit")!.getAttribute("aria-label")!)![1],
+      index,
+    ]),
+  );
+  const edges = [...ui.container.querySelectorAll(".graph-lines path[data-child]")];
+  assert.equal(edges.length, 3);
+  for (const edge of edges) {
+    const child = "00" + edge.getAttribute("data-child")!.slice(1);
+    const parent = "00" + edge.getAttribute("data-parent")!.slice(1);
+    assert.ok(rowOf.get(child)! < rowOf.get(parent)!);
+  }
+  fireEvent.click(ui.getByRole("button", { name: "List" }));
+  assert.deepEqual(revisionNumbers(".revision-list-row"), ["004", "003", "002", "001"]);
+  fireEvent.click(ui.getByRole("button", { name: "Graph" }));
+  // Keyboard follows the visual order: Home is the newest, End the oldest.
+  const newest = ui.getByRole("button", { name: /^Rev 004:/ });
+  fireEvent.keyDown(newest, { key: "End" });
+  assert.equal(ui.getByRole("button", { name: /^Rev 001:/ }).getAttribute("aria-pressed"), "true");
+  fireEvent.keyDown(ui.getByRole("button", { name: /^Rev 001:/ }), { key: "Home" });
+  assert.equal(newest.getAttribute("aria-pressed"), "true");
+  for (const name of [
+    "Zoom in",
+    "Zoom out",
+    "Fit graph width and reset scroll",
+    "Latest",
+  ])
+    assert.equal(ui.queryByRole("button", { name }), null);
+  assert.equal(ui.container.querySelector(".zoom-controls"), null);
 });
 test("normal dates follow local day boundaries while Technical details preserve exact UTC", () => {
   const previousTimezone = process.env.TZ;
@@ -86,7 +164,7 @@ test("normal dates follow local day boundaries while Technical details preserve 
     else process.env.TZ = previousTimezone;
   }
 });
-test("diagram labels and arrowheads follow parent identity, with ancestors above children", () => {
+test("diagram labels and arrowheads follow parent identity, with children above ancestors", () => {
   const state = scenarioState("branches");
   const ui = render(
     <HistoryRecoveryView {...historyProps({ vaultState: state })} />,
@@ -106,8 +184,8 @@ test("diagram labels and arrowheads follow parent identity, with ancestors above
       .match(/-?\d+(?:\.\d+)?/g)!
       .map(Number);
     assert.ok(
-      coordinates[1] > coordinates.at(-1)!,
-      "arrow points upward toward the recorded parent",
+      coordinates[1] < coordinates.at(-1)!,
+      "arrow points downward toward the recorded parent",
     );
   }
   const main = ui.getByRole("button", { name: "Main" });
@@ -123,7 +201,7 @@ test("diagram labels and arrowheads follow parent identity, with ancestors above
     ui.getByRole("heading", { name: "Review assembly for manufacture" }),
   );
 });
-test("branch highlighting and zoom controls change only viewing state", () => {
+test("branch highlighting changes only viewing state", () => {
   const state = scenarioState("branches");
   const before = JSON.stringify(state);
   const ui = render(
@@ -135,12 +213,6 @@ test("branch highlighting and zoom controls change only viewing state", () => {
     "true",
   );
   assert.equal(JSON.stringify(state), before);
-  fireEvent.click(ui.getByRole("button", { name: "Zoom in" }));
-  assert.ok(ui.getByText("110%"));
-  fireEvent.click(
-    ui.getByRole("button", { name: "Fit graph width and reset scroll" }),
-  );
-  assert.ok(ui.getByText("80%")); // jsdom clientWidth is zero; zoom is bounded.
 });
 const noop = async () => {};
 function historyProps(
@@ -163,7 +235,8 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   const baseline = ui.getByRole("button", { name: /Rev 001: Initial/ });
   fireEvent.click(baseline);
   assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
-  fireEvent.keyDown(baseline, { key: "ArrowDown" });
+  // Newest is on top in both views, so ArrowUp moves to the next revision.
+  fireEvent.keyDown(baseline, { key: "ArrowUp" });
   assert.equal(
     ui
       .getByRole("button", { name: /Rev 002: Refine/ })

@@ -301,7 +301,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     .getByRole("navigation")
     .getByRole("button", { name: "History" })
     .click();
-  await page.getByRole("button", { name: "Latest", exact: true }).click();
+  await page.getByRole("button", { name: /Offline revision/ }).click();
   await expect(
     page.getByRole("heading", { name: "Offline revision", exact: true }),
   ).toBeVisible();

@@ -146,7 +146,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   );
   await file.selectOption("Parts/Pin.SLDPRT");
   await page.getByRole("button", { name: /Rev 001:/ }).focus();
-  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowUp");
   await expect(page.getByRole("button", { name: /Rev 002:/ })).toBeFocused();
   await expect(current).toHaveAttribute(
     "data-branch-id",

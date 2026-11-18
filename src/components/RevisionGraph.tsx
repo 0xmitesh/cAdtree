@@ -1,6 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { Focus, Minus, Plus, CornerUpLeft, GitBranch } from "lucide-react";
-import { ancestryOf, type RevisionGraph as Graph } from "../history/layout";
+import { useEffect, useId, useMemo, useRef } from "react";
+import { GitBranch } from "lucide-react";
+import { type RevisionGraph as Graph } from "../history/layout";
 import { formatRevisionNumber } from "../engine/vault-service";
 import type { FileHistoryRecord } from "../history/file-history";
 import { formatTimestamp } from "../utils/format";
@@ -24,7 +24,6 @@ export function RevisionGraph({
   onHighlightBranch: (id: string | null) => void;
   fileRecords?: Map<string, FileHistoryRecord>;
 }) {
-  const [zoom, setZoom] = useState(1);
   const rowHeight = fileRecords ? 140 : 104;
   const viewport = useRef<HTMLDivElement>(null);
   const refs = useRef(new Map<string, HTMLButtonElement>());
@@ -33,18 +32,19 @@ export function RevisionGraph({
   const highlightedBranch = graph.branches.find(
     (branch) => branch.id === highlightBranchId,
   );
+  // Case emphasis is a light accent on the case's own revisions (not the earlier
+  // history it branched from); nothing is faded. A case with no revisions of its
+  // own yet marks its head, the starting revision. File history uses the chips as
+  // an ancestry filter instead (applied upstream), so it gets no accent.
   const ancestry = useMemo(() => {
-    if (!highlightedBranch) return null;
-    return new Set(
-      highlightedBranch.headIds.flatMap((id) => [...ancestryOf(graph, id)]),
-    );
-  }, [graph, highlightedBranch]);
-  // Graph reads from its earliest ancestor downward, with arrows back toward parents.
-  // List retains newest-first reading order. Both use the same revision identities.
-  const visualNodes = useMemo(
-    () => (mode === "graph" ? [...graph.nodes].reverse() : graph.nodes),
-    [graph.nodes, mode],
-  );
+    if (!highlightedBranch || fileRecords) return null;
+    const own = graph.nodes
+      .filter((node) => node.revision.manifest.branchId === highlightedBranch.id)
+      .map((node) => node.id);
+    return new Set(own.length ? own : highlightedBranch.headIds);
+  }, [graph, highlightedBranch, fileRecords]);
+  // Graph and list both read newest first; the graph's arrows point down to parents.
+  const visualNodes = graph.nodes;
   const positions = new Map(
     visualNodes.map((node, index) => [
       node.id,
@@ -66,8 +66,8 @@ export function RevisionGraph({
     const position = positions.get(id);
     if (mode === "graph" && viewport.current && position) {
       viewport.current.scrollTo({
-        top: Math.max(0, position.y * zoom - viewport.current.clientHeight / 2),
-        left: Math.max(0, position.x * zoom - viewport.current.clientWidth / 3),
+        top: Math.max(0, position.y - viewport.current.clientHeight / 2),
+        left: Math.max(0, position.x - viewport.current.clientWidth / 3),
       });
     } else {
       button?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -82,21 +82,14 @@ export function RevisionGraph({
     const button = refs.current.get(selectedId ?? "");
     const container = viewport.current;
     if (button && container) {
-      const index = [...graph.nodes]
-        .reverse()
-        .findIndex((node) => node.id === selectedId);
+      const index = graph.nodes.findIndex((node) => node.id === selectedId);
       if (index >= 0)
         container.scrollTop = Math.max(
           0,
-          (62 + index * rowHeight) * zoom - container.clientHeight / 2,
+          62 + index * rowHeight - container.clientHeight / 2,
         );
     }
-  }, [mode, graph.nodes, selectedId, zoom, rowHeight]);
-  const jump = () => {
-    if (!graph.latestId) return;
-    onSelect(graph.latestId);
-    reveal(graph.latestId, true);
-  };
+  }, [mode, graph.nodes, selectedId, rowHeight]);
   const keyboard = (event: React.KeyboardEvent, index: number) => {
     let next: number;
     if (event.key === "ArrowDown" || event.key === "ArrowRight")
@@ -111,12 +104,30 @@ export function RevisionGraph({
     onSelect(id);
     reveal(id, true);
   };
-  const toggleBranch = (id: string) =>
-    onHighlightBranch(highlightBranchId === id ? null : id);
+  const toggleBranch = (id: string) => {
+    if (highlightBranchId === id) {
+      onHighlightBranch(null);
+      return;
+    }
+    onHighlightBranch(id);
+    // Outside File history a case chip also selects the case's latest revision.
+    const head = fileRecords
+      ? undefined
+      : graph.branches.find((branch) => branch.id === id)?.headIds[0];
+    if (head) {
+      onSelect(head);
+      reveal(head);
+    }
+  };
   return (
     <section
       className="history-canvas"
       aria-label={mode === "graph" ? "Revision graph" : "Revision list"}
+      style={
+        ancestry && highlightedBranch
+          ? ({ "--case-color": highlightedBranch.color } as React.CSSProperties)
+          : undefined
+      }
     >
       <div className="canvas-bar">
         <span>
@@ -129,14 +140,6 @@ export function RevisionGraph({
               : "· complete project states"}
           </span>
         </span>
-        <button
-          className="text-button"
-          disabled={!graph.latestId}
-          onClick={jump}
-        >
-          <CornerUpLeft size={14} />{" "}
-          {fileRecords ? "Working case file state" : "Latest"}
-        </button>
       </div>
       <div className="graph-toolbar">
         <div
@@ -144,7 +147,7 @@ export function RevisionGraph({
           aria-label={
             fileRecords
               ? "Filter file history by branch ancestry"
-              : "Highlight branch ancestry"
+              : "Show a case's revisions"
           }
         >
           {graph.branches.map((branch) => (
@@ -162,8 +165,8 @@ export function RevisionGraph({
                 fileRecords
                   ? `Filter to ${branch.name} ancestry; does not switch the working branch`
                   : branch.current
-                    ? `Highlight ${branch.name} ancestry · current branch`
-                    : `Highlight ${branch.name} ancestry`
+                    ? `Show ${branch.name} revisions · current branch`
+                    : `Show ${branch.name} revisions`
               }
               onClick={() => toggleBranch(branch.id)}
             >
@@ -177,49 +180,6 @@ export function RevisionGraph({
             </button>
           ))}
         </div>
-        {mode === "graph" ? (
-          <div className="zoom-controls" aria-label="Graph zoom">
-            <button
-              className="icon-button"
-              aria-label="Zoom out"
-              disabled={zoom <= 0.8}
-              onClick={() =>
-                setZoom((z) => Math.max(0.8, +(z - 0.1).toFixed(1)))
-              }
-            >
-              <Minus size={15} />
-            </button>
-            <span>{Math.round(zoom * 100)}%</span>
-            <button
-              className="icon-button"
-              aria-label="Zoom in"
-              disabled={zoom >= 1.5}
-              onClick={() =>
-                setZoom((z) => Math.min(1.5, +(z + 0.1).toFixed(1)))
-              }
-            >
-              <Plus size={15} />
-            </button>
-            <button
-              className="icon-button"
-              aria-label="Fit graph width and reset scroll"
-              onClick={() => {
-                setZoom(
-                  Math.max(
-                    0.8,
-                    Math.min(
-                      1,
-                      (viewport.current?.clientWidth ?? width) / width,
-                    ),
-                  ),
-                );
-                viewport.current?.scrollTo({ top: 0, left: 0 });
-              }}
-            >
-              <Focus size={16} />
-            </button>
-          </div>
-        ) : null}
       </div>
       {fileRecords ? (
         <p className="file-history-help muted small">
@@ -242,14 +202,7 @@ export function RevisionGraph({
         aria-label="Scrollable history. Use arrow keys on a revision to inspect history."
       >
         {mode === "graph" ? (
-          <div
-            className="graph-scaled"
-            style={{ width: width * zoom, height: height * zoom }}
-          >
-            <div
-              className="graph-stage"
-              style={{ width, height, transform: `scale(${zoom})` }}
-            >
+          <div className="graph-stage" style={{ width, height }}>
               <svg
                 width={width}
                 height={height}
@@ -276,8 +229,9 @@ export function RevisionGraph({
                 {graph.edges.map((edge) => {
                   const child = positions.get(edge.child)!;
                   const parent = positions.get(edge.parent)!;
-                  const startY = child.y - NODE_RADIUS - 2;
-                  const endY = parent.y + NODE_RADIUS + 7;
+                  // Child sits above its parent: leave the child's bottom, arrive at the parent's top.
+                  const startY = child.y + NODE_RADIUS + 2;
+                  const endY = parent.y - NODE_RADIUS - 7;
                   return (
                     <path
                       key={edge.child}
@@ -286,13 +240,11 @@ export function RevisionGraph({
                       d={
                         child.x === parent.x
                           ? `M ${child.x} ${startY} L ${parent.x} ${endY}`
-                          : `M ${child.x} ${startY} V ${endY + 48} C ${child.x} ${endY + 16}, ${parent.x} ${endY + 28}, ${parent.x} ${endY}`
+                          : `M ${child.x} ${startY} V ${endY - 48} C ${child.x} ${endY - 16}, ${parent.x} ${endY - 28}, ${parent.x} ${endY}`
                       }
                       stroke={edge.color}
-                      opacity={
-                        ancestry && !ancestry.has(edge.child) ? 0.12 : 0.7
-                      }
-                      strokeWidth={2.25}
+                      opacity={ancestry?.has(edge.child) ? 0.95 : 0.7}
+                      strokeWidth={ancestry?.has(edge.child) ? 3 : 2.25}
                       fill="none"
                       markerEnd={`url(#${markerPrefix}-parent-${edgeColors.indexOf(edge.color)})`}
                     />
@@ -309,7 +261,7 @@ export function RevisionGraph({
                   <div
                     key={node.id}
                     data-file-history-kind={fileRecords?.get(node.id)?.kind}
-                    className={`graph-row ${selected ? "selected" : ""} ${ancestry && !ancestry.has(node.id) && !selected ? "dimmed" : ""}`}
+                    className={`graph-row ${selected ? "selected" : ""} ${ancestry?.has(node.id) ? "in-case" : ""}`}
                     style={
                       {
                         top: position.y - 42,
@@ -394,7 +346,7 @@ export function RevisionGraph({
                             title={
                               fileRecords
                                 ? `Filter to ${branch.name} ancestry; does not switch the working branch`
-                                : `Highlight ${branch.name} ancestry${branch.current ? " · active working branch" : ""}`
+                                : `Show ${branch.name} revisions${branch.current ? " · active working branch" : ""}`
                             }
                           >
                             <GitBranch size={11} />
@@ -414,7 +366,6 @@ export function RevisionGraph({
                   </div>
                 );
               })}
-            </div>
           </div>
         ) : (
           <div className="revision-list">
@@ -423,7 +374,7 @@ export function RevisionGraph({
                 key={node.id}
                 ref={(element) => register(node.id, element)}
                 data-file-history-kind={fileRecords?.get(node.id)?.kind}
-                className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry && !ancestry.has(node.id) && selectedId !== node.id ? "dimmed" : ""}`}
+                className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry?.has(node.id) ? "in-case" : ""}`}
                 aria-pressed={selectedId === node.id}
                 onClick={() => onSelect(node.id)}
                 onKeyDown={(event) => keyboard(event, index)}
@@ -476,14 +427,14 @@ export function RevisionGraph({
               className="text-button"
               onClick={() => onHighlightBranch(null)}
             >
-              {fileRecords ? "Show all branches" : "Clear ancestry highlight"}
+              {fileRecords ? "Show all branches" : "Clear highlight"}
             </button>
           ) : (
             "Select a revision to inspect · ↑ ↓ to navigate"
           )}
         </span>
         {mode === "graph" ? (
-          <span className="graph-direction">↑ Arrows point to parents</span>
+          <span className="graph-direction">↓ Arrows point to parents</span>
         ) : null}
       </div>
     </section>
