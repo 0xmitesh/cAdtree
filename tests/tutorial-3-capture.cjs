@@ -52,7 +52,7 @@ async function start(){
     const open=page.getByRole('button',{name:'Open project',exact:true});
     await open.focus();
     assert.equal(await page.getByText('Managed project',{exact:true}).count(),0);
-    assert.equal(await page.getByText(/One shared vault, independent working folders/).isVisible(),true);
+    assert.equal(await page.getByText(/One shared vault, independent working folders/).count(),0);
     await page.locator('.projects-page').screenshot({path:path.join(root,'public/tutorials/bring-existing-work/step-6-projects.png')});
     await open.click();
     await page.getByRole('navigation',{name:'Primary navigation'}).getByRole('button',{name:'Settings',exact:true}).click();

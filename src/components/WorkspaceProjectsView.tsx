@@ -138,15 +138,15 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                 <div className="project-copy">
                   <h3>{locations[0].name}</h3>
                   {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
-                  <p className="small">
-                    {locations.length > 1
-                      ? DUPLICATE_PROJECT_REASON
-                      : locations[0].status === "ready"
-                        ? "Managed project · One shared vault, independent working folders"
+                  {locations.length > 1 || locations[0].status !== "ready" ? (
+                    <p className="small">
+                      {locations.length > 1
+                        ? DUPLICATE_PROJECT_REASON
                         : locations[0].status === "incomplete"
                           ? "Incomplete copy · Retained for inspection; retry uses a fresh folder"
                           : "Connections or records need attention · Read-only inspection available"}
-                  </p>
+                    </p>
+                  ) : null}
                 </div>
                 {locations.length > 1 ? (
                   <button
