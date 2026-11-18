@@ -232,6 +232,9 @@ export function fileHistory(
             .filter((b) => b.headIds.includes(n.id))
             .map((b) => b.name),
         })),
+      copies: graph.copies.filter(
+        (c) => retained.has(c.child) && retained.has(c.source),
+      ),
       edges: graph.nodes.flatMap((n) => {
         if (!retained.has(n.id)) return [];
         const pid = nearest(parent.get(n.id) ?? null);
