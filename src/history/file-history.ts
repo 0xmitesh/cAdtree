@@ -51,6 +51,8 @@ export interface FileHistoryEntry {
   label: string;
   /** Latest known project-relative path. */
   path: string;
+  /** Every path the file has had, so the picker can find it by an earlier name. */
+  paths: string[];
   componentId?: string;
 }
 
@@ -64,11 +66,12 @@ export function fileHistoryEntries(state: VaultState): FileHistoryEntry[] {
       value: `component:${c.componentId}`,
       label: c.latestPath,
       path: c.latestPath,
+      paths: c.paths,
       componentId: c.componentId,
     })),
     ...historicalFilePaths(state)
       .filter((path) => !covered.has(path))
-      .map((path) => ({ value: path, label: path, path })),
+      .map((path) => ({ value: path, label: path, path, paths: [path] })),
   ];
   const counts = new Map<string, number>();
   for (const entry of entries) counts.set(entry.label, (counts.get(entry.label) ?? 0) + 1);

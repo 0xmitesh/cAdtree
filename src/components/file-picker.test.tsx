@@ -159,3 +159,70 @@ test("when component evidence is unreadable, every path is listed once and the e
     "Parts/Output_shaft.SLDPRT",
   ]);
 });
+
+test("pressing the mouse on the list's scroll bar or padding does not take focus or close it", () => {
+  const ui = render(<HistoryRecoveryView {...props(trackedState())} />);
+  open(ui);
+  const popup = ui.getByRole("listbox", { name: "Files" }).parentElement!;
+  // fireEvent returns false when the default action (moving focus) was prevented.
+  assert.equal(fireEvent.mouseDown(popup), false);
+  assert.ok(ui.getByRole("listbox", { name: "Files" }));
+});
+
+test("clearing back to all files does not reopen the list with the old file highlighted", () => {
+  const ui = render(<HistoryRecoveryView {...props(trackedState())} />);
+  pickFile(ui, "Parts/Output_shaft.SLDPRT");
+  showAllFiles(ui);
+  assert.equal(filePicker(ui).value, "");
+  assert.equal(ui.queryByRole("listbox"), null);
+  // Opening it again starts at "All files".
+  fireEvent.click(filePicker(ui));
+  assert.equal(
+    filePicker(ui).getAttribute("aria-activedescendant"),
+    ui.getByRole("option", { name: "All files" }).id,
+  );
+});
+
+test("typing an earlier name finds the renamed file, which is still labelled by its latest name", () => {
+  const ui = render(<HistoryRecoveryView {...props(trackedState())} />);
+  const input = filePicker(ui);
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: "housing.sldprt" } });
+  assert.deepEqual(pickerOptions(ui), [newHousing]);
+  fireEvent.change(input, { target: { value: "_v2" } });
+  assert.deepEqual(pickerOptions(ui), [newHousing]);
+});
+
+test("a file deleted and re-added under the same path gives two entries, each with its own history", () => {
+  const path = "Parts/Pin.SLDPRT";
+  const first = "component-aaaaaaaa-1111-4111-8111-111111111111";
+  const second = "component-bbbbbbbb-2222-4222-8222-222222222222";
+  const state = historyState(3);
+  const perRevision = [[{ path, componentId: first }], [], [{ path, componentId: second }]];
+  state.revisions.forEach((r, i) => {
+    r.manifest.files = perRevision[i].map((f) => ({ path: f.path, sha256: "1".repeat(64), size: 1, lastModified: 0 }));
+  });
+  state.components = {
+    status: "available",
+    revisions: Object.fromEntries(
+      state.revisions.map((r, i) => [r.manifest.revisionId, { files: perRevision[i], renames: [], payloadSha256: "f".repeat(64) }]),
+    ),
+  };
+  const ui = render(<HistoryRecoveryView {...props(state)} />);
+  open(ui);
+  assert.deepEqual(pickerOptions(ui), ["All files", `${path} · aaaaaaaa`, `${path} · bbbbbbbb`]);
+  fireEvent.blur(filePicker(ui));
+  const statuses = () => ui.getByRole("region", { name: "Selected file history" }).textContent!;
+  const rows = () => ui.container.querySelectorAll('.graph-row[data-file-history-kind="change"]').length;
+  pickFile(ui, `${path} · aaaaaaaa`);
+  assert.equal(rows(), 2);
+  fireEvent.click(ui.getByRole("button", { name: /Rev 002:/ }));
+  assert.match(statuses(), /Deleted/);
+  assert.equal(ui.queryByRole("button", { name: /Rev 003:/ }), null);
+  pickFile(ui, `${path} · bbbbbbbb`);
+  assert.equal(filePicker(ui).value, `${path} · bbbbbbbb`);
+  assert.equal(rows(), 1);
+  fireEvent.click(ui.getByRole("button", { name: /Rev 003:/ }));
+  assert.match(statuses(), /Added/);
+  assert.equal(ui.queryByRole("button", { name: /Rev 001:/ }), null);
+});

@@ -16,6 +16,8 @@ export function FilePicker({
   const inputId = `${baseId}-input`;
   const listId = `${baseId}-list`;
   const inputRef = useRef<HTMLInputElement>(null);
+  // Set while the clear button hands focus back to the input, so that does not reopen the list.
+  const refocusing = useRef(false);
   const [open, setOpen] = useState(false);
   // null: not editing, so the input shows the selected file.
   const [query, setQuery] = useState<string | null>(null);
@@ -28,8 +30,8 @@ export function FilePicker({
     const filtered = needle
       ? entries.filter(
           (entry) =>
-            entry.path.toLowerCase().includes(needle) ||
-            entry.label.toLowerCase().includes(needle),
+            entry.label.toLowerCase().includes(needle) ||
+            entry.paths.some((path) => path.toLowerCase().includes(needle)),
         )
       : entries;
     return [
@@ -80,6 +82,10 @@ export function FilePicker({
           title={value ? (selected?.path ?? value) : "All files"}
           value={text}
           onFocus={(event) => {
+            if (refocusing.current) {
+              refocusing.current = false;
+              return;
+            }
             event.currentTarget.select();
             show();
           }}
@@ -118,14 +124,20 @@ export function FilePicker({
             onClick={() => {
               close();
               onChange("");
+              refocusing.current = true;
               inputRef.current?.focus();
+              refocusing.current = false;
             }}
           >
             <X size={14} />
           </button>
         ) : null}
         {open ? (
-          <div className="file-picker-popup">
+          <div
+            className="file-picker-popup"
+            // The scroll bar and padding must not take focus from the input, or blur would close the list.
+            onMouseDown={(event) => event.preventDefault()}
+          >
             {options.length ? (
               <ul id={listId} role="listbox" aria-label="Files">
                 {options.map((option, index) => (
