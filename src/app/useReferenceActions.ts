@@ -1,7 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { AuthSnapshot } from "../auth/firebase-auth";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
-import { importReferenceAttachment, updateProjectReference } from "../engine/references";
+import { importReferenceAttachment } from "../engine/references";
 import type { VaultState } from "../engine/types";
 import { openExistingVault } from "../engine/vault-service";
 import type { ManagedProject, WorkspaceState } from "../engine/workspace-service";
@@ -47,23 +47,17 @@ export function useReferenceActions({
       async (context) => {
         await assertProjectWritable(context);
         let added = 0;
-        const known = new Set((vaultState.references?.library ?? []).map((item) => item.referenceId));
         try {
           for (const [index, file] of files.entries()) {
             // One reference per file, named after the file. The note is kept as the reference's description.
             const progress = { processedFiles: index, totalFiles: files.length };
             context.progress({ phase: "writing_objects", currentFile: file.name, processedBytes: 0, totalBytes: file.size, message: `Adding ${file.name}…`, ...progress });
-            const imported = await importReferenceAttachment(
+            await importReferenceAttachment(
               vaultDir, projectId, file,
               { title: file.name, description: note.trim(), tags: [] },
               undefined,
-              { savedBy, signal: context.signal, onProgress: context.progress },
+              { savedBy, applyToProject: true, signal: context.signal, onProgress: context.progress },
             );
-            // The import appends the new reference at the end of the library.
-            const reference = imported.references?.library.filter((item) => !known.has(item.referenceId)).at(-1);
-            if (!reference) throw new Error(`${file.name} was added, but could not be applied to the whole project.`);
-            imported.references?.library.forEach((item) => known.add(item.referenceId));
-            await updateProjectReference(vaultDir, projectId, reference.referenceId, { projectVersionId: reference.versions[0].versionId }, { signal: context.signal });
             added++;
           }
         } catch (error) {
