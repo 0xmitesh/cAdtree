@@ -1193,7 +1193,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setScanResult,
     setStatusBanner,
   });
-  const { handleAddReferences } = useReferenceActions({
+  const { handleAddReferences, handleStopApplyingReference } = useReferenceActions({
     vaultDir,
     vaultState,
     managedProject,
@@ -1593,6 +1593,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleExportForReview={handleExportForReview}
                   handleRetrieveReference={handleRetrieveReference}
                   handleAddReferences={handleAddReferences}
+                  handleStopApplyingReference={handleStopApplyingReference}
                   handleVerifySingleRevisionObjects={handleVerifySingleRevisionObjects}
                   handleVerifyAllObjects={handleVerifyAllObjects}
                   handleSimulateClearMetadataAndReopenVault={handleSimulateClearMetadataAndReopenVault}

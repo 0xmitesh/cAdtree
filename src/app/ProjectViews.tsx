@@ -68,6 +68,7 @@ export type ProjectViewsProps = {
   handleExportForReview: ReviewActions["handleExportForReview"];
   handleRetrieveReference: ReviewActions["handleRetrieveReference"];
   handleAddReferences: ReferenceActions["handleAddReferences"];
+  handleStopApplyingReference: ReferenceActions["handleStopApplyingReference"];
   handleVerifySingleRevisionObjects: DiagnosticsActions["handleVerifySingleRevisionObjects"];
   handleVerifyAllObjects: DiagnosticsActions["handleVerifyAllObjects"];
   handleSimulateClearMetadataAndReopenVault: DiagnosticsActions["handleSimulateClearMetadataAndReopenVault"];
@@ -121,6 +122,7 @@ export function ProjectViews({
   handleExportForReview,
   handleRetrieveReference,
   handleAddReferences,
+  handleStopApplyingReference,
   handleVerifySingleRevisionObjects,
   handleVerifyAllObjects,
   handleSimulateClearMetadataAndReopenVault,
@@ -201,7 +203,7 @@ export function ProjectViews({
       ))}
       <div hidden={activeTab !== 'references'}>
         <ReferencesView state={vaultState} busy={busy} progress={progress} onCancel={handleCancelOperation}
-          onRetrieve={handleRetrieveReference} onAdd={handleAddReferences}
+          onRetrieve={handleRetrieveReference} onAdd={handleAddReferences} onStopApplying={handleStopApplyingReference}
           addBlockReason={referenceWriteBlock(vaultState) ?? managedBlockReason} />
       </div>
       <div hidden={activeTab !== "history"}>

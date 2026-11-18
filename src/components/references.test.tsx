@@ -82,7 +82,7 @@ test('Add reference stores files without saving a revision, applies them to the 
   assert.ok(ui.getByText(/No references yet/));
   fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
   fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source(), new File(['Customer brief'], 'Brief.txt')] } });
-  fireEvent.change(ui.getByRole('textbox', { name: 'Note for the new references' }), { target: { value: 'From the customer' } });
+  fireEvent.change(ui.getByRole('textbox', { name: 'Note (optional)' }), { target: { value: 'From the customer' } });
   fireEvent.click(ui.getByRole('button', { name: 'Add' }));
   await waitFor(() => assert.ok(ui.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' })));
   assert.ok(ui.getByRole('button', { name: 'Download Brief.txt (Brief.txt)' }));
@@ -90,6 +90,7 @@ test('Add reference stores files without saving a revision, applies them to the 
   assert.equal(ui.getAllByText('From the customer').length, 2);
   assert.equal(ui.getAllByText(/Applies to the whole project/).length, 2, 'both cards say they apply to the whole project');
   assert.equal(ui.queryByRole('region', { name: 'Add reference' }), null, 'the panel closes after adding');
+  await waitFor(() => assert.ok(document.activeElement === ui.getByRole('button', { name: 'Add reference…' }), 'focus returns to Add reference…'));
   await waitFor(() => assert.ok(ui.getByText(/Added 2 references to the project/)));
   const saved = await openExistingVault(f.project.vaultDir);
   assert.equal(saved.revisions.length, 1, 'no revision was saved');
@@ -115,7 +116,7 @@ test('Add reference: cancelling writes nothing and choosing nothing keeps Add di
   assert.equal((ui.getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled, false);
   fireEvent.click(ui.getByRole('button', { name: 'Cancel' }));
   assert.equal(ui.queryByLabelText('Reference files'), null);
-  assert.ok(ui.getByRole('button', { name: 'Add reference…' }));
+  assert.ok(document.activeElement === ui.getByRole('button', { name: 'Add reference…' }), 'focus returns to Add reference… on Cancel');
   assert.equal(inventorySignature(await readVerifiedInventory(f.home)), before);
   assert.equal((await openExistingVault(f.project.vaultDir)).references?.library.length ?? 0, 0);
 });
@@ -126,7 +127,8 @@ test('Add reference is disabled with a reason when the project is read-only, and
   const calls: unknown[] = [];
   let ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onAdd={async (...args) => { calls.push(args); }} addBlockReason="Managed project is read-only. Reconnect it." />);
   assert.equal((ui.getByRole('button', { name: 'Add reference…' }) as HTMLButtonElement).disabled, true);
-  assert.ok(ui.getByText('Managed project is read-only. Reconnect it.'));
+  const reason = ui.getByText('Managed project is read-only. Reconnect it.');
+  assert.equal((ui.getByRole('button', { name: 'Add reference…' }) as HTMLButtonElement).getAttribute('aria-describedby'), reason.id, 'the disabled button points at the reason');
   assert.equal(calls.length, 0);
   ui.unmount();
   ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onAdd={async () => { throw new Error('Nothing was written.'); }} />);
@@ -138,6 +140,78 @@ test('Add reference is disabled with a reason when the project is read-only, and
   ui.unmount();
   ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} />);
   assert.equal(ui.queryByRole('button', { name: 'Add reference…' }), null, 'no add control without an add action');
+});
+
+test('Add reference publishes each file in one write; a failing file names itself and the rest, keeps only them in the panel, and the guide is refreshed only for published files', async () => {
+  const f = await fixture();
+  const ui = await openReferences(f);
+  const bad = new File(['xyz'], 'Bad.txt');
+  Object.defineProperty(bad, 'size', { value: 999 });
+  const writes = { count: 0 };
+  f.home.setHooks({ onBeforeWrite: () => { writes.count++; } });
+  // Nothing published: no guide refresh either.
+  fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [bad] } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add' }));
+  await waitFor(() => assert.ok(ui.getByText(/Bad\.txt could not be added: Attachment changed while being imported\./)));
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 0);
+  await new Promise(resolve => setTimeout(resolve, 300));
+  assert.equal(writes.count, 0, 'nothing was published, so nothing (guide included) was written');
+  // One file published, then a failure: the error shows once, in the panel.
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [new File(['Customer brief'], 'Brief.txt'), bad, new File(['Third'], 'Third.txt')] } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add' }));
+  await waitFor(() => assert.ok(ui.getByText('1 of 3 files were added. Bad.txt could not be added: Attachment changed while being imported. Not added yet: Third.txt.')));
+  assert.equal(ui.container.querySelectorAll('.app-status-feedback [role="alert"], .app-status-feedback .notice').length, 0, 'no second copy of the error in the status banner');
+  assert.equal(ui.getAllByText(/could not be added/).length, 1);
+  assert.ok(ui.getByRole('button', { name: 'Download Brief.txt (Brief.txt)' }), 'the published file is listed');
+  const panel = ui.getByRole('region', { name: 'Add reference' });
+  assert.deepEqual(Array.from(panel.querySelectorAll('li')).map(li => li.textContent!.split(' · ')[0]), ['Bad.txt', 'Third.txt'], 'a published file is not offered again');
+  assert.equal((await openExistingVault(f.project.vaultDir)).references!.library.length, 1);
+  await waitFor(() => assert.ok(writes.count > 0, 'the guide was refreshed after the published file'));
+});
+
+test('Stop applying removes a reference from the whole project after a confirm; it stays listed and earlier revisions keep it', async () => {
+  const f = await fixture();
+  const ui = await openReferences(f);
+  fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source()] } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add' }));
+  const stopName = 'Stop applying Requirement.pdf to the whole project';
+  await waitFor(() => assert.ok(ui.getByRole('button', { name: stopName })));
+  await f.working.writeFileText(['part.SLDPRT'], 'geometry v2');
+  const first = await captureRevision(f.working, f.project.vaultDir, { branchId, summary: 'Carries it', notes, workingFolders: f.project.workingFolders });
+  const links = (state: Awaited<ReturnType<typeof openExistingVault>>, revisionId: string) => state.references!.contexts[revisionId].record!.links.filter(link => link.origin === 'project').length;
+  assert.equal(links(first.vaultState, first.revision.manifest.revisionId), 1);
+  // Asking, then keeping, changes nothing.
+  const before = inventorySignature(await readVerifiedInventory(f.home));
+  fireEvent.click(ui.getByRole('button', { name: stopName }));
+  assert.ok(ui.getByText(/Revisions you save from now on will not include it/));
+  fireEvent.click(ui.getByRole('button', { name: 'Keep' }));
+  assert.ok(ui.getByRole('button', { name: stopName }));
+  assert.equal(inventorySignature(await readVerifiedInventory(f.home)), before);
+  // Confirming stops it.
+  fireEvent.click(ui.getByRole('button', { name: stopName }));
+  fireEvent.click(ui.getByRole('button', { name: 'Stop applying' }));
+  await waitFor(() => assert.equal(ui.queryByRole('button', { name: stopName }), null));
+  assert.ok(ui.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' }), 'the reference is never deleted');
+  await waitFor(() => assert.ok(ui.getByText(/no longer applies to the whole project/)));
+  const state = await openExistingVault(f.project.vaultDir);
+  assert.equal(state.references!.library.length, 1);
+  assert.equal(state.references!.library[0].projectVersionId, null);
+  assert.equal(links(state, first.revision.manifest.revisionId), 1, 'the earlier revision keeps it');
+  await f.working.writeFileText(['part.SLDPRT'], 'geometry v3');
+  const second = await captureRevision(f.working, f.project.vaultDir, { branchId, summary: 'Without it', notes, workingFolders: f.project.workingFolders });
+  assert.equal(links(second.vaultState, second.revision.manifest.revisionId), 0, 'new revisions no longer carry it');
+});
+
+test('Stop applying is hidden without an action and disabled in a read-only project', async () => {
+  const f = await fixture();
+  const state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirement.pdf', description: '', tags: [] }, undefined, { applyToProject: true });
+  let ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} />);
+  assert.equal(ui.queryByRole('button', { name: /Stop applying/ }), null);
+  ui.unmount();
+  ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onStopApplying={async () => {}} addBlockReason="Read-only." />);
+  assert.equal((ui.getByRole('button', { name: /Stop applying/ }) as HTMLButtonElement).disabled, true);
 });
 
 test('actual App browses and downloads saved references and reopens entirely from disk', async () => {
