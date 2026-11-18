@@ -895,9 +895,6 @@ progress {
 .graph-stage {
   position: relative;
 }
-.graph-scaled {
-  position: relative;
-}
 .graph-lines {
   position: absolute;
   inset: 0;

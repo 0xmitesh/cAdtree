@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef } from "react";
 import { GitBranch } from "lucide-react";
-import { ancestryOf, type RevisionGraph as Graph } from "../history/layout";
+import { type RevisionGraph as Graph } from "../history/layout";
 import { formatRevisionNumber } from "../engine/vault-service";
 import type { FileHistoryRecord } from "../history/file-history";
 import { formatTimestamp } from "../utils/format";
@@ -32,13 +32,16 @@ export function RevisionGraph({
   const highlightedBranch = graph.branches.find(
     (branch) => branch.id === highlightBranchId,
   );
-  // Case emphasis is a light accent on the case's own rows; nothing is faded.
-  // File history uses the chips as an ancestry filter instead (applied upstream).
+  // Case emphasis is a light accent on the case's own revisions (not the earlier
+  // history it branched from); nothing is faded. A case with no revisions of its
+  // own yet marks its head, the starting revision. File history uses the chips as
+  // an ancestry filter instead (applied upstream), so it gets no accent.
   const ancestry = useMemo(() => {
     if (!highlightedBranch || fileRecords) return null;
-    return new Set(
-      highlightedBranch.headIds.flatMap((id) => [...ancestryOf(graph, id)]),
-    );
+    const own = graph.nodes
+      .filter((node) => node.revision.manifest.branchId === highlightedBranch.id)
+      .map((node) => node.id);
+    return new Set(own.length ? own : highlightedBranch.headIds);
   }, [graph, highlightedBranch, fileRecords]);
   // Graph and list both read newest first; the graph's arrows point down to parents.
   const visualNodes = graph.nodes;
@@ -144,7 +147,7 @@ export function RevisionGraph({
           aria-label={
             fileRecords
               ? "Filter file history by branch ancestry"
-              : "Highlight branch ancestry"
+              : "Show a case's revisions"
           }
         >
           {graph.branches.map((branch) => (
@@ -162,8 +165,8 @@ export function RevisionGraph({
                 fileRecords
                   ? `Filter to ${branch.name} ancestry; does not switch the working branch`
                   : branch.current
-                    ? `Highlight ${branch.name} ancestry · current branch`
-                    : `Highlight ${branch.name} ancestry`
+                    ? `Show ${branch.name} revisions · current branch`
+                    : `Show ${branch.name} revisions`
               }
               onClick={() => toggleBranch(branch.id)}
             >
@@ -199,8 +202,7 @@ export function RevisionGraph({
         aria-label="Scrollable history. Use arrow keys on a revision to inspect history."
       >
         {mode === "graph" ? (
-          <div className="graph-scaled" style={{ width, height }}>
-            <div className="graph-stage" style={{ width, height }}>
+          <div className="graph-stage" style={{ width, height }}>
               <svg
                 width={width}
                 height={height}
@@ -344,7 +346,7 @@ export function RevisionGraph({
                             title={
                               fileRecords
                                 ? `Filter to ${branch.name} ancestry; does not switch the working branch`
-                                : `Highlight ${branch.name} ancestry${branch.current ? " · active working branch" : ""}`
+                                : `Show ${branch.name} revisions${branch.current ? " · active working branch" : ""}`
                             }
                           >
                             <GitBranch size={11} />
@@ -364,7 +366,6 @@ export function RevisionGraph({
                   </div>
                 );
               })}
-            </div>
           </div>
         ) : (
           <div className="revision-list">

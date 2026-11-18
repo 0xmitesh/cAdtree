@@ -37,9 +37,12 @@ test("clicking a case chip selects that case's latest revision and fades nothing
     "true",
   );
   assert.equal(ui.container.querySelectorAll(".dimmed").length, 0);
-  assert.ok(ui.container.querySelectorAll(".graph-row.in-case").length > 0);
-  // Rows outside the case are emphasised neither more nor less: only the case's own rows carry the accent.
-  assert.ok(ui.container.querySelector(".graph-row:not(.in-case)"));
+  // Only revisions saved on the case carry the accent, not the Main history it branched from.
+  const marked = () =>
+    [...ui.container.querySelectorAll(".graph-row.in-case .graph-hit")].map(
+      (hit) => /Rev (\d{3})/.exec(hit.getAttribute("aria-label")!)![1],
+    );
+  assert.deepEqual(marked().sort(), ["007", "008"]);
   fireEvent.click(ui.getByRole("button", { name: "List" }));
   fireEvent.click(ui.getByRole("button", { name: /^Rev 003 / }));
   fireEvent.click(ui.getByRole("button", { name: "Main" }));
@@ -50,7 +53,10 @@ test("clicking a case chip selects that case's latest revision and fades nothing
     true,
   );
   assert.equal(ui.container.querySelectorAll(".dimmed").length, 0);
-  assert.ok(ui.container.querySelectorAll(".revision-list-row.in-case").length > 0);
+  const markedRows = [...ui.container.querySelectorAll(".revision-list-row.in-case")].map(
+    (row) => /Rev (\d{3})/.exec(row.textContent!)![1],
+  );
+  assert.deepEqual(markedRows.sort(), ["001", "002", "003", "004", "005", "006"]);
   // Clicking the same chip again clears the emphasis.
   fireEvent.click(ui.getByRole("button", { name: "Main" }));
   assert.equal(ui.container.querySelectorAll(".in-case").length, 0);
@@ -58,6 +64,24 @@ test("clicking a case chip selects that case's latest revision and fades nothing
     ui.getByRole("button", { name: "Main" }).getAttribute("aria-pressed"),
     "false",
   );
+});
+test("a case with no revisions of its own yet marks its starting revision when its chip is clicked", () => {
+  const state = scenarioState("branches");
+  state.branches.push({
+    ...state.branches[0],
+    branchId: "fresh",
+    name: "Fresh",
+    isMain: false,
+    startingRevisionId: "r3",
+  });
+  state.branchHeads.fresh = "r3";
+  const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: state })} />);
+  fireEvent.click(ui.getByRole("button", { name: "Fresh" }));
+  const marked = [...ui.container.querySelectorAll(".graph-row.in-case .graph-hit")].map(
+    (hit) => /Rev (\d{3})/.exec(hit.getAttribute("aria-label")!)![1],
+  );
+  assert.deepEqual(marked, ["003"]);
+  assert.equal(ui.getByRole("button", { name: /^Rev 003:/ }).getAttribute("aria-pressed"), "true");
 });
 test("graph and list both list the newest revision first; there are no zoom or Latest controls", () => {
   const ui = render(

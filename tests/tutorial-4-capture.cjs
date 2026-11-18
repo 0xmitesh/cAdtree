@@ -123,7 +123,9 @@ async function main(){
     const graphBox = await graph.boundingBox();
     const originBox = await page.getByRole('button', { name: /Rev 003: Reviewed design baseline/ }).boundingBox();
     const latestBox = await page.getByRole('button', { name: /Rev 006: Main mounting detail refined/ }).boundingBox();
-    await page.screenshot({ path: path.join(assets, 'step-6-saved-histories.png'), clip: { x: graphBox.x + 12, y: originBox.y - 12, width: graphBox.width - 24, height: latestBox.y + latestBox.height - originBox.y + 24 } });
+    // Newest first: the origin may sit above or below the latest row, so clip by min/max.
+    const top = Math.min(originBox.y, latestBox.y), bottom = Math.max(originBox.y + originBox.height, latestBox.y + latestBox.height);
+    await page.screenshot({ path: path.join(assets, 'step-6-saved-histories.png'), clip: { x: graphBox.x + 12, y: top - 12, width: graphBox.width - 24, height: bottom - top + 24 } });
     const verification = await page.evaluate(async () => {
       const s = window.tutorialSample, p = await s.current();
       return { ...p.record, revisions: p.vaultState.revisions.map(r => ({ number: r.manifest.displayNumber, branch: p.vaultState.branches.find(b => b.branchId === r.manifest.branchId).name, parent: p.vaultState.revisions.find(v => v.manifest.revisionId === r.manifest.parentRevisionId)?.manifest.displayNumber ?? null, summary: r.manifest.summary })), picks: s.picks(), casePath: Object.values(p.workingPaths).find(p => !p.endsWith('/main')) };
