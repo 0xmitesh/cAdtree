@@ -96,10 +96,7 @@ test("unknown committed ownership never displays zero saves or offers an automat
     reason: "Unreadable completion",
   });
   const ui = render(<DesignCases state={state} {...controls} />);
-  assert.doesNotMatch(
-    ui.container.textContent!,
-    /No revisions saved on this case yet/,
-  );
+  assert.match(ui.container.textContent!, /Compare with Main is unavailable:/);
   assert.equal(
     (
       ui.getByRole("button", {

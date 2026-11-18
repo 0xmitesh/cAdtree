@@ -151,7 +151,6 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const rev = selected?.revision;
   const fileRecord = selected && projection?.records.get(selected.id);
   const historicalPath = componentId ? fileRecord?.file?.path ?? '' : filePath;
-  const componentPresent = !componentId || Boolean(rev && vaultState.components?.revisions[rev.manifest.revisionId]?.files.some(f => f.componentId === componentId));
   const fileNotes =
     rev?.manifest.fileNotes?.filter(
       (note) => !filePath || note.path === historicalPath || note.path === fileRecord?.previousPath,
@@ -613,6 +612,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
               <details
                 className="disclosure revision-troubleshooting"
                 key={rev.manifest.revisionId}
+                open={Boolean(damaged || diff.status === "unavailable")}
               >
                 <summary>Troubleshooting</summary>
                 <h3>Record information</h3>
@@ -685,7 +685,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           ) : null}
         </div>
       )}
-      {exportRevisionId && props.onExportForReview ? <ReviewExportDialog key={exportRevisionId} state={vaultState} revisionId={exportRevisionId} busy={props.isExporting ?? false} progress={progress} onExport={props.onExportForReview} onClose={() => setExportRevisionId(null)} onCancel={onCancelOperation} /> : null}
+      {exportRevisionId && props.onExportForReview ? <ReviewExportDialog key={exportRevisionId} state={vaultState} revisionId={exportRevisionId} initialPaths={filePath && historicalPath ? [historicalPath] : []} busy={props.isExporting ?? false} progress={progress} onExport={props.onExportForReview} onClose={() => setExportRevisionId(null)} onCancel={onCancelOperation} /> : null}
       {previewSourceId ? (
         <ApplyPreviewDialog
           application={props.application}

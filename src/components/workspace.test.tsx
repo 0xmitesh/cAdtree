@@ -335,9 +335,11 @@ test("damaged records stay visible and block export; healthy revisions show no v
     ).disabled,
     true,
   );
+  assert.equal((ui.getByText("Troubleshooting").closest("details") as HTMLDetailsElement).open, true);
   fireEvent.click(ui.getByRole("button", { name: /Rev 001: Initial/ }));
   assert.equal(ui.queryByText(/Metadata verified/), null);
   assert.equal(ui.queryByText(/Damaged revision/), null);
+  assert.equal((ui.getByText("Troubleshooting").closest("details") as HTMLDetailsElement).open, false);
 });
 const scan: ScanResult = {
   scannedAt: "2026-10-29T12:00:00Z",

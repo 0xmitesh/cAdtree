@@ -98,6 +98,17 @@ export function DesignCases({
               Switch to another working case before archiving.
             </p>
           ) : null}
+          {activity.baseline.status === "unavailable" ||
+          activity.main.status === "unavailable" ? (
+            <p className="muted small">
+              Compare with Main is unavailable:{" "}
+              {activity.baseline.status === "unavailable"
+                ? activity.baseline.reason
+                : activity.main.status === "unavailable"
+                  ? activity.main.reason
+                  : ""}
+            </p>
+          ) : null}
         </div>
         <button
           className="button secondary"

@@ -93,7 +93,7 @@ test("deleted file shows its absence and links to the parent revision; export is
   fireEvent.click(dialog.getByRole("radio", { name: /Selected files/ }));
   assert.equal(
     (dialog.getByRole("checkbox", { name: `Export ${path}` }) as HTMLInputElement).checked,
-    false,
+    true,
   );
 });
 test("file history header counts changes plainly and mentions unavailable versions only when there are some", () => {
