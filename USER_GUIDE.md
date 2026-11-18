@@ -85,7 +85,7 @@ The first changed capture uses the selected source revision as its parent and re
 There are three ways to use an earlier saved revision. None of them rewrites history.
 
 - **Bring back onto Main…** (the button names the active branch). Select an earlier revision of the active branch in **History** and choose it. The dialog **Make Main match Rev NNN** lists every difference, all selected: **Bring back**, **Replace with Rev NNN's version** or **Remove (not in Rev NNN)**. Deselect files to bring back only some, enter the engineering reason, choose **Prepare bring-back** and confirm the counts. Only the working files change. Save a revision afterwards; History then shows **Brought back from Rev NNN**. Replaced and removed files are kept with the operation and the latest revision stays in history. Unsaved working changes block it, and renamed files cannot be brought back yet.
-- **Export for review.** Select a revision and choose **Export for review**; there you pick the complete project or just the files you want, and export them into a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`). Use it to look at, share, or recover files, including files deleted later. See **Export a saved revision for review**.
+- **Export a copy.** Select a revision and choose **Export a copy**; there you choose a folder to save in, pick the complete project or just the files you want, and export them into a separate folder named `<Project> - <Branch> - R<nn>` (a clash gets `(2)`). Use it to look at, share, or recover files, including files deleted later. See **Export a copy of a saved revision**.
 - **Create design case.** Select a revision and choose **Create branch from here** to continue from it independently.
 
 Export creates neither a branch nor a revision. An export of selected files may omit CAD dependencies, and cAdtree does not rewrite CAD references.
@@ -312,11 +312,11 @@ Manual walkthrough (disposable project, supported desktop browser):
 4. Confirm a CAD rename, capture and compare the component ID across revisions, retaining old filenames. Make a branch from the older revision and verify its explicit links carry forward without changing the older revision.
 5. Reopen after clearing browser convenience data. Copy/import/adopt the complete project or workspace and check IDs, exact versions, old context and retrieved hashes in the copy. Export an older CAD snapshot and check its original filenames.
 6. On disposable copies only, remove/corrupt an attachment or context sidecar, revoke permission, and interrupt an import/capture. Verify clear errors, no dangling committed context, unchanged revision count on pre-completion rejection, usable independent CAD recovery, and a fresh retry after restoring evidence.
-7. Export a saved CAD revision for review. Check the dialog/summary explicitly exclude reference attachments and the output contains only snapshot design files and its review summary.
+7. Export a copy of a saved CAD revision. Check the dialog/summary explicitly exclude reference attachments and the output contains only snapshot design files and its review summary.
 
-## Export a saved revision for review
+## Export a copy of a saved revision
 
-Select the saved revision in **History**, then choose **Export for review**. The dialog identifies that revision's recorded project, branch and project-wide revision number, even when another branch is active. All exported bytes come from the saved snapshot, so newer working edits are excluded.
+Select the saved revision in **History**, then choose **Export a copy**. The dialog identifies that revision's recorded project, branch and project-wide revision number, even when another branch is active. All exported bytes come from the saved snapshot, so newer working edits are excluded.
 
 Project reference attachments are excluded from review exports in this stage. The dialog and readable export summary state this explicitly.
 
@@ -324,7 +324,7 @@ Project reference attachments are excluded from review exports in this stage. Th
 - **Selected files** lists only files present in that snapshot. It preserves their relative paths and filenames by default and clearly marks the output as partial. CAD dependencies are not discovered or added automatically.
 - **Add branch and revision to filenames** is an explicit selected-files option for standalone review. For example, `Parts/Pin.SLDPRT` becomes `Parts/Pin_Alternative_R03.SLDPRT`. Extensions are retained. Other documents may require reference repair; native CAD references are not rewritten.
 
-Choose a destination parent and review the proposed child folder and every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator - Alternative - R03 (2)`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
+Use **Choose folder…** to pick where the copy is saved (the dialog shows the folder's name), then check the proposed child folder. The file list and the summary text are behind **Show details**; open it to review every output filename before exporting. An existing label receives a proposed numbered alternative, such as `Actuator - Alternative - R03 (2)`, for confirmation. Project/branch labels and optional labelled filenames are sanitized for portability; a resulting filename collision blocks export until the selection or naming option is corrected. Original internal filenames are never silently changed in a complete export. A saved path that cannot be represented portably is rejected explicitly.
 
 Each output includes a readable `_CADTREE_REVIEW.txt` summary (or the proposed numbered summary name if that name already belongs to a saved file). It identifies the saved revision/date/notes, original-to-exported paths, available component IDs, file sizes and SHA-256 content hashes. Configured machine addresses, directory handles and destination absolute paths are not added to the summary. Saved notes remain user-authored content.
 

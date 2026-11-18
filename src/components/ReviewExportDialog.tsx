@@ -50,7 +50,7 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
       catch { setDestination(null); }
     } finally { setExporting(false); }
   };
-  return <Modal title="Export revision for review" busy={busy} onClose={onClose}>
+  return <Modal title="Export a copy" busy={busy} onClose={onClose}>
     <p><strong>{plan ? `${plan.projectName} · ${plan.branchName} · ${plan.revisionLabel}` : revision?.manifest.summary}</strong></p>
     <p>Exports verified saved bytes. Open documents and newer working edits are not included.</p>
     <p className="muted small">Project reference attachments are not included.</p>
@@ -59,7 +59,7 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'complete'} onChange={() => { setKind('complete'); setError(''); }} /> Complete project</span></label>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'selected'} onChange={() => { setKind('selected'); setError(''); }} /> Selected files</span></label>
       {kind === 'selected' ? <>
-        <Notice>This is a partial review copy. CAD dependencies are not discovered or included automatically.</Notice>
+        <Notice>This is a partial copy. CAD dependencies are not discovered or included automatically.</Notice>
         <div className="change-table" role="group" aria-label="Files present in the selected snapshot">
           {revision?.manifest.files.map(file => <label className="recovery-external-choice" key={file.path}><span className="file-path"><input type="checkbox" aria-label={`Export ${file.path}`} checked={selected.has(file.path)} onChange={() => setSelected(previous => {
             const next = new Set(previous); next.has(file.path) ? next.delete(file.path) : next.add(file.path); return next;
@@ -71,23 +71,25 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
       {preview.error ? <Notice type="error">{preview.error}</Notice> : null}
       {plan ? <>
         <p>Proposed folder: <strong className="file-path">{destination?.folderName ?? plan.folderName}/</strong></p>
-        <p>Destination parent: <strong>{destination?.parent.name ?? 'Choose a folder below'}</strong></p>
+        <p>Save in: <strong>{destination?.parent.name ?? 'No folder chosen yet'}</strong></p>
         {destination && destination.folderName !== plan.folderName ? <Notice>The original label is already in use. This fresh numbered folder is proposed for your confirmation.</Notice> : null}
-        <details className="disclosure" open>
-          <summary>Proposed files ({plan.files.length})</summary>
+        <details className="disclosure">
+          <summary>Show details</summary>
+          <p><strong>Files to copy ({plan.files.length})</strong></p>
           {plan.files.map(file => <p className="file-path" key={file.path}>{file.path === file.exportedPath ? file.path : `${file.path} → ${file.exportedPath}`}</p>)}
-          <p className="file-path">{plan.summaryName} — review summary</p>
+          <p className="file-path">{plan.summaryName} — summary of this copy</p>
+          <p><strong>Summary file contents</strong></p>
+          <pre className="file-path" style={{ whiteSpace: 'pre-wrap' }}>{plan.summaryText}</pre>
         </details>
-        <details className="disclosure"><summary>Review summary preview</summary><pre className="file-path" style={{ whiteSpace: 'pre-wrap' }}>{plan.summaryText}</pre></details>
       </> : null}
-      <button type="button" className="button secondary" disabled={!plan} onClick={() => void chooseDestination()}>{destination ? 'Change destination' : 'Choose destination parent'}</button>
+      <button type="button" className="button secondary" disabled={!plan} onClick={() => void chooseDestination()}>{destination ? 'Change folder…' : 'Choose folder…'}</button>
     </fieldset>
     {error ? <Notice type="error">{error}</Notice> : null}
     {busy && !choosing ? progress ? <OperationProgress progress={progress} onCancel={onCancel} /> : <button className="button secondary" onClick={onCancel}>Cancel export</button> : null}
-    {result ? <Notice type="success">Verified review export ready: {destination?.parent.name}/{result.folderName}/. {result.filesCount} saved files and {result.summaryName}.</Notice> : null}
+    {result ? <Notice type="success">Verified copy ready: {destination?.parent.name}/{result.folderName}/. {result.filesCount} saved files and {result.summaryName}.</Notice> : null}
     <div className="modal-actions">
       <button type="button" className="button secondary" disabled={busy} onClick={onClose}>{result ? 'Close' : 'Cancel'}</button>
-      {!result ? <button type="button" className="button primary" disabled={busy || !plan || !destination} onClick={() => void runExport()}>{exporting ? 'Exporting…' : 'Export for review'}</button> : null}
+      {!result ? <button type="button" className="button primary" disabled={busy || !plan || !destination} onClick={() => void runExport()}>{exporting ? 'Exporting…' : 'Export a copy'}</button> : null}
     </div>
   </Modal>;
 }

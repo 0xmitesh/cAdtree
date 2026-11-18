@@ -50,16 +50,16 @@ test('actual App exports the inspected older branch snapshot without switching M
   const before = await fingerprint(f.home);
   fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'History' }));
   fireEvent.click(ui.getByRole('button', { name: /Rev 002:/ }));
-  fireEvent.click(ui.getByRole('button', { name: 'Export for review' }));
-  const dialog = within(ui.getByRole('dialog', { name: 'Export revision for review' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Export a copy' }));
+  const dialog = within(ui.getByRole('dialog', { name: 'Export a copy' }));
   assert.ok(dialog.getByText('Actuator · Alternative · R02'));
   assert.ok(dialog.getByText('Actuator - Alternative - R02/'));
   assert.equal((dialog.getByRole('radio', { name: 'Complete project' }) as HTMLInputElement).checked, true);
-  fireEvent.click(dialog.getByRole('button', { name: 'Choose destination parent' }));
+  fireEvent.click(dialog.getByRole('button', { name: 'Choose folder…' }));
   await waitFor(() => assert.ok(dialog.getByText('Review destination')));
-  fireEvent.click(dialog.getByRole('button', { name: 'Export for review' }));
-  assert.equal(dialog.queryByText(/Verified review export ready/), null);
-  await waitFor(() => assert.ok(dialog.getByText(/Verified review export ready/)));
+  fireEvent.click(dialog.getByRole('button', { name: 'Export a copy' }));
+  assert.equal(dialog.queryByText(/Verified copy ready/), null);
+  await waitFor(() => assert.ok(dialog.getByText(/Verified copy ready/)));
   const output = await f.parent.getDirectory(['Actuator - Alternative - R02']);
   assert.equal(await output.readFileText(['Parts', 'Part1.SLDPRT']), 'saved alternative');
   assert.equal(await output.hasFile(['WorkingOnly.SLDPRT']), false);
@@ -84,7 +84,7 @@ test('selected-file dialog previews preserved paths, makes filename labelling ex
     return { folderName: plan.folderName, filesCount: 1, verifiedBytes: plan.files[0].size, summaryName: plan.summaryName };
   }} />);
   fireEvent.click(ui.getByRole('radio', { name: 'Selected files' }));
-  assert.ok(ui.getByText(/partial review copy/));
+  assert.ok(ui.getByText(/partial copy/));
   assert.equal(ui.queryByRole('checkbox', { name: 'Export WorkingOnly.SLDPRT' }), null);
   fireEvent.click(ui.getByRole('checkbox', { name: 'Export Parts/Part1.SLDPRT' }));
   const label = ui.getByRole('checkbox', { name: 'Add branch and revision to filenames' }) as HTMLInputElement;
@@ -92,14 +92,33 @@ test('selected-file dialog previews preserved paths, makes filename labelling ex
   assert.ok(ui.getByText(/Renamed files may require reference repair/));
   fireEvent.click(label);
   assert.ok(ui.getByText('Parts/Part1.SLDPRT → Parts/Part1_Alternative_R02.SLDPRT'));
-  fireEvent.click(ui.getByRole('button', { name: 'Choose destination parent' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Choose folder…' }));
   await waitFor(() => assert.ok(ui.getByText('Review destination')));
-  fireEvent.click(ui.getByRole('button', { name: 'Export for review' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Export a copy' }));
   assert.equal(calls, 1);
-  assert.equal(ui.queryByText(/Verified review export ready/), null);
+  assert.equal(ui.queryByText(/Verified copy ready/), null);
   assert.equal((ui.getByRole('button', { name: 'Exporting…' }) as HTMLButtonElement).disabled, true);
   await act(async () => finish());
-  await waitFor(() => assert.ok(ui.getByText(/Verified review export ready/)));
+  await waitFor(() => assert.ok(ui.getByText(/Verified copy ready/)));
+});
+
+test('dialog is named Export a copy, asks for a folder and keeps the file list and summary behind Show details', async () => {
+  const f = await fixture();
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(f.parent) });
+  const ui = render(<ReviewExportDialog state={f.saved.vaultState} revisionId={f.saved.revision.manifest.revisionId} busy={false} progress={null} onClose={() => {}} onCancel={() => {}} onExport={async () => { throw new Error('not exported'); }} />);
+  assert.ok(ui.getByRole('dialog', { name: 'Export a copy' }));
+  assert.equal(ui.queryByText(/for review/i), null);
+  assert.ok(ui.getByText('No folder chosen yet'));
+  assert.equal((ui.getByRole('button', { name: 'Export a copy' }) as HTMLButtonElement).disabled, true);
+  const details = ui.getByText('Show details').closest('details')!;
+  assert.equal(details.open, false);
+  assert.ok(details.textContent!.includes('Parts/Part1.SLDPRT'));
+  assert.equal(ui.queryByText('Review summary preview'), null);
+  fireEvent.click(ui.getByRole('button', { name: 'Choose folder…' }));
+  await waitFor(() => assert.ok(ui.getByText('Review destination')));
+  assert.ok(ui.getByRole('button', { name: 'Change folder…' }));
+  assert.equal((ui.getByRole('button', { name: 'Export a copy' }) as HTMLButtonElement).disabled, false);
+  assert.equal(details.open, false);
 });
 
 test('failed/cancelled UI export keeps the warning visible and shows a fresh numbered retry before success', async () => {
@@ -114,14 +133,14 @@ test('failed/cancelled UI export keeps the warning visible and shows a fresh num
     }
     return exportRevisionForReview({ plan, parent, folderName, vaultDir: new RealFileSystemAdapter(nativeDirectory(f.project.vaultDir)), workingFolders: Object.fromEntries(Object.entries(f.branch.workingFolders).map(([id, dir]) => [id, new RealFileSystemAdapter(nativeDirectory(dir!))])) });
   }} />);
-  fireEvent.click(ui.getByRole('button', { name: 'Choose destination parent' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Choose folder…' }));
   await waitFor(() => assert.ok(ui.getByText('Review destination')));
-  fireEvent.click(ui.getByRole('button', { name: 'Export for review' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Export a copy' }));
   await waitFor(() => assert.match(ui.getByRole('alert').textContent!, /Export cancelled.*Incomplete output/));
   await waitFor(() => assert.ok(ui.getByText('Actuator - Alternative - R02 (2)/')));
-  assert.equal(ui.queryByText(/Verified review export ready/), null);
-  fireEvent.click(ui.getByRole('button', { name: 'Export for review' }));
-  await waitFor(() => assert.ok(ui.getByText(/Verified review export ready/)));
+  assert.equal(ui.queryByText(/Verified copy ready/), null);
+  fireEvent.click(ui.getByRole('button', { name: 'Export a copy' }));
+  await waitFor(() => assert.ok(ui.getByText(/Verified copy ready/)));
   assert.equal(attempts, 2);
   assert.ok(await f.parent.hasDirectory(['Actuator - Alternative - R02']));
   assert.ok(await f.parent.hasDirectory(['Actuator - Alternative - R02 (2)']));

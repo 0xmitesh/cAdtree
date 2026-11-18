@@ -607,7 +607,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     <GitBranch size={16} /> Create design case from this revision
                   </button>
                 ) : null}
-                {props.onExportForReview ? <button className="button secondary" disabled={damaged || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export for review</button> : null}
+                {props.onExportForReview ? <button className="button secondary" disabled={damaged || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export a copy</button> : null}
               </div>
               <details
                 className="disclosure revision-troubleshooting"

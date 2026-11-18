@@ -147,12 +147,12 @@ test('home Readme: tutorials use the real button names and describe no feature t
   const text = buildHomeReadme({ homeName: 'Cadtree' });
   const flat = text.replace(/\s+/g, ' '); // prose is wrapped, so look for labels without line breaks
   for (const title of ['Save a revision', 'Create a design case', 'Bring an older revision back onto a branch (Bring back)',
-    'Merge a design case (Apply)', 'Export for review', 'Archive a design case']) {
+    'Merge a design case (Apply)', 'Export a copy', 'Archive a design case']) {
     assert.ok(text.split('\r\n').includes(title), `tutorial "${title}"`);
   }
   for (const label of ['Scan for changes', 'Save revision', 'Create design case from this revision', 'Create design case', 'Bring back onto',
     'Prepare bring-back', 'Bring back confirmed changes', 'Review changes to apply', 'Prepare application', 'Apply confirmed changes',
-    'Keep destination', 'Use source state', 'Leave unresolved', 'Export for review', 'Choose destination parent', 'Archive case',
+    'Keep destination', 'Use source state', 'Leave unresolved', 'Export a copy', 'Choose folder…', 'Archive case',
     'Reopen case', 'Revision summary', 'Case name', 'Engineering reason', 'Add a description', 'What you noticed']) {
     assert.ok(flat.includes(label), `mentions "${label}"`);
   }

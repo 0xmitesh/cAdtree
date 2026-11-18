@@ -194,13 +194,13 @@ test("Export after a rename is refused with the notice and writes nothing to the
   Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(parent) });
   nav(ui, "History");
   fireEvent.click(ui.getByRole("button", { name: /Mounting detail refined/ }));
-  fireEvent.click(ui.getByRole("button", { name: "Export for review" }));
-  const dialog = within(ui.getByRole("dialog", { name: "Export revision for review" }));
-  fireEvent.click(dialog.getByRole("button", { name: "Choose destination parent" }));
+  fireEvent.click(ui.getByRole("button", { name: "Export a copy" }));
+  const dialog = within(ui.getByRole("dialog", { name: "Export a copy" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Choose folder…" }));
   await waitFor(() => assert.ok(dialog.getByText("Review destination")));
   await renameFolder(root, OLD, NEW);
   const before = await fingerprint(sample.home);
-  fireEvent.click(dialog.getByRole("button", { name: "Export for review" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Export a copy" }));
   await idle(ui);
   assert.match(document.body.textContent!, RENAMED_RE);
   assert.equal((await parent.listEntries()).length, 0, "no export folder was created");

@@ -270,7 +270,7 @@ test("History offers no restore-copy buttons or per-file export boxes; the expor
   assert.equal(ui.queryByRole("button", { name: "Select all snapshot files" }), null);
   assert.equal(ui.queryByRole("button", { name: "Clear" }), null);
   assert.equal(ui.container.querySelectorAll('input[type="checkbox"]').length, 0);
-  fireEvent.click(ui.getByRole("button", { name: "Export for review" }));
+  fireEvent.click(ui.getByRole("button", { name: "Export a copy" }));
   const dialog = within(ui.getByRole("dialog"));
   assert.equal(
     (dialog.getByRole("radio", { name: /Complete project/ }) as HTMLInputElement).checked,
@@ -330,7 +330,7 @@ test("damaged records stay visible and block export; healthy revisions show no v
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Export for review",
+        name: "Export a copy",
       }) as HTMLButtonElement
     ).disabled,
     true,
