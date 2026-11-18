@@ -63,7 +63,8 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
           assert.equal(await page.getByRole('checkbox',{name:'Show removed references',exact:true}).count(),0);
         }
         if(view==='Settings') {
-          await page.getByText('Browser troubleshooting',{exact:true}).click();
+          await page.getByText('Troubleshooting',{exact:true}).click();
+          await page.getByText('Reset folder connections',{exact:true}).click();
           await page.getByRole('button',{name:'Reset all remembered folder connections in this browser',exact:true}).click();
           const reset=page.getByRole('dialog',{name:'Reset all remembered folder connections?',exact:true});
           assert.match(await reset.innerText(),/across all accounts and workspaces/);

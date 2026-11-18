@@ -3547,3 +3547,13 @@ input::placeholder {
   font-size: 13px;
   margin-top: 4px;
 }
+.settings-attention {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.settings-troubleshooting {
+  border-top: 0;
+  margin-top: 0;
+  padding: 15px 20px;
+}

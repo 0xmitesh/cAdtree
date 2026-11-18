@@ -160,11 +160,16 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await expect(summary).toHaveValue("Main scoped layout review");
   await nav.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(active).toHaveValue("branch-main");
+  await expect(page.getByText("All folders are connected.")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Reconnect workspace", exact: true }),
+  ).toBeHidden();
+  await page.getByText("Troubleshooting", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Reconnect workspace", exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator(".settings-page .settings-row").first(),
+    page.locator(".settings-troubleshooting .settings-row").first(),
   ).toContainText("working/main");
   await nav.getByRole("button", { name: "History", exact: true }).click();
 

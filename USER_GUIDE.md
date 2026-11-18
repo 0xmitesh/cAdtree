@@ -164,7 +164,7 @@ The project name appears above History, Changes, and Settings. History shows a s
 
 Drag the desktop sidebar’s right edge to resize it. You can also focus **Resize sidebar** with Tab and use Left/Right arrows, Home (minimum), or End (maximum). Width is remembered locally and bounded to leave room for the main content. The tree keeps its position and scrolls independently above the project navigation. Narrow screens retain **Browse folders**.
 
-Working-folder locations and **Reconnect workspace** are available under Settings → Folder connections. When a connection is missing, an actionable message appears in the project view. Errors, integrity warnings, incomplete operations, and progress remain visible when relevant.
+Settings is short. **Folder connections** lists a working folder only when a connection is missing or needs repair; otherwise it says that all folders are connected. **Troubleshooting** (closed by default) holds the working-folder location and **Reconnect workspace**, **Verify all file contents**, incomplete attempts, advanced record information and **Reset folder connections**. If an incomplete attempt or a damaged record exists, Settings shows a one-line hint that opens Troubleshooting. When a connection is missing, an actionable message also appears in the project view. Errors, integrity warnings, incomplete operations, and progress remain visible when relevant.
 
 
 ### Home options
@@ -302,7 +302,7 @@ Inspect a saved revision in **History → Saved references** to see its referenc
 
 All evidence is on disk under the project vault, outside branch working folders. Reconnect the complete project/home after clearing browser convenience data. Use cAdtree's complete project/workspace copy or adoption workflows to preserve all versions, associations and attachment objects. Copying only a branch working folder does not copy project history or references. Reference attachments do not appear as CAD changes and never receive component IDs.
 
-If import/save is cancelled or interrupted, incomplete metadata remains identifiable in **Settings → Storage and verification** and does not become a published reference or saved context. Reopen to inspect the outcome before a fresh retry, especially after a lost browser acknowledgement. Missing, corrupt or unsupported evidence is reported; it is never regenerated silently. Exact retrieval, linked captures and complete copies verify required content and refuse damaged evidence. CAD inspection and recovery remain available wherever their own saved evidence is valid. Permanent deletion and garbage collection are outside this stage.
+If import/save is cancelled or interrupted, incomplete metadata remains identifiable in **Settings → Troubleshooting** and does not become a published reference or saved context. Reopen to inspect the outcome before a fresh retry, especially after a lost browser acknowledgement. Missing, corrupt or unsupported evidence is reported; it is never regenerated silently. Exact retrieval, linked captures and complete copies verify required content and refuse damaged evidence. CAD inspection and recovery remain available wherever their own saved evidence is valid. Permanent deletion and garbage collection are outside this stage.
 
 Manual walkthrough (disposable project, supported desktop browser):
 

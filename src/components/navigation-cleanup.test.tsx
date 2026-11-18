@@ -26,7 +26,7 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("Browser troubleshooting explains its cross-account scope, cancels without changes and resets connections without deleting CAD history", async () => {
+test("Troubleshooting's reset explains its cross-account scope, cancels without changes and resets connections without deleting CAD history", async () => {
   const { sample, ui, nav } = await openSample();
   const other = nativeDirectory(new InMemoryFileSystemAdapter("Other workspace"));
   async function foreignPath() {
@@ -40,9 +40,10 @@ test("Browser troubleshooting explains its cross-account scope, cancels without 
   assert.equal(await foreignPath(), "D:\\Other");
   const before = await signature(sample.home);
   fireEvent.click(nav.getByRole("button", { name: "Settings" }));
-  fireEvent.click(ui.getByText("Browser troubleshooting"));
+  fireEvent.click(ui.getByText("Troubleshooting", { selector: "summary" }));
+  fireEvent.click(ui.getByText("Reset folder connections"));
   const reset = ui.getByRole("button", { name: "Reset all remembered folder connections in this browser" });
-  assert.equal(reset.closest("details")!.querySelector("summary")!.textContent, "Browser troubleshooting");
+  assert.equal(reset.closest("details")!.querySelector("summary")!.textContent, "Reset folder connections");
   fireEvent.click(reset);
   let dialog = within(ui.getByRole("dialog", { name: "Reset all remembered folder connections?" }));
   assert.match(ui.getByRole("dialog").textContent!, /across all accounts and workspaces/);

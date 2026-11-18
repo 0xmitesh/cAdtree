@@ -42,7 +42,8 @@ async function main(){
   const settingsClip = async name => {
     await page.setViewportSize({ width: 1024, height: 1200 });
     const heading = page.getByRole('region', { name: 'Project context', exact: true });
-    const location = page.locator('.settings-page > .panel').first().locator('.settings-row').first();
+    await page.locator('.settings-troubleshooting > summary').click();
+    const location = page.locator('.settings-troubleshooting .settings-row').first();
     await heading.scrollIntoViewIfNeeded();
     const top = await heading.boundingBox(), bottom = await location.boundingBox();
     await page.screenshot({ path: path.join(assets, name + '.png'), clip: { x: top.x, y: top.y, width: top.width, height: bottom.y + bottom.height - top.y } });

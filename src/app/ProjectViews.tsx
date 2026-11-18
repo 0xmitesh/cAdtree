@@ -280,6 +280,7 @@ export function ProjectViews({
           }
           vaultFolderName={vaultDir.name}
           onReattachWorkingFolder={handleReattachWorkingFolder}
+          missingConnections={missingConnections}
         />
       </div>
     </>
