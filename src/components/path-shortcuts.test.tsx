@@ -402,12 +402,8 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   assert.ok(ui.getByRole("heading", { name: "Cam assembly" }));
   assert.ok(ui.queryByRole("combobox", { name: "Working case" }) === null);
   assert.ok(ui.container.querySelector(".workspace-folder-bar") === null);
-  assert.equal(
-    ui.container
-      .querySelector(".project-location-details")!
-      .hasAttribute("open"),
-    false,
-  );
+  // A healthy project shows no location details at all.
+  assert.equal(ui.container.querySelector(".project-location-details"), null);
   assert.equal(ui.container.querySelector(".workspace-menu"), null);
   assert.ok(ui.getByRole("button", { name: "Create project" }));
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));

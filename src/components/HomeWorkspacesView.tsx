@@ -12,6 +12,10 @@ import { pathBudgetBlockSentence, workspaceNameHint } from "../utils/path-budget
 import { HomeFolderAddressSetting } from "./FilePathShortcuts";
 import { HomeWelcome } from "./HomeWelcome";
 
+/** Every status other than "ready" (damaged, incomplete, duplicate) is shown as "Needs attention"; the reason stays on the card. */
+const statusWord = (entry: HomeWorkspaceEntry) =>
+  entry.status === "ready" ? "Ready" : "Needs attention";
+
 export function HomeWorkspacesView(props: {
   home: HomeState | null;
   /** Absolute address of the Cadtree home, when known (drives the name hint). */
@@ -167,11 +171,16 @@ export function HomeWorkspacesView(props: {
                         <h3>{entry.name}</h3>
                         <p>
                           {entry.workspace
-                            ? `${entry.workspace.projects.length} project${entry.workspace.projects.length === 1 ? "" : "s"} · ${entry.status === "ready" ? "Connected" : "Needs attention"}`
-                            : entry.status === "incomplete"
-                              ? "Incomplete · Destination retained"
-                              : "Unavailable · Needs attention"}
+                            ? `${entry.workspace.projects.length} project${entry.workspace.projects.length === 1 ? "" : "s"} · ${statusWord(entry)}`
+                            : statusWord(entry)}
                         </p>
+                        {entry.status !== "ready" && !entry.workspace ? (
+                          <p className="small">
+                            {entry.status === "incomplete"
+                              ? "Incomplete · Destination retained"
+                              : "Unavailable"}
+                          </p>
+                        ) : null}
                       </div>
                       {entry.workspace ? (
                         <button
@@ -187,26 +196,39 @@ export function HomeWorkspacesView(props: {
                     {entry.issues.length ? (
                       <Notice type="error">{entry.issues.join(" ")}</Notice>
                     ) : null}
-                    <details className="disclosure">
-                      <summary>
-                        Location details
-                        {entries.length > 1
-                          ? ` · ${entries.length} retained locations`
-                          : ""}
-                      </summary>
-                      {entries.map((e) => (
-                        <div key={e.key}>
-                          <p className="file-path">
-                            {props.home!.root.name}/
-                            {e.directory ?? "Registration needs repair"} ·{" "}
-                            {e.status}
-                          </p>
-                          {e !== entry && e.issues.length ? (
-                            <p>{e.issues.join(" ")}</p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </details>
+                    {entry.status !== "ready" ||
+                    entries.length > 1 ||
+                    entries.some(
+                      (e) =>
+                        e.recordedDirectory && e.recordedDirectory !== e.directory,
+                    ) ? (
+                      <details className="disclosure">
+                        <summary>
+                          Location details
+                          {entries.length > 1
+                            ? ` · ${entries.length} retained locations`
+                            : ""}
+                        </summary>
+                        {entries.map((e) => (
+                          <div key={e.key}>
+                            <p className="file-path">
+                              {props.home!.root.name}/
+                              {e.directory ?? "Folder not recorded"} ·{" "}
+                              {statusWord(e)}
+                            </p>
+                            {e.recordedDirectory && e.recordedDirectory !== e.directory ? (
+                              <p>
+                                Registered as {e.recordedDirectory} (renamed or
+                                moved)
+                              </p>
+                            ) : null}
+                            {e !== entry && e.issues.length ? (
+                              <p>{e.issues.join(" ")}</p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </details>
+                    ) : null}
                   </article>
                 );
               })}

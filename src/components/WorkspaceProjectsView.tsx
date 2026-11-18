@@ -139,14 +139,19 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   <h3>{locations[0].name}</h3>
                   {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
                   <p className="small">
-                    {locations.length > 1
-                      ? DUPLICATE_PROJECT_REASON
-                      : locations[0].status === "ready"
-                        ? "Managed project · One shared vault, independent working folders"
+                    {locations.length === 1 && locations[0].status === "ready"
+                      ? "Ready"
+                      : "Needs attention"}
+                  </p>
+                  {locations.length > 1 || locations[0].status !== "ready" ? (
+                    <p className="small">
+                      {locations.length > 1
+                        ? DUPLICATE_PROJECT_REASON
                         : locations[0].status === "incomplete"
                           ? "Incomplete copy · Retained for inspection; retry uses a fresh folder"
                           : "Connections or records need attention · Read-only inspection available"}
-                  </p>
+                    </p>
+                  ) : null}
                 </div>
                 {locations.length > 1 ? (
                   <button
@@ -171,19 +176,21 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   </button>
                 ) : null}
               </div>
-              <details className="disclosure project-location-details">
-                <summary>Location details</summary>
-                {locations[0].projectId ? (
-                  <p className="file-path">
-                    Project identity: {locations[0].projectId}
-                  </p>
-                ) : null}
-                {locations.map((entry) => (
-                  <p className="file-path" key={entry.containerPath}>
-                    Workspace-relative location: {entry.containerPath}
-                  </p>
-                ))}
-              </details>
+              {locations.length > 1 || locations[0].status !== "ready" ? (
+                <details className="disclosure project-location-details">
+                  <summary>Location details</summary>
+                  {locations[0].projectId ? (
+                    <p className="file-path">
+                      Project identity: {locations[0].projectId}
+                    </p>
+                  ) : null}
+                  {locations.map((entry) => (
+                    <p className="file-path" key={entry.containerPath}>
+                      Workspace-relative location: {entry.containerPath}
+                    </p>
+                  ))}
+                </details>
+              ) : null}
               {locations.length > 1 && choosingLocation === id
                 ? locations.map((entry) => (
                     <div
@@ -192,9 +199,9 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                     >
                       <p>
                         {entry.containerPath} ·{" "}
-                        {entry.project?.ready
-                          ? "Published"
-                          : "Incomplete/damaged"}
+                        {entry.status === "ready"
+                          ? "Ready"
+                          : "Needs attention"}
                       </p>
                       <button
                         className="button secondary"

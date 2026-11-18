@@ -46,6 +46,7 @@ test("Projects list: Use this location is disabled for every copy sharing a proj
   const ui = render(<App />);
   await openHomeWorkspace(ui, f.home);
   // The normal project is a single location with its own Open button; the duplicates are grouped.
+  assert.ok(within(ui.getByRole("heading", { name: "Actuator" }).closest(".workspace-project") as HTMLElement).getByText("Needs attention"));
   fireEvent.click(ui.getByRole("button", { name: "Choose location" }));
   const buttons = ui.getAllByRole("button", { name: "Use this location" }) as HTMLButtonElement[];
   assert.equal(buttons.length, 2);
