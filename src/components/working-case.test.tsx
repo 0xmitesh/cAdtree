@@ -6,6 +6,9 @@ import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-libra
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
 import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
+import { WorkspaceTree } from "./WorkspaceTree";
+import { openWorkspace } from "../engine/workspace-service";
+import type { VaultState } from "../engine/types";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 
@@ -84,4 +87,36 @@ test("The Explorer switches the case from History, Changes and Settings, the hea
   await waitFor(() => assert.equal(appBusy(ui), false));
   for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), null);
   assert.equal(currentBranchId(ui), "branch-main");
+});
+
+test("An Explorer case row with unavailable lifecycle evidence is disabled and cannot be picked", async () => {
+  const sample = await compareApplyRecoverSample();
+  const workspace = await openWorkspace(sample.workspace.root);
+  const entry = workspace.projects[0];
+  const vault = {
+    ...entry.project!.vaultState,
+    caseLifecycles: { [sample.caseId]: { status: "unavailable", version: null, sequence: 0, error: "Lifecycle checksum mismatch" } },
+  } as VaultState;
+  const picked: Array<string | undefined> = [];
+  const ui = render(
+    <WorkspaceTree
+      home={null}
+      workspace={workspace}
+      managedWorkspaceKey={null}
+      projectId={entry.projectId}
+      activeVault={vault}
+      activeBranchId="branch-main"
+      projectView
+      busy={false}
+      onWorkspace={() => {}}
+      onProject={async (_workspace, _project, branchId) => { picked.push(branchId); }}
+    />,
+  );
+  const row = (id: string) => ui.container.querySelector<HTMLElement>(`[role="treeitem"][data-branch-id="${id}"]`)!;
+  await waitFor(() => assert.ok(row(sample.caseId)));
+  assert.equal(row(sample.caseId).getAttribute("aria-disabled"), "true");
+  fireEvent.click(row(sample.caseId));
+  assert.deepEqual(picked, []);
+  fireEvent.click(row("branch-main"));
+  assert.deepEqual(picked, ["branch-main"]);
 });

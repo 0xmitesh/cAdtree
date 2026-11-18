@@ -1,3 +1,4 @@
+import { assertCaseWritable } from "../engine/case-lifecycle";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { CreateBranchParams } from "../components/CreateBranchDialog";
 import type { WorkingFolderBindings } from "../engine/branch-state";
@@ -70,6 +71,66 @@ export function useBranchActions({
   setScanResult,
   setStatusBanner,
 }: UseBranchActionsArgs) {
+  const handleSelectBranch = async (branchId: string) => {
+    if (
+      operationRef.current ||
+      !vaultState ||
+      !vaultDir ||
+      branchId === activeBranchId
+    )
+      return;
+    contextVersion.current++;
+    setScanResult(null);
+    setStatusBanner(null);
+    await perform("scan", async (context) => {
+      await assertProjectWritable(context, true);
+      const state = await openExistingVault(vaultDir);
+      if (!context.current()) return;
+      applyVaultState(state);
+      if (!state.branches.some((b) => b.branchId === branchId))
+        throw new Error("Selected branch is missing. Reopen the vault.");
+      assertCaseWritable(state, branchId);
+      setActiveBranchId(branchId);
+      setWorkingDir(null);
+      const folder = workingFolders[branchId];
+      let readable = false;
+      try {
+        readable = Boolean(
+          folder && (await folder.queryPermission("read")) === "granted",
+        );
+      } catch {
+        /* Reconnect a stale handle explicitly. */
+      }
+      if (folder && readable) {
+        if (!context.current()) return;
+        setWorkingDir(folder);
+        await scan(vaultDir, workingFolders, branchId, context);
+      } else {
+        setWorkingFolders((previous) => {
+          const updated = { ...previous };
+          delete updated[branchId];
+          return updated;
+        });
+      }
+      const warning = workspace && managedProject
+        ? await persistWorkspace(
+            workspace,
+            { path: managedProject.record.containerPath, id: managedProject.record.projectId },
+            branchId,
+          )
+        : "";
+      if (context.current())
+        setStatusBanner(
+          !readable || warning
+            ? {
+                type: "info",
+                message:
+                  `${readable ? "" : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`.trim(),
+              }
+            : null,
+        );
+    });
+  };
   const handleCaseLifecycle = async (
     branchId: string,
     status: "active" | "archived",
@@ -182,6 +243,7 @@ export function useBranchActions({
     );
   };
   return {
+    handleSelectBranch,
     handleCaseLifecycle,
     handleReattachWorkingFolder,
     handleCreateBranch,

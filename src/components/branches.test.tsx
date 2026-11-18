@@ -285,10 +285,9 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   await waitFor(() =>
     assert.ok(ctx.ui.getByText("Metadata and file contents verified")),
   );
-  // The Explorer reopens the project from disk, so the session's verification mark is not kept.
   await selectBranch(ctx.ui, "branch-main");
   await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.equal(currentBranchId(ctx.ui), "branch-main");
+  assert.ok(ctx.ui.getByText("Metadata and file contents verified"));
 });
 
 test("App rejects branch switching during an asynchronous scan", async () => {

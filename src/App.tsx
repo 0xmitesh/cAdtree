@@ -1161,6 +1161,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setStatusBanner,
   });
   const {
+    handleSelectBranch,
     handleCaseLifecycle,
     handleReattachWorkingFolder,
     handleCreateBranch,
@@ -1349,7 +1350,16 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       setExplorerOpen(false);
     },
     onProject: async (entry, project, branch) => {
-      await openTreeProject(entry, project, branch);
+      // A case of the project that is already open is switched in place, on the same page.
+      if (
+        branch &&
+        projectView &&
+        project.projectId !== undefined &&
+        project.projectId === managedProject?.record.projectId &&
+        (entry?.key ?? null) === managedWorkspaceKey
+      )
+        await handleSelectBranch(branch);
+      else await openTreeProject(entry, project, branch);
       setExplorerOpen(false);
     },
   };
