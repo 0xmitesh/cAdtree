@@ -312,13 +312,13 @@ Manual walkthrough (disposable project, supported desktop browser):
 4. Confirm a CAD rename, capture and compare the component ID across revisions, retaining old filenames. Make a branch from the older revision and verify its explicit links carry forward without changing the older revision.
 5. Reopen after clearing browser convenience data. Copy/import/adopt the complete project or workspace and check IDs, exact versions, old context and retrieved hashes in the copy. Export an older CAD snapshot and check its original filenames.
 6. On disposable copies only, remove/corrupt an attachment or context sidecar, revoke permission, and interrupt an import/capture. Verify clear errors, no dangling committed context, unchanged revision count on pre-completion rejection, usable independent CAD recovery, and a fresh retry after restoring evidence.
-7. Export a copy of a saved CAD revision. Check the dialog/summary explicitly exclude reference attachments and the output contains only snapshot design files and its review summary.
+7. Export a copy of a saved CAD revision. Check that with **Include references** ticked the output has a `References` folder with the attachments, and that with it unticked the output contains only snapshot design files and its summary (which says reference attachments are not included).
 
 ## Export a copy of a saved revision
 
 Select the saved revision in **History**, then choose **Export a copy**. The dialog identifies that revision's recorded project, branch and project-wide revision number, even when another branch is active. All exported bytes come from the saved snapshot, so newer working edits are excluded.
 
-Project reference attachments are excluded from review exports in this stage. The dialog and readable export summary state this explicitly.
+**Include references** is ticked by default. It copies the reference attachments that apply to that saved revision (those saved with the project and those linked to the exported files) into a `References` folder inside the copy, under their original file names (a clash gets `(2)`; if the snapshot already has a `References` entry, the folder is named `References (2)`). Only attachments whose saved content verifies are copied; any that cannot be are left out and listed as `Not included` in the summary and in the dialog, and the rest of the export still completes. Untick it to export the design files only; the summary then says that reference attachments are not included.
 
 - **Complete project** preserves the snapshot's filenames, relative directories and empty directories inside a new folder such as `Actuator - Alternative - R03`.
 - **Selected files** lists only files present in that snapshot. It preserves their relative paths and filenames by default and clearly marks the output as partial. CAD dependencies are not discovered or added automatically.

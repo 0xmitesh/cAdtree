@@ -15,6 +15,7 @@ import { clearAllConvenienceMetadata } from '../engine/idb-store';
 import { inventorySignature, readVerifiedInventory } from '../engine/copy-service';
 import { exportRevisionForReview, ReviewExportError } from '../engine/review-export';
 import { openExistingVault } from '../engine/vault-service';
+import { importReferenceAttachment, updateProjectReference } from '../engine/references';
 
 Object.assign(globalThis, { indexedDB });
 afterEach(async () => { cleanup(); await clearAllConvenienceMetadata(); Reflect.deleteProperty(window, 'showDirectoryPicker'); });
@@ -81,7 +82,7 @@ test('selected-file dialog previews preserved paths, makes filename labelling ex
     assert.equal(plan.request.kind, 'selected');
     assert.equal(plan.files.length, 1);
     assert.equal(plan.files[0].exportedPath, 'Parts/Part1_Alternative_R02.SLDPRT');
-    return { folderName: plan.folderName, filesCount: 1, verifiedBytes: plan.files[0].size, summaryName: plan.summaryName };
+    return { folderName: plan.folderName, filesCount: 1, verifiedBytes: plan.files[0].size, summaryName: plan.summaryName, referencesCount: 0, referencesSkipped: [] };
   }} />);
   fireEvent.click(ui.getByRole('radio', { name: 'Selected files' }));
   assert.ok(ui.getByText(/partial copy/));
@@ -119,6 +120,37 @@ test('dialog is named Export a copy, asks for a folder and keeps the file list a
   assert.ok(ui.getByRole('button', { name: 'Change folder…' }));
   assert.equal((ui.getByRole('button', { name: 'Export a copy' }) as HTMLButtonElement).disabled, false);
   assert.equal(details.open, false);
+});
+
+test('Include references is on by default, copies the revision\'s attachments into References, and can be turned off', async () => {
+  const f = await fixture();
+  const bytes = new Uint8Array([1, 2, 3, 4]);
+  const imported = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, { name: 'Clearance spec.pdf', type: 'application/pdf', size: bytes.length, stream: () => new Blob([bytes as BlobPart]).stream() }, { title: 'Clearance spec', description: '', tags: [] });
+  const ref = imported.references!.library[0];
+  await updateProjectReference(f.project.vaultDir, f.project.record.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
+  const withRef = await captureRevision(f.working, f.project.vaultDir, { branchId: 'branch-main', summary: 'With reference', notes, workingFolders: { ...f.project.workingFolders, ...f.branch.workingFolders } });
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(f.parent) });
+  const plans: { includeReferences: boolean | undefined; references: number }[] = [];
+  const ui = render(<ReviewExportDialog state={withRef.vaultState} revisionId={withRef.revision.manifest.revisionId} busy={false} progress={null} onClose={() => {}} onCancel={() => {}} onExport={async (plan, parent, folderName) => {
+    plans.push({ includeReferences: plan.request.includeReferences, references: plan.references.length });
+    return exportRevisionForReview({ plan, parent, folderName, vaultDir: new RealFileSystemAdapter(nativeDirectory(f.project.vaultDir)), workingFolders: Object.fromEntries(Object.entries({ ...f.project.workingFolders, ...f.branch.workingFolders }).map(([id, dir]) => [id, new RealFileSystemAdapter(nativeDirectory(dir!))])) });
+  }} />);
+  const box = ui.getByRole('checkbox', { name: 'Include references' }) as HTMLInputElement;
+  assert.equal(box.checked, true);
+  assert.ok(ui.getByText('1 reference attachment will be copied into a References folder.'));
+  assert.ok(ui.getByText('References/Clearance spec.pdf — reference attachment'));
+  fireEvent.click(box);
+  assert.equal(box.checked, false);
+  assert.ok(ui.getByText('Reference attachments will not be copied.'));
+  assert.equal(ui.queryByText('References/Clearance spec.pdf — reference attachment'), null);
+  fireEvent.click(box);
+  fireEvent.click(ui.getByRole('button', { name: 'Choose folder…' }));
+  await waitFor(() => assert.ok(ui.getByText('Review destination')));
+  fireEvent.click(ui.getByRole('button', { name: 'Export a copy' }));
+  await waitFor(() => assert.ok(ui.getByText(/Verified copy ready.*1 reference attachment/)));
+  assert.deepEqual(plans, [{ includeReferences: true, references: 1 }]);
+  const output = await f.parent.getDirectory(['Actuator - Main - R03']);
+  assert.deepEqual(new Uint8Array(await output.readFileBytes(['References', 'Clearance spec.pdf'])), bytes);
 });
 
 test('failed/cancelled UI export keeps the warning visible and shows a fresh numbered retry before success', async () => {

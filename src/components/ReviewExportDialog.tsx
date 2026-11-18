@@ -16,6 +16,7 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
   const [kind, setKind] = useState<'complete' | 'selected'>('complete');
   const [selected, setSelected] = useState(() => new Set(initialPaths.filter(p => revision?.manifest.files.some(f => f.path === p))));
   const [labelFilenames, setLabelFilenames] = useState(false);
+  const [includeReferences, setIncludeReferences] = useState(true);
   const [destination, setDestination] = useState<{ parent: FileSystemDirectoryAdapter; folderName: string } | null>(null);
   const [error, setError] = useState('');
   const [choosing, setChoosing] = useState(false);
@@ -23,9 +24,9 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
   const [result, setResult] = useState<ReviewExportResult | null>(null);
   const busy = parentBusy || choosing || exporting;
   const preview = useMemo(() => {
-    try { return { plan: prepareReviewExport(state, revisionId, { kind, selectedPaths: [...selected], labelFilenames: kind === 'selected' && labelFilenames }), error: '' }; }
+    try { return { plan: prepareReviewExport(state, revisionId, { kind, selectedPaths: [...selected], labelFilenames: kind === 'selected' && labelFilenames, includeReferences }), error: '' }; }
     catch (e) { return { plan: undefined, error: e instanceof Error ? e.message : String(e) }; }
-  }, [state, revisionId, kind, selected, labelFilenames]);
+  }, [state, revisionId, kind, selected, labelFilenames, includeReferences]);
   const plan = preview.plan;
   const chooseDestination = async () => {
     if (!plan || busy) return;
@@ -53,7 +54,6 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
   return <Modal title="Export a copy" busy={busy} onClose={onClose}>
     <p><strong>{plan ? `${plan.projectName} · ${plan.branchName} · ${plan.revisionLabel}` : revision?.manifest.summary}</strong></p>
     <p>Exports verified saved bytes. Open documents and newer working edits are not included.</p>
-    <p className="muted small">Project reference attachments are not included.</p>
     <fieldset disabled={busy || Boolean(result)}>
       <legend>Export contents</legend>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'complete'} onChange={() => { setKind('complete'); setError(''); }} /> Complete project</span></label>
@@ -68,6 +68,10 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
         <label className="recovery-external-choice"><span><input type="checkbox" checked={labelFilenames} onChange={e => setLabelFilenames(e.target.checked)} /> Add branch and revision to filenames</span></label>
         <p className="muted small">Use labelled filenames for standalone review copies. Renamed files may require reference repair when used by other documents; cAdtree does not rewrite native references.</p>
       </> : <p>Preserves every saved internal filename and relative directory, including empty directories.</p>}
+      <label className="recovery-external-choice"><span><input type="checkbox" checked={includeReferences} onChange={e => { setIncludeReferences(e.target.checked); setError(''); }} /> Include references</span></label>
+      <p className="muted small">{includeReferences
+        ? (plan ? (plan.references.length ? `${plan.references.length} reference attachment${plan.references.length === 1 ? '' : 's'} will be copied into a ${plan.referencesDirectory} folder.` : 'No reference attachments apply to this revision.') : '')
+        : 'Reference attachments will not be copied.'}</p>
       {preview.error ? <Notice type="error">{preview.error}</Notice> : null}
       {plan ? <>
         <p>Proposed folder: <strong className="file-path">{destination?.folderName ?? plan.folderName}/</strong></p>
@@ -77,6 +81,7 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
           <summary>Show details</summary>
           <p><strong>Files to copy ({plan.files.length})</strong></p>
           {plan.files.map(file => <p className="file-path" key={file.path}>{file.path === file.exportedPath ? file.path : `${file.path} → ${file.exportedPath}`}</p>)}
+          {plan.references.map(ref => <p className="file-path" key={ref.versionId}>{ref.exportedPath} — reference attachment</p>)}
           <p className="file-path">{plan.summaryName} — summary of this copy</p>
           <p><strong>Summary file contents</strong></p>
           <pre className="file-path" style={{ whiteSpace: 'pre-wrap' }}>{plan.summaryText}</pre>
@@ -86,7 +91,8 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
     </fieldset>
     {error ? <Notice type="error">{error}</Notice> : null}
     {busy && !choosing ? progress ? <OperationProgress progress={progress} onCancel={onCancel} /> : <button className="button secondary" onClick={onCancel}>Cancel export</button> : null}
-    {result ? <Notice type="success">Verified copy ready: {destination?.parent.name}/{result.folderName}/. {result.filesCount} saved files and {result.summaryName}.</Notice> : null}
+    {result ? <Notice type="success">Verified copy ready: {destination?.parent.name}/{result.folderName}/. {result.filesCount} saved files{result.referencesCount ? `, ${result.referencesCount} reference attachment${result.referencesCount === 1 ? '' : 's'}` : ''} and {result.summaryName}.</Notice> : null}
+    {result?.referencesSkipped.length ? <Notice>{result.referencesSkipped.map(s => `Not included: ${s.label}: ${s.reason}`).join(' ')} The summary file lists them.</Notice> : null}
     <div className="modal-actions">
       <button type="button" className="button secondary" disabled={busy} onClick={onClose}>{result ? 'Close' : 'Cancel'}</button>
       {!result ? <button type="button" className="button primary" disabled={busy || !plan || !destination} onClick={() => void runExport()}>{exporting ? 'Exporting…' : 'Export a copy'}</button> : null}

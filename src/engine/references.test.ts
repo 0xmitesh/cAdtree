@@ -324,15 +324,112 @@ test('legacy revisions remain unannotated without rewriting manifests and missin
   assert.equal(await f.vault.hasFile(['reference-context.json']), false);
 });
 
-test('review exports exclude reference attachments and explicitly describe that limit', async () => {
+test('review exports leave reference attachments out unless asked, and say so', async () => {
   const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'geometry'); const saved = await f.save();
   const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'complete', selectedPaths: [], labelFilenames: false });
+  assert.equal(plan.references.length, 0); assert.equal(plan.referencesDirectory, null);
   const parent = new InMemoryFileSystemAdapter('Reviews');
   const output = await exportRevisionForReview({ vaultDir: f.vault, parent, plan, folderName: plan.folderName, workingFolders: f.folders });
   const folder = await parent.getDirectory([output.folderName]);
   assert.deepEqual((await folder.listEntries()).map(e => e.name).sort(), ['_CADTREE_REVIEW.txt', 'part']);
   assert.match(await folder.readFileText([output.summaryName]), /reference attachments are not included/);
+  assert.equal(output.referencesCount, 0);
+});
+
+test('review export with references writes verified attachments into References with their original names and lists them', async () => {
+  const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
+  // A second reference with the same file name and different bytes gets the counter and never overwrites the first.
+  const other = new Uint8Array([9, 8, 7]);
+  const second = await importReferenceAttachment(f.vault, f.projectId, attachment('客户 requirement.pdf', other), { ...metadata, title: 'Second' });
+  const secondRef = second.references!.library.find(r => r.title === 'Second')!;
+  await updateProjectReference(f.vault, f.projectId, secondRef.referenceId, { projectVersionId: secondRef.versions[0].versionId });
+  await f.working.writeFileText(['part'], 'geometry'); const saved = await f.save();
+  const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'complete', selectedPaths: [], labelFilenames: false, includeReferences: true });
+  assert.equal(plan.referencesDirectory, 'References');
+  assert.deepEqual(plan.references.map(r => r.exportedPath).sort(), ['References/客户 requirement (2).pdf', 'References/客户 requirement.pdf']);
+  const parent = new InMemoryFileSystemAdapter('Reviews');
+  const output = await exportRevisionForReview({ vaultDir: f.vault, parent, plan, folderName: plan.folderName, workingFolders: f.folders });
+  assert.equal(output.referencesCount, 2); assert.deepEqual(output.referencesSkipped, []);
+  const folder = await parent.getDirectory([output.folderName]);
+  assert.deepEqual((await folder.listEntries()).map(e => e.name).sort(), ['References', '_CADTREE_REVIEW.txt', 'part']);
+  const bytesOf = async (name: string) => new Uint8Array(await folder.readFileBytes(['References', name]));
+  const first = plan.references.find(r => r.sha256 === f.version.sha256)!, otherEntry = plan.references.find(r => r.sha256 !== f.version.sha256)!;
+  assert.deepEqual(await bytesOf(first.exportedPath.split('/')[1]), original);
+  assert.deepEqual(await bytesOf(otherEntry.exportedPath.split('/')[1]), other);
+  const summary = await folder.readFileText([output.summaryName]);
+  assert.match(summary, /Reference attachments \(copied to "References\/"/);
+  assert.match(summary, /"客户 requirement\.pdf" -> "References\/客户 requirement\.pdf"/);
+  assert.match(summary, /Applies to: "whole project"/);
+  assert.doesNotMatch(summary, /reference attachments are not included/);
+  assert.doesNotMatch(summary, /Not included/);
+});
+
+test('review export names References (2) when the snapshot already has a References entry, and sanitises attachment names', async () => {
+  const f = await fixture();
+  const imported = await importReferenceAttachment(f.vault, f.projectId, attachment('CON.txt', original), { ...metadata, title: 'Device name' });
+  const ref = imported.references!.library.find(r => r.title === 'Device name')!;
+  await updateProjectReference(f.vault, f.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
+  await f.working.writeFileText(['references', 'notes.txt'], 'user folder'); const saved = await f.save();
+  const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'complete', selectedPaths: [], labelFilenames: false, includeReferences: true });
+  assert.equal(plan.referencesDirectory, 'References (2)');
+  assert.deepEqual(plan.references.map(r => r.exportedPath), ['References (2)/CON (2).txt']);
+  const parent = new InMemoryFileSystemAdapter('Reviews');
+  const output = await exportRevisionForReview({ vaultDir: f.vault, parent, plan, folderName: plan.folderName, workingFolders: f.folders });
+  const folder = await parent.getDirectory([output.folderName]);
+  assert.equal(await folder.readFileText(['references', 'notes.txt']), 'user folder');
+  assert.deepEqual(new Uint8Array(await folder.readFileBytes(['References (2)', 'CON (2).txt'])), original);
+});
+
+test('selected-file review export includes project references and those linked to the selected files only', async () => {
+  const f = await fixture();
+  const imported = await importReferenceAttachment(f.vault, f.projectId, attachment('pin-spec.pdf', new Uint8Array([4, 5])), { ...metadata, title: 'Pin spec' });
+  const pinSpec = imported.references!.library.find(r => r.title === 'Pin spec')!;
+  await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
+  await f.working.writeFileText(['Pin.SLDPRT'], 'pin'); await f.working.writeFileText(['Other.SLDPRT'], 'other');
+  const reviewed = await f.scan();
+  const saved = await f.save({ referenceReview: createReferenceReview(reviewed.state, reviewed.scan, [{ referenceId: pinSpec.referenceId, versionId: pinSpec.versions[0].versionId, locator: '', explanation: 'Fit', component: { kind: 'pending', path: 'Pin.SLDPRT' } }]) });
+  const id = saved.revision.manifest.revisionId;
+  const names = async (selectedPaths: string[]) => {
+    const plan = prepareReviewExport(saved.vaultState, id, { kind: 'selected', selectedPaths, labelFilenames: false, includeReferences: true });
+    return plan.references.map(r => r.originalFilename).sort();
+  };
+  assert.deepEqual(await names(['Pin.SLDPRT']), ['pin-spec.pdf', '客户 requirement.pdf']);
+  assert.deepEqual(await names(['Other.SLDPRT']), ['客户 requirement.pdf']);
+});
+
+test('a reference attachment that cannot be verified is skipped and listed; the export still completes', async () => {
+  const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
+  const lost = new Uint8Array([6, 6, 6]);
+  const imported = await importReferenceAttachment(f.vault, f.projectId, attachment('lost.pdf', lost), { ...metadata, title: 'Lost' });
+  const lostRef = imported.references!.library.find(r => r.title === 'Lost')!;
+  await updateProjectReference(f.vault, f.projectId, lostRef.referenceId, { projectVersionId: lostRef.versions[0].versionId });
+  await f.working.writeFileText(['part'], 'geometry'); const saved = await f.save();
+  const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'complete', selectedPaths: [], labelFilenames: false, includeReferences: true });
+  assert.equal(plan.references.length, 2);
+  await f.vault.removeEntry(getObjectPathSegments(lostRef.versions[0].sha256));
+  const parent = new InMemoryFileSystemAdapter('Reviews');
+  const output = await exportRevisionForReview({ vaultDir: f.vault, parent, plan, folderName: plan.folderName, workingFolders: f.folders });
+  assert.equal(output.referencesCount, 1);
+  assert.equal(output.referencesSkipped.length, 1); assert.equal(output.referencesSkipped[0].label, 'lost.pdf'); assert.match(output.referencesSkipped[0].reason, /Missing content object/);
+  const folder = await parent.getDirectory([output.folderName]);
+  assert.deepEqual((await (await folder.getDirectory(['References'])).listEntries()).map(e => e.name), ['客户 requirement.pdf']);
+  const summary = await folder.readFileText([output.summaryName]);
+  assert.match(summary, /Not included: "lost\.pdf": Missing content object/);
+  assert.equal(await folder.hasFile(['_CADTREE_EXPORT_INCOMPLETE.txt']), false);
+});
+
+test('when every reference attachment is skipped no References folder is created', async () => {
+  const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
+  await f.working.writeFileText(['part'], 'geometry'); const saved = await f.save();
+  const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'complete', selectedPaths: [], labelFilenames: false, includeReferences: true });
+  await f.vault.removeEntry(getObjectPathSegments(f.version.sha256));
+  const parent = new InMemoryFileSystemAdapter('Reviews');
+  const output = await exportRevisionForReview({ vaultDir: f.vault, parent, plan, folderName: plan.folderName, workingFolders: f.folders });
+  assert.equal(output.referencesCount, 0);
+  const folder = await parent.getDirectory([output.folderName]);
+  assert.deepEqual((await folder.listEntries()).map(e => e.name).sort(), ['_CADTREE_REVIEW.txt', 'part']);
+  assert.match(await folder.readFileText([output.summaryName]), /Not included: "客户 requirement\.pdf"/);
 });
 
 test('context equality ignores display path but preserves exact version, origin, locator and permanent identity', () => {
