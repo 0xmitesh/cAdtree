@@ -1621,6 +1621,13 @@ input::placeholder {
   margin-bottom: 5px;
   color: #6d7d6e;
 }
+.note-more-detail {
+  font-size: 12px;
+}
+.note-more-detail > label {
+  display: block;
+  margin-top: 11px;
+}
 .draft-note {
   display: flex;
   gap: 6px;

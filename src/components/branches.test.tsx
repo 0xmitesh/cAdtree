@@ -179,14 +179,14 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   fireEvent.click(
     changes.getByRole("button", { name: /Add.*overall engineering notes/ }),
   );
-  fireEvent.change(changes.getByRole("textbox", { name: "Overall: problem" }), {
+  fireEvent.change(changes.getByRole("textbox", { name: "Overall: Why" }), {
     target: { value: "Main intent" },
   });
   fireEvent.click(
     changes.getByRole("button", { name: "Add note for Part.SLDPRT" }),
   );
   fireEvent.change(
-    changes.getByRole("textbox", { name: "Part.SLDPRT: problem" }),
+    changes.getByRole("textbox", { name: "Part.SLDPRT: Why" }),
     { target: { value: "Main file note" } },
   );
   const branch = await createFromUI(ctx, "Case A");
@@ -221,7 +221,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   fireEvent.click(
     changes.getByRole("button", { name: /Add.*overall engineering notes/ }),
   );
-  fireEvent.change(changes.getByRole("textbox", { name: "Overall: problem" }), {
+  fireEvent.change(changes.getByRole("textbox", { name: "Overall: Why" }), {
     target: { value: "Alternative intent" },
   });
   await selectBranch(ctx.ui, "branch-main");
@@ -238,7 +238,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: "Overall: problem",
+        name: "Overall: Why",
       }) as HTMLTextAreaElement
     ).value,
     "Main intent",
@@ -246,7 +246,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: "Part.SLDPRT: problem",
+        name: "Part.SLDPRT: Why",
       }) as HTMLTextAreaElement
     ).value,
     "Main file note",

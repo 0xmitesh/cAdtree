@@ -46,7 +46,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:'Scan for changes',exact:true}).click();
       await page.getByRole('textbox',{name:'Revision summary'}).fill('Keep pending notes');
       await page.getByRole('button',{name:/Add overall engineering notes/}).click();
-      await page.getByRole('textbox',{name:'Overall: problem',exact:true}).fill('Keep intent');
+      await page.getByRole('textbox',{name:'Overall: Description',exact:true}).fill('Keep intent');
       await nav.getByRole('button',{name:'History',exact:true}).click();
       await page.getByRole('button',{name:/Rev 004: Reduced bracket thickness/}).click();
       const before=await page.evaluate(()=>window.sample.signature());
@@ -107,7 +107,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       assert.equal(await page.locator('.project-context-header').getAttribute('data-branch-id'),await page.evaluate(()=>window.sample.caseId));
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
       assert.equal(await page.getByRole('textbox',{name:'Revision summary'}).inputValue(),'Keep pending notes');
-      assert.equal(await page.getByRole('textbox',{name:'Overall: problem',exact:true}).inputValue(),'Keep intent');
+      assert.equal(await page.getByRole('textbox',{name:'Overall: Description',exact:true}).inputValue(),'Keep intent');
       // Main-view history is separate from dialogs and retains the loaded project.
       const logo=page.getByRole('button',{name:'cAdtree introduction',exact:true});
       assert.equal(await logo.getAttribute('href'),null);
@@ -116,7 +116,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();
       await page.goBack();await changes.waitFor();
       assert.equal(await page.getByRole('textbox',{name:'Revision summary'}).inputValue(),'Keep pending notes');
-      assert.equal(await page.getByRole('textbox',{name:'Overall: problem',exact:true}).inputValue(),'Keep intent');
+      assert.equal(await page.getByRole('textbox',{name:'Overall: Description',exact:true}).inputValue(),'Keep intent');
       await page.goForward();await page.getByRole('heading',{name:'Welcome to cAdtree',exact:true}).waitFor();
       await nav.getByRole('button',{name:'My workspaces',exact:true}).click();
       await page.getByRole('button',{name:'Open workspace',exact:true}).click();

@@ -190,3 +190,18 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
   assert.equal(reopened.revisions.length, state.revisions.length + 1);
   assert.equal(reopened.components?.status, 'available');
 });
+
+test('Changes saves the single Description and per-file Note into modification, leaving Why and What you noticed empty', async () => {
+  const f = await fixture();
+  let params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0] | undefined;
+  const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { onCapture: async (p: typeof params) => { params = p; } })} />);
+  fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Notes check' } });
+  fireEvent.click(ui.getByRole('button', { name: /Add overall engineering notes/ }));
+  fireEvent.change(ui.getByRole('textbox', { name: 'Overall: Description' }), { target: { value: 'Overall words' } });
+  fireEvent.click(ui.getByRole('button', { name: 'Add note for first' }));
+  fireEvent.change(ui.getByRole('textbox', { name: 'first: Note' }), { target: { value: 'File words' } });
+  fireEvent.click(ui.getByRole('button', { name: /^Save revision$/ }));
+  await waitFor(() => assert.ok(params));
+  assert.deepEqual(params!.notes, { problem: '', modification: 'Overall words', observations: '' });
+  assert.deepEqual(params!.fileNotes, [{ path: 'first', problem: '', modification: 'File words', observations: '' }]);
+});

@@ -243,7 +243,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
     changes(ui).getByRole("button", { name: "Add note for Case-only.bin" }),
   );
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: "Case-only.bin: problem" }),
+    changes(ui).getByRole("textbox", { name: "Case-only.bin: Why" }),
     { target: { value: "Case A engineering note" } },
   );
   fireEvent.click(ui.getByRole("treeitem", { name: "autocad" }));
@@ -282,7 +282,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: "Case-only.bin: problem",
+        name: "Case-only.bin: Why",
       }) as HTMLTextAreaElement
     ).value,
     "Case A engineering note",

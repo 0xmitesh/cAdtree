@@ -9,7 +9,8 @@ import type {
 } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
-import { NotesFields, Notice, OperationProgress, StatusBadge } from "./ui";
+import { Notice, OperationProgress, StatusBadge } from "./ui";
+import { NoteEditor } from "./NoteEditor";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
 import { createIdentityReview, prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
@@ -497,7 +498,8 @@ export function ChangesCaptureView({
                 {showOverall ? "− Hide" : "+ Add"} overall engineering notes
               </button>
               {showOverall ? (
-                <NotesFields
+                <NoteEditor
+                  label="Description"
                   value={notes}
                   onChange={setNotes}
                   disabled={busy}
@@ -539,7 +541,9 @@ export function ChangesCaptureView({
                     </button>
                   </div>
                   <strong className="file-path">{notePath}</strong>
-                  <NotesFields
+                  <NoteEditor
+                    key={notePath}
+                    label="Note"
                     value={fileNotes[notePath]}
                     onChange={(n) =>
                       setFileNotes((prev) => ({

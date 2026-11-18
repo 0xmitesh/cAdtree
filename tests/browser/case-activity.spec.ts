@@ -57,7 +57,7 @@ for (const width of [1366, 390])
       .getByRole("button", { name: /Add.*overall engineering notes/ })
       .click();
     await page
-      .getByRole("textbox", { name: "Overall: observations", exact: true })
+      .getByRole("textbox", { name: "Overall: Description", exact: true })
       .fill("Overall session draft");
     await page
       .getByRole("button", {
@@ -67,7 +67,7 @@ for (const width of [1366, 390])
       .click();
     await page
       .getByRole("textbox", {
-        name: "Parts/Part-X.SLDPRT: observations",
+        name: "Parts/Part-X.SLDPRT: Note",
         exact: true,
       })
       .fill("Part session draft");
@@ -173,11 +173,11 @@ for (const width of [1366, 390])
       "Main draft stays intact during case review",
     );
     await expect(
-      page.getByRole("textbox", { name: "Overall: observations", exact: true }),
+      page.getByRole("textbox", { name: "Overall: Description", exact: true }),
     ).toHaveValue("Overall session draft");
     await expect(
       page.getByRole("textbox", {
-        name: "Parts/Part-X.SLDPRT: observations",
+        name: "Parts/Part-X.SLDPRT: Note",
         exact: true,
       }),
     ).toHaveValue("Part session draft");

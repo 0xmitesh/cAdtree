@@ -103,7 +103,7 @@ for (const width of [1366, 390])
         .getByRole("button", { name: /Add.*overall engineering notes/ })
         .click();
       await page
-        .getByRole("textbox", { name: "Overall: observations", exact: true })
+        .getByRole("textbox", { name: "Overall: Description", exact: true })
         .fill("Session draft survives lifecycle metadata changes");
       await page
         .getByRole("button", {
@@ -113,7 +113,7 @@ for (const width of [1366, 390])
         .click();
       await page
         .getByRole("textbox", {
-          name: "Parts/Part-X.SLDPRT: observations",
+          name: "Parts/Part-X.SLDPRT: Note",
           exact: true,
         })
         .fill("Retain this per-file draft too");
@@ -188,13 +188,13 @@ for (const width of [1366, 390])
       ).toHaveValue("Keep this case-scoped engineering draft");
       await expect(
         page.getByRole("textbox", {
-          name: "Overall: observations",
+          name: "Overall: Description",
           exact: true,
         }),
       ).toHaveValue("Session draft survives lifecycle metadata changes");
       await expect(
         page.getByRole("textbox", {
-          name: "Parts/Part-X.SLDPRT: observations",
+          name: "Parts/Part-X.SLDPRT: Note",
           exact: true,
         }),
       ).toHaveValue("Retain this per-file draft too");

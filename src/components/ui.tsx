@@ -126,44 +126,6 @@ export function OperationProgress({
     </div>
   );
 }
-export function NotesFields({
-  value,
-  onChange,
-  disabled,
-  scope,
-}: {
-  value: RevisionNotes;
-  onChange: (value: RevisionNotes) => void;
-  disabled?: boolean;
-  scope: string;
-}) {
-  const id = useId();
-  return (
-    <div className="notes-fields">
-      {(["problem", "modification", "observations"] as const).map((field) => (
-        <label key={field} htmlFor={`${id}-${field}`}>
-          <span>
-            {
-              {
-                problem: "Problem or intent",
-                modification: "Engineering change",
-                observations: "Observations",
-              }[field]
-            }
-          </span>
-          <textarea
-            id={`${id}-${field}`}
-            aria-label={`${scope}: ${field}`}
-            value={value[field]}
-            onChange={(e) => onChange({ ...value, [field]: e.target.value })}
-            disabled={disabled}
-            rows={2}
-          />
-        </label>
-      ))}
-    </div>
-  );
-}
 export function NotesText({ notes }: { notes: RevisionNotes }) {
   return (
     <dl className="notes-text">
