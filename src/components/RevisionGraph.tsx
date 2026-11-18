@@ -427,7 +427,7 @@ export function RevisionGraph({
               className="text-button"
               onClick={() => onHighlightBranch(null)}
             >
-              {fileRecords ? "Show all branches" : "Clear ancestry highlight"}
+              {fileRecords ? "Show all branches" : "Clear highlight"}
             </button>
           ) : (
             "Select a revision to inspect · ↑ ↓ to navigate"

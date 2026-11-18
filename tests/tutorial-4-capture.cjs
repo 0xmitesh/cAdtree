@@ -113,7 +113,7 @@ async function main(){
     await selector.selectOption('branch-main'); await idle();
     await nav.getByRole('button', { name: 'History', exact: true }).click();
     await page.getByRole('button', { name: /Rev 006: Main mounting detail refined/ }).click();
-    const clearHighlight = page.getByRole('button', { name: 'Clear ancestry highlight', exact: true });
+    const clearHighlight = page.getByRole('button', { name: 'Clear highlight', exact: true });
     if (await clearHighlight.count()) await clearHighlight.click();
     await page.setViewportSize({ width: 1440, height: 1200 });
     // Focus the shared origin and the two later directions, rather than shrinking
