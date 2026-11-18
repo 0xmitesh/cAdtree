@@ -1486,14 +1486,6 @@ summary {
 .file-path-actions {
   flex-wrap: nowrap;
 }
-.file-path-actions.historical {
-  margin-top: 8px;
-  align-items: flex-start;
-}
-.file-path-actions.historical > .text-button {
-  text-align: left;
-  white-space: normal;
-}
 .file-path-menu {
   position: relative;
 }
@@ -1508,18 +1500,25 @@ summary {
 .file-path-menu > summary::-webkit-details-marker {
   display: none;
 }
-.file-path-menu > button {
+.file-path-menu-items {
   position: absolute;
   z-index: 4;
   right: 0;
   top: 100%;
   min-width: 210px;
   max-width: 260px;
-  padding: 12px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
   background: white;
   border: 1px solid var(--border);
   border-radius: 6px;
   text-align: left;
+}
+.file-path-menu-items > button {
+  padding: 8px 10px;
+  text-align: left;
+  white-space: normal;
 }
 .path-feedback,
 .path-storage-warning {
@@ -1613,6 +1612,13 @@ input::placeholder {
   display: block;
   margin-bottom: 5px;
   color: #6d7d6e;
+}
+.note-more-detail {
+  font-size: 12px;
+}
+.note-more-detail > label {
+  display: block;
+  margin-top: 11px;
 }
 .draft-note {
   display: flex;
@@ -3145,6 +3151,7 @@ input::placeholder {
 .reference-card { padding: 1rem; margin-block: 1rem; border: 1px solid var(--border); border-radius: 8px; }
 .revision-attachments { display: grid; gap: .75rem; min-width: 0; }
 .revision-attachments input[type="file"] { width: 100%; min-width: 0; }
+.saved-references { display: grid; gap: .75rem; min-width: 0; }
 .attachment-editor { min-width: 0; margin: 0; padding: .75rem; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: .5rem; }
 .attachment-editor legend { max-width: 100%; overflow-wrap: anywhere; font-weight: 600; }
 .attachment-editor select { max-width: 100%; }

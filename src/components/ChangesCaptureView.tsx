@@ -9,11 +9,12 @@ import type {
 } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { formatBytes, formatTimestamp } from "../utils/format";
-import { NotesFields, Notice, OperationProgress, StatusBadge } from "./ui";
+import { Notice, OperationProgress, StatusBadge } from "./ui";
+import { NoteEditor } from "./NoteEditor";
 import { FilePathActions } from "./FilePathShortcuts";
 import type { FilePathLocation } from "../utils/folder-path";
-import { prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
-import { ComponentIdentityControls } from './ComponentIdentityControls';
+import { createIdentityReview, prepareComponentRecord, type IdentityReview } from '../engine/component-identity';
+import { canMatchRename, canTreatAsNew, ComponentIdentityControls, identityReviewStale, MatchRenameDialog, TreatAsNewDialog } from './ComponentIdentityControls';
 import { createReferenceReview, prepareReferenceContext, referenceSelectionChanged, type ReferenceReview, type PendingReferenceAttachment } from '../engine/references';
 import { RevisionAttachments, type DraftReferenceAttachment } from './RevisionAttachments';
 
@@ -117,6 +118,8 @@ export function ChangesCaptureView({
       });
   }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview, referenceReview, attachments, showAttachments]);
   const [showUnchanged, setShowUnchanged] = useState(false);
+  const [treatAsNewPath, setTreatAsNewPath] = useState<string | null>(null);
+  const [matchPath, setMatchPath] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
     null,
@@ -315,8 +318,9 @@ export function ChangesCaptureView({
         <OperationProgress progress={progress} onCancel={onCancelOperation} />
       ) : null}
       {error ? <Notice type="error">{error}</Notice> : null}
-      <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} onEnable={onEnableComponentTracking} busy={busy} />
-      {identityConflict ? <Notice type="error">{identityConflict}</Notice> : null}
+      <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} busy={busy} />
+      {!vaultState.components || vaultState.components.status === 'legacy' ? <p className="muted small" data-testid="renames-untracked">Renames aren't tracked for this project.</p> : null}
+      {identityConflict ? <Notice type="error">{identityConflict}{vaultState.components?.status === 'unavailable' && vaultState.components.enrollmentIncomplete && onEnableComponentTracking ? <> <button className="button secondary" type="button" disabled={busy} onClick={() => { setError(''); onEnableComponentTracking().catch(e => setError(e instanceof Error ? e.message : String(e))); }}>Retry component enrollment</button></> : null}</Notice> : null}
       {scan && !scan.hasChanges && referenceChanged ? <Notice>This revision saves updated references with the current project files.</Notice> : null}
       {referenceConflict ? <Notice type="error">{referenceConflict} <button className="text-button" type="button" disabled={busy} onClick={() => { if (scan && effectiveReferences) setReferenceReview(createReferenceReview(vaultState, scan, effectiveReferences.explicit)); setShowAttachments(true); }}>Review current references</button></Notice> : null}
       {needsReview ? (
@@ -391,12 +395,28 @@ export function ChangesCaptureView({
                       </span>
                     </div>
                     <div className="change-file-actions">
-                      {resolveFilePath ? (
-                        <FilePathActions
-                          filePath={file.path}
-                          resolve={() => resolveFilePath(file.path)}
-                        />
-                      ) : null}
+                      <FilePathActions
+                        filePath={file.path}
+                        resolve={resolveFilePath ? () => resolveFilePath(file.path) : undefined}
+                        extraItems={[
+                          ...((status === "Modified" || status === "Unchanged") && canTreatAsNew(vaultState, scan) && !identityReview?.replacements.includes(file.path)
+                            ? [{
+                                label: "Treat as new component",
+                                ariaLabel: `Treat as new component — ${file.path}`,
+                                disabled: busy || identityReviewStale(vaultState, scan, identityReview),
+                                onSelect: () => setTreatAsNewPath(file.path),
+                              }]
+                            : []),
+                          ...(status === "Deleted" && canMatchRename(vaultState, scan, identityReview, file.path)
+                            ? [{
+                                label: "Match to a new file…",
+                                ariaLabel: `Match to a new file — ${file.path}`,
+                                disabled: busy,
+                                onSelect: () => setMatchPath(file.path),
+                              }]
+                            : []),
+                        ]}
+                      />
                       {status !== "Unchanged" ? (
                         <button
                           className="text-button note-action"
@@ -485,10 +505,11 @@ export function ChangesCaptureView({
                 aria-expanded={showOverall}
                 onClick={() => setShowOverall((v) => !v)}
               >
-                {showOverall ? "− Hide" : "+ Add"} overall engineering notes
+                {showOverall ? "− Hide description" : "+ Add a description"}
               </button>
               {showOverall ? (
-                <NotesFields
+                <NoteEditor
+                  label="Description"
                   value={notes}
                   onChange={setNotes}
                   disabled={busy}
@@ -498,7 +519,7 @@ export function ChangesCaptureView({
               <button className="text-button" type="button" disabled={busy} aria-expanded={showAttachments} onClick={() => { setShowAttachments(value => !value); if (!referenceReview && effectiveReferences) setReferenceReview(effectiveReferences); }}>
                 {showAttachments ? '− Hide reference files' : '+ Attach reference files'}{attachments.length ? ` (${attachments.length})` : ''}
               </button>
-              {showAttachments && scan && effectiveReferences ? <RevisionAttachments state={vaultState} scan={scan} identityReview={identityReview} review={effectiveReferences} onReview={setReferenceReview} attachments={attachments} onAttachments={setAttachments} busy={busy} /> : null}
+              {showAttachments && scan && effectiveReferences ? <RevisionAttachments state={vaultState} scan={scan} identityReview={identityReview} review={effectiveReferences} onReview={setReferenceReview} attachments={attachments} onAttachments={setAttachments} busy={busy} needsAttention={Boolean(referenceConflict)} /> : null}
               {Object.keys(fileNotes).length ? (
                 <div className="draft-file-notes">
                   <h3>File notes</h3>
@@ -530,7 +551,9 @@ export function ChangesCaptureView({
                     </button>
                   </div>
                   <strong className="file-path">{notePath}</strong>
-                  <NotesFields
+                  <NoteEditor
+                    key={notePath}
+                    label="Note"
                     value={fileNotes[notePath]}
                     onChange={(n) =>
                       setFileNotes((prev) => ({
@@ -593,6 +616,38 @@ export function ChangesCaptureView({
           </form>
         ) : null}
       </div>
+      {matchPath && scan ? (
+        <MatchRenameDialog
+          from={matchPath}
+          scan={scan}
+          value={identityReview}
+          busy={busy}
+          onCancel={() => setMatchPath(null)}
+          onConfirm={(to) => {
+            try {
+              setIdentityReview(createIdentityReview(vaultState, scan, [...(identityReview?.renames ?? []), { from: matchPath, to }], identityReview?.replacements ?? []));
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            }
+            setMatchPath(null);
+          }}
+        />
+      ) : null}
+      {treatAsNewPath && scan ? (
+        <TreatAsNewDialog
+          path={treatAsNewPath}
+          busy={busy}
+          onCancel={() => setTreatAsNewPath(null)}
+          onConfirm={() => {
+            try {
+              setIdentityReview(createIdentityReview(vaultState, scan, identityReview?.renames ?? [], [...(identityReview?.replacements ?? []), treatAsNewPath]));
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            }
+            setTreatAsNewPath(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -94,6 +94,42 @@ function harness(
 const copyButton = (ui: ReturnType<typeof render>) =>
   ui.getByRole("button", { name: `Copy folder path — ${filePath}` });
 
+test("each file row has a single path menu holding both copy actions", () => {
+  const ui = render(harness(workspace()));
+  assert.equal(ui.container.querySelectorAll(".file-path-actions > *").length, 1);
+  assert.equal(ui.container.querySelectorAll(".file-path-actions > :not(details)").length, 0);
+  const menu = within(ui.container.querySelector(".file-path-menu") as HTMLElement);
+  assert.ok(menu.getByRole("button", { name: `Copy file path — ${filePath}` }));
+  assert.ok(menu.getByRole("button", { name: `Copy folder path — ${filePath}` }));
+  assert.equal(ui.queryByRole("button", { name: /Copy full file path/ }), null);
+});
+
+test("file menus close on Escape (returning focus) and outside click, and only one is open at a time", async () => {
+  const ui = render(
+    <FilePathShortcutsProvider workspace={workspace()} convenienceEpoch={0}>
+      <FilePathActions filePath="A.bin" resolve={async () => location} />
+      <FilePathActions filePath="B.bin" resolve={async () => location} />
+      <button>elsewhere</button>
+    </FilePathShortcutsProvider>,
+  );
+  const [a, b] = Array.from(ui.container.querySelectorAll("details.file-path-menu")) as HTMLDetailsElement[];
+  const open = async (menu: HTMLDetailsElement) => {
+    menu.open = true;
+    await waitFor(() => assert.ok(menu.open));
+    await new Promise((r) => setTimeout(r, 20));
+  };
+  await open(a);
+  await open(b);
+  await waitFor(() => assert.equal(a.open, false));
+  assert.equal(b.open, true);
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => assert.equal(b.open, false));
+  assert.equal(document.activeElement, b.querySelector("summary"));
+  await open(a);
+  fireEvent.mouseDown(ui.getByText("elsewhere"));
+  await waitFor(() => assert.equal(a.open, false));
+});
+
 test("a first path click offers setup, saves locally, rechecks the file, then completes that exact copy", async () => {
   await clearAllConvenienceMetadata();
   const copied: string[] = [];
@@ -128,9 +164,9 @@ test("a first path click offers setup, saves locally, rechecks the file, then co
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(copied.length, 2));
   assert.ok(ui.queryByRole("dialog") === null);
-  fireEvent.click(ui.getByLabelText(`More path actions — ${filePath}`));
+  fireEvent.click(ui.getByLabelText(`File actions — ${filePath}`));
   fireEvent.click(
-    ui.getByRole("button", { name: `Copy full file path — ${filePath}` }),
+    ui.getByRole("button", { name: `Copy file path — ${filePath}` }),
   );
   await waitFor(() => assert.equal(copied.length, 3));
   assert.equal(
@@ -164,9 +200,9 @@ test("a branch-root file copies its working folder; the secondary action include
     "D:\\CAD Workspace\\projects\\p\\working\\actual-leaf",
   );
   assert.ok(ui.getByText("Folder path copied"));
-  fireEvent.click(ui.getByLabelText(`More path actions — ${rootFile}`));
+  fireEvent.click(ui.getByLabelText(`File actions — ${rootFile}`));
   fireEvent.click(
-    ui.getByRole("button", { name: `Copy full file path — ${rootFile}` }),
+    ui.getByRole("button", { name: `Copy file path — ${rootFile}` }),
   );
   await waitFor(() => assert.equal(copied.length, 2));
   assert.equal(copied[1], copied[0] + "\\Assembly.SLDASM");

@@ -37,8 +37,8 @@ test("Logo is an intro button; main-view Back/Forward preserves current project,
   await waitFor(()=>assert.equal(appBusy(ui),false));
   const summary=ui.getByRole("textbox",{name:/Revision summary/});
   fireEvent.change(summary,{target:{value:"Keep this pending decision"}});
-  fireEvent.click(ui.getByRole("button",{name:/Add overall engineering notes/}));
-  const note=ui.getByRole("textbox",{name:"Overall: problem"});
+  fireEvent.click(ui.getByRole("button",{name:/Add a description/}));
+  const note=ui.getByRole("textbox",{name:"Overall: Why"});
   fireEvent.change(note,{target:{value:"Keep the engineering intent"}});
   fireEvent.click(nav.getByRole("button",{name:"History"}));
   fireEvent.click(ui.getByRole("button",{name:/Rev 004: Reduced bracket thickness/}));

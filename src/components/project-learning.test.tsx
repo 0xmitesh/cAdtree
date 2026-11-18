@@ -30,11 +30,11 @@ test("Project Learn preserves the working case, inspected revision, scan and all
   await waitFor(() => assert.equal(appBusy(ui), false));
   const summary = ui.getByRole("textbox", { name: /Revision summary/ });
   fireEvent.change(summary, { target: { value: "Keep this pending summary" } });
-  fireEvent.click(ui.getByRole("button", { name: /Add overall engineering notes/ }));
-  const overall = ui.getByRole("textbox", { name: "Overall: problem" });
+  fireEvent.click(ui.getByRole("button", { name: /Add a description/ }));
+  const overall = ui.getByRole("textbox", { name: "Overall: Description" });
   fireEvent.change(overall, { target: { value: "Keep this engineering intent" } });
   fireEvent.click(ui.getByRole("button", { name: "Add note for Bracket.SLDPRT" }));
-  const fileNote = ui.getByRole("textbox", { name: "Bracket.SLDPRT: modification" });
+  const fileNote = ui.getByRole("textbox", { name: "Bracket.SLDPRT: Note" });
   fireEvent.change(fileNote, { target: { value: "Keep this file-specific draft" } });
   fireEvent.click(nav.getByRole("button", { name: "History" }));
   fireEvent.click(ui.getByRole("button", { name: /Rev 004: Reduced bracket thickness/ }));

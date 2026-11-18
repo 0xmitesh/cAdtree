@@ -153,7 +153,7 @@ test('home Readme: tutorials use the real button names and describe no feature t
   for (const label of ['Scan for changes', 'Save revision', 'Create design case from this revision', 'Create design case', 'Bring back onto',
     'Prepare bring-back', 'Bring back confirmed changes', 'Review changes to apply', 'Prepare application', 'Apply confirmed changes',
     'Keep destination', 'Use source state', 'Leave unresolved', 'Export for review', 'Choose destination parent', 'Archive case',
-    'Reopen case', 'Revision summary', 'Case name', 'Engineering reason', 'Problem or intent', 'Engineering change']) {
+    'Reopen case', 'Revision summary', 'Case name', 'Engineering reason', 'Add a description', 'What you noticed']) {
     assert.ok(flat.includes(label), `mentions "${label}"`);
   }
   assert.doesNotMatch(text, /restore copy|convert|cloud|collaborat|upload|sync/i);

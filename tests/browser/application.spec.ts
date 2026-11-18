@@ -200,10 +200,11 @@ for (const width of [1366, 390])
       .getByRole("textbox", { name: /Revision summary/ })
       .fill("Reuse case Part-X after CAD reference checks");
     await page
-      .getByRole("button", { name: /Add.*overall engineering notes/ })
+      .getByRole("button", { name: /Add a description/ })
       .click();
+    await page.getByTestId("note-Overall").getByText("More detail").click();
     await page
-      .getByRole("textbox", { name: "Overall: observations", exact: true })
+      .getByRole("textbox", { name: "Overall: What you noticed", exact: true })
       .fill("CAD-like references and rebuild checked in disposable fixture");
     await page
       .getByRole("button", {
@@ -212,8 +213,12 @@ for (const width of [1366, 390])
       })
       .click();
     await page
+      .getByTestId("note-Parts/Part-X.SLDPRT")
+      .getByText("More detail")
+      .click();
+    await page
       .getByRole("textbox", {
-        name: "Parts/Part-X.SLDPRT: observations",
+        name: "Parts/Part-X.SLDPRT: What you noticed",
         exact: true,
       })
       .fill("Adjusted after application in this fixture");

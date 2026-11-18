@@ -53,11 +53,13 @@ for (const width of [1366, 390])
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     const summary = page.getByRole("textbox", { name: /Revision summary/ });
     await summary.fill("Main draft stays intact during case review");
+    // The scan-complete message floats over the form until dismissed.
+    await page.getByRole("button", { name: "Dismiss message" }).click();
     await page
-      .getByRole("button", { name: /Add.*overall engineering notes/ })
+      .getByRole("button", { name: /Add a description/ })
       .click();
     await page
-      .getByRole("textbox", { name: "Overall: observations", exact: true })
+      .getByRole("textbox", { name: "Overall: Description", exact: true })
       .fill("Overall session draft");
     await page
       .getByRole("button", {
@@ -67,7 +69,7 @@ for (const width of [1366, 390])
       .click();
     await page
       .getByRole("textbox", {
-        name: "Parts/Part-X.SLDPRT: observations",
+        name: "Parts/Part-X.SLDPRT: Note",
         exact: true,
       })
       .fill("Part session draft");
@@ -173,11 +175,11 @@ for (const width of [1366, 390])
       "Main draft stays intact during case review",
     );
     await expect(
-      page.getByRole("textbox", { name: "Overall: observations", exact: true }),
+      page.getByRole("textbox", { name: "Overall: Description", exact: true }),
     ).toHaveValue("Overall session draft");
     await expect(
       page.getByRole("textbox", {
-        name: "Parts/Part-X.SLDPRT: observations",
+        name: "Parts/Part-X.SLDPRT: Note",
         exact: true,
       }),
     ).toHaveValue("Part session draft");

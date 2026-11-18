@@ -135,13 +135,14 @@ test('revision listing: header, identity, notes, folders, files with object path
   assert.ok(lines.includes('Branch: Main (branch ID: branch-main)'));
   assert.ok(lines.includes(`Parent revision: Rev 001 (${f.revisionIds[0]})`));
   assert.ok(lines.includes(`Saved: ${manifest.captureCompletedAt}`));
-  assert.ok(lines.includes('    Problem: Grip too heavy'));
-  assert.ok(lines.includes('    Observations: Synthetic only'));
+  assert.ok(lines.includes('    Why: Grip too heavy'));
+  assert.ok(lines.includes('    What you noticed: Synthetic only'));
   assert.ok(lines.includes('        second line'), 'multi-line values continue indented, without trailing spaces');
-  // Per-file notes: empty fields read "(none)".
+  // Per-file notes: empty fields are omitted.
   assert.ok(lines.includes('    Parts/Collar.SLDPRT'));
-  assert.ok(lines.includes('        Modification: Thinner wall'));
-  assert.ok(lines.includes('        Observations: (none)'));
+  assert.ok(lines.includes('        Note: Thinner wall'));
+  assert.ok(!lines.includes('        What you noticed: (none)'));
+  assert.ok(!lines.some((l) => l.includes('Observations')));
   // Folders and files.
   assert.deepEqual(manifest.directories.slice().sort(), ['Empty folder', 'Parts']);
   assert.ok(lines.includes('FOLDERS (2)'));
@@ -178,9 +179,8 @@ test('revision listing: empty notes, no per-file notes and no references read "(
   const text = listing(f, f.project.vaultState, 0);
   const lines = text.split('\r\n');
   assert.ok(lines.includes('Parent revision: none'));
-  assert.ok(lines.includes('    Problem: (none)'));
-  assert.ok(lines.includes('    Modification: (none)'));
-  assert.ok(lines.includes('    Observations: (none)'));
+  const notes = lines.indexOf('NOTES');
+  assert.equal(lines[notes + 1], '    (none)');
   const fileNotes = lines.indexOf('NOTES ON INDIVIDUAL FILES');
   assert.equal(lines[fileNotes + 1], '    (none)');
   const refs = lines.indexOf('REFERENCES CAPTURED WITH THIS REVISION');

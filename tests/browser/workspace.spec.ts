@@ -52,7 +52,7 @@ for (const viewport of [
       .getByRole("button", { name: "Add note for Parts/Housing.SLDPRT" })
       .click();
     await page
-      .getByRole("textbox", { name: "Parts/Housing.SLDPRT: problem" })
+      .getByRole("textbox", { name: "Parts/Housing.SLDPRT: Note" })
       .fill("Shaft binds at operating temperature.");
     await page.screenshot({
       path: path.join(screenshotDir, `changes-${viewport.width}.png`),
@@ -64,7 +64,7 @@ for (const viewport of [
       .getByRole("button", { name: "Changes", exact: true })
       .click();
     await expect(
-      page.getByRole("textbox", { name: "Parts/Housing.SLDPRT: problem" }),
+      page.getByRole("textbox", { name: "Parts/Housing.SLDPRT: Note" }),
     ).toHaveValue("Shaft binds at operating temperature.");
   });
 }

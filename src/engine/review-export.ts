@@ -48,6 +48,12 @@ function capUnits(text: string, limit: number): string {
   return out.replace(/[ .]+$/, '');
 }
 /** Readable export folder base: `Project - Branch - R03`, at most 64 UTF-16 units. */
+function noteLines(notes: { problem: string; modification: string; observations: string }, mainLabel: string): string[] {
+  return ([[mainLabel, notes.modification], ['Why', notes.problem], ['What you noticed', notes.observations]] as const)
+    .filter(([, value]) => value?.trim())
+    .map(([label, value]) => `${label}: ${JSON.stringify(value)}`);
+}
+
 export function exportFolderBaseName(projectName: string, branchName: string, revisionLabel: string): string {
   const branch = capUnits(folderNameFor(branchName, 'Branch'), 24) || 'Branch';
   const build = (projectLimit: number) => {
@@ -135,9 +141,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     `Revision: ${revisionLabel} (${manifest.revisionId})`,
     `Saved date: ${manifest.captureCompletedAt}`,
     `Revision summary: ${quote(manifest.summary)}`,
-    `Problem or intent: ${quote(manifest.notes.problem)}`,
-    `Engineering change: ${quote(manifest.notes.modification)}`,
-    `Observations: ${quote(manifest.notes.observations)}`,
+    ...noteLines(manifest.notes, 'Description'),
     'These are ordinary review copies. Editing them does not update saved history.',
     'Project reference attachments are not included in this review export.',
     request.labelFilenames ? 'Filenames were labelled for standalone review. Other documents may require reference repair. Native references were not rewritten.' : 'Original internal filenames and relative paths were preserved.',
@@ -145,7 +149,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     ...files.flatMap(file => [
       `${quote(file.path)} -> ${quote(file.exportedPath)}`,
       `  SHA-256: ${file.sha256}; bytes: ${file.size}; component ID: ${file.componentId ?? 'unavailable for this snapshot'}`,
-      ...manifest.fileNotes?.filter(n => n.path === file.path).map(n => `  File notes: ${quote({ problem: n.problem, modification: n.modification, observations: n.observations })}`) ?? [],
+      ...manifest.fileNotes?.filter(n => n.path === file.path).map(n => `  File notes: ${quote(Object.fromEntries(([['Note', n.modification], ['Why', n.problem], ['What you noticed', n.observations]] as const).filter(([, v]) => v?.trim())))}`) ?? [],
     ]),
     '', 'Recorded export directories:', ...directories.map(quote), '',
   ].join('\n');

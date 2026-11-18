@@ -41,6 +41,14 @@ const SUMMARY_LIMIT = 80;
 const WRAP = 100;
 const NONE = '(none)';
 
+/** Writes the non-empty note fields; the main text is "Description" overall and "Note" per file. */
+function noteFields(doc: Doc, notes: { problem: string; modification: string; observations: string }, indent: number, mainLabel: string): void {
+  const fields: [string, string][] = [[mainLabel, notes.modification], ['Why', notes.problem], ['What you noticed', notes.observations]];
+  const present = fields.filter(([, value]) => value?.trim());
+  if (!present.length) { doc.line(NONE, indent); return; }
+  for (const [label, value] of present) doc.kv(label, value, indent);
+}
+
 // ---------------------------------------------------------------------------
 // Text helpers
 // ---------------------------------------------------------------------------
@@ -187,13 +195,14 @@ export function buildRevisionListing(input: RevisionListingInput): string {
   doc.kv('Saved', manifest.captureCompletedAt).kv('Summary', manifest.summary);
 
   doc.section('NOTES');
-  doc.kv('Problem', manifest.notes.problem, 4).kv('Modification', manifest.notes.modification, 4).kv('Observations', manifest.notes.observations, 4);
+  noteFields(doc, manifest.notes, 4, 'Description');
 
   doc.section('NOTES ON INDIVIDUAL FILES');
   const fileNotes = manifest.fileNotes ?? [];
   if (!fileNotes.length) doc.line(NONE, 4);
   for (const note of fileNotes) {
-    doc.line(note.path, 4).kv('Problem', note.problem, 8).kv('Modification', note.modification, 8).kv('Observations', note.observations, 8);
+    doc.line(note.path, 4);
+    noteFields(doc, note, 8, 'Note');
   }
 
   doc.section(`FOLDERS (${manifest.directories.length})`);
@@ -562,8 +571,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   );
   steps(doc, 'Save a revision', [
     'Close your CAD documents, then choose Changes on the left and choose Scan for changes.',
-    'Check the changed files. Enter a Revision summary (required). Optionally choose + Add overall engineering notes ' +
-      '(Problem or intent, Engineering change, Observations) or + Attach reference files.',
+    'Check the changed files. Enter a Revision summary (required). Optionally choose + Add a description ' +
+      '(with More detail for Why and What you noticed) or + Attach reference files.',
     'Choose Save revision. The new revision appears in History.',
   ]);
   steps(doc, 'Create a design case', [

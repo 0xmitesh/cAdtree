@@ -407,7 +407,7 @@ test("capture uses the reviewed signature and scoped notes; drafts survive view 
     target: { value: "Add retainer" },
   });
   fireEvent.click(ui.getByRole("button", { name: "Add note for New.SLDPRT" }));
-  fireEvent.change(ui.getByRole("textbox", { name: "New.SLDPRT: problem" }), {
+  fireEvent.change(ui.getByRole("textbox", { name: "New.SLDPRT: Why" }), {
     target: { value: "Improve retention" },
   });
   ui.rerender(
@@ -423,7 +423,7 @@ test("capture uses the reviewed signature and scoped notes; drafts survive view 
   assert.equal(
     (
       ui.getByRole("textbox", {
-        name: "New.SLDPRT: problem",
+        name: "New.SLDPRT: Why",
       }) as HTMLTextAreaElement
     ).value,
     "Improve retention",

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { IdentityReview } from '../engine/component-identity';
 import { prepareComponentRecord } from '../engine/component-identity';
 import type { PendingReferenceAttachment, ReferenceLinkInput, ReferenceReview } from '../engine/references';
@@ -6,11 +7,15 @@ import { formatBytes } from '../utils/format';
 
 export interface DraftReferenceAttachment extends PendingReferenceAttachment { draftId: string }
 
-export function RevisionAttachments({ state, scan, identityReview, review, onReview, attachments, onAttachments, busy }: {
+export function RevisionAttachments({ state, scan, identityReview, review, onReview, attachments, onAttachments, busy, needsAttention }: {
   state: VaultState; scan: ScanResult; identityReview?: IdentityReview; review: ReferenceReview;
   onReview: (value: ReferenceReview) => void;
   attachments: DraftReferenceAttachment[]; onAttachments: (value: DraftReferenceAttachment[]) => void; busy: boolean;
+  /** Opens the saved-reference list, e.g. when the saved selections need review. */
+  needsAttention?: boolean;
 }) {
+  const [manageOpen, setManageOpen] = useState(Boolean(needsAttention));
+  useEffect(() => { if (needsAttention) setManageOpen(true); }, [needsAttention]);
   let files: { path: string; componentId: string }[] = [];
   try { files = prepareComponentRecord(state, scan, identityReview)?.files ?? []; }
   catch { /* The Changes view displays the blocking identity issue. */ }
@@ -27,6 +32,8 @@ export function RevisionAttachments({ state, scan, identityReview, review, onRev
       <label className="field"><span>Reference note (optional)</span><textarea aria-label={`Reference note for ${name}`} maxLength={8000} rows={3} value={value.explanation} placeholder="How does this reference relate to the design?" onChange={event => update({ ...value, explanation: event.target.value })} /></label>
     </>;
   };
+  const carried = state.references?.library.filter(reference => !reference.removed && reference.projectVersionId) ?? [];
+  const savedCount = review.explicit.length + carried.length;
   return <div className="revision-attachments">
     <label className="field"><span>Reference files</span><input type="file" multiple disabled={busy} onChange={event => {
       const chosen = Array.from(event.currentTarget.files ?? []).map(source => ({ draftId: crypto.randomUUID(), source, explanation: '' }));
@@ -39,16 +46,21 @@ export function RevisionAttachments({ state, scan, identityReview, review, onRev
       {fields(attachment.source.name, attachment, change => onAttachments(attachments.map(item => item.draftId === attachment.draftId ? { ...item, ...change } : item)))}
       <button className="text-button danger" type="button" onClick={() => onAttachments(attachments.filter(item => item.draftId !== attachment.draftId))}>Remove {attachment.source.name}</button>
     </fieldset>)}
-    {review.explicit.map((link, index) => {
-      const reference = state.references?.library.find(item => item.referenceId === link.referenceId);
-      const name = reference?.versions.find(version => version.versionId === link.versionId)?.originalFilename ?? 'Unavailable reference';
-      return <fieldset className="attachment-editor" key={`${link.referenceId}:${index}`} disabled={busy}>
-        <legend>{reference?.title ?? name}</legend><p className="muted small">{name} · Saved file</p>
-        {fields(`${name} ${index + 1}`, link, change => onReview({ ...review, explicit: review.explicit.map((item, i) => i === index ? { ...item, ...change } : item) }))}
-        {link.locator ? <p className="small">Location: {link.locator}</p> : null}
-        <button className="text-button danger" type="button" onClick={() => onReview({ ...review, explicit: review.explicit.filter((_, i) => i !== index) })}>Remove from this revision</button>
-      </fieldset>;
-    })}
-    {state.references?.library.filter(reference => !reference.removed && reference.projectVersionId).map(reference => <p className="muted small" key={reference.referenceId}>{reference.title} · Whole revision · Carried forward</p>)}
+    {savedCount ? <>
+      <button className="text-button" type="button" aria-expanded={manageOpen} onClick={() => setManageOpen(value => !value)}>Manage references ({savedCount})</button>
+      {manageOpen ? <div className="saved-references">
+        {review.explicit.map((link, index) => {
+          const reference = state.references?.library.find(item => item.referenceId === link.referenceId);
+          const name = reference?.versions.find(version => version.versionId === link.versionId)?.originalFilename ?? 'Unavailable reference';
+          return <fieldset className="attachment-editor" key={`${link.referenceId}:${index}`} disabled={busy}>
+            <legend>{reference?.title ?? name}</legend><p className="muted small">{name} · Saved file</p>
+            {fields(`${name} ${index + 1}`, link, change => onReview({ ...review, explicit: review.explicit.map((item, i) => i === index ? { ...item, ...change } : item) }))}
+            {link.locator ? <p className="small">Location: {link.locator}</p> : null}
+            <button className="text-button danger" type="button" onClick={() => onReview({ ...review, explicit: review.explicit.filter((_, i) => i !== index) })}>Remove from this revision</button>
+          </fieldset>;
+        })}
+        {carried.map(reference => <p className="muted small" key={reference.referenceId}>{reference.title} · Whole revision · Carried forward</p>)}
+      </div> : null}
+    </> : null}
   </div>;
 }

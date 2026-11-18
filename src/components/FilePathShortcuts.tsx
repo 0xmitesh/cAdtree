@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Copy, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import {
   composeFilePaths,
   type ResolveFilePath,
@@ -357,58 +357,126 @@ export function HomeFolderAddressSetting() {
   );
 }
 
+export interface FileMenuItem {
+  label: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
+let openFileMenu: HTMLDetailsElement | null = null;
+
+/** One "…" menu per file row: Copy file path, Copy folder path and any extra items. */
 export function FilePathActions({
   filePath,
   resolve,
-  historicalBranch,
+  extraItems,
 }: {
   filePath: string;
-  resolve: ResolveFilePath;
-  historicalBranch?: string;
+  resolve?: ResolveFilePath;
+  extraItems?: FileMenuItem[];
 }) {
   const context = useContext(Shortcuts);
-  if (!context) return null;
-  const label = "Copy folder path";
-  const description = `${historicalBranch ? "Current file on " + historicalBranch + " · " : ""}${filePath}`;
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const menu = menuRef.current;
+    const close = (refocus: boolean) => {
+      menu?.removeAttribute("open");
+      setMenuOpen(false);
+      if (refocus) menu?.querySelector<HTMLElement>("summary")?.focus();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close(true);
+    };
+    const onPointer = (event: Event) => {
+      if (menu && !menu.contains(event.target as Node)) close(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [menuOpen]);
+  const canCopy = Boolean(context && resolve);
+  const extras = extraItems ?? [];
+  if (!canCopy && !extras.length) return null;
+  const description = filePath;
+  const choose = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    action: () => void,
+  ) => {
+    const disclosure = event.currentTarget.closest("details");
+    disclosure?.removeAttribute("open");
+    disclosure?.querySelector<HTMLElement>("summary")?.focus();
+    action();
+  };
   return (
     <div
-      className={`file-path-actions${historicalBranch ? " historical" : ""}`}
+      className="file-path-actions"
     >
-      <button
-        type="button"
-        className={historicalBranch ? "text-button" : "icon-button"}
-        aria-label={`${label} — ${description}`}
-        title={`${label} — ${description}`}
-        onClick={() => context.copy({ resolve, containingFolder: true })}
+      <details
+        className="file-path-menu"
+        ref={menuRef}
+        onToggle={(event) => {
+          const menu = event.currentTarget;
+          setMenuOpen(menu.open);
+          if (menu.open) {
+            if (openFileMenu && openFileMenu !== menu) openFileMenu.removeAttribute("open");
+            openFileMenu = menu;
+          } else if (openFileMenu === menu) openFileMenu = null;
+        }}
       >
-        <Copy size={15} aria-hidden="true" />
-        {historicalBranch ? (
-          <span>
-            {label} · Current file on {historicalBranch}
-          </span>
-        ) : null}
-      </button>
-      <details className="file-path-menu">
         <summary
-          title={`More path actions — ${description}`}
-          aria-label={`More path actions — ${description}`}
+          title={`File actions — ${description}`}
+          aria-label={`File actions — ${description}`}
         >
           <MoreHorizontal size={16} aria-hidden="true" />
         </summary>
-        <button
-          type="button"
-          className="text-button"
-          aria-label={`Copy full file path — ${description}`}
-          onClick={(event) => {
-            const disclosure = event.currentTarget.closest("details");
-            disclosure?.removeAttribute("open");
-            disclosure?.querySelector<HTMLElement>("summary")?.focus();
-            context.copy({ resolve, containingFolder: false });
-          }}
-        >
-          Copy full file path
-          {historicalBranch ? ` · Current file on ${historicalBranch}` : ""}
-        </button>
+        <div className="file-path-menu-items">
+          {canCopy ? (
+            <>
+              <button
+                type="button"
+                className="text-button"
+                aria-label={`Copy file path — ${description}`}
+                onClick={(event) =>
+                  choose(event, () =>
+                    context!.copy({ resolve: resolve!, containingFolder: false }),
+                  )
+                }
+              >
+                Copy file path
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                aria-label={`Copy folder path — ${description}`}
+                onClick={(event) =>
+                  choose(event, () =>
+                    context!.copy({ resolve: resolve!, containingFolder: true }),
+                  )
+                }
+              >
+                Copy folder path
+              </button>
+            </>
+          ) : null}
+          {extras.map((item) => (
+            <button
+              type="button"
+              className="text-button"
+              key={item.label}
+              disabled={item.disabled}
+              aria-label={item.ariaLabel ?? item.label}
+              onClick={(event) => choose(event, item.onSelect)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </details>
     </div>
   );
