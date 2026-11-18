@@ -509,7 +509,7 @@ export function ChangesCaptureView({
               <button className="text-button" type="button" disabled={busy} aria-expanded={showAttachments} onClick={() => { setShowAttachments(value => !value); if (!referenceReview && effectiveReferences) setReferenceReview(effectiveReferences); }}>
                 {showAttachments ? '− Hide reference files' : '+ Attach reference files'}{attachments.length ? ` (${attachments.length})` : ''}
               </button>
-              {showAttachments && scan && effectiveReferences ? <RevisionAttachments state={vaultState} scan={scan} identityReview={identityReview} review={effectiveReferences} onReview={setReferenceReview} attachments={attachments} onAttachments={setAttachments} busy={busy} /> : null}
+              {showAttachments && scan && effectiveReferences ? <RevisionAttachments state={vaultState} scan={scan} identityReview={identityReview} review={effectiveReferences} onReview={setReferenceReview} attachments={attachments} onAttachments={setAttachments} busy={busy} needsAttention={Boolean(referenceConflict)} /> : null}
               {Object.keys(fileNotes).length ? (
                 <div className="draft-file-notes">
                   <h3>File notes</h3>

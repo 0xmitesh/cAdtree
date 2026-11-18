@@ -177,6 +177,27 @@ test('Changes attaches new reference files with notes to the whole revision or a
   assert.ok(browser.getByText('Part: New.SLDPRT'));
 });
 
+test('already-saved references stay behind a collapsed Manage references disclosure; new attachments stay visible', async () => {
+  const f = await fixture();
+  const state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirement', description: '', tags: [] });
+  const ref = state.references!.library[0], scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
+  const review = createReferenceReview(state, scan, [{ referenceId: ref.referenceId, versionId: ref.versions[0].versionId, locator: 'page 1', explanation: 'Kept note' }]);
+  const cache = new Map([['draft', { summary: '', notes, fileNotes: {}, notePath: null, showOverall: false, referenceReview: review, showAttachments: true }]]);
+  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
+  assert.equal(ui.queryByText(/Reference selections are stale/), null);
+  const toggle = ui.getByRole('button', { name: 'Manage references (1)' });
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(ui.queryByRole('textbox', { name: 'Reference note for Requirement.pdf 1' }), null);
+  assert.equal(ui.queryByRole('button', { name: 'Remove from this revision' }), null);
+  assert.ok(ui.getByLabelText('Reference files'), 'the attach control stays visible');
+  fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [new File(['Customer brief'], 'Brief.txt')] } });
+  assert.ok(ui.getByRole('textbox', { name: 'Reference note for Brief.txt' }), 'new attachments are shown as before');
+  fireEvent.click(toggle);
+  assert.equal((ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf 1' }) as HTMLTextAreaElement).value, 'Kept note');
+  fireEvent.click(ui.getByRole('button', { name: 'Remove from this revision' }));
+  assert.equal(ui.queryByRole('button', { name: /Manage references/ }), null);
+});
+
 test('stale reference decisions remain visible until explicitly reviewed and legacy History never uses current defaults', async () => {
   const f = await fixture();
   let state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirement', description: '', tags: [] });
