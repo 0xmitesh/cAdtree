@@ -33,28 +33,27 @@ async function fixture() {
 }
 const source = () => new File([new Uint8Array([0, 255, 13, 10, 128])], 'Requirement.pdf', { type: 'application/pdf' });
 
-test('reference browsing combines branch, file and search without mutation controls or project writes', async () => {
+test('reference browsing is one search box without mutation controls or project writes', async () => {
   const f = await referenceBrowserFixture();
   const before = inventorySignature(await readVerifiedInventory(f.vault));
   const copies: Uint8Array[] = [];
   const ui = render(<ReferencesView state={f.state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async (id, version) => {
     copies.push((await retrieveReferenceAttachment(f.vault, f.state.project.projectId, id, version)).bytes);
   }} />);
-  assert.equal(ui.getAllByRole('combobox').length, 2);
+  assert.equal(ui.queryAllByRole('combobox').length, 0, 'no Branch or Part / file filters');
+  assert.equal(ui.queryByRole('combobox', { name: 'Branch' }), null);
+  assert.equal(ui.queryByRole('combobox', { name: 'Part / file' }), null);
   for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future revisions']) assert.equal(ui.queryByRole('button', { name }), null);
-  const branch = ui.getByRole('combobox', { name: 'Branch' });
-  const file = ui.getByRole('combobox', { name: 'Part / file' });
   const search = ui.getByRole('searchbox', { name: 'Search references' });
-  assert.ok(ui.getByRole('option', { name: 'notes.txt' }));
-  const partB = (within(file).getByRole('option', { name: 'B.SLDPRT' }) as HTMLOptionElement).value;
-  fireEvent.change(branch, { target: { value: 'branch-main' } });
-  fireEvent.change(file, { target: { value: partB } });
-  fireEvent.change(search, { target: { value: 'Alpha' } });
-  assert.ok(ui.getByText(/No matching references/));
-  fireEvent.change(search, { target: { value: '' } });
-  assert.equal(ui.container.querySelectorAll('.reference-card').length, 2);
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 5);
+  // The file a reference applies to.
+  fireEvent.change(search, { target: { value: 'A-renamed.SLDPRT' } });
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 1);
+  assert.ok(ui.getByRole('button', { name: 'Download Alpha requirement (Alpha.txt)' }));
+  assert.ok(ui.getByText('Part: A-renamed.SLDPRT'));
+  // A note, then a file name, then no match.
+  fireEvent.change(search, { target: { value: 'Beta requirement description' } });
   assert.ok(ui.getByRole('button', { name: 'Download Beta requirement (Beta.txt)' }));
-  fireEvent.change(branch, { target: { value: f.branchId } });
   fireEvent.change(search, { target: { value: 'Alpha updated.txt' } });
   assert.equal(ui.container.querySelectorAll('.reference-card').length, 1);
   assert.ok(ui.getByText('Alternative · Rev 004'));
@@ -62,6 +61,10 @@ test('reference browsing combines branch, file and search without mutation contr
   fireEvent.click(ui.getByRole('button', { name: 'Download Alpha requirement (Alpha updated.txt)' }));
   await waitFor(() => assert.equal(copies.length, 1));
   assert.equal(new TextDecoder().decode(copies[0]), 'Alpha two');
+  fireEvent.change(search, { target: { value: 'nothing like this' } });
+  assert.ok(ui.getByText(/No matching references/));
+  fireEvent.change(search, { target: { value: '' } });
+  assert.equal(ui.container.querySelectorAll('.reference-card').length, 5);
   assert.equal(inventorySignature(await readVerifiedInventory(f.vault)), before);
 });
 
@@ -150,7 +153,6 @@ test('actual App browses and downloads saved references and reopens entirely fro
   assert.equal(ui.queryByRole('button', { name: 'Import reference' }), null);
   const beforeDownload = inventorySignature(await readVerifiedInventory(f.home));
   const branchBefore = ui.container.querySelector('.project-context-header')!.getAttribute('data-branch-id');
-  fireEvent.change(ui.getByRole('combobox', { name: 'Branch' }), { target: { value: 'branch-main' } });
   fireEvent.change(ui.getByRole('searchbox', { name: 'Search references' }), { target: { value: 'clearance' } });
   assert.ok(ui.getByText('Saved by Test Engineer'));
   let retrieved: Blob | undefined, downloaded = '';
@@ -169,7 +171,7 @@ test('actual App browses and downloads saved references and reopens entirely fro
   await waitFor(() => assert.equal(appBusy(ui), false));
   fireEvent.click(within(ui.getByRole('navigation')).getByRole('button', { name: 'References' }));
   assert.ok(ui.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' }));
-  assert.equal((ui.getByRole('combobox', { name: 'Branch' }) as HTMLSelectElement).value, '');
+  assert.equal((ui.getByRole('searchbox', { name: 'Search references' }) as HTMLInputElement).value, '');
 });
 
 test('clicking a saved reference downloads its pinned version and reports corrupted content without delivering a copy', async () => {

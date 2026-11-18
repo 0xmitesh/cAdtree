@@ -286,11 +286,11 @@ Keep the complete project when copying or moving it. Do not remove or edit vault
 
 ## Project references and revision context
 
-Open a project and choose **References** to browse its supporting files. **Branch** offers every project branch plus **All branches**. **Part / file** offers files across saved project history, including drawings, text and other non-CAD files, plus **All parts / files**. These filters only change the reference list; they do not switch your working branch. The current case is not shown on References.
+Open a project and choose **References** to browse its supporting files. The page has one search box: leave **Search references** empty to see every saved file, or type to narrow the list. The current case is not shown on References.
 
-Leave **Search references** empty to see all files matching the dropdowns. Search narrows that same selection by title, filename, description, tags, saved name or matching revision details. Each saved attachment version appears as a downloadable file with its save date, recorded name and the branch/revision/part associations that match the filters. Whole-revision sources also appear for a selected file when that file belongs to the saved revision; they remain labelled **Whole revision**. Confirmed renames retain their associations; a different component reusing the old filename does not inherit them.
+Search matches a reference's name, its file name, its note, who saved it, and the file it applies to or other details of the revision it was attached to (such as its summary or location). Each saved attachment version appears as a downloadable file with its save date, recorded name and the branch/revision/part associations that match the search. Whole-revision sources are labelled **Whole revision**. Confirmed renames retain their associations; a different component reusing the old filename does not inherit them.
 
-Click a reference title to download its exact saved file. Browser download settings control the location; the original filename is suggested. Earlier versions and sources removed from current defaults remain available. An older imported source with no saved association appears under the all-branches/all-files selection as **Not attached to a saved revision yet**. Besides adding new references (below), this page has no edit, version-addition, default-selection or removal actions.
+Click a reference title to download its exact saved file. Browser download settings control the location; the original filename is suggested. Earlier versions and sources removed from current defaults remain available. An older imported source with no saved association appears as **Not attached to a saved revision yet**. Besides adding new references (below), this page has no edit, version-addition, default-selection or removal actions.
 
 To add a reference without saving a revision, choose **Add reference…**, pick one or more files, add an optional note, and choose **Add**. Each file is copied and verified into the project (attributed to the signed-in user) and applies to the whole project: it is included whenever you save a revision from then on, and shows **Applies to the whole project** until then. Nothing is added if you choose **Cancel**, and the button is disabled when the project is read-only. To tie a file to one part, attach it when you save a revision instead.
 
@@ -308,8 +308,8 @@ If import/save is cancelled or interrupted, incomplete metadata remains identifi
 
 Manual walkthrough (disposable project, supported desktop browser):
 
-1. Open a populated project or the synthetic preview. In References, leave both dropdowns on All and search empty; inspect each file's saved date, name and revision/part details, then click its title to download a copy.
-2. Select a branch and part/file together, then search by filename or revision description. Confirm results match both dropdowns and clear search to restore all references within that selection. Check that the working branch has not changed.
+1. Open a populated project or the synthetic preview. In References, leave search empty; inspect each file's saved date, name and revision/part details, then click its title to download a copy.
+2. Search by reference name, filename, note, the file it applies to, or revision description. Confirm only matching references appear and clearing the search restores all of them. Check that the working branch has not changed.
 3. In a project containing multiple attachment versions, download the older saved file and compare it with the original. Confirm removed defaults remain available through their historical associations and no editing/removal controls appear on References.
 4. Confirm a CAD rename, capture and compare the component ID across revisions, retaining old filenames. Make a branch from the older revision and verify its explicit links carry forward without changing the older revision.
 5. Reopen after clearing browser convenience data. Copy/import/adopt the complete project or workspace and check IDs, exact versions, old context and retrieved hashes in the copy. Export an older CAD snapshot and check its original filenames.

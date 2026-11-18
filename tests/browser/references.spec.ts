@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
 // Real browser handles in disposable storage; native CAD/folder dialogs are separate checks.
-for (const width of [1366, 390]) test(`reference browser: branch/file/search intersection and exact downloads at ${width}px`, async ({ page }) => {
+for (const width of [1366, 390]) test(`reference browser: one search box, exact downloads and adding a reference at ${width}px`, async ({ page }) => {
   test.setTimeout(60000);
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/');
-  const ids = await page.evaluate(async () => {
+  await page.evaluate(async () => {
     const paths = ['/src/engine/fs-adapter.ts', '/src/engine/home-service.ts', '/src/engine/workspace-service.ts', '/src/engine/revision-service.ts', '/src/engine/references.ts', '/src/engine/scanner.ts', '/src/engine/vault-service.ts', '/src/engine/branch-state.ts'];
     const [{ RealFileSystemAdapter }, homeService, workspaceService, { captureRevision }, refs, { scanBranchChanges }, { openExistingVault }, { getBranchBaseline }] = await Promise.all(paths.map(path => import(path)));
     const root = await navigator.storage.getDirectory();
@@ -32,7 +32,6 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
       return captureRevision(project.workingFolders[branchId], project.vaultDir, { branchId, summary, notes: { problem: '', modification: '', observations: '' }, workingFolders: project.workingFolders, referenceReview: refs.createReferenceReview(state, scan, explicit) });
     };
     const first = await save('branch-main', [link(alpha, 'A.SLDPRT'), link(beta, 'B.SLDPRT')], 'Main baseline');
-    const partB = first.vaultState.components.revisions[first.revision.manifest.revisionId].files.find((file: { path: string }) => file.path === 'B.SLDPRT').componentId;
     project = await workspaceService.createManagedBranch(workspace.workspace.root, project.record.containerPath, { sourceRevisionId: first.revision.manifest.revisionId, name: 'Alternative', reason: 'Explore B' });
     const alternativeId = project.createdBranchId;
     await save(alternativeId, [link(alpha, 'B.SLDPRT')], 'Alternative B source');
@@ -40,7 +39,6 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
     await save(alternativeId, [link(alpha, 'B.SLDPRT', state.references.library[0].versions[1].versionId)], 'Alternative updated source');
     await refs.updateProjectReference(project.vaultDir, project.record.projectId, beta.referenceId, { removed: true });
     Object.assign(window, { showDirectoryPicker: async () => home });
-    return { alternativeId, partB: 'component:' + partB };
   });
   await page.getByRole('button', { name: 'Open my Cadtree home', exact: true }).click();
   await page.getByRole('textbox', { name: 'Cadtree home folder address' }).fill('D:\\Cadtree');
@@ -52,19 +50,22 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
   await page.getByRole('navigation').getByRole('button', { name: 'References', exact: true }).click();
   const view = page.locator('.references-page');
   await expect(page.locator('.project-context-case')).toHaveCount(0);
-  await expect(view.getByRole('combobox')).toHaveCount(2);
+  await expect(view.getByRole('combobox')).toHaveCount(0);
   await expect(view.locator('.reference-card')).toHaveCount(4);
   for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future revisions']) await expect(view.getByRole('button', { name, exact: true })).toHaveCount(0);
-  await expect(view.getByRole('combobox', { name: 'Part / file' }).locator('option')).toContainText(['All parts / files', 'A.SLDPRT', 'B.SLDPRT', 'notes.txt']);
-  await view.getByRole('combobox', { name: 'Branch', exact: true }).selectOption('branch-main');
-  await view.getByRole('combobox', { name: 'Part / file' }).selectOption(ids.partB);
   const search = view.getByRole('searchbox', { name: 'Search references' });
+  // The file a reference applies to.
+  await search.fill('B.SLDPRT');
+  await expect(view.locator('.reference-card')).toHaveCount(3);
+  await search.fill('A.SLDPRT');
+  await expect(view.locator('.reference-card')).toHaveCount(1);
+  await expect(view.getByRole('button', { name: 'Download Alpha requirement (Alpha.txt)', exact: true })).toBeVisible();
   await search.fill('Alpha');
+  await expect(view.locator('.reference-card')).toHaveCount(2);
+  await search.fill('nothing like this');
   await expect(view).toContainText('No matching references');
   await search.fill('');
-  await expect(view.locator('.reference-card')).toHaveCount(2);
-  await expect(view.getByRole('button', { name: 'Download Beta requirement (Beta.txt)', exact: true })).toBeVisible();
-  await view.getByRole('combobox', { name: 'Branch', exact: true }).selectOption(ids.alternativeId);
+  await expect(view.locator('.reference-card')).toHaveCount(4);
   await search.fill('Alpha updated.txt');
   await expect(view.locator('.reference-card')).toHaveCount(1);
   await expect(view).toContainText('Alternative · Rev 003');
@@ -81,8 +82,6 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
   expect(await page.locator('.project-context-header').getAttribute('data-branch-id')).toBe(workingBranch);
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await search.fill('');
-  await view.getByRole('combobox', { name: 'Branch', exact: true }).selectOption('');
-  await view.getByRole('combobox', { name: 'Part / file' }).selectOption('');
   await expect(view.locator('.reference-card')).toHaveCount(4);
   // Attach fresh files through the Save revision form, then retrieve the copy
   // from both saved History and the read-only project reference browser.
@@ -124,8 +123,6 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
   await expect(view.getByRole('button', { name: 'Download Clearance.pdf (Clearance.pdf)', exact: true })).toBeVisible();
   // Add a reference from the References page without saving a revision.
   await view.getByRole('searchbox', { name: 'Search references' }).fill('');
-  await view.getByRole('combobox', { name: 'Branch', exact: true }).selectOption('');
-  await view.getByRole('combobox', { name: 'Part / file' }).selectOption('');
   const cardsBefore = await view.locator('.reference-card').count();
   await view.getByRole('button', { name: 'Add reference…', exact: true }).click();
   await view.getByLabel('Reference files', { exact: true }).setInputFiles({ name: 'Standard.pdf', mimeType: 'application/pdf', buffer: Buffer.from([1, 2, 3, 4]) });
