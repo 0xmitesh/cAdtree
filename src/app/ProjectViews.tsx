@@ -262,9 +262,6 @@ export function ProjectViews({
           }
           onCreateBranch={handleCreateBranch}
           isCreatingBranch={isCreatingBranch}
-          resolveWorkingFilePath={(branchId, path) =>
-            workingFileResolver(branchId, path)()
-          }
         />
       </div>
       <div hidden={activeTab !== "diagnostics"}>

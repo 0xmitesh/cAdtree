@@ -26,16 +26,15 @@ const controls = {
   },
   onCancel: () => {},
 };
-test("unsaved cases describe their inherited baseline without inventing a case save; Compare uses explicit case → Main endpoints", () => {
+test("the design cases panel has no Saved activity and divergence section; Compare uses explicit case → Main endpoints", () => {
   const state = fixture();
   const ui = render(<DesignCases state={state} {...controls} />);
-  fireEvent.click(
-    ui.getByLabelText("Saved activity and divergence for Alternative"),
+  assert.equal(
+    ui.queryByLabelText("Saved activity and divergence for Alternative"),
+    null,
   );
-  assert.match(
-    ui.container.textContent!,
-    /No revisions saved on this case yet — inherits Rev 001/,
-  );
+  assert.doesNotMatch(ui.container.textContent!, /Saved activity and divergence/);
+  assert.equal(ui.container.querySelector(".case-activity"), null);
   fireEvent.click(
     ui.getByRole("button", { name: "Compare Alternative with Main" }),
   );
@@ -73,17 +72,6 @@ test("unavailable ancestry leaves healthy endpoint comparison available, and arc
   };
   const ui = render(<DesignCases state={state} {...controls} />);
   fireEvent.click(ui.getByText("Archived cases (1)", { exact: true }));
-  fireEvent.click(
-    ui.getByLabelText("Saved activity and divergence for Alternative"),
-  );
-  assert.match(
-    ui.container.textContent!,
-    /Shared ancestor with MainUnavailable/,
-  );
-  assert.match(
-    ui.container.textContent!,
-    /Revision counts since shared ancestor: unavailable/,
-  );
   assert.ok(ui.getByRole("button", { name: "Reopen case Alternative" }));
   const button = ui.getByRole("button", {
     name: "Compare Alternative with Main",
@@ -108,14 +96,7 @@ test("unknown committed ownership never displays zero saves or offers an automat
     reason: "Unreadable completion",
   });
   const ui = render(<DesignCases state={state} {...controls} />);
-  fireEvent.click(
-    ui.getByLabelText("Saved activity and divergence for Alternative"),
-  );
-  assert.doesNotMatch(
-    ui.container.textContent!,
-    /No revisions saved on this case yet/,
-  );
-  assert.match(ui.container.textContent!, /save count cannot be confirmed/);
+  assert.match(ui.container.textContent!, /Compare with Main is unavailable:/);
   assert.equal(
     (
       ui.getByRole("button", {

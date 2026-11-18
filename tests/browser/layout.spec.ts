@@ -93,10 +93,10 @@ test("current App: compact headings, branch context, bounded resizing and mobile
 
   // The drawing summary must describe the actual changed document, not a part.
   await expect(
-    page.getByRole("checkbox", {
-      name: "Select Drawings/Assembly.SLDDRW for export",
-      exact: true,
-    }),
+    page
+      .getByRole("complementary", { name: "Revision details" })
+      .locator(".detail-files")
+      .getByText("Drawings/Assembly.SLDDRW", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Rev 004: Explore lighter/ }).click();
   await expect(

@@ -22,13 +22,10 @@ const props = (
   ...overrides,
 });
 
-test("Compare initializes from the actual parent, swaps endpoints, compares nonadjacent and identical revisions, and preserves History inspection/export selection", () => {
+test("Compare initializes from the actual parent, swaps endpoints, compares nonadjacent and identical revisions, and preserves History inspection", () => {
   const state = historyState(4),
     before = JSON.stringify(state);
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
-  fireEvent.click(
-    ui.getByRole("checkbox", { name: `Select ${path} for export` }),
-  );
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
     ui.getByRole("dialog", { name: "Compare saved revisions" }),
@@ -83,15 +80,36 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
       .getByRole("button", { name: /Rev 004:/ })
       .getAttribute("aria-pressed") === "true",
   );
-  assert.equal(
-    (
-      ui.getByRole("checkbox", {
-        name: `Select ${path} for export`,
-      }) as HTMLInputElement
-    ).checked,
-    true,
-  );
   assert.equal(JSON.stringify(state), before);
+});
+test("Compare keeps checksums and component identity inside a closed Technical details disclosure", () => {
+  const state = historyState(2);
+  const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
+  fireEvent.click(ui.getByRole("button", { name: "Compare" }));
+  const dialog = within(
+    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+  );
+  assert.equal(dialog.queryByText("Content hash"), null);
+  const summary = dialog.getByText("Technical details");
+  const disclosure = summary.closest("details") as HTMLDetailsElement;
+  assert.ok(disclosure);
+  assert.equal(disclosure.open, false);
+  // Every checksum and the identity notes live only inside the disclosure.
+  const codes = [...ui.getByRole("dialog").querySelectorAll("code")];
+  assert.ok(codes.length > 0);
+  assert.ok(codes.every((code) => disclosure.contains(code)));
+  assert.ok(
+    codes.some((code) =>
+      state.revisions[1].manifest.files.some((f) => f.sha256 === code.textContent),
+    ),
+  );
+  assert.equal(
+    dialog.queryAllByText(/Component identity between endpoints/).filter(
+      (element) => !disclosure.contains(element),
+    ).length,
+    0,
+  );
+  assert.ok(dialog.getByRole("article", { name: `Modified: ${path}` }));
 });
 test("file-scoped comparison expands to all files, labels endpoint notes and branch names, and explains absence in both endpoints", () => {
   const state = scenarioState("branches");

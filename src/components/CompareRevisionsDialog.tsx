@@ -207,12 +207,6 @@ export function CompareRevisionsDialog({
                   ? `${formatBytes(file.size)} · present`
                   : "Not present in this revision"}
               </p>
-              {file ? (
-                <details className="comparison-hash">
-                  <summary>Content hash</summary>
-                  <code>{file.sha256}</code>
-                </details>
-              ) : null}
               {notes.length ? (
                 <div className="comparison-file-notes">
                   <strong className="small">
@@ -234,6 +228,10 @@ export function CompareRevisionsDialog({
       </div>
     </article>
   );
+  const checksumRows = [
+    ...changed,
+    ...(scopePath || showUnchanged ? unchanged : []),
+  ];
   const directoryCount =
     (diff?.addedDirectories.length ?? 0) +
     (diff?.deletedDirectories.length ?? 0);
@@ -285,8 +283,6 @@ export function CompareRevisionsDialog({
             </button>
           ) : null}
         </div>
-        {identityChanges.length ? <Notice><strong>Component identity between endpoints</strong>{identityChanges.map(message => <p className="file-path" key={message}>{message}</p>)}<p>Byte differences below remain grouped by saved path.</p></Notice> : null}
-        {fromId && toId && (!fromComponents || !toComponents) ? <p className="muted small">Component continuity is unavailable at one or both endpoints. This comparison uses saved paths and byte hashes.</p> : null}
         {!fromId || !toId ? (
           <Notice>
             {!fromId
@@ -391,6 +387,51 @@ export function CompareRevisionsDialog({
                 ) : null}
               </>
             ) : null}
+            <details className="disclosure comparison-technical">
+              <summary>Technical details</summary>
+              {identityChanges.length ? (
+                <section aria-label="Component identity between endpoints">
+                  <h4>Component identity between endpoints</h4>
+                  {identityChanges.map((message) => (
+                    <p className="file-path" key={message}>
+                      {message}
+                    </p>
+                  ))}
+                  <p className="muted small">
+                    Byte differences above remain grouped by saved path.
+                  </p>
+                </section>
+              ) : null}
+              {!fromComponents || !toComponents ? (
+                <p className="muted small">
+                  Component continuity is unavailable at one or both endpoints.
+                  This comparison uses saved paths and byte hashes.
+                </p>
+              ) : null}
+              <section aria-label="File checksums">
+                <h4>File checksums (SHA-256)</h4>
+                {checksumRows.length ? (
+                  checksumRows.map((row) => (
+                    <dl className="technical-data" key={row.path}>
+                      <dt>{row.path}</dt>
+                      {[
+                        { side: "From", revision: result.from, file: row.before },
+                        { side: "To", revision: result.to, file: row.after },
+                      ].map(({ side, revision, file }) => (
+                        <dd key={side}>
+                          {side} ·{" "}
+                          {formatRevisionNumber(revision.manifest.displayNumber)}
+                          :{" "}
+                          {file ? <code>{file.sha256}</code> : "Not present"}
+                        </dd>
+                      ))}
+                    </dl>
+                  ))
+                ) : (
+                  <p className="muted small">No files in this comparison.</p>
+                )}
+              </section>
+            </details>
             <details className="disclosure comparison-directories">
               <summary>Project directory changes ({directoryCount})</summary>
               <p className="muted small">

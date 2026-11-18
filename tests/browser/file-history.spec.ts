@@ -108,10 +108,10 @@ test("actual App: file history follows parents across branches, retains deleted 
   ).toHaveCount(2);
   await page.getByRole("button", { name: /Rev 002:/ }).click();
   await expect(
-    page.getByRole("checkbox", {
-      name: "Select Obsolete/Retired.SLDPRT for export",
-    }),
-  ).toBeDisabled();
+    page
+      .getByRole("complementary", { name: "Revision details" })
+      .locator('input[type="checkbox"]'),
+  ).toHaveCount(0);
   await pickFile(page, "Parts/Pin.SLDPRT");
   await page.getByRole("button", { name: /Rev 013:/ }).click();
   await expect(
@@ -119,10 +119,11 @@ test("actual App: file history follows parents across branches, retains deleted 
   ).toContainText("Deleted");
   await page.getByRole("button", { name: /View in parent revision/ }).click();
   await expect(
-    page.getByRole("checkbox", {
-      name: "Select Parts/Pin.SLDPRT for export",
-    }),
-  ).toBeChecked();
+    page
+      .getByRole("complementary", { name: "Revision details" })
+      .locator(".detail-files")
+      .getByText("Parts/Pin.SLDPRT", { exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Export for review", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Export revision for review" }),

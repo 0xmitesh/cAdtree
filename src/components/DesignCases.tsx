@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgressUpdate, VaultState } from "../engine/types";
-import { caseLifecycle, caseLabel } from "../engine/case-lifecycle";
+import { caseLifecycle } from "../engine/case-lifecycle";
 import { Modal, Notice, OperationProgress } from "./ui";
 import { designCaseActivities } from "../engine/case-activity";
-import type { ComparisonEndpoint } from "../engine/snapshot-comparison";
-import { formatRevisionNumber } from "../engine/vault-service";
-import { formatTimestamp } from "../utils/format";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 
 export function DesignCases({
@@ -32,10 +29,6 @@ export function DesignCases({
     fromId: string;
     toId: string;
   } | null>(null);
-  const revisionLabel = (endpoint: ComparisonEndpoint) =>
-    endpoint.status === "available"
-      ? `${formatRevisionNumber(endpoint.revision.manifest.displayNumber)} · ${caseLabel(state, endpoint.revision.manifest.branchId)}`
-      : `Unavailable — ${endpoint.reason}`;
   const [action, setAction] = useState<{
     branchId: string;
     status: "active" | "archived";
@@ -105,108 +98,40 @@ export function DesignCases({
               Switch to another working case before archiving.
             </p>
           ) : null}
-          <details className="case-activity">
-            <summary
-              aria-label={`Saved activity and divergence for ${branch.name}`}
-            >
-              Saved activity and divergence
-              <span className="sr-only"> for {branch.name}</span>
-            </summary>
-            <dl>
-              <dt>Started from</dt>
-              <dd>{revisionLabel(activity.origin)}</dd>
-              <dt>Latest saved on this case</dt>
-              <dd>
-                {activity.ownSaves.status === "available" &&
-                activity.ownSaves.value === 0 ? (
-                  activity.baseline.status === "available" ? (
-                    `No revisions saved on this case yet — inherits ${revisionLabel(activity.baseline)}`
-                  ) : (
-                    `No revisions saved on this case yet. Inherited baseline ${revisionLabel(activity.baseline)}`
-                  )
-                ) : activity.baseline.status === "available" &&
-                  activity.baseline.revision.manifest.branchId ===
-                    branch.branchId ? (
-                  <>
-                    {revisionLabel(activity.baseline)} ·{" "}
-                    <time
-                      dateTime={
-                        activity.baseline.revision.manifest.captureCompletedAt
-                      }
-                    >
-                      {formatTimestamp(
-                        activity.baseline.revision.manifest.captureCompletedAt,
-                      )}
-                    </time>
-                  </>
-                ) : (
-                  `Unavailable — ${activity.baseline.status === "unavailable" ? activity.baseline.reason : "A latest case save cannot be confirmed."}`
-                )}
-              </dd>
-              <dt>Saves belonging to this case</dt>
-              <dd>
-                {activity.ownSaves.status === "available"
-                  ? activity.ownSaves.value
-                  : `Unavailable — ${activity.ownSaves.reason}`}
-              </dd>
-              <dt>Current Main</dt>
-              <dd>{revisionLabel(activity.main)}</dd>
-              <dt>Shared ancestor with Main</dt>
-              <dd>
-                {activity.divergence.status === "available"
-                  ? `${formatRevisionNumber(activity.divergence.value.ancestor.manifest.displayNumber)} · ${caseLabel(state, activity.divergence.value.ancestor.manifest.branchId)}`
-                  : `Unavailable — ${activity.divergence.reason}`}
-              </dd>
-            </dl>
-            {activity.divergence.status === "available" ? (
-              <p>
-                Main: {activity.divergence.value.mainCount}{" "}
-                {activity.divergence.value.mainCount === 1
-                  ? "revision"
-                  : "revisions"}{" "}
-                since shared ancestor
-                <br />
-                Case history: {activity.divergence.value.caseCount}{" "}
-                {activity.divergence.value.caseCount === 1
-                  ? "revision"
-                  : "revisions"}{" "}
-                since shared ancestor
-              </p>
-            ) : (
-              <p>Revision counts since shared ancestor: unavailable.</p>
-            )}
+          {activity.baseline.status === "unavailable" ||
+          activity.main.status === "unavailable" ? (
             <p className="muted small">
-              Counts describe saved history, not file differences or engineering
-              compatibility. Case history can include inherited revisions from
-              other cases. Applied files do not create merge ancestry.
+              Compare with Main is unavailable:{" "}
+              {activity.baseline.status === "unavailable"
+                ? activity.baseline.reason
+                : activity.main.status === "unavailable"
+                  ? activity.main.reason
+                  : ""}
             </p>
-            <button
-              className="button secondary"
-              disabled={
-                busy ||
-                activity.baseline.status !== "available" ||
-                activity.main.status !== "available"
-              }
-              aria-label={`Compare ${branch.name} with Main`}
-              onClick={() => {
-                if (
-                  activity.baseline.status === "available" &&
-                  activity.main.status === "available"
-                )
-                  setComparison({
-                    fromId: activity.baseline.revision.manifest.revisionId,
-                    toId: activity.main.revision.manifest.revisionId,
-                  });
-              }}
-            >
-              Compare with Main
-            </button>
-            <p className="muted small">
-              From: case saved baseline → To: Main saved baseline. Working edits
-              are not included.
-            </p>
-          </details>
+          ) : null}
         </div>
+        <button
+          className="button secondary"
+          disabled={
+            busy ||
+            activity.baseline.status !== "available" ||
+            activity.main.status !== "available"
+          }
+          aria-label={`Compare ${branch.name} with Main`}
+          title="Compares this case's saved baseline with Main's saved baseline. Working edits are not included."
+          onClick={() => {
+            if (
+              activity.baseline.status === "available" &&
+              activity.main.status === "available"
+            )
+              setComparison({
+                fromId: activity.baseline.revision.manifest.revisionId,
+                toId: activity.main.revision.manifest.revisionId,
+              });
+          }}
+        >
+          Compare with Main
+        </button>
         {lifecycle.status !== "unavailable" ? (
           <button
             className="button secondary"
