@@ -177,7 +177,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
     target: { value: "Main draft" },
   });
   fireEvent.click(
-    changes.getByRole("button", { name: /Add.*overall engineering notes/ }),
+    changes.getByRole("button", { name: /Add a description/ }),
   );
   fireEvent.change(changes.getByRole("textbox", { name: "Overall: Why" }), {
     target: { value: "Main intent" },
@@ -219,7 +219,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
     target: { value: "Case A draft" },
   });
   fireEvent.click(
-    changes.getByRole("button", { name: /Add.*overall engineering notes/ }),
+    changes.getByRole("button", { name: /Add a description/ }),
   );
   fireEvent.change(changes.getByRole("textbox", { name: "Overall: Why" }), {
     target: { value: "Alternative intent" },

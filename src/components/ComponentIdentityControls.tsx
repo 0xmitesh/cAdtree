@@ -29,10 +29,9 @@ export function ComponentIdentityControls({ state, scan, value, onChange, busy }
   const hasBaseline = Boolean(evidence.revisions[scan.baselineRevisionId ?? '']);
   const free = scan.added.filter(f => !value?.renames.some(r => r.to === f.path));
   const missing = hasBaseline && scan.added.length ? possibleRenames(scan).filter(s => !value?.renames.some(r => r.from === s.from)) : [];
-  // Only pairs with identical bytes are suggested; other missing files stay available for a manual match.
+  // Only pairs with identical bytes are suggested here; other renames are matched from a deleted file's menu.
   const suggested = missing.filter(s => s.candidates.length);
-  const manual = missing.filter(s => !s.candidates.length);
-  if (!stale && !value?.renames.length && !value?.replacements.length && !missing.length) return null;
+  if (!stale && !value?.renames.length && !value?.replacements.length && !suggested.length) return null;
   const targetFor = (s: { from: string; candidates: string[] }) => targets[s.from] ?? (s.candidates.length === 1 && free.some(f => f.path === s.candidates[0]) ? s.candidates[0] : '');
   const row = (suggestion: { from: string; candidates: string[] }) => {
     const target = targetFor(suggestion);
@@ -59,10 +58,6 @@ export function ComponentIdentityControls({ state, scan, value, onChange, busy }
         <p className="small">Confirm continuity only if this is the same document. This does not rename files or repair CAD references. Leave unassociated to record deletion/addition.</p>
         {suggested.map(row)}
       </> : null}
-      {manual.length ? <details className="disclosure">
-        <summary>Match other missing files manually ({manual.length})</summary>
-        {manual.map(row)}
-      </details> : null}
     </div>
   </section>;
 }
@@ -72,5 +67,27 @@ export function TreatAsNewDialog({ path, busy, onCancel, onConfirm }: { path: st
   return <Modal title="Treat as new component" busy={busy} onClose={onCancel}>
     <p>{`At the next successful save, ${path} will receive a new document ID. Its previous component history remains available. Use this for an unrelated replacement, not an ordinary edit.`}</p>
     <div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy} onClick={onConfirm}>Confirm new component</button></div>
+  </Modal>;
+}
+
+/** A deleted file can be matched to a new file when its baseline has component records and no decision covers it yet. */
+export function canMatchRename(state: VaultState, scan: ScanResult | null, value: IdentityReview | undefined, path: string): boolean {
+  if (!scan || !canTreatAsNew(state, scan) || identityReviewStale(state, scan, value)) return false;
+  return !value?.renames.some(r => r.from === path) && scan.added.some(f => !value?.renames.some(r => r.to === f.path));
+}
+
+/** Manual rename for a deleted file: choose its new file and confirm explicitly. */
+export function MatchRenameDialog({ from, scan, value, busy, onCancel, onConfirm }: { from: string; scan: ScanResult; value?: IdentityReview; busy: boolean; onCancel: () => void; onConfirm: (to: string) => void }) {
+  const [to, setTo] = useState('');
+  const identical = scan.deleted.find(f => f.path === from)?.sha256;
+  const free = scan.added.filter(f => !value?.renames.some(r => r.to === f.path));
+  return <Modal title="Match to a new file" busy={busy} onClose={onCancel}>
+    <p className="file-path">Missing: {from}</p>
+    <p className="small">Choose the new file only if it is the same document. This does not rename files or repair CAD references.</p>
+    <label className="field"><span>New file for {from}</span><select value={to} onChange={e => setTo(e.target.value)}>
+      <option value="">Choose a new file</option>
+      {free.map(f => <option key={f.path} value={f.path}>{f.path}{f.sha256 === identical ? ' — identical bytes' : ' — different bytes'}</option>)}
+    </select></label>
+    <div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy || !to} onClick={() => onConfirm(to)}>Confirm rename</button></div>
   </Modal>;
 }

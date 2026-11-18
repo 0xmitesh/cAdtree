@@ -126,7 +126,7 @@ export function OperationProgress({
     </div>
   );
 }
-export function NotesText({ notes }: { notes: RevisionNotes }) {
+export function NotesText({ notes, file }: { notes: RevisionNotes; file?: boolean }) {
   return (
     <dl className="notes-text">
       {(["problem", "modification", "observations"] as const)
@@ -136,9 +136,9 @@ export function NotesText({ notes }: { notes: RevisionNotes }) {
             <dt>
               {
                 {
-                  problem: "Problem or intent",
-                  modification: "Engineering change",
-                  observations: "Observations",
+                  problem: "Why",
+                  modification: file ? "Note" : "Description",
+                  observations: "What you noticed",
                 }[k]
               }
             </dt>

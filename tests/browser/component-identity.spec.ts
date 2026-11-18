@@ -33,17 +33,26 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await page.getByRole('button', { name: 'Open project', exact: true }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'Changes', exact: true }).click();
   const identity = page.getByRole('region', { name: 'Component identity' });
-  // Only identical-bytes pairs are suggested; an edited-and-renamed file is matched from the manual disclosure.
-  const manual = identity.getByText(/Match other missing files manually/);
-  if (width === 390) await manual.click();
-  await expect(identity.getByText(width === 390 ? /Name and bytes may both have changed/ : /Possible rename:/)).toBeVisible();
-  await identity.getByRole('combobox', { name: 'New path for parts/caliper.SLDPRT' }).selectOption('parts/cliper.SLDPRT');
-  await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  // Only identical-bytes pairs are suggested; an edited-and-renamed file is matched from its deleted row menu.
+  const matchManually = async () => {
+    await page.getByLabel(/^File actions — parts\/caliper\.SLDPRT/).click();
+    await page.getByRole('button', { name: /^Match to a new file/ }).click();
+    await page.getByRole('dialog', { name: 'Match to a new file' }).getByRole('combobox').selectOption('parts/cliper.SLDPRT');
+    await page.getByRole('dialog', { name: 'Match to a new file' }).getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  };
+  if (width === 390) {
+    await expect(page.getByRole('region', { name: 'Component identity' })).toHaveCount(0);
+    await matchManually();
+  } else {
+    await expect(identity.getByText(/Possible rename:/)).toBeVisible();
+    await identity.getByRole('combobox', { name: 'New path for parts/caliper.SLDPRT' }).selectOption('parts/cliper.SLDPRT');
+    await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  }
   await expect(identity.getByText('Confirmed rename: parts/caliper.SLDPRT → parts/cliper.SLDPRT')).toBeVisible();
   await identity.getByRole('button', { name: 'Cancel association' }).click();
   await expect(identity.getByText(/Confirmed rename:/)).toHaveCount(0);
-  if (width === 390) await manual.click();
-  await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
+  if (width === 390) await matchManually();
+  else await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
   await page.getByRole('textbox', { name: /Revision summary/ }).fill('Correct component filename');
   await page.getByRole('button', { name: 'Save revision', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');

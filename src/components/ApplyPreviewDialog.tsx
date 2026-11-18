@@ -308,7 +308,7 @@ function ApplyPreviewBody({
                 </details>
               ) : null}
               {notes.length ? (
-                notes.map((note) => <NotesText key={note.path} notes={note} />)
+                notes.map((note) => <NotesText key={note.path} notes={note} file />)
               ) : (
                 <p className="muted small">
                   No per-file notes recorded at this revision.

@@ -45,7 +45,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
       await page.getByRole('button',{name:'Scan for changes',exact:true}).click();
       await page.getByRole('textbox',{name:'Revision summary'}).fill('Keep pending notes');
-      await page.getByRole('button',{name:/Add overall engineering notes/}).click();
+      await page.getByRole('button',{name:/Add a description/}).click();
       await page.getByRole('textbox',{name:'Overall: Description',exact:true}).fill('Keep intent');
       await nav.getByRole('button',{name:'History',exact:true}).click();
       await page.getByRole('button',{name:/Rev 004: Reduced bracket thickness/}).click();

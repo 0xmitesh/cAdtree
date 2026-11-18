@@ -200,7 +200,7 @@ for (const width of [1366, 390])
       .getByRole("textbox", { name: /Revision summary/ })
       .fill("Reuse case Part-X after CAD reference checks");
     await page
-      .getByRole("button", { name: /Add.*overall engineering notes/ })
+      .getByRole("button", { name: /Add a description/ })
       .click();
     await page.getByTestId("note-Overall").getByText("More detail").click();
     await page

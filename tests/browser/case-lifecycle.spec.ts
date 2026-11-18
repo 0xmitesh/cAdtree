@@ -100,7 +100,7 @@ for (const width of [1366, 390])
         .getByRole("textbox", { name: /Revision summary/ })
         .fill("Keep this case-scoped engineering draft");
       await page
-        .getByRole("button", { name: /Add.*overall engineering notes/ })
+        .getByRole("button", { name: /Add a description/ })
         .click();
       await page
         .getByRole("textbox", { name: "Overall: Description", exact: true })

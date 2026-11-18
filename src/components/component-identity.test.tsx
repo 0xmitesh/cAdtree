@@ -75,20 +75,27 @@ test('a single identical-bytes candidate is pre-selected and confirms directly',
   fireEvent.click(ui.getByRole('button',{name:'Confirm rename'}));
   assert.deepEqual((review as IdentityReview|undefined)?.renames,[{from:'old',to:'first'}]);
 });
-test('files whose name and bytes both changed are not suggested; they stay available behind a manual disclosure', async()=>{
+test('files whose name and bytes both changed are not suggested in the panel; a deleted file\'s menu matches them explicitly', async()=>{
   const f = await fixture(); await f.working.removeEntry(['second']); await f.working.writeFileText(['first'],'different bytes');
   const scan = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
-  let review:IdentityReview|undefined;
-  const ui = render(<Controls state={f.state} scan={scan} onChange={value=>review=value}/>);
+  let captured:any;
+  const ui = render(<ChangesCaptureView {...changesProps(f.state,scan,{onCapture:async(p:any)=>{captured=p;}})}/>);
+  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null,'no suggestion, so no panel');
   assert.equal(ui.queryByText(/Possible rename/),null);
-  const manual = ui.getByText(/Match other missing files manually/).closest('details') as HTMLDetailsElement;
-  assert.equal(manual.open,false);
-  const select = within(manual).getByRole('combobox',{name:'New path for old'}) as HTMLSelectElement;
-  assert.equal(select.value,'');
-  assert.equal((within(manual).getByRole('button',{name:'Confirm rename'}) as HTMLButtonElement).disabled,true);
-  fireEvent.change(select,{target:{value:'first'}});
-  fireEvent.click(within(manual).getByRole('button',{name:'Confirm rename'}));
-  assert.deepEqual((review as IdentityReview|undefined)?.renames,[{from:'old',to:'first'}]);
+  fireEvent.click(ui.getByRole('button',{name:'Match to a new file — old'}));
+  const dialog = within(ui.getByRole('dialog',{name:'Match to a new file'}));
+  assert.equal((dialog.getByRole('button',{name:'Confirm rename'}) as HTMLButtonElement).disabled,true);
+  fireEvent.change(dialog.getByRole('combobox'),{target:{value:'first'}});
+  fireEvent.click(dialog.getByRole('button',{name:'Confirm rename'}));
+  const panel = within(ui.getByRole('region',{name:'Component identity'}));
+  assert.ok(panel.getByText('Confirmed rename: old → first'));
+  assert.equal(ui.queryByRole('button',{name:'Match to a new file — old'}),null);
+  fireEvent.change(ui.getByRole('textbox',{name:/Revision summary/}),{target:{value:'Renamed and edited'}});
+  fireEvent.click(ui.getByRole('button',{name:/^Save revision$/}));
+  await waitFor(()=>assert.ok(captured));
+  assert.deepEqual(captured.identityReview.renames,[{from:'old',to:'first'}]);
+  fireEvent.click(panel.getByRole('button',{name:'Cancel association'}));
+  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
 });
 test('legacy projects show no identity controls and no enable-tracking button', async()=>{
   const f = await fixture(); await f.vault.removeEntry(['components'],{recursive:true});
@@ -99,6 +106,7 @@ test('legacy projects show no identity controls and no enable-tracking button', 
   const changes = render(<ChangesCaptureView {...changesProps(state,f.scan)}/>);
   assert.equal(changes.queryByRole('region',{name:'Component identity'}),null);
   assert.equal(changes.queryByText(/Enable component tracking/),null);
+  assert.ok(changes.getByText("Renames aren't tracked for this project."));
 });
 function changesProps(state:VaultState,scan:ScanResult,extra:object={}) {
   return {vaultState:state,activeBranchId:'branch-main',workingFolderName:'Main',vaultFolderName:'Vault',scanResult:scan,isScanStale:false,isScanning:false,isCapturing:false,progress:null,statusBanner:null,onScan:async()=>{},onCancelOperation:()=>{},onReattachWorkingFolder:async()=>{},onCapture:async()=>{},...extra};
@@ -173,8 +181,10 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
     captures++;
   }} />);
   fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Capture applied component' } });
-  fireEvent.change(ui.getByRole('combobox', { name: 'New path for old' }), { target: { value: 'first' } });
-  fireEvent.click(ui.getByRole('button', { name: 'Confirm rename' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Match to a new file — old' }));
+  const match = within(ui.getByRole('dialog', { name: 'Match to a new file' }));
+  fireEvent.change(match.getByRole('combobox'), { target: { value: 'first' } });
+  fireEvent.click(match.getByRole('button', { name: 'Confirm rename' }));
   assert.match(ui.getByRole('alert').textContent!, /Component identity conflict.*first.*confirmed rename/);
   const save = ui.getByRole('button', { name: /^Save revision$/ }) as HTMLButtonElement;
   assert.equal(save.disabled, true);
@@ -196,7 +206,7 @@ test('Changes saves the single Description and per-file Note into modification, 
   let params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0] | undefined;
   const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { onCapture: async (p: typeof params) => { params = p; } })} />);
   fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Notes check' } });
-  fireEvent.click(ui.getByRole('button', { name: /Add overall engineering notes/ }));
+  fireEvent.click(ui.getByRole('button', { name: /Add a description/ }));
   fireEvent.change(ui.getByRole('textbox', { name: 'Overall: Description' }), { target: { value: 'Overall words' } });
   fireEvent.click(ui.getByRole('button', { name: 'Add note for first' }));
   fireEvent.change(ui.getByRole('textbox', { name: 'first: Note' }), { target: { value: 'File words' } });

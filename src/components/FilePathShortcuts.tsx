@@ -364,6 +364,8 @@ export interface FileMenuItem {
   onSelect: () => void;
 }
 
+let openFileMenu: HTMLDetailsElement | null = null;
+
 /** One "…" menu per file row: Copy file path, Copy folder path and any extra items. */
 export function FilePathActions({
   filePath,
@@ -377,6 +379,29 @@ export function FilePathActions({
   extraItems?: FileMenuItem[];
 }) {
   const context = useContext(Shortcuts);
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const menu = menuRef.current;
+    const close = (refocus: boolean) => {
+      menu?.removeAttribute("open");
+      setMenuOpen(false);
+      if (refocus) menu?.querySelector<HTMLElement>("summary")?.focus();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close(true);
+    };
+    const onPointer = (event: Event) => {
+      if (menu && !menu.contains(event.target as Node)) close(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [menuOpen]);
   const canCopy = Boolean(context && resolve);
   const extras = extraItems ?? [];
   if (!canCopy && !extras.length) return null;
@@ -395,7 +420,18 @@ export function FilePathActions({
     <div
       className={`file-path-actions${historicalBranch ? " historical" : ""}`}
     >
-      <details className="file-path-menu">
+      <details
+        className="file-path-menu"
+        ref={menuRef}
+        onToggle={(event) => {
+          const menu = event.currentTarget;
+          setMenuOpen(menu.open);
+          if (menu.open) {
+            if (openFileMenu && openFileMenu !== menu) openFileMenu.removeAttribute("open");
+            openFileMenu = menu;
+          } else if (openFileMenu === menu) openFileMenu = null;
+        }}
+      >
         <summary
           title={`File actions — ${description}`}
           aria-label={`File actions — ${description}`}

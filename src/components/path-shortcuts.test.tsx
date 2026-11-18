@@ -104,6 +104,32 @@ test("each file row has a single path menu holding both copy actions", () => {
   assert.equal(ui.queryByRole("button", { name: /Copy full file path/ }), null);
 });
 
+test("file menus close on Escape (returning focus) and outside click, and only one is open at a time", async () => {
+  const ui = render(
+    <FilePathShortcutsProvider workspace={workspace()} convenienceEpoch={0}>
+      <FilePathActions filePath="A.bin" resolve={async () => location} />
+      <FilePathActions filePath="B.bin" resolve={async () => location} />
+      <button>elsewhere</button>
+    </FilePathShortcutsProvider>,
+  );
+  const [a, b] = Array.from(ui.container.querySelectorAll("details.file-path-menu")) as HTMLDetailsElement[];
+  const open = async (menu: HTMLDetailsElement) => {
+    menu.open = true;
+    await waitFor(() => assert.ok(menu.open));
+    await new Promise((r) => setTimeout(r, 20));
+  };
+  await open(a);
+  await open(b);
+  await waitFor(() => assert.equal(a.open, false));
+  assert.equal(b.open, true);
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => assert.equal(b.open, false));
+  assert.equal(document.activeElement, b.querySelector("summary"));
+  await open(a);
+  fireEvent.mouseDown(ui.getByText("elsewhere"));
+  await waitFor(() => assert.equal(a.open, false));
+});
+
 test("a first path click offers setup, saves locally, rechecks the file, then completes that exact copy", async () => {
   await clearAllConvenienceMetadata();
   const copied: string[] = [];
