@@ -894,7 +894,6 @@ progress {
 }
 .graph-stage {
   position: relative;
-  transform-origin: top left;
 }
 .graph-scaled {
   position: relative;
@@ -914,8 +913,8 @@ progress {
   background: transparent;
   box-shadow: none;
 }
-.graph-row.dimmed {
-  opacity: 0.35;
+.graph-row.in-case .graph-label {
+  box-shadow: inset 3px 0 0 var(--case-color, var(--branch-color));
 }
 .graph-hit {
   background: transparent;
@@ -1067,13 +1066,6 @@ progress {
   gap: 10px;
   font-size: 12px;
 }
-.zoom-controls {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #6b8076;
-}
 .graph-toolbar {
   padding: 10px 14px;
   display: flex;
@@ -1127,8 +1119,8 @@ progress {
   color: #637468;
   font-size: 12px;
 }
-.revision-list-row.dimmed {
-  opacity: 0.4;
+.revision-list-row.in-case {
+  box-shadow: inset 3px 0 0 var(--case-color, var(--branch-color));
 }
 .revision-list-row {
   width: 100%;

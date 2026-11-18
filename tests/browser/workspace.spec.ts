@@ -30,7 +30,8 @@ for (const viewport of [
     ).toBeVisible();
     await page.getByRole("button", { name: "Graph", exact: true }).click();
     await page.getByRole("button", { name: /Rev 002: Refine/ }).focus();
-    await page.keyboard.press("ArrowDown");
+    // Newest first: the next newer revision is above.
+    await page.keyboard.press("ArrowUp");
     await expect(
       page.getByRole("heading", {
         name: "Add bearing retainer and update drawing",
@@ -82,18 +83,27 @@ for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {
       await expect(
         page.getByRole("button", { name: "Prototype", exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
+      // The chip selects the case's latest revision; nothing is faded.
+      await expect(
+        page.getByRole("button", { name: /^Rev 008:/ }),
+      ).toHaveAttribute("aria-pressed", "true");
+      await expect(page.locator(".graph-row.dimmed")).toHaveCount(0);
     }
     if (scenario === "long") {
       const latest = page.getByRole("button", { name: /Rev 120:/ });
       await latest.focus();
-      await page.keyboard.press("Home");
+      // Newest first: End reaches the oldest revision, Home returns to the newest.
+      await page.keyboard.press("End");
       await expect(
         page.getByRole("heading", {
           name: "Initial assembly and component set",
         }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Latest", exact: true }).click();
+      await page.keyboard.press("Home");
       await expect(latest).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        page.getByRole("button", { name: "Latest", exact: true }),
+      ).toHaveCount(0);
     }
     if (scenario === "damaged")
       await expect(

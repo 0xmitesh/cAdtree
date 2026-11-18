@@ -103,7 +103,7 @@ for (const width of [1366, 390]) test(`reference browser: branch/file/search int
   await page.getByRole('button', { name: 'Save revision', exact: true }).click();
   await expect(page.getByText(/Published and verified Rev 004/)).toBeVisible();
   await page.getByRole('navigation').getByRole('button', { name: 'History', exact: true }).click();
-  await page.getByRole('button', { name: 'Latest', exact: true }).click();
+  await page.getByRole('button', { name: /Rev 004:/ }).click();
   await page.getByRole('button', { name: 'Saved references', exact: true }).click();
   await expect(page.locator('.revision-detail')).toContainText('Maintain the bearing clearance');
   await expect(page.locator('.revision-detail')).toContainText('Whole revision intent');
