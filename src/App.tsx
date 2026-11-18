@@ -1267,11 +1267,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     onVisit: async (target) => {
       if (operationRef.current || pendingSignOutRef.current) return false;
       const uid = authStateRef.current.user?.uid;
-      // Back/Forward leaves the page too: its banner stays behind.
-      setStatusBanner(null);
+      // Back/Forward leaves the page too: its banner stays behind. A visit that cannot move keeps it.
       setLearningOpen(false);
       setExplorerOpen(false);
       if (target.view === "intro") {
+        setStatusBanner(null);
         setHomeView(true);
         setIntroView(true);
         return true;
@@ -1280,11 +1280,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       if (target.view === "workspaces") { allWorkspaces(); return true; }
       const sameWorkspace = target.workspaceId === workspace?.identity.workspaceId && target.workspaceKey === managedWorkspaceKey;
       if (target.view === "workspace" && sameWorkspace) {
+        setStatusBanner(null);
         setHomeView(false);
         setActiveTab("connect");
         return true;
       }
       if (target.view === "project" && sameWorkspace && target.projectId === managedProject?.record.projectId && vaultState) {
+        setStatusBanner(null);
         setHomeView(false);
         setActiveTab(target.tab);
         return true;
@@ -1292,6 +1294,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       const entry = home?.workspaces.find(e => e.key === target.workspaceKey && e.workspaceId === target.workspaceId);
       if (target.view === "workspace") {
         if (!entry?.workspace) return false;
+        setStatusBanner(null);
         await openHomeEntry(entry);
       } else {
         const available = entry?.workspace ?? (sameWorkspace ? workspace : null);
@@ -1299,6 +1302,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         const matches = available?.projects.filter(p => p.projectId === target.projectId) ?? [];
         const project = matches.length === 1 ? matches[0] : undefined;
         if (!project?.project || project.status === "duplicate") return false;
+        setStatusBanner(null);
         // Reopen other project locations through existing permission and identity validation.
         await openTreeProject(entry, project);
         if (authStateRef.current.user?.uid !== uid) return false;
