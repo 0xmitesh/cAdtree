@@ -88,7 +88,7 @@ test("deleted file shows its absence and links to the parent revision; export is
   );
   assert.equal(ui.queryByRole("button", { name: /Copy selected files/ }), null);
   assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);
-  fireEvent.click(ui.getByRole("button", { name: "Export for review" }));
+  fireEvent.click(ui.getByRole("button", { name: "Export a copy" }));
   const dialog = within(ui.getByRole("dialog"));
   fireEvent.click(dialog.getByRole("radio", { name: /Selected files/ }));
   assert.equal(
@@ -159,7 +159,7 @@ test("file filtering keeps damaged evidence visible and preserves export blockin
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Export for review",
+        name: "Export a copy",
       }) as HTMLButtonElement
     ).disabled,
     true,

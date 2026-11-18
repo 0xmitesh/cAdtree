@@ -115,15 +115,15 @@ for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {
     });
   });
 }
-test("export for review dialog keyboard focus", async ({ page }) => {
+test("export a copy dialog keyboard focus", async ({ page }) => {
   await page.goto("/tests/preview.html?scenario=single");
   const trigger = page.getByRole("button", {
-    name: "Export for review",
+    name: "Export a copy",
     exact: true,
   });
   await trigger.click();
   await expect(
-    page.getByRole("dialog", { name: "Export revision for review" }),
+    page.getByRole("dialog", { name: "Export a copy" }),
   ).toContainText("Complete project");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);

@@ -146,7 +146,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
         "Save your current work first; unsaved working changes block a bring-back. Select Rev 003 in History and choose Bring back onto Main…. cAdtree lists every difference between Main's latest saved state and Rev 003, all pre-selected: Bring back, Replace with Rev 003's version, or Remove (not in Rev 003).",
         "Deselect any file you want to keep as it is, enter the Engineering reason for bringing this back and click Prepare bring-back. Check the counts in the confirmation, acknowledge that CAD documents are saved and closed, then click Bring back confirmed changes.",
         "Only Main's working files change, and no revision is saved yet. Check the files in CAD, then save a revision; History shows Brought back from Rev 003. Files that were replaced or removed are kept with the operation and Rev 007 stays in history, so nothing is lost.",
-        "To get a separate copy to look at or share instead, use Export for review on the revision. Renamed files cannot be brought back yet; export them or create a design case from the revision.",
+        "To get a separate copy to look at or share instead, use Export a copy on the revision. Renamed files cannot be brought back yet; export them or create a design case from the revision.",
       ],
       visuals: [
         {

@@ -17,7 +17,7 @@ export type UseReviewActionsArgs = {
   assertProjectWritable: AssertProjectWritable;
 };
 
-/** Export for review and reference retrieval: hand a saved revision or an attachment to the user. */
+/** Export a copy and reference retrieval: hand a saved revision or an attachment to the user. */
 export function useReviewActions({
   vaultDir,
   vaultState,

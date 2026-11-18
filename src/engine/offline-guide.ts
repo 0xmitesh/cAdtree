@@ -604,12 +604,14 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'Only the working files change. Check them in your CAD program, then choose Changes and Save revision. The design ' +
       'case is not deleted.',
   ]);
-  steps(doc, 'Export for review', [
+  steps(doc, 'Export a copy', [
     'In History, select the revision you want to look at or share.',
-    'Choose Export for review, then Complete project or Selected files.',
-    'Choose Choose destination parent and pick the folder that will hold the export.',
-    'Choose Export for review. cAdtree writes a verified copy of the saved files into a new folder named ' +
-      '<Project> - <Branch> - R<nn>. Nothing in your project changes.',
+    'Choose Export a copy, then Complete project or Selected files.',
+    'Choose Choose folder… and pick the folder that will hold the copy. Leave Include references ticked to also copy ' +
+      'the revision\'s reference attachments.',
+    'Choose Export a copy. cAdtree writes a verified copy of the saved files into a new folder named ' +
+      '<Project> - <Branch> - R<nn>; reference attachments go into a References folder inside it. Nothing in your ' +
+      'project changes.',
   ]);
   steps(doc, 'Archive a design case', [
     'Choose History. The Design cases panel lists each case.',

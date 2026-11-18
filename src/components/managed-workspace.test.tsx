@@ -246,7 +246,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Export for review",
+        name: "Export a copy",
       }) as HTMLButtonElement
     ).disabled,
     true,
