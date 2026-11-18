@@ -227,6 +227,7 @@ function sourceNumber(state: VaultState, sourceRevisionId: string) {
     ? formatRevisionNumber(source.manifest.displayNumber)
     : sourceRevisionId;
 }
+const REASON_INLINE_MAX = 60;
 /** One plain line saying where a revision's files were copied from. */
 export function AppliedFrom({
   state,
@@ -245,6 +246,13 @@ export function AppliedFrom({
             {record.plan.mode === "revert"
               ? `Brought back ${number}`
               : `Copied from ${number} on ${caseLabel(state, record.sourceBranchId)}`}
+            {record.plan.reason.length <= REASON_INLINE_MAX ? (
+              <> — {record.plan.reason}</>
+            ) : (
+              <span className="applied-from-reason muted small">
+                {record.plan.reason}
+              </span>
+            )}
           </p>
         );
       })}
@@ -279,9 +287,6 @@ export function AppliedFromDetails({
                 {sourceNumber(state, record.plan.sourceRevisionId)}
               </strong>
               {reverted ? null : <> · {caseLabel(state, record.sourceBranchId)}</>}
-            </p>
-            <p>
-              <strong>Engineering reason:</strong> {record.plan.reason}
             </p>
             <p className="small">
               {reverted

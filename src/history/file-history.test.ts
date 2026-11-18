@@ -256,3 +256,23 @@ test("file history keeps a copy link only when both ends stay in the filtered gr
   const kept = new Set(filtered.nodes.map((n) => n.id));
   for (const c of filtered.copies) assert.ok(kept.has(c.child) && kept.has(c.source));
 });
+test("file history keeps the copy link when both ends survive the filter", () => {
+  // r1 adds the file, r2 changes it, r3 changes it again; r3 was brought back from r1.
+  const state = stateWithHashes(["a", "b", "c"]);
+  state.applicationOperations = [
+    {
+      operationId: "apply-y",
+      destinationBranchId: "branch-main",
+      relativePath: "applications/branch-main/y",
+      status: "captured",
+      capturedRevisionId: "r3",
+      events: [],
+      record: { sourceBranchId: "branch-main", plan: { sourceRevisionId: "r1", mode: "revert" } },
+    } as any,
+  ];
+  const filtered = view(state).graph;
+  assert.deepEqual(
+    filtered.copies.map((c) => [c.child, c.source, c.mode]),
+    [["r3", "r1", "revert"]],
+  );
+});

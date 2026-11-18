@@ -56,6 +56,8 @@ test("graph draws a dashed line toward the source and names it on the row", () =
   // Parent edges keep their own solid style.
   const parents = ui.container.querySelectorAll("path[data-child]");
   assert.ok(parents.length > 0);
+  // Links run in the gutter right of both dots, so never over a parent line.
+  for (const line of lines) assert.match(line.getAttribute("d")!, /^M [\d.]+ [\d.]+ Q .* V .* Q /);
   for (const p of parents) assert.equal(p.getAttribute("stroke-dasharray"), null);
   const merged = ui.getByRole("button", { name: /^Rev 006:/ });
   assert.match(merged.getAttribute("aria-label")!, /, copied from Rev 008$/);
@@ -121,10 +123,10 @@ test("revision details: one plain line outside Troubleshooting, the byte and ide
   fireEvent.click(ui.getByRole("button", { name: /^Rev 006:/ }));
   const troubleshooting = ui.container.querySelector<HTMLDetailsElement>(".revision-troubleshooting")!;
   const line = ui.container.querySelector(".applied-from")!;
-  assert.equal(line.textContent, "Copied from Rev 008 on Prototype");
+  assert.equal(line.textContent, "Copied from Rev 008 on Prototype — Reuse reviewed design");
   assert.equal(troubleshooting.contains(line), false);
   assert.equal(troubleshooting.open, false);
-  for (const text of [/Before, applied and captured bytes/, /Application record identities/, /Reuse reviewed design/]) {
+  for (const text of [/Before, applied and captured bytes/, /Application record identities/]) {
     assert.ok(troubleshooting.textContent!.match(text), String(text));
     assert.equal(line.parentElement!.textContent!.replace(troubleshooting.textContent!, "").match(text), null);
   }

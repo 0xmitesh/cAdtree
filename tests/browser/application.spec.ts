@@ -258,7 +258,7 @@ for (const width of [1366, 390])
       .getByRole("button", { name: /Rev 006: Reuse case Part-X/ })
       .press("Enter");
     await expect(
-      page.getByText("Copied from Rev 003 on Part-X redesign", { exact: true }),
+      page.getByText(/^Copied from Rev 003 on Part-X redesign/),
     ).toBeVisible();
     await page.locator(".revision-troubleshooting > summary").click();
     await expect(

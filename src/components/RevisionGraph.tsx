@@ -266,14 +266,14 @@ export function RevisionGraph({
                   const from = positions.get(copy.child);
                   const to = positions.get(copy.source);
                   if (!from || !to) return null;
-                  // Leave the copy's dot on the side facing its source and stop
-                  // short of the source's dot; same-lane links bow to the right
-                  // so they never sit on a parent line.
-                  const down = to.y > from.y;
-                  const startY = from.y + (down ? NODE_RADIUS + 2 : -NODE_RADIUS - 2);
-                  const endY = to.y + (down ? -NODE_RADIUS - 8 : NODE_RADIUS + 8);
-                  const bow = from.x === to.x ? 30 : 0;
-                  const lift = down ? 40 : -40;
+                  // Leave the copy's dot on its right side, run down the gutter
+                  // between lanes (clear of parent lines, dots and labels) and
+                  // arrive at the right side of the source's dot.
+                  const dir = to.y > from.y ? 1 : -1;
+                  const runX = Math.max(from.x, to.x) + 38;
+                  const startX = from.x + NODE_RADIUS + 2;
+                  const endX = to.x + NODE_RADIUS + 8;
+                  const corner = 14;
                   return (
                     <path
                       key={`${copy.child}:${copy.source}`}
@@ -281,7 +281,7 @@ export function RevisionGraph({
                       data-copy-child={copy.child}
                       data-copy-source={copy.source}
                       data-copy-mode={copy.mode}
-                      d={`M ${from.x} ${startY} C ${from.x + bow} ${startY + lift}, ${to.x + bow} ${endY - lift}, ${to.x} ${endY}`}
+                      d={`M ${startX} ${from.y} Q ${runX} ${from.y} ${runX} ${from.y + dir * corner} V ${to.y - dir * corner} Q ${runX} ${to.y} ${endX} ${to.y}`}
                       fill="none"
                       strokeDasharray="5 5"
                       markerEnd={`url(#${markerPrefix}-copy)`}
@@ -504,7 +504,7 @@ export function RevisionGraph({
         {mode === "graph" ? (
           <span className="graph-direction">
             ↓ Arrows point to parents
-            {graph.copies.length ? " · Dashed lines point to where files were copied from" : ""}
+            {graph.copies.length ? " · Dashed lines point to where files were copied or brought back from" : ""}
           </span>
         ) : null}
       </div>

@@ -275,7 +275,7 @@ test("Copied files details distinguish originally applied and final captured byt
   ];
   f.state.applicationOperations = [f.operation];
   const ui = render(<AppliedFromDetails state={f.state} revisionId="final" />);
-  assert.match(ui.container.textContent!, /Reuse reviewed design/);
+  assert.doesNotMatch(ui.container.textContent!, /Engineering reason/);
   assert.match(
     ui.container.textContent!,
     /Adjusted after application before saving/,

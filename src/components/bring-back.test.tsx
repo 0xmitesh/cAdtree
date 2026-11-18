@@ -219,11 +219,18 @@ function capturedOperation(mode: "merge" | "revert") {
 
 test("AppliedFrom is one plain line: a revert says Brought back <rev>, a merge says Copied from <rev> on <case>; identities live in the details", () => {
   const revert = render(<AppliedFrom state={capturedOperation("revert")} revisionId="final" />);
-  assert.equal(revert.container.textContent, "Brought back Rev 003");
+  assert.equal(revert.container.textContent, "Brought back Rev 003 — Because");
   assert.equal(revert.container.querySelectorAll("details").length, 0);
   cleanup();
   const merge = render(<AppliedFrom state={capturedOperation("merge")} revisionId="final" />);
-  assert.equal(merge.container.textContent, "Copied from Rev 008 on Prototype");
+  assert.equal(merge.container.textContent, "Copied from Rev 008 on Prototype — Because");
+  cleanup();
+  const long = capturedOperation("merge");
+  const longReason = "Reuse the reviewed housing change but keep every newer Main development";
+  long.applicationOperations![0].record!.plan.reason = longReason;
+  const longUi = render(<AppliedFrom state={long} revisionId="final" />);
+  assert.equal(longUi.container.querySelector(".applied-from-reason")!.textContent, longReason);
+  assert.match(longUi.container.textContent!, /^Copied from Rev 008 on Prototype/);
   cleanup();
   const revertDetails = render(<AppliedFromDetails state={capturedOperation("revert")} revisionId="final" />);
   assert.doesNotMatch(revertDetails.container.textContent!, /Base:/);

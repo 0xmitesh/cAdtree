@@ -3043,6 +3043,9 @@ input::placeholder {
   margin: 0 22px 12px;
   overflow-wrap: anywhere;
 }
+.applied-from-reason {
+  display: block;
+}
 .modal:has(.apply-preview) {
   width: min(960px, calc(100vw - 32px));
 }
