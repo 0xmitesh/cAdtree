@@ -60,6 +60,8 @@ export type ProjectViewsProps = {
   handleReattachWorkingFolder: BranchActions["handleReattachWorkingFolder"];
   handleCreateBranch: BranchActions["handleCreateBranch"];
   handleScanCurrent: CaptureActions["handleScanCurrent"];
+  /** The interrupted-Apply panel's Refresh: the quiet automatic routine, outside `perform`. */
+  refreshApplicationStatus: () => Promise<void>;
   handleCaptureRevision: CaptureActions["handleCaptureRevision"];
   handlePrepareApplication: ApplicationActions["handlePrepareApplication"];
   handleRefreshApplicationReview: ApplicationActions["handleRefreshApplicationReview"];
@@ -115,6 +117,7 @@ export function ProjectViews({
   handleReattachWorkingFolder,
   handleCreateBranch,
   handleScanCurrent,
+  refreshApplicationStatus,
   handleCaptureRevision,
   handlePrepareApplication,
   handleRefreshApplicationReview,
@@ -147,7 +150,7 @@ export function ProjectViews({
         onCancel={handleCancelOperation}
         onRecover={handleRecoverApplication}
         onAbandon={handleAbandonApplication}
-        onRefresh={handleScanCurrent}
+        onRefresh={refreshApplicationStatus}
         onChanges={() => navigate("changes")}
       />
       {vaultState.branches.map((branch) => (

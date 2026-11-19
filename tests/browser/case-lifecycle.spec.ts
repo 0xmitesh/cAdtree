@@ -1,3 +1,4 @@
+import { waitForScan } from "./rescan";
 import { pickFile } from "./file-picker";
 import { test, expect } from "@playwright/test";
 for (const width of [1366, 390])
@@ -92,15 +93,11 @@ for (const width of [1366, 390])
         ).lifecycleDraftEdit(fixture);
       }, fixture);
       await nav.getByRole("button", { name: "Changes", exact: true }).click();
-      await page
-        .getByRole("button", { name: "Scan for changes", exact: true })
-        .click();
+      await waitForScan(page);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await page
         .getByRole("textbox", { name: /Revision summary/ })
         .fill("Keep this case-scoped engineering draft");
-      // The scan-complete message floats over the form until dismissed.
-      await page.getByRole("button", { name: "Dismiss message" }).click();
       await page
         .getByRole("button", { name: /Add a description/ })
         .click();
@@ -125,9 +122,7 @@ for (const width of [1366, 390])
           await import(/* @vite-ignore */ url)
         ).lifecycleDraftEdit(fixture, true);
       }, fixture);
-      await page
-        .getByRole("button", { name: "Scan for changes", exact: true })
-        .click();
+      await waitForScan(page);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await select.selectOption("branch-main");
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");

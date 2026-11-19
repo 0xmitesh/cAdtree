@@ -11,7 +11,7 @@ import {
   currentBranchId,
   openHomeWorkspace,
   openTestHome,
-  selectBranch,
+  selectBranch, waitForScan,
 } from "../../tests/app-controls";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { createHome, createHomeWorkspace, openHome } from "../engine/home-service";
@@ -64,7 +64,7 @@ const changesPage = (ui: ReturnType<typeof render>) =>
   within([...ui.container.querySelectorAll<HTMLElement>(".changes-page")].find((page) => !page.parentElement!.hidden)!);
 async function scanMain(ui: ReturnType<typeof render>) {
   fireEvent.click(within(ui.getByRole("navigation")).getByRole("button", { name: "Changes" }));
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await waitFor(() => assert.ok(ui.getByRole("heading", { name: "1 changed file" })));
 }
 

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
-import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace, selectBranch, waitForScan, holdOperation } from "../../tests/app-controls";
 import { WorkspaceTree } from "./WorkspaceTree";
 import { openWorkspace } from "../engine/workspace-service";
 import type { VaultState } from "../engine/types";
@@ -34,7 +34,7 @@ test("References has no case selector while the other project views show the cur
   const header = ui.getByRole("region", { name: "Project context" });
   const before = inventorySignature(await readVerifiedInventory(sample.home));
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await waitFor(() => assert.equal(appBusy(ui), false));
   fireEvent.change(ui.getByRole("textbox", { name: /Revision summary/ }), { target: { value: "Keep the Main engineering draft" } });
   fireEvent.click(nav.getByRole("button", { name: "History" }));
@@ -60,7 +60,7 @@ test("References has no case selector while the other project views show the cur
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)), before);
 });
 
-test("The Explorer switches the case from History, Changes and Settings, the header shows it as text, and the Explorer is locked during a scan", async () => {
+test("The Explorer switches the case from History, Changes and Settings, the header shows it as text, and the Explorer is locked while an operation runs", async () => {
   const { sample, ui, nav } = await openSample();
   const caseRows = () => Array.from(ui.container.querySelectorAll<HTMLElement>('.desktop-workspace-tree [data-branch-id]'));
   assert.equal(ui.queryByRole("combobox", { name: "Working case" }), null);
@@ -75,17 +75,11 @@ test("The Explorer switches the case from History, Changes and Settings, the hea
     }
   }
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)), before);
-  fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  let release!: () => void;
-  const gate = new Promise<void>(resolve => { release = resolve; });
-  sample.home.setHooks({ onBeforeListEntries: async () => { await gate; } });
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
-  await waitFor(() => assert.equal(appBusy(ui), true));
+  const held = await holdOperation(ui, sample.home);
   assert.ok(caseRows().length >= 2);
   for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), "true");
   fireEvent.click(caseRows().find(row => row.dataset.branchId === sample.caseId)!);
-  await act(async () => release());
-  await waitFor(() => assert.equal(appBusy(ui), false));
+  await held.release();
   for (const row of caseRows()) assert.equal(row.getAttribute("aria-disabled"), null);
   assert.equal(currentBranchId(ui), "branch-main");
 });

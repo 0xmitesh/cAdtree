@@ -3,7 +3,7 @@ import {
   openHomeWorkspace,
   appBusy,
   currentBranchId,
-  selectBranch,
+  selectBranch, waitForScan,
 } from "../../tests/app-controls";
 import { indexedDB as testIndexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
@@ -472,7 +472,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   assert.match(copied[0], /^D:\\Cadtree\\/);
   copied.length = 0;
   nav(ui, "Changes");
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   fireEvent.click(ui.getByRole("button", { name: /Show 1 unchanged files/ }));
   fireEvent.click(copyButton(ui));

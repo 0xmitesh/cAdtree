@@ -4,6 +4,7 @@ import {
   currentBranchId,
   selectBranch,
   completeHomeAddress,
+  holdOperation,
 } from "../../tests/app-controls";
 import { indexedDB } from "fake-indexeddb";
 import test, { afterEach } from "node:test";
@@ -289,33 +290,17 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   );
   assert.equal(picker.calls(), 1);
   assert.equal(ui.queryByRole("dialog"), null);
-  // A delayed scan cannot switch workspaces or install another context mid-operation.
-  let release!: () => void;
-  let entered = false;
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  root.setHooks({
-    onBeforeRead: async (path) => {
-      if (path.endsWith("/Part.SLDPRT") && !entered) {
-        entered = true;
-        await gate;
-      }
-    },
-  });
-  fireEvent.click(
-    changes(ui).getByRole("button", { name: "Scan for changes" }),
-  );
-  await waitFor(() => assert.equal(entered, true));
+  // A running operation cannot be overtaken by switching workspaces or installing another context.
+  const held = await holdOperation(ui, root);
   assert.equal(
     ui.getByRole("treeitem", { name: "autocad" }).getAttribute("aria-disabled"),
     "true",
   );
   fireEvent.click(ui.getByRole("treeitem", { name: "autocad" }));
   nav(ui, "My workspaces");
-  release();
+  await held.release();
   await idle(ui);
-  root.setHooks({ onBeforeRead: undefined });
+  nav(ui, "Changes");
   assert.equal(
     (
       changes(ui).getByRole("textbox", {

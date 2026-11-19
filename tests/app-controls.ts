@@ -86,3 +86,33 @@ export async function waitForScan(ui: RenderResult) {
   await waitFor(() => assert.equal(ui.queryByTestId("auto-check"), null), { timeout: 5000 });
   await waitFor(() => assert.equal(appBusy(ui), false));
 }
+
+/**
+ * Starts a slow user operation (Settings, Troubleshooting, "Verify all file contents") and holds it open until
+ * `release()`. Stands in for the removed "Scan for changes" button wherever a test needs an operation in flight.
+ */
+export async function holdOperation(ui: RenderResult, home: InMemoryFileSystemAdapter) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  home.setHooks({
+    onBeforeRead: async (path) => {
+      if (path.includes("/objects/")) await gate;
+    },
+  });
+  fireEvent.click(
+    within(ui.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Settings" }),
+  );
+  const page = within(ui.container.querySelector<HTMLElement>(".settings-page")!);
+  fireEvent.click(page.getByText("Troubleshooting", { selector: "summary" }));
+  fireEvent.click(page.getByRole("button", { name: "Verify all file contents" }));
+  await waitFor(() => assert.equal(appBusy(ui), true));
+  return {
+    release: async () => {
+      await act(async () => release());
+      await waitFor(() => assert.equal(appBusy(ui), false));
+      home.setHooks({ onBeforeRead: undefined });
+    },
+  };
+}

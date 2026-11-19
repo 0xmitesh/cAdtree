@@ -251,16 +251,6 @@ export function ChangesCaptureView({
           </h1>
           <p>What changed, and why it matters.</p>
         </div>
-        <div className="project-heading-controls">
-          <button
-            className="button secondary"
-            disabled={busy || !workingFolderName}
-            onClick={onScan}
-          >
-            <RefreshCw size={16} />
-            {isScanning ? "Scanning…" : "Scan for changes"}
-          </button>
-        </div>
       </div>
       <div className="scan-strip">
         <span>

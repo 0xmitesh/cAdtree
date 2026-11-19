@@ -448,23 +448,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const refreshHome = async () => {
-    if (!home) return;
-    await perform(
-      "connect",
-      async (context) => {
-        if ((await home.root.requestPermission("readwrite")) !== "granted")
-          throw new Error("Reconnect the Cadtree home to renew access.");
-        const next = await openHome(home.root);
-        if (next.identity.homeId !== home.identity.homeId)
-          throw new Error(
-            "Cadtree home identity changed. Open the intended home explicitly.",
-          );
-        if (context.current()) setHome(next);
-      },
-      true,
-    );
-  };
   const openHomeEntry = async (entry: HomeWorkspaceEntry) => {
     if (!home) return;
     await perform(
@@ -661,7 +644,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       )
     )
       throw new Error(
-        "This branch is no longer available. Refresh the workspace.",
+        "This branch is no longer available. Return to the workspace and try again.",
       );
     const preferred =
       requestedBranchId ??
@@ -774,7 +757,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             chosen.workspaceId !== homeWorkspace.workspaceId
           )
             throw new Error(
-              "This workspace is unavailable. Refresh home to inspect its connections.",
+              "This workspace is unavailable. Return to the home page to see its connections.",
             );
           current = chosen.workspace;
           if (context.current()) setHome(discovered);
@@ -810,7 +793,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           )
         )
           throw new Error(
-            "This branch is no longer available. Refresh the workspace.",
+            "This branch is no longer available. Return to the workspace and try again.",
           );
         if (!context.current()) return;
         setWorkspace(current);
@@ -985,7 +968,14 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       const current = await openWorkspace(workspace.root);
       if (!context.current()) return;
       setWorkspace(current);
-      if (managedProject) await refindOpenProject(context, current);
+      if (managedProject) {
+        const found = await refindOpenProject(context, current);
+        // A rename made in Explorer or Finder is worth saying once; everything else stays quiet.
+        if (found?.kind === "ok" && found.renamed && context.current()) {
+          setBannerScope("workspace");
+          setStatusBanner({ type: "info", message: renamedNotice(found.project) });
+        }
+      }
     },
   });
   // Install a project only after all explicit connections have passed identity checks.
@@ -1377,7 +1367,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 onCreate={addHomeWorkspace}
                 onBring={() => addHomeWorkspace()}
                 onOpen={openHomeEntry}
-                onRefresh={refreshHome}
                 onCancel={handleCancelOperation}
               />
             ) : workspace && (activeTab === "connect" || !vaultState || !vaultDir) ? (
@@ -1387,7 +1376,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 workspaceAddress={workspaceBudgetAddress}
                 busy={busy}
                 progress={progress}
-                onRefresh={refreshWorkspace}
                 onCreate={(name) => addManagedProject(name)}
                 onImport={(source) => addManagedProject(source.name, source)}
                 onOpenProject={openManaged}
@@ -1427,6 +1415,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleReattachWorkingFolder={handleReattachWorkingFolder}
                   handleCreateBranch={handleCreateBranch}
                   handleScanCurrent={handleScanCurrent}
+                  refreshApplicationStatus={refreshPageNow}
                   handleCaptureRevision={handleCaptureRevision}
                   handlePrepareApplication={handlePrepareApplication}
                   handleRefreshApplicationReview={handleRefreshApplicationReview}

@@ -157,6 +157,12 @@ test("Changes fills in by itself after Apply, even while the completion dialog i
   assert.equal(ui.queryByRole("button", { name: "Scan for changes" }), null);
 });
 
+test("the Scan for changes button is gone; the Changes page shows its state as text", async () => {
+  const { ui } = await openSample();
+  assert.equal(ui.queryByRole("button", { name: /Scan for changes|Scanning/ }), null);
+  assert.match(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Scanned/);
+});
+
 test("a revision draft survives a quiet rescan", async () => {
   const { sample, ui } = await openSample();
   await sample.main.writeFileText(["Draft-file.txt"], "one");
@@ -191,6 +197,7 @@ test("the workspace page lists a new project after returning to the window", asy
   const sample = await compareApplyRecoverSample();
   const ui = render(<App />);
   await openHomeWorkspace(ui, sample.home);
+  assert.equal(ui.queryByRole("button", { name: /Refresh workspace/ }), null);
   assert.equal(ui.queryByText("Added elsewhere"), null);
   await createProject(sample.workspace.root, "Added elsewhere");
   await focusWindow();
@@ -203,6 +210,7 @@ test("the home page lists a new workspace after returning to the window", async 
   const ui = render(<App />);
   const { openTestHome } = await import("../../tests/app-controls");
   await openTestHome(ui, sample.home);
+  assert.equal(ui.queryByRole("button", { name: /Refresh home/ }), null);
   const { createHomeWorkspace } = await import("../engine/home-service");
   await createHomeWorkspace(sample.home, "Second Workspace");
   await focusWindow();

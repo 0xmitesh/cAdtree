@@ -1,3 +1,4 @@
+import { waitForScan } from "./rescan";
 import { test, expect } from "@playwright/test";
 
 for (const width of [1366, 390])
@@ -192,9 +193,7 @@ for (const width of [1366, 390])
     await status
       .getByRole("button", { name: "Review and save revision", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Scan for changes", exact: true })
-      .click();
+    await waitForScan(page);
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     await page
       .getByRole("textbox", { name: /Revision summary/ })

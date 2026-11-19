@@ -2,10 +2,10 @@ import "../../tests/dom";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { indexedDB } from "fake-indexeddb";
-import { render, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
-import { appBusy, currentBranchId, openHomeWorkspace } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace, waitForScan } from "../../tests/app-controls";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import { copyVerifiedTree, inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
@@ -24,6 +24,7 @@ const OLD = "projects/Bracket Assembly";
 const NEW = "projects/Bracket Assembly (renamed in Explorer)";
 const NEW_LEAF = "Bracket Assembly (renamed in Explorer)";
 const RENAMED = `This project's folder was renamed to '${NEW_LEAF}'. cAdtree found it by its project ID.`;
+const sleep = (ms: number) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
 const idle = (ui: ReturnType<typeof render>) => waitFor(() => assert.equal(appBusy(ui), false));
 
 async function renameFolder(root: FileSystemDirectoryAdapter, from: string, to: string) {
@@ -49,8 +50,10 @@ const nav = (ui: ReturnType<typeof render>, name: string) =>
 /** The workspace page with the project still open (Explorer workspace row). */
 const toWorkspacePage = (ui: ReturnType<typeof render>) =>
   fireEvent.click(within(ui.getByRole("tree", { name: "Workspace explorer" })).getByRole("treeitem", { name: /^Tutorial Workspace/ }));
+/** The workspace page re-reads itself when the user returns to the window (there is no Refresh button). */
 const refresh = async (ui: ReturnType<typeof render>) => {
-  fireEvent.click(ui.getByRole("button", { name: "Refresh workspace" }));
+  await act(async () => { window.dispatchEvent(new window.Event("focus")); });
+  await sleep(150);
   await idle(ui);
 };
 const revisionCount = async (root: FileSystemDirectoryAdapter, path: string) =>
@@ -59,12 +62,12 @@ const exists = async (root: FileSystemDirectoryAdapter, path: string) =>
   root.getDirectory(path.split("/")).then(() => true, () => false);
 async function scanAndDraft(ui: ReturnType<typeof render>, summary: string) {
   nav(ui, "Changes");
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   fireEvent.change(ui.getByRole("textbox", { name: /Revision summary/ }), { target: { value: summary } });
 }
 
-test("Refresh after the open project's folder is renamed: notice, still open, new location in use, case kept", async () => {
+test("Returning after the open project's folder is renamed: notice, still open, new location in use, case kept", async () => {
   const { sample, ui } = await setup();
   const before = await revisionCount(sample.workspace.root, OLD);
   await renameFolder(sample.workspace.root, OLD, NEW);
@@ -77,7 +80,7 @@ test("Refresh after the open project's folder is renamed: notice, still open, ne
   const moved = await sample.workspace.root.getDirectory([...NEW.split("/"), "working", "main"]);
   await moved.writeFileText(["After-rename.txt"], "new file");
   nav(ui, "Changes");
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   assert.ok(ui.getByText("After-rename.txt"));
   assert.equal(await revisionCount(sample.workspace.root, NEW), before);
@@ -89,7 +92,7 @@ test("Scan after a rename re-finds the project by ID, reports it and scans the n
   const moved = await sample.workspace.root.getDirectory([...NEW.split("/"), "working", "main"]);
   await moved.writeFileText(["After-rename.txt"], "new file");
   nav(ui, "Changes");
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   assert.ok(ui.getByText(new RegExp(RENAMED.replace(/[()']/g, "\\$&"))));
   assert.ok(ui.getByText("After-rename.txt"));
@@ -108,7 +111,7 @@ test("Saving after a rename writes nothing to the old path, shows the notice, an
   assert.equal(await exists(root, OLD), false, "nothing was recreated at the old path");
   assert.equal(await revisionCount(root, NEW), before, "nothing was saved");
   // Retry: the draft is kept, rescan, then save at the new location.
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   assert.equal((ui.getByRole("textbox", { name: /Revision summary/ }) as HTMLInputElement).value, "Saved after rename");
   fireEvent.click(ui.getByRole("button", { name: "Save revision" }));
@@ -137,7 +140,7 @@ test("A copy made while the project is open: saving is refused with the duplicat
   assert.ok(ui.container.querySelector(".project-context-header"));
 });
 
-test("The open project's folder is removed from the workspace: Refresh reports it can't be found, read-only", async () => {
+test("The open project's folder is removed from the workspace: the quiet refresh reports it can't be found, read-only", async () => {
   const { sample, ui } = await setup();
   const root = sample.workspace.root;
   await root.removeEntry(OLD.split("/"), { recursive: true });
@@ -146,8 +149,7 @@ test("The open project's folder is removed from the workspace: Refresh reports i
   nav(ui, "Changes");
   assert.match(ui.container.textContent!, /Managed project is read-only\. This project's folder can't be found in the workspace any more\./);
   await sample.main.writeFileText(["Late.txt"], "x").catch(() => {});
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
-  await idle(ui);
+  await refresh(ui);
   assert.equal(await exists(root, OLD), false, "nothing was recreated");
 });
 
@@ -158,7 +160,7 @@ test("Unchanged path: Refresh and a scan show no rename notice", async () => {
   assert.equal(ui.queryByText(/was renamed to/), null);
   await sample.main.writeFileText(["Plain.txt"], "x");
   nav(ui, "Changes");
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   assert.ok(ui.getByText("Plain.txt"));
   assert.equal(ui.queryByText(/was renamed to/), null);

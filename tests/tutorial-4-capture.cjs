@@ -61,8 +61,8 @@ async function main(){
     // Refresh Tutorial 2's scan action, which also displayed the old per-page picker.
     await page.setViewportSize({ width: 1024, height: 1200 });
     await nav.getByRole('button', { name: 'Changes', exact: true }).click();
-    const scan = page.getByRole('button', { name: 'Scan for changes', exact: true });
-    await focus(scan);
+    // There is no Scan button any more: Changes scans by itself, so the screenshot shows the page heading only.
+    await page.waitForSelector('[data-scanned-at]');
     const contextBox = await page.getByRole('region', { name: 'Project context', exact: true }).boundingBox();
     const changesBox = await page.locator('.changes-page .page-heading').boundingBox();
     await page.screenshot({ path: path.join(root, 'public/tutorials/save-first-revision/step-4-scan.png'), clip: { x: changesBox.x - 8, y: contextBox.y, width: changesBox.width + 16, height: changesBox.y + changesBox.height - contextBox.y + 8 } });

@@ -43,7 +43,8 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await pickCase(await page.evaluate(()=>window.sample.caseId));
       await page.waitForFunction(()=>document.querySelector('main')?.getAttribute('aria-busy')==='false');
       await nav.getByRole('button',{name:'Changes',exact:true}).click();
-      await page.getByRole('button',{name:'Scan for changes',exact:true}).click();
+      // The case switch already scanned; Changes shows its result without any button.
+      await page.waitForSelector('[data-scanned-at]');
       await page.getByRole('textbox',{name:'Revision summary'}).fill('Keep pending notes');
       await page.getByRole('button',{name:/Add a description/}).click();
       await page.getByRole('textbox',{name:'Overall: Description',exact:true}).fill('Keep intent');
