@@ -27,6 +27,9 @@ import { revisionCompletionPath, revisionManifestPath } from './revision-service
 import { componentRecordPath } from './component-identity';
 import { projectMapPath, restorePagePath, revisionListingPath } from './offline-guide-paths';
 import {
+  DISCARDED_MAX_COUNTER, DISCARDED_NOTE_FALLBACK, DISCARDED_NOTE_FILENAME, discardedFolderPath, discardedNotePath,
+} from './discarded-paths';
+import {
   referenceCatalogMarkerPath, referenceCatalogPath, referenceContextPath, referenceEnrollmentMarkerPath,
   referenceEnrollmentRecordPath,
 } from './references';
@@ -81,6 +84,8 @@ const EVENT = '20260101-000000-999';
 /** Revisions and knowledge records use the record ID format. */
 const REV = CASE_ID;
 const SEQ = 999999;
+/** Longest Discarded folder name: `YYYY-MM-DD HH.MM (9)`. */
+const DISCARDED_NAME = `2026-01-01 00.00 (${DISCARDED_MAX_COUNTER})`;
 const V = 'vault';
 
 /** Placeholders usable in `shape`, each with the regular expression a real value must match. */
@@ -95,6 +100,7 @@ export const PATH_TOKENS: Record<string, string> = {
   b64uuid: '[A-Za-z0-9_-]{22}',
   seq: '[0-9]{6}',
   uuid: '[0-9a-f-]{36}',
+  discardName: '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}\\.[0-9]{2}(?: \\([2-9]\\))?',
   leaf: '[^/]+',
 };
 
@@ -120,6 +126,10 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('project offline map', 'file', projectMapPath(), '_MAP cAdtree.txt'),
   template('project offline restore page', 'file', restorePagePath(), '_RESTORE cAdtree.html'),
   template('main working folder', 'dir', ['working', 'main'], 'working/main'),
+  // Discard keeps readable copies; files below the folder are user paths (like working/<case>/).
+  template('discarded copy folder', 'dir', discardedFolderPath(DISCARDED_NAME), 'Discarded/{discardName}'),
+  template('discarded copy note', 'file', discardedNotePath(DISCARDED_NAME), `Discarded/{discardName}/${DISCARDED_NOTE_FILENAME}`),
+  template('discarded copy note (name taken)', 'file', discardedNotePath(DISCARDED_NAME, DISCARDED_NOTE_FALLBACK), `Discarded/{discardName}/${DISCARDED_NOTE_FALLBACK}`),
   template('design case working folder (name allowance)', 'dir', ['working', 'x'.repeat(CASE_ALLOWANCE)], 'working/{leaf}'),
   // Incomplete marker written into a design-case working folder when case creation fails.
   template('design case incomplete marker', 'file', ['working', 'x'.repeat(CASE_ALLOWANCE), CASE_INCOMPLETE_MARKER], `working/{leaf}/${CASE_INCOMPLETE_MARKER}`),

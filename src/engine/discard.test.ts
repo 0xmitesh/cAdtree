@@ -30,8 +30,12 @@ import { caseLifecycle } from "./case-lifecycle";
 import { changeCaseLifecycle } from "./case-lifecycle-service";
 import { readVerifiedInventory } from "./copy-service";
 import type { VaultState } from "./types";
+import { joinAddress } from "./path-limits";
+import { refreshProjectGuide } from "./offline-guide";
 
 const notes = { problem: "", modification: "Saved", observations: "" };
+/** 14:05 local time, so the readable folder is "2026-11-19 14.05". */
+const NOW = new Date(2026, 10, 19, 14, 5, 0);
 
 async function setup() {
   const root = new InMemoryFileSystemAdapter("Workspace");
@@ -83,6 +87,7 @@ async function setup() {
       paths,
       expectedPlanHash: p.hash,
       workingFolders: folders,
+      now: () => NOW,
     });
   };
   const files = async (dir: FileSystemDirectoryAdapter) =>
@@ -155,6 +160,24 @@ test("discard all: added, modified and deleted files and folders go back to the 
     ),
     "a2 edited",
   );
+  // The readable copy: replaced bytes, removed folders and the note, written last.
+  assert.equal(result.keptAs, "Discarded/2026-11-19 14.05");
+  assert.deepEqual(result.keptInsideOnly, []);
+  const kept = await f.projectFolder.getDirectory(["Discarded", "2026-11-19 14.05"]);
+  assert.equal(await kept.readFileText(["A.txt"]), "a2 edited");
+  assert.equal(await kept.readFileText(["New.txt"]), "new");
+  assert.equal(await kept.readFileText(["Added", "Deep", "x.txt"]), "x");
+  assert.equal(await kept.hasDirectory(["Empty"]), true);
+  assert.equal(await kept.hasFile(["Gone.txt"]), false);
+  const note = await kept.readFileText(["_DISCARDED cAdtree.txt"]);
+  assert.ok(note.includes(`Discarded at (UTC): ${NOW.toISOString()}`), note);
+  assert.match(note, /Case: Main/);
+  assert.match(note, /Working folder: working\/main/);
+  assert.match(note, /Unsaved edit: A\.txt\n    copy in this folder/);
+  assert.match(note, /Unsaved deletion: Gone\.txt\n    put back from the saved revision/);
+  assert.match(note, /Unsaved new folder: Empty/);
+  assert.match(note, /HOW TO PUT FILES BACK/);
+  assert.equal(op.events.find((e) => e.kind === "kept")?.keptAs, "Discarded/2026-11-19 14.05");
   // Nothing is left to save.
   const scan = await scanForReplace(f.main, "branch-main", getBranchBaseline(await f.state(), "branch-main"));
   assert.equal(scan.hasChanges, false);
@@ -300,6 +323,9 @@ test("untracked OS clutter in a discarded folder is moved with it, never left be
   assert.equal(await f.main.hasDirectory(["Added"]), false);
   // Clutter outside the selection is not touched.
   assert.equal(await f.main.readFileText([".DS_Store"]), "finder root");
+  const kept = await f.projectFolder.getDirectory(result.keptAs!.split("/"));
+  assert.equal(await kept.readFileText(["Added", ".DS_Store"]), "finder");
+  assert.equal(await kept.hasFile([".DS_Store"]), false);
   const index = result.operation.record!.plan.actions.findIndex((a) => a.path === "Added/.DS_Store");
   assert.equal(
     await f.vault.readFileText(
@@ -365,4 +391,72 @@ test("a finished discard does not block saving, Bring back or hiding the case", 
     expectedVersion: caseLifecycle(await f.state(), caseId).version,
   }, { workingFolders: f.folders });
   assert.equal(caseLifecycle(await f.state(), caseId).status, "archived");
+});
+
+test("discards in the same minute get a counter; deletions alone keep nothing", async () => {
+  const f = await setup();
+  const names: (string | null)[] = [];
+  for (const text of ["one", "two", "three"]) {
+    await f.w(f.main, "A.txt", text);
+    names.push((await f.discard(["A.txt"])).keptAs);
+  }
+  assert.deepEqual(names, [
+    "Discarded/2026-11-19 14.05",
+    "Discarded/2026-11-19 14.05 (2)",
+    "Discarded/2026-11-19 14.05 (3)",
+  ]);
+  const second = await f.projectFolder.getDirectory(["Discarded", "2026-11-19 14.05 (2)"]);
+  assert.equal(await second.readFileText(["A.txt"]), "two");
+  // A case-only clash counts as taken too.
+  await f.projectFolder.getDirectory(["Discarded", "2026-11-19 14.05 (4)".toUpperCase()], { create: true });
+  await f.w(f.main, "A.txt", "four");
+  assert.equal((await f.discard(["A.txt"])).keptAs, "Discarded/2026-11-19 14.05 (5)");
+  // Only a deletion: nothing to keep, no folder.
+  await f.main.removeEntry(["Gone.txt"]);
+  const result = await f.discard(["Gone.txt"]);
+  assert.equal(result.keptAs, null);
+  assert.equal(result.operation.status, "done");
+  assert.equal(await f.main.readFileText(["Gone.txt"]), "gone");
+  // Past the ninth copy in one minute it stops before changing working files.
+  for (let n = 6; n <= 9; n++)
+    await f.projectFolder.getDirectory(["Discarded", `2026-11-19 14.05 (${n})`], { create: true });
+  await f.w(f.main, "A.txt", "ten");
+  await assert.rejects(f.discard(["A.txt"]), /Too many discards in the same minute/);
+  assert.equal(await f.main.readFileText(["A.txt"]), "ten");
+});
+
+test("a readable copy whose path is too long is skipped and listed; the vault keeps it", async () => {
+  const f = await setup();
+  const address = `C:\\${"W".repeat(200)}`;
+  f.root.setAddress(address);
+  const long = `Deep/${"n".repeat(20)}.txt`;
+  await f.w(f.main, long, "long one");
+  await f.w(f.main, "A.txt", "short one");
+  const failing = joinAddress(address, f.containerPath, "Discarded", "2026-11-19 14.05", long);
+  (f.root as InMemoryFileSystemAdapter).simulateFailureAt(failing, new DOMException("too long", "InvalidStateError"));
+  const result = await f.discard(["A.txt", "Deep"]);
+  assert.deepEqual(result.keptInsideOnly, [long]);
+  assert.equal(await f.main.hasDirectory(["Deep"]), false);
+  const kept = await f.projectFolder.getDirectory(["Discarded", "2026-11-19 14.05"]);
+  assert.equal(await kept.readFileText(["A.txt"]), "short one");
+  const note = await kept.readFileText(["_DISCARDED cAdtree.txt"]);
+  assert.match(note, /KEPT INSIDE cAdtree ONLY/);
+  const index = result.operation.record!.plan.actions.findIndex((a) => a.path === long);
+  const staged = ["vault", ...applicationStagedPath("branch-main", result.operation.operationId, "before", index)].join("/");
+  assert.ok(note.includes(staged), note);
+  assert.equal(
+    await f.vault.readFileText(applicationStagedPath("branch-main", result.operation.operationId, "before", index)),
+    "long one",
+  );
+});
+
+test("the project Map mentions Discarded/", async () => {
+  const f = await setup();
+  await f.w(f.main, "A.txt", "edit");
+  await f.discard(["A.txt"]);
+  const guide = await refreshProjectGuide(f.root, f.containerPath);
+  assert.equal(guide.status, "written");
+  const map = await f.projectFolder.readFileText(["_MAP cAdtree.txt"]);
+  assert.match(map, /Discarded\/<date time>\//);
+  assert.match(map, /_DISCARDED cAdtree\.txt/);
 });

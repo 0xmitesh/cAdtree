@@ -17,6 +17,7 @@
  * Text format: UTF-8, no BOM, CRLF line endings, no trailing whitespace, ends with a single CRLF.
  * Never claims that geometry changed and never mentions format conversion.
  */
+import { DISCARDED_NOTE_FILENAME } from './discarded-paths';
 import type { FileSystemDirectoryAdapter } from './fs-adapter';
 import { withProjectWriterLock } from './locks';
 import { getObjectPathSegments } from './object-store';
@@ -373,6 +374,9 @@ export function buildProjectMap(input: ProjectMapInput): string {
   doc.line();
   doc.line('By hand:', 4);
   doc.line('Latest files: copy the working folders listed under YOUR LATEST FILES.', 4);
+  doc.line('Discarded changes: copies of unsaved changes discarded in cAdtree are kept in Discarded/<date time>/', 4);
+  doc.line(`next to this file. Each such folder has ${DISCARDED_NOTE_FILENAME}, which says what was discarded and how`, 4);
+  doc.line('to put files back. cAdtree never deletes them.', 4);
   doc.line('An older revision: open its listing (path under REVISIONS). It lists every folder and file with the', 4);
   doc.line('object file to copy and the SHA-256 to check, and explains how to rebuild it. On Windows, turn on', 4);
   doc.line('View → Show → File name extensions first; the renamed copy must not end in .bin.', 4);

@@ -7,8 +7,11 @@ import { captureRevision } from './revision-service';
 import { createProject, createWorkspace, createManagedBranch } from './workspace-service';
 import { prepareApplyPreview, buildApplyPreview, type PreviewChoice } from './apply-preview';
 import {
-  applicationReview, prepareApplication, applyPreparedApplication, recoverApplication,
+  applicationReview, prepareApplication, applyPreparedApplication, recoverApplication, replaceWorkingFiles, scanForReplace,
 } from './application-service';
+import { buildReplacePlan, replacePlanHash } from './apply-preview';
+import { getBranchBaseline } from './branch-state';
+import { DISCARDED_MAX_COUNTER } from './discarded-paths';
 import { branchApplications } from './application-records';
 import { importReferenceAttachment } from './references';
 import { caseLifecycle } from './case-lifecycle';
@@ -213,6 +216,22 @@ test('drift: every path written by a full workflow is covered by a template and 
   await recoverApplication(vault, projectId, 'branch-main', op.operationId, options);
   await snapshot();
 
+  // Step 6b: discard unsaved changes on Main twice in the same minute (readable copy, then its "(2)").
+  for (const content of ['discarded edit 1', 'discarded edit 2']) {
+    await main.writeFileText(part.split('/'), content);
+    await main.writeFileText(['New folder', 'Sketch.SLDPRT'], content);
+    const s = await openExistingVault(vault);
+    const baseline = getBranchBaseline(s, 'branch-main')!;
+    const paths = [part, 'New folder'];
+    const replacePlan = buildReplacePlan(s, await scanForReplace(main, 'branch-main', baseline), baseline.revisionId, paths);
+    assert.ok(replacePlan.ready, replacePlan.blockers.join(' '));
+    await replaceWorkingFiles(vault, await root.getDirectory(containerPath.split('/')), {
+      mode: 'discard', projectId, branchId: 'branch-main', targetRevisionId: baseline.revisionId, paths,
+      expectedPlanHash: replacePlanHash(replacePlan), now: () => new Date(2026, 0, 1, 0, 0, 30), ...options,
+    });
+  }
+  await snapshot();
+
   // Step 7: Knowledge Lab record.
   await createKnowledgeRecord(vault, {
     projectId, recordType: 'generic.observation', schemaVersion: 1,
@@ -242,7 +261,9 @@ test('drift: every path written by a full workflow is covered by a template and 
   await snapshot();
 
   // Assertions.
-  const isUserContent = (p: string) => /^working\/[^/]+\/.+/.test(p) && !/^working\/[^/]+\/_CADTREE_RECOVERY_INCOMPLETE\.txt$/.test(p);
+  const isUserContent = (p: string) =>
+    (/^working\/[^/]+\/.+/.test(p) && !/^working\/[^/]+\/_CADTREE_RECOVERY_INCOMPLETE\.txt$/.test(p)) ||
+    (/^Discarded\/[^/]+\/.+/.test(p) && !/^Discarded\/[^/]+\/_DISCARDED cAdtree( \(2\))?\.txt$/.test(p));
   const internalFiles = [...files].filter((p) => !isUserContent(p));
   const internalDirs = [...dirs].filter((p) => !isUserContent(p));
   assert.ok(internalFiles.length > 40 && internalDirs.length > 10, 'the workflow must have written a realistic number of paths');
@@ -266,9 +287,22 @@ test('drift: every path written by a full workflow is covered by a template and 
   const unexercised = INTERNAL_PATH_TEMPLATES.filter((t) => !used.has(t.label)).map((t) => t.label);
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
   // The deepest templates must actually be reached by this workflow.
-  for (const label of ['application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'project offline restore page', 'vault revision listing']) {
+  assert.ok(dirs.has('Discarded/2026-01-01 00.00') && dirs.has('Discarded/2026-01-01 00.00 (2)'), 'two discarded copies');
+  for (const label of ['discarded copy folder', 'discarded copy note', 'application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'project offline restore page', 'vault revision listing']) {
     assert.ok(used.has(label), `workflow did not exercise: ${label}`);
   }
+});
+
+test('the Discarded/ prefix stays within 30 characters, under the design-case prefix, so the reserve stays 110', () => {
+  const folder = INTERNAL_PATH_TEMPLATES.find((t) => t.label === 'discarded copy folder')!;
+  assert.equal(folder.segments.join('/'), `Discarded/2026-01-01 00.00 (${DISCARDED_MAX_COUNTER})`);
+  assert.ok(folder.relativeLength <= 30, `${folder.relativeLength}`);
+  // "Discarded/<name>/" before a user path is shorter than "working/<case allowance>/" (41).
+  assert.ok(folder.relativeLength + 1 < 'working/'.length + CASE_ALLOWANCE + 1);
+  assert.ok(shapePattern(folder.shape).test('Discarded/2026-11-19 14.05'));
+  assert.ok(shapePattern(folder.shape).test('Discarded/2026-11-19 14.05 (2)'));
+  assert.ok(!shapePattern(folder.shape).test('Discarded/2026-11-19 14.05 (10)'));
+  assert.equal(internalReserve(), 110);
 });
 
 test('internalReserve equals the deepest template and today\'s value is reported', () => {

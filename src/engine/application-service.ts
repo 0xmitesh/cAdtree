@@ -9,6 +9,7 @@ import {
   buildApplyPreview,
   buildReplacePlan,
   isReplaceMode,
+  replaceKeepsCopy,
   replacePlanHash,
   type ApplyPreviewPlan,
   type ReplaceMode,
@@ -69,6 +70,16 @@ import type {
   VaultState,
 } from "./types";
 import { getBranchBaseline } from "./branch-state";
+import {
+  DISCARDED_FOLDER,
+  DISCARDED_MAX_COUNTER,
+  DISCARDED_NOTE_FALLBACK,
+  DISCARDED_NOTE_FILENAME,
+  discardedFolderBase,
+  discardedFolderPath,
+} from "./discarded-paths";
+import { clashKey, withCounter } from "./folder-names";
+import { PathTooLongError } from "./path-limits";
 
 export interface ApplicationOptions extends CopyOptions {
   /** Clock for new event IDs; defaults to the current time. Tests inject a fixed one. */
@@ -1068,7 +1079,7 @@ export async function replaceWorkingFiles(
       },
     });
     await stageOperation(vault, working, op, request);
-    const kept = { keptAs: null as string | null, keptInsideOnly: [] as string[] };
+    const kept = await keepDiscardedCopy(projectFolder, vault, working, op, state, request);
     await appendApplicationEvent(vault, op, {
       kind: "kept",
       ...(kept.keptAs ? { keptAs: kept.keptAs } : {}),
@@ -1080,6 +1091,218 @@ export async function replaceWorkingFiles(
     op.status = "done";
     return { operation: op, plan, ...kept };
   });
+}
+interface DiscardedEntry {
+  path: string;
+  kind: "edit" | "new file" | "deleted file" | "new folder" | "deleted folder";
+  /** The readable copy is in the Discarded folder. */
+  copied: boolean;
+  /** Vault copy (project-relative) when the readable one could not be written. */
+  insideOnly?: string;
+  sha256?: string;
+}
+/** A write that failed because of the path (too long here, or an opaque browser refusal). */
+const isPathFailure = (error: unknown) =>
+  error instanceof PathTooLongError ||
+  (typeof DOMException !== "undefined" &&
+    error instanceof DOMException &&
+    (error.name === "InvalidStateError" || error.name === "NotFoundError"));
+/**
+ * The readable copy of a discard, after staging and before any working-folder
+ * write: `Discarded/<YYYY-MM-DD HH.MM local>` (counter on a clash, created with
+ * exclusiveCreate), each replaced file written from its verified staged
+ * before-copy (exclusive, then hash-verified), each removed folder recreated,
+ * and `_DISCARDED cAdtree.txt` written last. A copy whose path is too long is
+ * skipped and listed as kept inside cAdtree only (the vault's staged copy stays).
+ * Nothing is kept when the discard replaces no bytes and removes no folder.
+ */
+async function keepDiscardedCopy(
+  projectFolder: FileSystemDirectoryAdapter,
+  vault: FileSystemDirectoryAdapter,
+  working: FileSystemDirectoryAdapter,
+  op: ApplicationOperation,
+  state: VaultState,
+  options: ApplicationOptions,
+): Promise<{ keptAs: string | null; keptInsideOnly: string[] }> {
+  const record = op.record!;
+  const actions = changedActions(record);
+  if (!replaceKeepsCopy(record.plan))
+    return { keptAs: null, keptInsideOnly: [] };
+  const at = options.now ? options.now() : new Date();
+  const parent = await projectFolder.getDirectory([DISCARDED_FOLDER], {
+    create: true,
+  });
+  const base = discardedFolderBase(at);
+  // The folder-name allocator's rules (case-insensitive clash, counter), bounded
+  // so the prefix stays within the path budget; exclusiveCreate is the backstop.
+  const taken = new Set(
+    (await parent.listEntries()).map((entry) => clashKey(entry.name)),
+  );
+  let name: string | undefined;
+  for (let n = 1; n <= DISCARDED_MAX_COUNTER && !name; n++) {
+    const candidate = withCounter(base, n);
+    if (taken.has(clashKey(candidate))) continue;
+    try {
+      await parent.getDirectory([candidate], {
+        create: true,
+        exclusiveCreate: true,
+      });
+      name = candidate;
+    } catch (error) {
+      if (!(error instanceof FileConflictError)) throw error;
+    }
+  }
+  if (!name)
+    throw new Error(
+      `Too many discards in the same minute (${base}). Wait a minute and try again. No working files were changed.`,
+    );
+  const folder = await parent.getDirectory([name]);
+  const entries: DiscardedEntry[] = [];
+  for (const action of foldersToRemove(record).reverse()) {
+    throwIfCancelled(options.signal);
+    try {
+      await folder.getDirectory(splitAndValidatePath(action.path), {
+        create: true,
+      });
+      entries.push({ path: action.path, kind: "new folder", copied: true });
+    } catch (error) {
+      if (!isPathFailure(error)) throw error;
+      entries.push({ path: action.path, kind: "new folder", copied: false });
+    }
+  }
+  for (const action of foldersToCreate(record))
+    entries.push({ path: action.path, kind: "deleted folder", copied: false });
+  for (const [index, action] of actions.entries()) {
+    throwIfCancelled(options.signal);
+    if (!action.before) {
+      entries.push({ path: action.path, kind: "deleted file", copied: false });
+      continue;
+    }
+    const kind = action.after ? "edit" : "new file";
+    const staged = stagedPath(op, "before", index);
+    try {
+      const segments = splitAndValidatePath(action.path);
+      const result = await folder.writeFileStream(
+        segments,
+        await vault.readFileStream(staged),
+        { signal: options.signal, exclusive: true },
+      );
+      if (result.bytesWritten !== action.before.size)
+        throw new Error(`Incomplete discarded copy: ${action.path}`);
+      await verifiedFile(folder, segments, action.before, options.signal);
+      entries.push({ path: action.path, kind, copied: true, sha256: action.before.sha256 });
+    } catch (error) {
+      if (!isPathFailure(error)) throw error;
+      entries.push({
+        path: action.path,
+        kind,
+        copied: false,
+        insideOnly: ["vault", ...staged].join("/"),
+        sha256: action.before.sha256,
+      });
+    }
+  }
+  const noteName = actions.some(
+    (a) => a.before && a.path.toLowerCase() === DISCARDED_NOTE_FILENAME.toLowerCase(),
+  )
+    ? DISCARDED_NOTE_FALLBACK
+    : DISCARDED_NOTE_FILENAME;
+  const target = state.revisions.find(
+    (r) => r.manifest.revisionId === record.plan.sourceRevisionId,
+  );
+  const text = discardedNoteText({
+    at,
+    projectName: state.project.name,
+    caseName:
+      state.branches.find((b) => b.branchId === record.plan.destinationBranchId)
+        ?.name ?? record.plan.destinationBranchId,
+    workingFolder: working.name,
+    revision: target
+      ? `${formatRevisionNumber(target.manifest.displayNumber)} (${target.manifest.revisionId})`
+      : record.plan.sourceRevisionId,
+    operation: ["vault", ...applicationPath(op.destinationBranchId, op.operationId)].join("/"),
+    entries: entries.sort((a, b) => a.path.localeCompare(b.path)),
+  });
+  const notePath = [noteName];
+  await folder.writeFileText(notePath, text, { exclusive: true });
+  if ((await folder.readFileText(notePath)) !== text)
+    throw new Error(
+      "The note of the discarded copy did not read back. No working files were changed.",
+    );
+  return {
+    keptAs: discardedFolderPath(name).join("/"),
+    keptInsideOnly: entries.filter((e) => e.insideOnly).map((e) => e.path),
+  };
+}
+/** Text of `_DISCARDED cAdtree.txt`. Pure. */
+export function discardedNoteText(input: {
+  at: Date;
+  projectName: string;
+  caseName: string;
+  workingFolder: string;
+  revision: string;
+  operation: string;
+  entries: DiscardedEntry[];
+}): string {
+  const lines: string[] = [
+    "cAdtree: discarded changes",
+    "",
+    "This folder keeps copies of unsaved changes that were discarded in cAdtree.",
+    "cAdtree never deletes it. Delete it yourself when you no longer need it.",
+    "",
+    `Discarded at (UTC): ${input.at.toISOString()}`,
+    `Project: ${input.projectName}`,
+    `Case: ${input.caseName}`,
+    `Working folder: working/${input.workingFolder}`,
+    `Went back to: ${input.revision}`,
+    `cAdtree record: ${input.operation}`,
+    "",
+    "WHAT WAS DISCARDED",
+  ];
+  const what: Record<DiscardedEntry["kind"], string> = {
+    edit: "Unsaved edit",
+    "new file": "Unsaved new file",
+    "deleted file": "Unsaved deletion",
+    "new folder": "Unsaved new folder",
+    "deleted folder": "Unsaved folder deletion",
+  };
+  for (const entry of input.entries) {
+    const where = entry.copied
+      ? "copy in this folder"
+      : entry.insideOnly
+        ? "kept inside cAdtree only (see below)"
+        : entry.kind === "new folder"
+          ? "not copied (path too long)"
+          : "put back from the saved revision; nothing to keep";
+    lines.push(`  ${what[entry.kind]}: ${entry.path}`, `    ${where}`);
+  }
+  const inside = input.entries.filter((e) => e.insideOnly);
+  if (inside.length) {
+    lines.push(
+      "",
+      "KEPT INSIDE cAdtree ONLY",
+      "The path was too long for a readable copy here. The bytes are kept in the vault:",
+    );
+    for (const entry of inside)
+      lines.push(
+        `  ${entry.path}`,
+        `    ${entry.insideOnly}`,
+        `    SHA-256 ${entry.sha256}`,
+      );
+  }
+  lines.push(
+    "",
+    "HOW TO PUT FILES BACK",
+    `Copy a file from this folder to the same place under working/${input.workingFolder}/ in the`,
+    "project folder (same relative path), replacing the file there. It then shows as an unsaved",
+    "change in cAdtree.",
+  );
+  if (inside.length)
+    lines.push(
+      "For a file kept inside cAdtree only, copy the .bin file named above to that place and",
+      "rename it to the original name; its SHA-256 checksum must match the one above.",
+    );
+  return `${lines.join("\n")}\n`;
 }
 /**
  * Before the first working-folder write of a replace: each folder it removes
