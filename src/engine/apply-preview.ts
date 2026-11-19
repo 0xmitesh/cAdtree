@@ -538,8 +538,6 @@ export function buildApplyPreview(
     blockers.push(
       "Resolve every selected conflict before this preview can be ready.",
     );
-  if (!reason.trim())
-    blockers.push("Enter an engineering reason for the proposed application.");
   if (collisions.length)
     blockers.push(
       "Resolve file/directory path collisions; this result cannot be marked ready.",

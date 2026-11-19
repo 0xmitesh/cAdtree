@@ -299,3 +299,16 @@ test("no deadlock: applyAndSave and a concurrent capture serialise on the one pr
   assert.equal(other.status, "rejected");
   assert.match(String((other as PromiseRejectedResult).reason), /No changes detected/);
 });
+
+test("the reason is optional: an empty reason gives a ready plan, a valid record and an empty Why", async () => {
+  const f = await project();
+  const review = await f.review(f.r1.revisionId, "revert", "");
+  assert.equal(review.reason, "");
+  const result = await applyAndSave(f.vault, review, f.options);
+  assert.equal(result.status, "saved");
+  if (result.status !== "saved") return;
+  assert.equal(result.revision.manifest.notes.problem, "");
+  const op = (await f.ops()).at(-1)!;
+  assert.equal(op.status, "captured");
+  assert.equal(op.record!.plan.reason, "");
+});

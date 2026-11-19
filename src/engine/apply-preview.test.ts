@@ -337,11 +337,13 @@ test("file/directory, ancestor-file and case-insensitive collisions block readin
     assert.ok(plan.collisions.length, kind);
   }
 });
-test("readiness requires a reason, source actions and valid selections; preserved directories and metadata are copied without mutation", () => {
+test("readiness requires source actions and valid selections (a reason is optional); preserved directories and metadata are copied without mutation", () => {
   const { state } = fixture(),
     c = context(state),
     before = JSON.stringify(state);
-  assert.equal(buildApplyPreview(c, { [part]: chosen() }, " ").ready, false);
+  const noReason = buildApplyPreview(c, { [part]: chosen() }, " ");
+  assert.equal(noReason.ready, true);
+  assert.deepEqual(noReason.blockers, []);
   assert.equal(
     buildApplyPreview(
       c,

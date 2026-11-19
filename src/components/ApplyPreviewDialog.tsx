@@ -216,6 +216,17 @@ function ApplyPreviewBody({
     () => buildApplyPreview(context, choices, reason),
     [context, choices, reason],
   );
+  // The engine no longer requires a reason (applyAndSave); this older dialog
+  // still does, until it is replaced by the one-Confirm dialog.
+  const reasonMissing = !reason.trim();
+  const blockers = useMemo(() => {
+    if (!reasonMissing) return plan.blockers;
+    const list = [...plan.blockers];
+    const collisions = list.findIndex((b) => b.startsWith("Resolve file/directory path collisions"));
+    list.splice(collisions < 0 ? list.length : collisions, 0, "Enter an engineering reason for the proposed application.");
+    return list;
+  }, [plan, reasonMissing]);
+  const ready = plan.ready && !reasonMissing;
   const branchName = (revision: ReconstructedRevision) =>
     caseLabel(state, revision.manifest.branchId);
   const endpointCards = revert
@@ -606,13 +617,13 @@ function ApplyPreviewBody({
           aria-label="Preview readiness"
         >
           <strong>
-            {plan.ready
+            {ready
               ? "Ready as a saved-state preview"
               : "Preview not ready"}
           </strong>
-          {plan.blockers.length ? (
+          {blockers.length ? (
             <ul>
-              {plan.blockers.map((blocker) => (
+              {blockers.map((blocker) => (
                 <li key={blocker}>{blocker}</li>
               ))}
             </ul>
@@ -952,7 +963,7 @@ function ApplyPreviewBody({
             className="button primary"
             disabled={
               !application ||
-              !plan.ready ||
+              !ready ||
               running ||
               Boolean(application.blockedReason)
             }
