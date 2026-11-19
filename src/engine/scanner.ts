@@ -95,16 +95,44 @@ export function isEffectivelyEmpty(entries: DirectoryEntryInfo[]): boolean {
   return entries.every((e) => e.kind === 'file' && isSystemClutterName(e.name));
 }
 
+/** Hashes remembered from an earlier scan of the same folder: path → size, lastModified and sha256. */
+export type KnownHashes = ReadonlyMap<string, FileEntry>;
+
+/**
+ * A file whose date is this close to the moment it was scanned could still have been rewritten within the
+ * same clock tick, so its hash is never reused.
+ */
+const RACY_WINDOW_MS = 2000;
+
+/**
+ * The hashes of an earlier scan that are safe to reuse by the automatic scan: every scanned file except those
+ * modified within {@link RACY_WINDOW_MS} of that scan. Only for scans that only display the result; capture
+ * always hashes every byte itself.
+ */
+export function knownHashesFromScan(previous: ScanResult): KnownHashes {
+  const scannedAt = Date.parse(previous.scannedAt);
+  const known = new Map<string, FileEntry>();
+  if (!Number.isFinite(scannedAt)) return known;
+  for (const file of [...previous.added, ...previous.modified.map((m) => m.current), ...previous.unchanged]) {
+    if (file.lastModified <= scannedAt - RACY_WINDOW_MS) known.set(file.path, file);
+  }
+  return known;
+}
+
 /**
  * Recursively enumerates all files and subdirectories under `workingDir`.
  * Subdirectory counts and paths exclude the selected working folder root itself,
  * and empty subdirectories are preserved in `directories`.
+ *
+ * `knownHashes` (optional, display-only scans): a file whose size and last-modified time equal the remembered
+ * entry reuses its hash and is not read again. Anything else is read and hashed in full.
  */
 export async function enumerateWorkingFolder(
   workingDir: FileSystemDirectoryAdapter,
   options?: {
     onProgress?: (path: string, processedFiles: number, totalBytes: number) => void;
     signal?: AbortSignal;
+    knownHashes?: KnownHashes;
   }
 ): Promise<EnumerateWorkingFolderResult> {
   const files: FileEntry[] = [];
@@ -164,6 +192,13 @@ export async function enumerateWorkingFolder(
       } else if (entry.kind === 'file') {
         try {
           const stat = await currentDir.statFile([entry.name]);
+          const known = options?.knownHashes?.get(relPath);
+          if (known && known.size === stat.size && known.lastModified === stat.lastModified) {
+            files.push({ path: relPath, size: stat.size, sha256: known.sha256, lastModified: stat.lastModified });
+            totalBytes += stat.size;
+            options?.onProgress?.(relPath, files.length, totalBytes);
+            continue;
+          }
           const stream = await currentDir.readFileStream([entry.name]);
           const { sha256, size } = await hashStream(stream, { signal: options?.signal });
 
@@ -256,6 +291,8 @@ export async function scanBranchChanges(
   options?: {
     onProgress?: (path: string, processedFiles: number, totalBytes: number) => void;
     signal?: AbortSignal;
+    /** Display-only scans: reuse the hash of a file whose size and date are unchanged. Never pass for capture. */
+    knownHashes?: KnownHashes;
   }
 ): Promise<ScanResult> {
   const scannedAt = new Date().toISOString();
