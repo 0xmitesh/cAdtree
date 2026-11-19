@@ -38,13 +38,14 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
         ├── vault/           objects/<2>/<sha256>.bin, revisions/ (<rev>.manifest.json + derived <rev>.txt listing), branches/, completed/,
         │                    components/, references/, applications/, case-lifecycle/, staging/  (immutable, verified history)
         ├── working/main     Main's working files (the user edits these in CAD)
-        └── working/<Case>   one independent working folder per design case (branch)
+        ├── working/<Case>   one independent working folder per design case (branch)
+        └── Discarded/       <date time>/ copies of discarded unsaved changes, kept by cAdtree (approved 2026-11-19, being built in Phase 4)
 ```
 
 **Concepts:**
 - **Revision:** an immutable, project-wide snapshot with notes. Revisions don't nest folders: bytes live in `vault/objects`.
-- **Design case:** a branch from a saved revision, with its own working folder. Cases are archived, never auto-deleted.
-- **Apply:** two modes. Merge brings a design case's changes into another branch. Revert ("Bring back") makes a branch match an earlier revision of itself: every difference is reviewed, and the user saves a revision afterwards.
+- **Design case:** a branch from a saved revision, with its own working folder. Cases can be hidden, never auto-deleted (see §7).
+- **Apply:** two modes. Merge brings a design case's changes into another branch. Revert ("Bring back") makes a branch match an earlier revision of itself: every difference is reviewed. Approved 2026-11-19, being built in Phase 4: Bring back and Copy files from <case> (merge) save a revision automatically after a successful write (one Confirm, reason optional); Discard and Get this version replace working files without saving (they are unsaved changes).
 - **Component identity:** a stable ID that is separate from the filename. Renames are confirmed explicitly, and identity is never guessed from names or hashes.
 - **Reference:** a versioned supporting document pinned to a revision or component.
 
@@ -79,25 +80,26 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 **Stack:**
 - React 19, TypeScript, Vite and Tailwind.
 - The browser File System Access API. Chromium only; Safari and Firefox don't work.
-- Firebase Auth for sign-in. Sign-in doesn't upload files.
+- Firebase Auth for sign-in, which is **optional** (2026-11-19, #105): local work never needs an account. Firebase is loaded lazily (`src/auth/firebase-adapter.ts` via `import()` from `src/auth/firebase-auth.ts`). Convenience storage (`idb-store`) uses one browser scope, not one per account. Sign-in doesn't upload files.
 - The user's filesystem is authoritative. IndexedDB holds only convenience state: remembered handles and preferences.
 
 **Code map** (`src/engine` unless noted). Put new code in the layer that owns the concern; don't duplicate an owner.
-- **Filesystem and integrity primitives:** `fs-adapter` (adapter interface, `FileConflictError`, real and in-memory adapters), `object-store` (content-addressed objects, verified write/read), `copy-service` (bounded, verified tree copy), `scanner` (working-folder scan, OS clutter), `locks` (single-writer Web Locks), `hash` / `hash.worker` (SHA-256), `path-encoding`, `idb-store` (convenience state only), `types`.
+- **Filesystem and integrity primitives:** `fs-adapter` (adapter interface, `FileConflictError`, real and in-memory adapters), `object-store` (content-addressed objects, verified write/read), `copy-service` (bounded, verified tree copy), `scanner` (working-folder scan, OS clutter; optional `knownHashes` cache used only by automatic scans, capture always hashes everything), `locks` (single-writer Web Locks), `hash` / `hash.worker` (SHA-256), `path-encoding`, `idb-store` (convenience state only), `types`.
 - **Naming and IDs:** `folder-names` (the only folder-name allocator), `ids` (record and event IDs).
 - **Path budget:** `path-budget` (limits, templates, reserve, worst-case paths), `path-limits` (measured real limits, "Path too long" safety net), `src/utils/path-budget-message.ts` (UI wording).
 - **Home, workspace, project:** `home-service`, `workspace-service`, `vault-service` (vault initialisation, validation, loading).
-- **History:** `revision-service` (capture), `branch-service` (create a design case), `branch-state`, `case-lifecycle` / `case-lifecycle-service` (archive), `case-activity`, `snapshot-comparison`; views in `src/history/` (`layout` graph from parent edges, `file-history`, `reference-browser`).
+- **History:** `revision-service` (capture), `branch-service` (create a design case), `branch-state`, `case-lifecycle` / `case-lifecycle-service` (archive; shown to users as hiding a case once Phase 4 lands), `case-activity`, `snapshot-comparison`; views in `src/history/` (`layout` graph from parent edges and `copies` (dashed links from captured application records), `file-history`, `reference-browser`).
 - **Apply (merge and Bring back):** `apply-preview` (read-only plan, both modes), `application-service` (prepare, write, recover, abandon), `application-records` (sealed records).
-- **Restore primitive and Export:** `recovery-service` (`restoreRevisionToFolder`, used by design-case creation; the name is historical), `review-export` (Export for review).
+- **Restore primitive and Export:** `recovery-service` (`restoreRevisionToFolder`, used by design-case creation; the name is historical), `review-export` (Export a copy; can include the revision's references).
 - **Identity and references:** `component-identity`, `references`.
 - **Offline guide:** `offline-guide` (pure text builders for the home Readme and Index, project Map and revision listings; `refreshProjectGuide` / `refreshHomeGuide`, the only writers; best-effort, never throw) `offline-restore-page` (pure builder of the self-contained `_RESTORE cAdtree.html`; its script is in `offline-restore-page-script`) and `offline-guide-paths` (file names and paths, shared with `path-budget`). The app calls them after successful operations through `src/app/offline-guide-refresh.ts` (`refreshGuidesAfter`, fire-and-forget, no React state).
 - **Knowledge Lab:** `src/knowledge/` (index, retrieval, persisted `records/`), test vault and Explorer under `tests/knowledge-lab`.
 - **UI shell:** `src/App.tsx` (shared state; home/workspace/project open and leave, `leaveProject` / `resetActiveSessionUi`; the home-address prompt; Back/Forward wiring; home and workspace views) and `src/app/`:
   - shell components: `NavigationRail`, `AppNotices`, `AppDialogs`, `ProjectViews` (the project tabs inside App's keyed container);
   - `useOperation` (`perform`: one operation at a time, busy state, progress, banners, cancellation via `context.signal`; `context.current()` stops updates from an operation that has been replaced or unmounted) and `useAuthSession` (sign-in/out);
-  - action hooks per concern: `useCaptureActions`, `useApplicationActions`, `useBranchActions`, `useDiagnosticsActions`, `useReviewActions`. Each takes the current render's values and setters and runs its work through `perform`; hooks that write project files (all except `useDiagnosticsActions`) call `assertProjectWritable(context)` first;
-  - `types.ts` (shared types incl. `Perform`, `AssertProjectWritable`), `project-lookup.ts`.
+  - `useAutoRefresh` (quiet automatic scans and re-reads outside `perform`, no busy state or banner; `perform` aborts it first);
+  - action hooks per concern: `useCaptureActions`, `useApplicationActions`, `useBranchActions`, `useDiagnosticsActions`, `useReferenceActions` (add reference, stop applying), `useReviewActions`. Each takes the current render's values and setters and runs its work through `perform`; hooks that write project files (all except `useDiagnosticsActions`) call `assertProjectWritable(context)` first;
+  - `types.ts` (shared types incl. `Perform`, `AssertProjectWritable`), `project-lookup.ts`. `ActiveBranchPicker` is gone: the Explorer is the case switcher.
   - New UI concerns get their own hook or component here; reusable views stay in `src/components/`.
 
 ## 3. Invariants (never weaken)
@@ -124,7 +126,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
    - Measured with Chrome on Windows: folder creation fails at a full path of 248 characters or more, and file writes fail at about 252 or more (because of `.crswap`).
    - Measured with Chrome on macOS (10 Nov 2026): a single name may be 255 characters (macOS counts characters; 120 three-byte characters = 360 bytes were accepted). Folder and file creation fail at a full path of 1024, and file writes at 1017 (`.crswap`). Linux is still unmeasured.
    - **Enforced rule (Item 2):** one standard on every platform. The full absolute path is counted in UTF-16 units; warn from 200, block above 240, plus 7 for the `.crswap` sibling of a written file; names are capped at 255 bytes.
-   - Future worst case = project path + internal reserve, or project path + case allowance (32) + the longest user file or folder, where the design-case check also counts the 32-character incomplete marker (`_CADTREE_RECOVERY_INCOMPLETE.txt`) written into `working/<case>/` if creation fails. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (currently 110). New internal paths must keep `npm test`'s drift test green.
+   - Future worst case = project path + internal reserve, or project path + case allowance (32) + the longest user file or folder, where the `Discarded/` prefix (≤ 30, approved, in progress) stays under the 41-character case allowance (`working/` + 32 + `/`) so the reserve stays 110, and where the design-case check also counts the 32-character incomplete marker (`_CADTREE_RECOVERY_INCOMPLETE.txt`) written into `working/<case>/` if creation fails. The reserve is computed from the real path builders in `src/engine/path-budget.ts` and guarded by a drift test (currently 110). New internal paths must keep `npm test`'s drift test green.
    - Checks run in the engine after the final folder name is chosen and before the first write: workspace, project create/import/adopt, design case.
    - Existing projects are never blocked from opening or saving. An unknown home address means unchecked, never "ok".
    - Safety net: `PathTooLongError` (`src/engine/path-limits.ts`) turns `InvalidStateError`/`NotFoundError` on creates and writes at the measured real limits into "Path too long" with the real path.
@@ -146,6 +148,8 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 - **Independent reviewer** (subagent, model Opus 5.5, effort medium): reviews every piece before it's merged. It never edits, commits or pushes. Its brief says what to check (correctness, every write path, invariants, whether the tests fail without the fix) and asks for a verdict with blocker/should/nit findings in under 20–25 lines. Should-fix findings go back to the same executor as a follow-up commit; the orchestrator checks the follow-up diff itself.
 - **Critical refactors** (e.g. the `App.tsx` split, 2026-11-15): the founder may choose Opus 5.5 (medium) to implement and Opus 5.5 (high) to review instead of Sonnet. Pure refactors must prove they change nothing: bodies moved word for word, effect order unchanged, and rendered `body.innerHTML` identical between base and head in many app states (seeded clock, `Math.random`, `crypto.getRandomValues` and `randomUUID`; compare same-run pairs).
 - **Haiku:** not used for reviews or engine code; at most for purely mechanical chores.
+- **Design notes for the simplification plan (18 Nov 2026):** required only for engine phases (Phases 3 and 4); UI-only phases used the approved plan as approval.
+- **Parallel pieces** are built in git worktrees and merged one at a time; every commit still passes lint.
 - **Batching:** small, related cleanups may share one PR, with one commit each. Anything touching identity, writes or invariants gets its own PR.
 - **Standing approval:** once the founder approves an item (or its design note), the orchestrator may commit, push, open the PR and merge it when the review has no open blockers or should-fix items and all checks pass on the final head. It reports after each merge.
 
@@ -202,6 +206,7 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 **Agent environment** (Claude sessions with a connected folder):
 - **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server: in Terminal on the Mac, or on Windows by double-clicking `C:\Users\1\Documents\cAdtree\start-cadtree-dev.cmd` (outside the repo; it checks Node, installs packages if missing, runs `npm.cmd run dev` and keeps its window open on errors). Computer use can't type into terminals, so agents can't start it.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
+- **Playwright ports and git stash:** set `CADTREE_TEST_PORT` per worktree so parallel `npm run test:ui` runs don't collide. `git stash` is shared across worktrees; executors commit instead.
 - **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
 - **Updating the local checkouts:** after each merge into `main`, fast-forward the local `main` checkout with a git bundle through a temporary `_transfer` folder, confirm its tree equals GitHub's, and delete that folder afterwards. Give every bundle a unique file name (e.g. `main-<short sha>.bundle`) and check `git bundle list-heads` on the device before fetching: re-sending a file under the same name has delivered a stale copy. Fetch with enough history before bundling (`git fetch --depth=50 origin main` in the shallow cloud clone) and run `git bundle verify`: a too-shallow clone produced a bundle that "did not send all necessary objects".
 - **Windows line endings:** Windows checkouts use CRLF. Use `-c core.autocrlf=input` when staging and `-c core.autocrlf=true` when updating a Windows checkout. Stage only the intended files.
@@ -225,6 +230,10 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - The Knowledge Lab is an evidence-and-decision memory, not CAD intelligence. Native SolidWorks and ANSYS parsing were rejected (2026-11-09).
 - Local-first and browser-only: the user's filesystem is the source of truth; no backend, database or required install without a demonstrated need (§1).
 - We are in a building phase with no active users: old on-disk formats don't need to stay readable, and compatibility code may be removed (2026-11-11; legacy reference readers removed in #61).
+- Automatic scan (2026-11-19, #106): the open project or page is re-checked quietly when the tab or window regains focus and after Apply or Bring back (`useAutoRefresh`, outside `perform`, no write, no lock); the Scan for changes, Refresh home and Refresh workspace buttons are gone.
+- Optional sign-in (2026-11-19, #105): no sign-in gate for local work; sign-in lives in an Account control in the navigation rail and is described as being for future features, without claiming they exist (§1).
+- Settings and History details live in collapsed Troubleshooting sections (2026-11-18, #99, #100).
+- Notes UI shows one Description/Note field (`modification`) with More detail for Why (`problem`) and What you noticed (`observations`); the data model is unchanged (2026-11-18, #101).
 
 **Storage, names and IDs**
 - Folders carry the readable names users chose; identity comes from metadata IDs, never folder locations. `folder-names.ts` is the only allocator: illegal characters → `-`, case-insensitive clash → `(2)`, reserved names → `CON (2)`, 255-byte cap (Item 1, 2026-11-10).
@@ -241,13 +250,15 @@ These are decided. Build on them; don't redesign around them. The full decision 
 
 **History and recovery**
 - Every intent for an older version has one feature (2026-11-11, "Remove Restore copy", #62–#67):
-  - look at or share it → **Export for review** (folder `<Project> - <Branch> - R<nn>`, `(2)` on a clash, cAdtree's part ≤ 64 characters);
-  - make a branch match it again → **Bring back onto <branch>…** (Apply's revert mode, only for earlier revisions in that branch's history; every difference reviewed and pre-selected; reason required; renamed files blocked for now);
+  - look at or share it → **Export a copy** (can include the revision's references in `References/`; folder `<Project> - <Branch> - R<nn>`, `(2)` on a clash, cAdtree's part ≤ 64 characters);
+  - make a branch match it again → **Bring back onto <branch>…** (Apply's revert mode, only for earlier revisions in that branch's history; renamed files blocked for now; approved 2026-11-19, being built in Phase 4: one Confirm, reason optional, saved automatically);
+  - get one file → **Get this version** (approved 2026-11-19, being built in Phase 4; built on the Apply machinery, not a parallel restore path);
   - keep working from it → **Create design case**.
 - "Restore copy" and `recoveries/` are gone and must not come back as a parallel path. Existing `recoveries/` folders are left untouched; cAdtree never deletes user data.
-- Apply (merge or Bring back) only changes working files; the user saves a revision afterwards. Nothing creates a revision automatically.
+- Approved 2026-11-19, being built in Phase 4 (replaces "Apply only changes working files; the user saves a revision afterwards"): Bring back and Copy files from <case> save a revision automatically after a successful write. Discard and Get this version replace working files without saving; the result is unsaved changes. If the write succeeds but the save fails, the files stay and the user is offered Save now. Review before apply (§3.4) is unchanged.
 - Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files or a subfolder that stays is kept and not selectable; a folder to remove that holds only untracked OS clutter stops the Apply before any write (a deliberate exception to skipping untracked clutter: cAdtree never deletes it, so the user deletes it or unticks the folder); recovery undoes folder changes too. Case-only renames stay blocked at review.
-- Design cases are archived, never auto-deleted. Duplicated IDs become read-only, never merged.
+- Approved 2026-11-19, being built in Phase 4: design cases can be hidden (whole cases only, never Main; allowed with unsaved changes after a warning), never auto-deleted. Duplicated IDs become read-only, never merged.
+- Approved 2026-11-19, being built in Phase 4: discarded copies (`projects/<P>/Discarded/<date time>/`) are never deleted by cAdtree.
 
 **Offline guide**
 - Offline guide (2026-11-16): `_README cAdtree.txt` and `_INDEX cAdtree.txt` at the home root, `_MAP cAdtree.txt` and `_RESTORE cAdtree.html` per project and `vault/revisions/<rev>.txt` per revision let a user recover files without cAdtree. The restore page is self-contained (inline script, strict CSP, no network, data only through `textContent`); it restores single files by checksum (any browser) or rebuilds a whole revision into an empty folder outside the vault (Chrome or Edge, vault opened read-only), verifying every checksum. They are derived and never read back, so the vault always wins. They are written best-effort after successful operations (revision saved, case created or archived, project created or imported, workspace created or brought in, writable home opened), never on failure, never by opening or browsing a project, only into writable projects and homes, never into strict vault folders (`staging/`, `components/`, `references/`, `case-lifecycle/`, `applications/`), and listings are written once. The three project paths have templates in `path-budget`; the reserve stays 110. Guide format is 2.
