@@ -282,7 +282,7 @@ export function DiagnosticsView({
               <summary>Reset folder connections</summary>
               <p>
                 Reset remembered folder connections and saved folder addresses for
-                all accounts and workspaces in this browser. CAD files, saved
+                all workspaces in this browser. CAD files, saved
                 revisions, reference attachments and accounts are not deleted.
               </p>
               <button
@@ -303,7 +303,7 @@ export function DiagnosticsView({
         >
           <p>
             This affects saved folder connections and addresses across all
-            accounts and workspaces in this browser, not just this project.
+            workspaces in this browser, not just this project.
             It does not delete CAD files, saved revisions, reference attachments
             or accounts.
           </p>

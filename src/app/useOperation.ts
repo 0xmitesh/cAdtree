@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
-import type { AuthSnapshot } from "../auth/firebase-auth";
+import { useEffect, useRef, useState } from "react";
 import type { ProgressUpdate } from "../engine/types";
 import { folderPermissionError } from "../utils/folder-access";
 import { presentPathBudgetError } from "../utils/path-budget-message";
@@ -8,11 +7,6 @@ import type { ActiveTab, BannerScope, Context, Operation, StatusBanner } from ".
 
 export type UseOperationArgs = {
   activeTab: ActiveTab;
-  pendingSignOutRef: RefObject<boolean>;
-  pendingAccountSnapshotRef: RefObject<AuthSnapshot | null>;
-  setSignOutPending: (value: boolean) => void;
-  executeSignOut: () => Promise<void> | void;
-  applyAuthSnapshot: (next: AuthSnapshot) => void;
 };
 
 /** `rethrow`: pass a failure on to the caller. `banner: false`: the caller shows the failure itself, so no status banner. */
@@ -21,11 +15,6 @@ export type PerformOptions = { rethrow?: boolean; banner?: boolean };
 /** The busy/progress/banner core: one operation at a time, cancellable, with its outcome in the status banner. */
 export function useOperation({
   activeTab,
-  pendingSignOutRef,
-  pendingAccountSnapshotRef,
-  setSignOutPending,
-  executeSignOut,
-  applyAuthSnapshot,
 }: UseOperationArgs) {
   const [bannerScope, setBannerScope] = useState<BannerScope>("workspace");
   const [operation, setOperation] = useState<Operation | null>(null);
@@ -50,7 +39,7 @@ export function useOperation({
   ): Promise<T | undefined> => {
     const { rethrow = false, banner = true } =
       typeof options === "boolean" ? { rethrow: options } : options;
-    if (operationRef.current || pendingSignOutRef.current || pendingAccountSnapshotRef.current) {
+    if (operationRef.current) {
       if (rethrow)
         throw new Error("Finish or cancel the current operation first.");
       return;
@@ -92,15 +81,6 @@ export function useOperation({
         operationRef.current = null;
         setOperation(null);
         setProgress(null);
-        if (pendingSignOutRef.current) {
-          pendingSignOutRef.current = false;
-          void executeSignOut();
-        } else if (pendingAccountSnapshotRef.current) {
-          const pending = pendingAccountSnapshotRef.current;
-          pendingAccountSnapshotRef.current = null;
-          setSignOutPending(false);
-          applyAuthSnapshot(pending);
-        }
       }
     }
   };

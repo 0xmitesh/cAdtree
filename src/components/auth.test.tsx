@@ -1,5 +1,6 @@
 import "../../tests/dom";
 import { completeHomeAddress } from "../../tests/app-controls";
+import type { AccountUser } from "../auth/firebase-auth";
 import {
   createTestAuthController,
   DEFAULT_TEST_USER,
@@ -31,14 +32,28 @@ import {
   clearAllConvenienceMetadata,
   rememberHome,
   getRememberedHome,
+  getWorkspacePath,
   saveWorkspacePath,
-  setConvenienceAccountScope,
 } from "../engine/idb-store";
 
 Object.assign(globalThis, { indexedDB });
 
+/** Opens the Account dialog from the navigation rail. */
+const openAccount = async (ui: ReturnType<typeof render>) => {
+  fireEvent.click(ui.getByRole("button", { name: "Account" }));
+  return await waitFor(() => ui.getByRole("dialog", { name: "Account" }));
+};
+/** The Account control says nobody is signed in. */
+const showsSignedOut = (ui: ReturnType<typeof render>) =>
+  within(ui.getByRole("button", { name: "Account" })).getByText("Optional");
+/** Signs out through the Account dialog. */
+const signOut = async (ui: ReturnType<typeof render>) => {
+  const dialog = await openAccount(ui);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Sign out" }));
+  await waitFor(() => assert.equal(ui.queryAllByRole("dialog").length, 0));
+};
+
 beforeEach(async () => {
-  setConvenienceAccountScope("default");
   await clearAllConvenienceMetadata();
   resetGlobalTestAuth({ ready: true, user: DEFAULT_TEST_USER });
 });
@@ -49,7 +64,7 @@ afterEach(() => {
   resetGlobalTestAuth({ ready: true, user: DEFAULT_TEST_USER });
 });
 
-test("account changes during the workspace import picker cannot transfer remembered homes between accounts", async () => {
+test("signing in as another account while the workspace import picker is open changes nothing that is remembered", async () => {
   const home = new InMemoryFileSystemAdapter("Account A home");
   const created = await createHome(home);
   const source = new InMemoryFileSystemAdapter("Imported workspace");
@@ -72,12 +87,9 @@ test("account changes during the workspace import picker cannot transfer remembe
   await act(async () => { release(nativeDirectory(source)); });
   await waitFor(async () => assert.equal((await openHome(home)).workspaces.length, 1));
   await waitFor(() => assert.equal(ui.container.querySelector("main")?.getAttribute("aria-busy"), "false"));
-  assert.equal((await getRememberedHome())?.homeId ?? null, null, "Account B must not inherit Account A's home");
-  assert.equal(ui.queryAllByRole("heading", { name: "Imported workspace" }).length, 0);
+  assert.equal((await getRememberedHome())?.homeId, created.identity.homeId, "the remembered home does not depend on the account");
   assert.ok(ui.getByText(SECOND_TEST_USER.displayName!));
   assert.equal(inventorySignature(await readVerifiedInventory(source)), sourceBefore);
-  setConvenienceAccountScope(DEFAULT_TEST_USER.uid);
-  assert.equal((await getRememberedHome())?.homeId, created.identity.homeId);
 });
 
 test("all five current tutorials stay available to signed-out visitors without opening local folders", async () => {
@@ -98,29 +110,11 @@ test("all five current tutorials stay available to signed-out visitors without o
   assert.equal(auth.getSignInPayloads().length, 0);
 });
 
-test("a superseded account switch is not replayed after an in-progress folder connection", async () => {
-  const disk = new InMemoryFileSystemAdapter("Cadtree");
-  await createHome(disk);
-  let release!: (handle: FileSystemDirectoryHandle) => void;
-  Object.assign(window, { showDirectoryPicker: () => new Promise<FileSystemDirectoryHandle>((resolve) => { release = resolve; }) });
-  const auth = createTestAuthController({ ready: true, user: DEFAULT_TEST_USER });
-  const ui = render(<App auth={auth.adapter} />);
-  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
-  act(() => {
-    auth.setUser(SECOND_TEST_USER);
-    auth.setUser(DEFAULT_TEST_USER);
-  });
-  await act(async () => { release(nativeDirectory(disk)); });
-  await completeHomeAddress(ui, "D:\\Cadtree");
-  assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
-  assert.equal(ui.queryAllByText(SECOND_TEST_USER.displayName!).length, 0);
-});
-
 test("signed-out visitor can browse the homepage and complete a tutorial without signing in", async () => {
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  assert.ok(ui.getByRole("button", { name: "Sign in" }));
+  assert.ok(showsSignedOut(ui));
   assert.ok(ui.getByRole("heading", { name: "Learn cAdtree" }));
 
   fireEvent.click(within(ui.getByRole("article", { name: "Start with cAdtree" })).getByRole("button", { name: "Start tutorial" }));
@@ -143,10 +137,9 @@ test("signed-out visitor can browse the homepage and complete a tutorial without
   assert.equal(auth.getSignInPayloads().length, 0);
 });
 
-test("initial session gate waits for Firebase auth resolution before restoring remembered home", async () => {
+test("the remembered home is offered while the session is still being checked and stays when an account signs in", async () => {
   const disk = new InMemoryFileSystemAdapter("Secret Engineering Home");
   const created = await createHome(disk);
-  setConvenienceAccountScope(DEFAULT_TEST_USER.uid);
   await rememberHome({
     homeId: created.identity.homeId,
     name: created.identity.name,
@@ -161,10 +154,10 @@ test("initial session gate waits for Firebase auth resolution before restoring r
   const auth = createTestAuthController({ ready: false, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  assert.ok(ui.getByText("Checking session…"));
-  assert.equal(
-    ui.queryByRole("button", { name: /Return to Secret Engineering Home/i }),
-    null,
+  await waitFor(() =>
+    assert.ok(
+      ui.getByRole("button", { name: "Return to Secret Engineering Home" }),
+    ),
   );
   assert.equal(
     (
@@ -183,15 +176,83 @@ test("initial session gate waits for Firebase auth resolution before restoring r
   act(() => {
     auth.setUser(DEFAULT_TEST_USER);
   });
-
-  await waitFor(() =>
-    assert.ok(
-      ui.getByRole("button", { name: "Return to Secret Engineering Home" }),
-    ),
+  assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
+  assert.ok(
+    ui.getByRole("button", { name: "Return to Secret Engineering Home" }),
   );
 });
 
-test("signed-out workspace actions prompt for Google sign-in, handle cancellation and failure, and resume after sign-in", async () => {
+test("a signed-out visitor creates a home, a workspace and a project with no sign-in dialog; the home and its address are remembered after a reload and across sign-in and sign-out", async () => {
+  const diskRoot = new InMemoryFileSystemAdapter("Cadtree");
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(diskRoot) });
+  const auth = createTestAuthController({ ready: true, user: null });
+  const ui = render(<App auth={auth.adapter} />);
+  const noSignInDialog = () => assert.equal(ui.queryByRole("dialog", { name: "Account" }), null);
+
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
+  await completeHomeAddress(ui, "D:\\Cadtree");
+  await waitFor(() => assert.ok(ui.getByRole("heading", { name: "My workspaces." })));
+  noSignInDialog();
+
+  await waitFor(() => assert.equal((ui.getByRole("button", { name: "Create workspace" }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(ui.getByRole("button", { name: "Create workspace" }));
+  const workspaceDialog = within(ui.getByRole("dialog", { name: "Create workspace" }));
+  fireEvent.change(workspaceDialog.getByLabelText("Workspace name"), { target: { value: "Studio" } });
+  fireEvent.click(workspaceDialog.getByRole("button", { name: "Create workspace" }));
+  await waitFor(() => assert.ok(ui.getByRole("button", { name: "Create project" })));
+  noSignInDialog();
+
+  await waitFor(() => assert.equal((ui.getByRole("button", { name: "Create project" }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(ui.getByRole("button", { name: "Create project" }));
+  const projectDialog = within(ui.getByRole("dialog", { name: "Create project" }));
+  fireEvent.change(projectDialog.getByLabelText("Project name"), { target: { value: "Bracket" } });
+  fireEvent.click(projectDialog.getByRole("button", { name: "Create project" }));
+  await waitFor(() => assert.ok(ui.getByText(/Created project "Bracket"/)));
+  await waitFor(() => assert.equal(ui.container.querySelector("main")?.getAttribute("aria-busy"), "false"));
+  noSignInDialog();
+  assert.equal(auth.getSignInPayloads().length, 0);
+
+  // A reload while signed out: the home and its address are still there.
+  cleanup();
+  const reloaded = render(<App auth={createTestAuthController({ ready: true, user: null }).adapter} />);
+  await waitFor(() => assert.ok(reloaded.getByRole("button", { name: "Return to Cadtree" })));
+  const remembered = (await getRememberedHome())!;
+  assert.equal(await getWorkspacePath(remembered.homeId, nativeDirectory(diskRoot)), "D:\\Cadtree");
+
+  // Signing in and out never hides or clears it.
+  cleanup();
+  const controller = createTestAuthController({ ready: true, user: null });
+  const again = render(<App auth={controller.adapter} />);
+  await waitFor(() => assert.ok(again.getByRole("button", { name: "Return to Cadtree" })));
+  act(() => { controller.setUser(DEFAULT_TEST_USER); });
+  assert.ok(again.getByRole("button", { name: "Return to Cadtree" }));
+  await signOut(again);
+  assert.ok(showsSignedOut(again));
+  assert.ok(again.getByRole("button", { name: "Return to Cadtree" }));
+  assert.equal((await getRememberedHome())!.homeId, remembered.homeId);
+});
+
+test("the app is usable while the sign-in service never answers", async () => {
+  const diskRoot = new InMemoryFileSystemAdapter("Cadtree");
+  Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(diskRoot) });
+  const silent = {
+    subscribe: () => () => {},
+    signInWithGoogle: () => new Promise<never>(() => {}),
+    signOut: async () => {},
+  };
+  const ui = render(<App auth={silent} />);
+  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
+  await completeHomeAddress(ui, "D:\\Cadtree");
+  await waitFor(() => assert.ok(ui.getByRole("heading", { name: "My workspaces." })));
+  await waitFor(() => assert.equal((ui.getByRole("button", { name: "Create workspace" }) as HTMLButtonElement).disabled, false));
+  fireEvent.click(ui.getByRole("button", { name: "Create workspace" }));
+  const dialog = within(ui.getByRole("dialog", { name: "Create workspace" }));
+  fireEvent.change(dialog.getByLabelText("Workspace name"), { target: { value: "Studio" } });
+  fireEvent.click(dialog.getByRole("button", { name: "Create workspace" }));
+  await waitFor(() => assert.ok(ui.getByRole("button", { name: "Create project" })));
+});
+
+test("a signed-out visitor creates a home with no sign-in dialog; the Account sign-in handles cancel, failure and success without touching the open home", async () => {
   const emptyHome = new InMemoryFileSystemAdapter("Cadtree");
   let pickerCalls = 0;
   Object.assign(window, {
@@ -204,74 +265,60 @@ test("signed-out workspace actions prompt for Google sign-in, handle cancellatio
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  // 1. Cancelled sign-in leaves visitor on public page without invoking picker
-  auth.setSignInOutcome({ type: "cancel" });
   fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const signInDialog = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
-  fireEvent.click(
-    within(signInDialog).getByRole("button", {
-      name: /Continue with Google/i,
-    }),
-  );
-  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-  assert.equal(pickerCalls, 0);
-  assert.equal(ui.queryByRole("alert"), null);
-
-  // 2. Failed sign-in shows retryable error without opening folder
-  auth.setSignInOutcome({
-    type: "error",
-    message: "Network connection failed during Google sign-in.",
-  });
-  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const retryDialog = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
-  fireEvent.click(
-    within(retryDialog).getByRole("button", {
-      name: /Continue with Google/i,
-    }),
-  );
-  await waitFor(() =>
-    assert.match(
-      within(retryDialog).getByRole("alert").textContent!,
-      /Network connection failed/,
-    ),
-  );
-  assert.equal(pickerCalls, 0);
-
-  // 3. Retry succeeds and resumes intended Start my Cadtree home action
-  auth.setSignInOutcome({ type: "success", user: DEFAULT_TEST_USER });
-  fireEvent.click(
-    within(retryDialog).getByRole("button", {
-      name: /Continue with Google/i,
-    }),
-  );
   await waitFor(() =>
     assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
   );
   assert.equal(pickerCalls, 1);
+  assert.equal(ui.queryByRole("dialog", { name: "Account" }), null);
   await completeHomeAddress(ui, "D:\\Cadtree");
   await waitFor(() =>
     assert.ok(ui.getByRole("heading", { name: "My workspaces." })),
   );
+  assert.equal(auth.getSignInPayloads().length, 0);
+
+  // 1. Cancelled sign-in closes the dialog and changes nothing.
+  auth.setSignInOutcome({ type: "cancel" });
+  const first = await openAccount(ui);
+  fireEvent.click(
+    within(first).getByRole("button", { name: /Continue with Google/i }),
+  );
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.equal(ui.queryByRole("alert"), null);
+
+  // 2. A failed sign-in shows a retryable error.
+  auth.setSignInOutcome({
+    type: "error",
+    message: "Network connection failed during Google sign-in.",
+  });
+  const retry = await openAccount(ui);
+  fireEvent.click(
+    within(retry).getByRole("button", { name: /Continue with Google/i }),
+  );
+  await waitFor(() =>
+    assert.match(
+      within(retry).getByRole("alert").textContent!,
+      /Network connection failed/,
+    ),
+  );
+
+  // 3. Success closes the dialog; the open home stays open.
+  auth.setSignInOutcome({ type: "success", user: DEFAULT_TEST_USER });
+  fireEvent.click(
+    within(retry).getByRole("button", { name: /Continue with Google/i }),
+  );
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
+  assert.ok(ui.getByRole("heading", { name: "My workspaces." }));
+  assert.equal(pickerCalls, 1);
   assert.deepEqual(auth.getSignInPayloads(), [[], [], []]);
 });
 
 test("Sign In / Create Account tabs, Email & Password authentication, and Forgot password flow", async () => {
-  const emptyHome = new InMemoryFileSystemAdapter("Cadtree");
-  Object.assign(window, {
-    showDirectoryPicker: async () => nativeDirectory(emptyHome),
-  });
-
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const modal = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
+  const modal = await openAccount(ui);
 
   // Forgot password requires email address first
   fireEvent.click(
@@ -314,61 +361,14 @@ test("Sign In / Create Account tabs, Email & Password authentication, and Forgot
     within(modal).getByRole("button", { name: "Create Account" }),
   );
 
-  await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
-  );
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
   assert.deepEqual(auth.getSignInPayloads(), [
     [{ method: "create-account", email: "engineer@company.com" }],
   ]);
 });
 
-test("when native directory picker requires a fresh click after async sign-in, Continue button completes the flow", async () => {
-  const emptyHome = new InMemoryFileSystemAdapter("Cadtree");
-  let pickerAttempt = 0;
-  Object.assign(window, {
-    showDirectoryPicker: async () => {
-      pickerAttempt++;
-      if (pickerAttempt === 1) {
-        throw new DOMException(
-          "Must be handling a user gesture to show a directory picker.",
-          "SecurityError",
-        );
-      }
-      return nativeDirectory(emptyHome);
-    },
-  });
-
-  const auth = createTestAuthController({ ready: true, user: null });
-  auth.setSignInOutcome({ type: "success", user: DEFAULT_TEST_USER });
-  const ui = render(<App auth={auth.adapter} />);
-
-  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const modal = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
-  fireEvent.click(
-    within(modal).getByRole("button", { name: /Continue with Google/i }),
-  );
-
-  const continueDialog = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Start Cadtree home" }),
-  );
-  assert.match(
-    continueDialog.textContent!,
-    /Signed in\. Click Continue to choose your local folder\./,
-  );
-  assert.equal(ui.queryByRole("alert"), null);
-
-  fireEvent.click(
-    within(continueDialog).getByRole("button", { name: "Continue" }),
-  );
-  await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
-  );
-  assert.equal(pickerAttempt, 2);
-});
-
-test("signed-in user can capture revisions offline and sign-out waits for an in-progress write before clearing UI", async () => {
+async function saveRevisionOffline(user: AccountUser | null) {
   Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
   const homeRoot = new InMemoryFileSystemAdapter("Cadtree");
   const home = await createHome(homeRoot);
@@ -383,10 +383,7 @@ test("signed-in user can capture revisions offline and sign-out waits for an in-
     showDirectoryPicker: async () => nativeDirectory(homeRoot),
   });
 
-  const auth = createTestAuthController({
-    ready: true,
-    user: DEFAULT_TEST_USER,
-  });
+  const auth = createTestAuthController({ ready: true, user });
   const ui = render(<App auth={auth.adapter} />);
 
   fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
@@ -429,46 +426,51 @@ test("signed-in user can capture revisions offline and sign-out waits for an in-
     { target: { value: "Initial offline capture" } },
   );
 
-  // Trigger capture and immediately request Sign out while capture is running
+  // Trigger capture; when signed in, request Sign out while it is running.
   const saveBtn = changesPage.getByRole("button", {
     name: "Save revision",
   });
   fireEvent.click(saveBtn);
-  const signOutBtn = ui.getByRole("button", {
-    name: /Sign out|Finishing write…/i,
-  });
-  fireEvent.click(signOutBtn);
-
-  // Wait for capture to finish and sign-out to complete back to public homepage
+  if (user) {
+    await signOut(ui);
+    // Signing out leaves the save and the open project alone.
+    assert.ok(showsSignedOut(ui));
+    assert.equal(auth.getSignOutCount(), 1);
+  }
   await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Sign in" })),
+    assert.equal(
+      ui.container.querySelector("main")?.getAttribute("aria-busy"),
+      "false",
+    ),
   );
-  assert.ok(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  assert.equal(auth.getSignOutCount(), 1);
+  assert.equal(
+    (ui.getByRole("button", { name: "History" }) as HTMLButtonElement).disabled,
+    false,
+  );
+  assert.equal(ui.queryByRole("button", { name: "Start my Cadtree home" }), null);
+  assert.equal(ui.queryByRole("dialog", { name: "Account" }), null);
 
-  // Reopen the actual managed vault after sign-out and verify the completed save.
+  // Reopen the actual managed vault and verify the completed save.
   const reopened = await resolveManagedProject(ws.workspace.root, imported.record.containerPath);
   assert.equal(reopened.vaultState.revisions.length, 1);
   assert.equal(reopened.vaultState.revisions[0].manifest.summary, "Initial offline capture");
   const working = reopened.workingFolders["branch-main"];
   assert.ok(working);
   assert.equal(await working.readFileText(["Bracket.SLDPRT"]), "initial CAD geometry");
+}
 
-});
+test("signed-in user can capture revisions offline and sign out while the save runs", () => saveRevisionOffline(DEFAULT_TEST_USER));
+test("a signed-out user can open a project and save a revision offline with no sign-in dialog", () => saveRevisionOffline(null));
 
-test("shared browser isolation: Account B does not see Account A's remembered home or paths, and A's files stay intact", async () => {
+test("signing out and signing in as another account keeps the open home, its workspaces and the remembered home", async () => {
   const homeA = new InMemoryFileSystemAdapter("Alice Engineering Home");
   const createdA = await createHome(homeA);
   await createHomeWorkspace(homeA, "Alice R&D", {
     expectedHomeId: createdA.identity.homeId,
   });
 
-  const homeB = new InMemoryFileSystemAdapter("Bob Manufacturing Home");
-  await createHome(homeB);
-
-  let nextDirectory = homeA;
   Object.assign(window, {
-    showDirectoryPicker: async () => nativeDirectory(nextDirectory),
+    showDirectoryPicker: async () => nativeDirectory(homeA),
   });
 
   const auth = createTestAuthController({
@@ -477,7 +479,6 @@ test("shared browser isolation: Account B does not see Account A's remembered ho
   });
   const ui = render(<App auth={auth.adapter} />);
 
-  // Account A opens Alice Engineering Home
   fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
   await completeHomeAddress(ui, "D:\\AliceSecretPath\\Cadtree");
   await waitFor(() =>
@@ -485,40 +486,25 @@ test("shared browser isolation: Account B does not see Account A's remembered ho
   );
   assert.ok(ui.getByRole("heading", { name: "Alice R&D" }));
 
-  // Account A signs out
-  fireEvent.click(ui.getByRole("button", { name: "Sign out" }));
-  await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Sign in" })),
-  );
-  assert.equal(ui.queryByRole("heading", { name: "Alice R&D" }), null);
-  assert.equal(
-    ui.queryByRole("button", { name: /Return to Alice Engineering Home/i }),
-    null,
-  );
-  assert.equal(ui.queryByText(/AliceSecretPath/), null);
+  await signOut(ui);
+  assert.ok(showsSignedOut(ui));
+  assert.ok(ui.getByRole("heading", { name: "My workspaces." }));
+  assert.ok(ui.getByRole("heading", { name: "Alice R&D" }));
 
-  // Account B signs in on the same browser
   act(() => {
     auth.setUser(SECOND_TEST_USER);
   });
   await waitFor(() =>
     assert.ok(ui.getByText(SECOND_TEST_USER.displayName!)),
   );
-  assert.equal(
-    ui.queryByRole("button", { name: /Return to Alice Engineering Home/i }),
-    null,
-  );
-  assert.equal(ui.queryByText(/AliceSecretPath/), null);
+  assert.ok(ui.getByRole("heading", { name: "Alice R&D" }));
 
-  // Account B explicitly selects Bob's local folder
-  nextDirectory = homeB;
-  fireEvent.click(ui.getByRole("button", { name: "Open my Cadtree home" }));
-  await completeHomeAddress(ui, "D:\\BobPath\\Cadtree");
+  // The disk is untouched, and a fresh page still offers the home to whoever opens the browser.
+  assert.ok((await homeA.listEntries()).some((entry) => entry.name === ".cadtree-home.json"));
+  assert.equal((await getRememberedHome())?.homeId, createdA.identity.homeId);
+  cleanup();
+  const reopened = render(<App auth={createTestAuthController({ ready: true, user: null }).adapter} />);
   await waitFor(() =>
-    assert.ok(ui.getByRole("heading", { name: "My workspaces." })),
+    assert.ok(reopened.getByRole("button", { name: "Return to Alice Engineering Home" })),
   );
-
-  // Account A's disk files remain completely intact
-  const entriesA = await homeA.listEntries();
-  assert.ok(entriesA.some((entry) => entry.name === ".cadtree-home.json"));
 });

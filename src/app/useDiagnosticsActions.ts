@@ -168,7 +168,7 @@ export function useDiagnosticsActions({
       setStatusBanner({
         type: "info",
         message:
-          "Reset remembered folder connections and addresses across all accounts and workspaces in this browser. The current workspace was reread; reconnect folders and re-enter their addresses when needed.",
+          "Reset remembered folder connections and addresses across all workspaces in this browser. The current workspace was reread; reconnect folders and re-enter their addresses when needed.",
       });
       return;
     }
@@ -182,7 +182,7 @@ export function useDiagnosticsActions({
     setStatusBanner({
       type: "info",
       message:
-        "Reset remembered folder connections and addresses across all accounts and workspaces in this browser. Saved history was reread from the vault. Reconnect working folders and re-enter their addresses when needed.",
+        "Reset remembered folder connections and addresses across all workspaces in this browser. Saved history was reread from the vault. Reconnect working folders and re-enter their addresses when needed.",
     });
   };
   const handleSimulateClearMetadataAndReopenVault = async () => {

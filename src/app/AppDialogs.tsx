@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { AccountSignInModal } from "../components/AccountControls";
+import { AccountModal } from "../components/AccountControls";
 import { FolderAddressDialog } from "../components/FolderAddressDialog";
 import { ProjectLearningModal } from "../components/ProjectLearningModal";
 import { Modal } from "../components/ui";
@@ -7,9 +7,10 @@ import {
   WorkspaceTree,
   type WorkspaceTreeProps,
 } from "../components/WorkspaceTree";
+import type { AccountUser } from "../auth/firebase-auth";
 import type { HomeState } from "../engine/home-service";
 import type { VaultState } from "../engine/types";
-import type { BannerScope, PendingHome, SignInPrompt, StatusBanner } from "./types";
+import type { BannerScope, PendingHome, AccountDialog, StatusBanner } from "./types";
 
 export interface AppDialogsProps {
   busy: boolean;
@@ -30,8 +31,11 @@ export interface AppDialogsProps {
   setLearningOpen: Dispatch<SetStateAction<boolean>>;
   explorerOpen: boolean;
   setExplorerOpen: Dispatch<SetStateAction<boolean>>;
-  signInPrompt: SignInPrompt | null;
-  setSignInPrompt: Dispatch<SetStateAction<SignInPrompt | null>>;
+  accountDialog: AccountDialog | null;
+  setAccountDialog: Dispatch<SetStateAction<AccountDialog | null>>;
+  accountUser: AccountUser | null;
+  signOutPending: boolean;
+  onSignOut: () => void;
   handleContinueWithGoogle: () => Promise<void>;
   handleSubmitEmailAuth: (
     mode: "sign-in" | "create-account",
@@ -39,7 +43,6 @@ export interface AppDialogsProps {
     password: string,
   ) => Promise<void>;
   handleForgotPassword: (email: string) => Promise<void>;
-  onContinuePickerAfterSignIn: () => void;
 }
 
 /** Dialogs hosted by the shell: home address, learning, folder browser and sign-in. */
@@ -62,12 +65,14 @@ export function AppDialogs({
   setLearningOpen,
   explorerOpen,
   setExplorerOpen,
-  signInPrompt,
-  setSignInPrompt,
+  accountDialog,
+  setAccountDialog,
+  accountUser,
+  signOutPending,
+  onSignOut,
   handleContinueWithGoogle,
   handleSubmitEmailAuth,
   handleForgotPassword,
-  onContinuePickerAfterSignIn,
 }: AppDialogsProps) {
   return (
     <>
@@ -114,17 +119,14 @@ export function AppDialogs({
           </div>
         </Modal>
       ) : null}
-      {signInPrompt ? (
-        <AccountSignInModal
-          step={signInPrompt.step}
-          createHomePicker={
-            signInPrompt.action.kind === "connect-home"
-              ? signInPrompt.action.create
-              : undefined
-          }
-          signingIn={signInPrompt.signingIn}
-          error={signInPrompt.error}
-          info={signInPrompt.info}
+      {accountDialog ? (
+        <AccountModal
+          user={accountUser}
+          signOutPending={signOutPending}
+          onSignOut={onSignOut}
+          signingIn={accountDialog.signingIn}
+          error={accountDialog.error}
+          info={accountDialog.info}
           onContinueWithGoogle={() => {
             void handleContinueWithGoogle();
           }}
@@ -135,13 +137,12 @@ export function AppDialogs({
             void handleForgotPassword(email);
           }}
           onClearFeedback={() => {
-            setSignInPrompt((prev) =>
+            setAccountDialog((prev) =>
               prev ? { ...prev, error: null, info: null } : null,
             );
           }}
-          onContinuePicker={onContinuePickerAfterSignIn}
           onCancel={() => {
-            if (!signInPrompt.signingIn) setSignInPrompt(null);
+            if (!accountDialog.signingIn) setAccountDialog(null);
           }}
         />
       ) : null}

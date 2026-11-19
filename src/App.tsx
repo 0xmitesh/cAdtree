@@ -13,14 +13,9 @@ import {
   getWorkspacePath,
   type RememberedHome,
   bindWorkspacePathToRoot,
-  setConvenienceAccountScope,
 } from "./engine/idb-store";
-import {
-  type AccountUser,
-  type AuthAdapter,
-  isUserActivationError,
-} from "./auth/firebase-auth";
-import { AccountStatusControl } from "./components/AccountControls";
+import type { AuthAdapter } from "./auth/firebase-auth";
+import { accountLabel } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
   resolveWorkingFolderPath,
@@ -82,7 +77,6 @@ import { useReviewActions } from "./app/useReviewActions";
 import type {
   ActiveTab,
   Context,
-  PendingAuthAction,
   PendingHome,
 } from "./app/types";
 import {
@@ -157,92 +151,40 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanStale, setIsScanStale] = useState(false);
 
-  const resetActiveSessionUi = () => {
-    contextVersion.current++;
-    setLearningOpen(false);
-    setManagedProject(null);
-    setProjectUnavailable(null);
-    setVaultState(null);
-    setVaultDir(null);
-    setWorkingFolders({});
-    setWorkingDir(null);
-    setScanResult(null);
-    setActiveBranchId(MAIN_BRANCH_ID);
-    setActiveTab("connect");
-    setStatusBanner(null);
-    setWorkspace(null);
-    setHome(null);
-    setHomeView(true);
-    setIntroView(false);
-    setManagedWorkspaceKey(null);
-    setPendingHome(null);
-    setExplorerOpen(false);
-    homeAddressCache.current = [];
-    setHomeAddress(null);
-    draftCache.current.clear();
-    branchContexts.current.clear();
-    setRememberedWorkspace(null);
-    setRememberedHome(null);
-    setConvenienceEpoch((value) => value + 1);
-  };
-
   // Called here so its auth subscription effect keeps its place among App's effects.
   const {
     authState,
     authStateRef,
-    signInPrompt,
-    setSignInPrompt,
+    accountDialog,
+    setAccountDialog,
     signOutPending,
-    setSignOutPending,
-    pendingSignOutRef,
-    pendingAccountSnapshotRef,
-    applyAuthSnapshot,
-    executeSignOut,
     handleRequestSignOut,
-    requestSignIn,
+    openAccount,
     handleContinueWithGoogle,
     handleSubmitEmailAuth,
     handleForgotPassword,
-    handleContinuePickerAfterSignIn,
   } = useAuthSession({
     auth,
-    resetActiveSessionUi,
-    setRememberedWorkspace,
-    setRememberedHome,
-    // Declared below by useOperation and the home actions; read only after this render.
-    getOperationRef: () => operationRef,
+    // Declared below by useOperation; read only after this render.
     setBannerScope: (scope) => setBannerScope(scope),
     setStatusBanner: (banner) => setStatusBanner(banner),
-    completeAuthenticatedSignIn: (account, intendedAction) =>
-      completeAuthenticatedSignIn(account, intendedAction),
-    connectHomeInternal: (create, saved) => connectHomeInternal(create, saved),
   });
 
+  // The browser remembers the last home and workspace, signed in or not.
   useEffect(() => {
-    const uid = authState.ready && authState.user ? authState.user.uid : null;
-    setConvenienceAccountScope(uid);
-    if (!uid) {
-      setRememberedWorkspace(null);
-      setRememberedHome(null);
-      return;
-    }
     let cancelled = false;
     void getRememberedWorkspace().then((value) => {
-      if (!cancelled && authStateRef.current.user?.uid === uid) {
-        setRememberedWorkspace(value);
-      }
+      if (!cancelled) setRememberedWorkspace(value);
     });
     void getRememberedHome()
       .then((value) => {
-        if (!cancelled && authStateRef.current.user?.uid === uid) {
-          setRememberedHome(value);
-        }
+        if (!cancelled) setRememberedHome(value);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [authState.ready, authState.user?.uid]);
+  }, []);
 
   // Declared here so its unmount effect keeps its place among App's effects.
   const {
@@ -258,11 +200,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     handleCancelOperation,
   } = useOperation({
     activeTab,
-    pendingSignOutRef,
-    pendingAccountSnapshotRef,
-    setSignOutPending,
-    executeSignOut,
-    applyAuthSnapshot,
   });
   useEffect(() => {
     setIsScanStale(false);
@@ -360,10 +297,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const allWorkspaces = () => {
     if (operationRef.current) return;
-    if (!authStateRef.current.user) {
-      requestSignIn({ kind: "my-workspaces" });
-      return;
-    }
     setStatusBanner(null);
     setHomeView(true);
     setIntroView(false);
@@ -406,12 +339,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setBannerScope("workspace");
     setStatusBanner(warning ? { type: "info", message: warning } : null);
   };
-  const connectHomeInternal = async (
-    create: boolean,
-    saved?: RememberedHome,
-    options?: { pauseOnGestureError?: boolean },
-  ) => {
-    let gestureBlocked = false;
+  const connectHome = async (create: boolean, saved?: RememberedHome) => {
     await perform(
       "connect",
       async (context) => {
@@ -424,10 +352,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           try {
             root = await pickFolder("readwrite");
           } catch (error: unknown) {
-            if (options?.pauseOnGestureError && isUserActivationError(error)) {
-              gestureBlocked = true;
-              return;
-            }
             if (error instanceof DOMException && error.name === "AbortError")
               throw new Error(
                 create
@@ -490,60 +414,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           });
       },
     );
-    if (gestureBlocked) {
-      setSignInPrompt({
-        step: "continue-picker",
-        action: { kind: "connect-home", create, saved },
-        signingIn: false,
-        error: null,
-      });
-    }
-  };
-  const connectHome = async (create: boolean, saved?: RememberedHome) => {
-    if (!authStateRef.current.user) {
-      requestSignIn({ kind: "connect-home", create, saved });
-      return;
-    }
-    await connectHomeInternal(create, saved);
-  };
-  const completeAuthenticatedSignIn = async (
-    account: AccountUser,
-    intendedAction: PendingAuthAction,
-  ) => {
-    applyAuthSnapshot({ ready: true, user: account });
-    const [remWorkspace, remHome] = await Promise.all([
-      getRememberedWorkspace(),
-      getRememberedHome().catch(() => null),
-    ]);
-    if (authStateRef.current.user?.uid === account.uid) {
-      setRememberedWorkspace(remWorkspace);
-      setRememberedHome(remHome);
-    }
-    setSignInPrompt(null);
-    if (intendedAction.kind === "connect-home") {
-      await connectHomeInternal(
-        intendedAction.create,
-        intendedAction.saved,
-        { pauseOnGestureError: true },
-      );
-    } else if (intendedAction.kind === "my-workspaces") {
-      leaveProject();
-      setWorkspace(null);
-      setHomeView(true);
-      setIntroView(false);
-      setManagedWorkspaceKey(null);
-    } else if (intendedAction.kind === "callback") {
-      await intendedAction.run();
-    }
   };
   const completeHomeSetup = async (path: string) => {
-    if (!authStateRef.current.ready || !authStateRef.current.user) {
-      requestSignIn({
-        kind: "callback",
-        run: () => completeHomeSetup(path),
-      });
-      return;
-    }
     if (!pendingHome) return;
     const selected = pendingHome;
     await perform(
@@ -592,13 +464,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     );
   };
   const openHomeEntry = async (entry: HomeWorkspaceEntry) => {
-    if (!authStateRef.current.ready || !authStateRef.current.user) {
-      requestSignIn({
-        kind: "callback",
-        run: () => openHomeEntry(entry),
-      });
-      return;
-    }
     if (!home) return;
     await perform(
       "connect",
@@ -628,13 +493,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     );
   };
   const addHomeWorkspace = async (name?: string) => {
-    if (!authStateRef.current.ready || !authStateRef.current.user) {
-      requestSignIn({
-        kind: "callback",
-        run: () => addHomeWorkspace(name),
-      });
-      return;
-    }
     if (!home) throw new Error("Choose a Cadtree home first.");
     // Only await when the prompt is needed: the folder picker below must still start inside the click.
     if (!budgetHomeAddress()) await ensureHomeAddress("home");
@@ -864,13 +722,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       );
   };
   const openManaged = async (entry: WorkspaceProjectEntry) => {
-    if (!authStateRef.current.ready || !authStateRef.current.user) {
-      requestSignIn({
-        kind: "callback",
-        run: () => openManaged(entry),
-      });
-      return;
-    }
     if (!workspace) return;
     await perform(
       "connect",
@@ -901,13 +752,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     entry,
     branchId,
   ) => {
-    if (!authStateRef.current.ready || !authStateRef.current.user) {
-      requestSignIn({
-        kind: "callback",
-        run: () => openTreeProject(homeWorkspace, entry, branchId),
-      });
-      return;
-    }
     await perform(
       "connect",
       async (context) => {
@@ -1052,13 +896,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     name: string,
     source?: FileSystemDirectoryAdapter,
   ) => {
-    if (!authStateRef.current.ready || !authStateRef.current.user) {
-      requestSignIn({
-        kind: "callback",
-        run: () => addManagedProject(name, source),
-      });
-      return;
-    }
     if (!workspace) throw new Error("Choose a workspace first.");
     await ensureHomeAddress("workspace");
     await perform(
@@ -1239,7 +1076,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setActiveTab,
     setStatusBanner,
   });
-  const busy = operation !== null || signOutPending;
+  const busy = operation !== null;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
   const isVerifyingAll = operation === "verify";
@@ -1274,12 +1111,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       } : { view: "intro" };
   useViewHistory({
     view,
-    scope: authState.user?.uid ?? "signed-out",
-    ready: authState.ready,
+    scope: "local",
+    ready: true,
     busy,
     onVisit: async (target) => {
-      if (operationRef.current || pendingSignOutRef.current) return false;
-      const uid = authStateRef.current.user?.uid;
+      if (operationRef.current) return false;
       // Back/Forward leaves the page too: its banner stays behind. A visit that cannot move keeps it.
       setLearningOpen(false);
       setExplorerOpen(false);
@@ -1289,7 +1125,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         setIntroView(true);
         return true;
       }
-      if (!uid || target.homeId !== home?.identity.homeId) return false;
+      if (target.homeId !== home?.identity.homeId) return false;
       if (target.view === "workspaces") { allWorkspaces(); return true; }
       const sameWorkspace = target.workspaceId === workspace?.identity.workspaceId && target.workspaceKey === managedWorkspaceKey;
       if (target.view === "workspace" && sameWorkspace) {
@@ -1318,10 +1154,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         setStatusBanner(null);
         // Reopen other project locations through existing permission and identity validation.
         await openTreeProject(entry, project);
-        if (authStateRef.current.user?.uid !== uid) return false;
         setActiveTab(target.tab);
       }
-      return authStateRef.current.user?.uid === uid;
+      return true;
     },
   });
   const homeEntry = home?.workspaces.find(
@@ -1459,29 +1294,18 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           onWordmarkClick={() => {
             if (operationRef.current) return;
             setStatusBanner(null);
-            if (!authStateRef.current.user) {
-              setHomeView(true);
-              setIntroView(true);
-              return;
-            }
             setHomeView(true);
             setIntroView(true);
             setLearningOpen(false);
           }}
           onAllWorkspaces={allWorkspaces}
+          accountLabel={accountLabel(authState.user)}
+          onAccount={openAccount}
           onBrowseFolders={() => setExplorerOpen(true)}
           onLearn={() => setLearningOpen(true)}
         />
         <div className="workspace-shell">
           <div className="shell-top-bar">
-            <AccountStatusControl
-              ready={authState.ready}
-              user={authState.user}
-              busy={busy}
-              signOutPending={signOutPending}
-              onSignIn={() => requestSignIn({ kind: "my-workspaces" })}
-              onSignOut={handleRequestSignOut}
-            />
             <span className="local-indicator compact-local-indicator">
               <i />
               Local workspace
@@ -1508,24 +1332,14 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             />
             {homeView ? (
               <HomeWorkspacesView
-                home={authState.ready && authState.user ? home : null}
+                home={home}
                 homeAddress={budgetHomeAddress()}
                 intro={introView}
-                remembered={
-                  authState.ready && authState.user ? rememberedHome : null
-                }
+                remembered={rememberedHome}
                 busy={busy}
                 progress={progress}
                 onConnect={connectHome}
                 onReconnect={async () => {
-                  if (!authStateRef.current.user) {
-                    requestSignIn({
-                      kind: "connect-home",
-                      create: false,
-                      saved: rememberedHome ?? undefined,
-                    });
-                    return;
-                  }
                   if (home) {
                     allWorkspaces();
                     return;
@@ -1622,12 +1436,14 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             setLearningOpen={setLearningOpen}
             explorerOpen={explorerOpen}
             setExplorerOpen={setExplorerOpen}
-            signInPrompt={signInPrompt}
-            setSignInPrompt={setSignInPrompt}
+            accountDialog={accountDialog}
+            setAccountDialog={setAccountDialog}
+            accountUser={authState.user}
+            signOutPending={signOutPending}
+            onSignOut={handleRequestSignOut}
             handleContinueWithGoogle={handleContinueWithGoogle}
             handleSubmitEmailAuth={handleSubmitEmailAuth}
             handleForgotPassword={handleForgotPassword}
-            onContinuePickerAfterSignIn={handleContinuePickerAfterSignIn}
           />
         </div>
       </div>

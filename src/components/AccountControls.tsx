@@ -3,66 +3,16 @@ import { ArrowRight, Lock, Mail } from "lucide-react";
 import type { AccountUser } from "../auth/firebase-auth";
 import { Modal, Notice } from "./ui";
 
-export interface AccountStatusControlProps {
-  ready: boolean;
+/** What the Account control in the navigation rail says about the account. */
+export function accountLabel(user: AccountUser | null): string | null {
+  return user ? user.displayName || user.email || "Signed in" : null;
+}
+
+export interface AccountModalProps {
   user: AccountUser | null;
-  busy: boolean;
-  signOutPending: boolean;
-  onSignIn: () => void;
-  onSignOut: () => void;
-}
-
-export function AccountStatusControl({
-  ready,
-  user,
-  busy,
-  signOutPending,
-  onSignIn,
-  onSignOut,
-}: AccountStatusControlProps) {
-  if (!ready) {
-    return (
-      <div className="account-control" aria-live="polite">
-        <span className="account-status-label">Checking session…</span>
-      </div>
-    );
-  }
-  if (!user) {
-    return (
-      <div className="account-control">
-        <button
-          type="button"
-          className="text-button account-action-button"
-          disabled={busy}
-          onClick={onSignIn}
-        >
-          Sign in
-        </button>
-      </div>
-    );
-  }
-  const label = user.displayName || user.email || "Signed-in account";
-  return (
-    <div className="account-control" aria-label="Account status">
-      <span className="account-user-label" title={user.email ?? label}>
-        {label}
-      </span>
-      <button
-        type="button"
-        className="text-button account-action-button"
-        disabled={signOutPending}
-        onClick={onSignOut}
-      >
-        {signOutPending ? "Finishing write…" : "Sign out"}
-      </button>
-    </div>
-  );
-}
-
-export interface AccountSignInModalProps {
-  step: "sign-in" | "continue-picker";
-  createHomePicker?: boolean;
   signingIn: boolean;
+  signOutPending: boolean;
+  onSignOut: () => void;
   error: string | null;
   info?: string | null;
   onContinueWithGoogle: () => void;
@@ -73,61 +23,25 @@ export interface AccountSignInModalProps {
   ) => void;
   onForgotPassword?: (email: string) => void;
   onClearFeedback?: () => void;
-  onContinuePicker: () => void;
   onCancel: () => void;
 }
 
-export function AccountSignInModal({
-  step,
-  createHomePicker,
+export function AccountModal({
+  user,
   signingIn,
+  signOutPending,
+  onSignOut,
   error,
   info,
   onContinueWithGoogle,
   onSubmitEmail,
   onForgotPassword,
   onClearFeedback,
-  onContinuePicker,
   onCancel,
-}: AccountSignInModalProps) {
+}: AccountModalProps) {
   const [mode, setMode] = useState<"sign-in" | "create-account">("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  if (step === "continue-picker") {
-    return (
-      <Modal
-        title={createHomePicker ? "Start Cadtree home" : "Open Cadtree home"}
-        busy={signingIn}
-        onClose={onCancel}
-      >
-        <div className="stack">
-          <p className="muted">
-            Signed in. Click Continue to choose your local folder.
-          </p>
-          {error ? <Notice type="error">{error}</Notice> : null}
-        </div>
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="button secondary"
-            disabled={signingIn}
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="button primary"
-            disabled={signingIn}
-            onClick={onContinuePicker}
-          >
-            Continue
-          </button>
-        </div>
-      </Modal>
-    );
-  }
 
   const handleFormSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -136,13 +50,34 @@ export function AccountSignInModal({
   };
 
   return (
-    <Modal title="Sign in to cAdtree" busy={signingIn} onClose={onCancel}>
+    <Modal title="Account" busy={signingIn || signOutPending} onClose={onCancel}>
       <div className="auth-modal-body">
         <p className="muted auth-modal-subtitle">
-          Sign in or create a free account to open or create local workspaces
-          and projects. Your CAD files stay on your device.
+          You do not need an account to use cAdtree: everything on your own
+          computer works without one, and your CAD files always stay on your
+          device. An account is only for features that may come later, such as
+          sharing, cloud storage and an AI knowledge base. None of these are
+          available yet.
         </p>
 
+        {user ? (
+          <>
+            <p>
+              Signed in as <strong>{accountLabel(user)}</strong>.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="button secondary"
+                disabled={signOutPending}
+                onClick={onSignOut}
+              >
+                {signOutPending ? "Signing out…" : "Sign out"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="auth-mode-tabs" role="tablist" aria-label="Account mode">
           <button
             type="button"
@@ -278,6 +213,8 @@ export function AccountSignInModal({
             <ArrowRight size={15} aria-hidden="true" />
           </button>
         </form>
+          </>
+        )}
       </div>
     </Modal>
   );

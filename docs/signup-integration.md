@@ -1,5 +1,7 @@
 # Signup integration with completed tutorials
 
+> **Update (19 Nov 2026, Phase 3).** Sign-in is now optional and no longer gates local work. The "required sign-in for local work" described below was removed: the app opens straight to the home or the intro, and sign-in moved to an **Account** control in the navigation rail. Browser convenience storage uses one scope whether or not anyone is signed in (the account-scoping described below was removed, and old `account:<uid>` keys are ignored); signing in or out no longer closes the open project, so the deferred sign-out and account-switch handling was removed. Firebase is loaded lazily (its own chunk, loaded only when Account is opened or after first paint when a saved session may exist), and the first auth snapshot is always `{ ready: true, user: null }`, upgraded when Firebase reports a saved user. Sign-in without a network reports "Sign-in needs an internet connection". Reference authors are recorded only when signed in. Opening the app itself with no network still needs a service worker and is not built. The rest of this file records the original integration.
+
 ## Source and scope
 
 Integration base: GitHub main `4b1d6a946c0b6b3b9905f864d60c77b690fee6db` (Tutorial 5, PR #27). The supplied AI Studio ZIP's existing app, styles, browser-storage module and test/configuration helpers match the pre-signup baseline at `e5a282cb4a5b6d6757beef66ab1c3c4a7d2cb127` (PR #23). Its four newer tutorial cards were still Coming soon.

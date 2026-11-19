@@ -1,6 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-test("signed-out visitor can complete a tutorial, sign in to open a home, and isolate remembered homes across accounts", async ({
+type AuthControl = {
+  DEFAULT_TEST_USER: unknown;
+  SECOND_TEST_USER: unknown;
+  setUser(user: unknown): void;
+  setSignInOutcome(outcome: unknown): void;
+};
+
+test("signing in is optional: a signed-out visitor creates a home with no sign-in, and the Account control never changes what is open or remembered", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 844 });
@@ -8,12 +15,13 @@ test("signed-out visitor can complete a tutorial, sign in to open a home, and is
 
   // Switch to signed-out visitor state
   await page.evaluate(() => {
-    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__?: any })
+    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__: AuthControl })
       .__CADTREE_TEST_AUTH_CONTROL__;
     ctrl.setUser(null);
   });
 
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  const account = page.getByRole("button", { name: "Account" });
+  await expect(account).toContainText("Optional");
 
   // Signed-out visitor can open and complete a tutorial
   await page.getByRole("article", { name: "Start with cAdtree" }).getByRole("button", { name: "Start tutorial" }).click();
@@ -28,7 +36,7 @@ test("signed-out visitor can complete a tutorial, sign in to open a home, and is
   }
   await expect(tutorialModal).toBeHidden();
 
-  // Clicking Start my Cadtree home while signed out opens Sign in modal
+  // Starting a home goes straight to the folder step: no sign-in dialog.
   await page.evaluate(async () => {
     const opfs = await navigator.storage.getDirectory();
     try {
@@ -44,83 +52,66 @@ test("signed-out visitor can complete a tutorial, sign in to open a home, and is
   });
 
   await page.getByRole("button", { name: "Start my Cadtree home" }).click();
-  const signInModal = page.getByRole("dialog", { name: "Sign in to cAdtree" });
-  await expect(signInModal).toBeVisible();
-  await expect(
-    signInModal.getByRole("tab", { name: "Sign In" }),
-  ).toBeVisible();
-  await expect(
-    signInModal.getByRole("tab", { name: "Create Account" }),
-  ).toBeVisible();
-  await expect(signInModal.getByLabel("Email Address")).toBeVisible();
-  await expect(signInModal.getByLabel("Password")).toBeVisible();
-  await expect(
-    signInModal.getByRole("button", { name: "Forgot password?" }),
-  ).toBeVisible();
-
-  // Failed sign-in shows error and stays on public page
-  await page.evaluate(() => {
-    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__?: any })
-      .__CADTREE_TEST_AUTH_CONTROL__;
-    ctrl.setSignInOutcome({
-      type: "error",
-      message: "Sign-in failed in test.",
-    });
-  });
-  await signInModal
-    .getByRole("button", { name: /Continue with Google/i })
-    .click();
-  await expect(signInModal.getByRole("alert")).toContainText(
-    "Sign-in failed in test.",
-  );
-
-  // Retry succeeds as Account A and proceeds to Complete home setup
-  await page.evaluate(() => {
-    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__?: any })
-      .__CADTREE_TEST_AUTH_CONTROL__;
-    ctrl.setSignInOutcome({
-      type: "success",
-      user: ctrl.DEFAULT_TEST_USER,
-    });
-  });
-  await signInModal
-    .getByRole("button", { name: /Continue with Google/i })
-    .click();
-
   const addressDialog = page.getByRole("dialog", {
     name: "Complete home setup",
   });
   await expect(addressDialog).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Account" })).toHaveCount(0);
   await addressDialog
     .getByLabel("Cadtree home folder address")
     .fill("D:\\EngineerA\\Cadtree");
   await addressDialog
     .getByRole("button", { name: "Complete setup" })
     .click();
-
   await expect(
     page.getByRole("heading", { name: "My workspaces." }),
   ).toBeVisible();
-  await expect(page.getByText("Test Engineer")).toBeVisible();
 
-  // Sign out returns to public homepage
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Start my Cadtree home" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Return to/i }),
-  ).toHaveCount(0);
-
-  // Sign in as Account B on the same browser: Account A's remembered home stays hidden
+  // The Account dialog explains that an account is optional and handles a failed sign-in.
+  await account.click();
+  const accountDialog = page.getByRole("dialog", { name: "Account" });
+  await expect(accountDialog).toContainText("You do not need an account");
+  await expect(accountDialog.getByRole("tab", { name: "Sign In" })).toBeVisible();
+  await expect(accountDialog.getByRole("tab", { name: "Create Account" })).toBeVisible();
+  await expect(accountDialog.getByLabel("Email Address")).toBeVisible();
+  await expect(accountDialog.getByLabel("Password")).toBeVisible();
+  await expect(accountDialog.getByRole("button", { name: "Forgot password?" })).toBeVisible();
   await page.evaluate(() => {
-    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__?: any })
+    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__: AuthControl })
+      .__CADTREE_TEST_AUTH_CONTROL__;
+    ctrl.setSignInOutcome({ type: "error", message: "Sign-in failed in test." });
+  });
+  await accountDialog.getByRole("button", { name: /Continue with Google/i }).click();
+  await expect(accountDialog.getByRole("alert")).toContainText("Sign-in failed in test.");
+
+  // A retry succeeds; the open home stays open.
+  await page.evaluate(() => {
+    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__: AuthControl })
+      .__CADTREE_TEST_AUTH_CONTROL__;
+    ctrl.setSignInOutcome({ type: "success", user: ctrl.DEFAULT_TEST_USER });
+  });
+  await accountDialog.getByRole("button", { name: /Continue with Google/i }).click();
+  await expect(accountDialog).toBeHidden();
+  await expect(account).toContainText("Test Engineer");
+  await expect(page.getByRole("heading", { name: "My workspaces." })).toBeVisible();
+
+  // Signing out leaves everything open too.
+  await account.click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("dialog", { name: "Account" })).toBeHidden();
+  await expect(account).toContainText("Optional");
+  await expect(page.getByRole("heading", { name: "My workspaces." })).toBeVisible();
+
+  // Another account on the same browser sees the same home.
+  await page.evaluate(() => {
+    const ctrl = (window as unknown as { __CADTREE_TEST_AUTH_CONTROL__: AuthControl })
       .__CADTREE_TEST_AUTH_CONTROL__;
     ctrl.setUser(ctrl.SECOND_TEST_USER);
   });
-  await expect(page.getByText("Second Engineer")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Return to/i }),
-  ).toHaveCount(0);
+  await expect(account).toContainText("Second Engineer");
+  await expect(page.getByRole("heading", { name: "My workspaces." })).toBeVisible();
+
+  // After a reload the home is still offered, whoever is signed in.
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Return to/i })).toBeVisible();
 });
