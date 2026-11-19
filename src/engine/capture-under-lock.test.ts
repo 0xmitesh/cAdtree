@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from './fs-adapter';
-import { withProjectWriterLock } from './locks';
+import { withProjectWriterLock, type ProjectWriterLock } from './locks';
 import { openExistingVault } from './vault-service';
 import { captureRevision, captureUnderLock, WorkingFilesChangedError } from './revision-service';
-import { enumerateWorkingFolder } from './scanner';
+import { enumerateWorkingFolder, partitionSystemFiles } from './scanner';
 import { createProject, createWorkspace } from './workspace-service';
 import { MAIN_BRANCH_ID, type ExpectedWorkingSnapshot } from './types';
 
@@ -21,12 +21,17 @@ async function project() {
 type P = Awaited<ReturnType<typeof project>>;
 const input = (p: P, summary: string, extra = {}) => ({ branchId: MAIN_BRANCH_ID, summary, notes, workingFolders: p.created.workingFolders, ...extra });
 
-async function snapshotOf(dir: FileSystemDirectoryAdapter): Promise<ExpectedWorkingSnapshot> {
+/** The tracked content of a folder: untracked OS clutter is left out unless listed in `tracked`. */
+async function snapshotOf(dir: FileSystemDirectoryAdapter, tracked: string[] = []): Promise<ExpectedWorkingSnapshot> {
   const listed = await enumerateWorkingFolder(dir);
-  return { files: listed.files.map(({ path, sha256, size }) => ({ path, sha256, size })), directories: listed.directories };
+  const files = partitionSystemFiles(listed.files, new Set(tracked)).files;
+  return { files: files.map(({ path, sha256, size }) => ({ path, sha256, size })), directories: listed.directories };
 }
 /** Every file (with bytes' hash) and folder in the vault, to prove nothing was written. */
-const vaultTree = async (p: P) => JSON.stringify(await snapshotOf(p.vault));
+const vaultTree = async (p: P) => {
+  const listed = await enumerateWorkingFolder(p.vault);
+  return JSON.stringify({ files: listed.files.map(({ path, sha256, size }) => ({ path, sha256, size })), directories: listed.directories });
+};
 
 const timeout = (ms: number) => new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), ms));
 
@@ -40,7 +45,7 @@ test('captureUnderLock runs inside a held project lock without deadlock and give
   const viaWrapper = await captureRevision(a.main, a.vault, input(a, 'First'));
   const projectId = b.created.record.projectId;
   const viaLock = await Promise.race([
-    withProjectWriterLock(projectId, () => captureUnderLock(b.main, b.vault, input(b, 'First'), projectId)),
+    withProjectWriterLock(projectId, (lock) => captureUnderLock(b.main, b.vault, input(b, 'First'), projectId, lock)),
     timeout(5000),
   ]);
   assert.notEqual(viaLock, 'timeout', 'captureUnderLock under the held lock must finish');
@@ -83,11 +88,62 @@ test('expectedSnapshot: a capture whose fresh scan matches exactly is saved norm
   assert.equal(second.revision.manifest.parentRevisionId, saved.revision.manifest.revisionId);
 });
 
+test('captureUnderLock refuses a lock token for another project or one already released, before writing anything', async () => {
+  const p = await project();
+  const other = await project();
+  await p.main.writeFileText(part, 'one');
+  const projectId = p.created.record.projectId;
+  const before = await vaultTree(p);
+  await withProjectWriterLock(other.created.record.projectId, (lock) =>
+    assert.rejects(captureUnderLock(p.main, p.vault, input(p, 'First'), projectId, lock), /writer lock for this project is not held/));
+  let released!: ProjectWriterLock;
+  await withProjectWriterLock(projectId, async (lock) => { released = lock; });
+  await assert.rejects(captureUnderLock(p.main, p.vault, input(p, 'First'), projectId, released), /writer lock for this project is not held/);
+  assert.equal(await vaultTree(p), before);
+});
+
+test('expectedSnapshot: OS clutter listed in the snapshot counts as tracked and is saved, even if the parent revision does not track it', async () => {
+  const p = await project();
+  await p.main.writeFileText(part, 'one');
+  await captureRevision(p.main, p.vault, input(p, 'First'));
+  await p.main.writeFileText(['Parts', '.DS_Store'], 'finder');
+  await p.main.writeFileText(part, 'two');
+  const expected = await snapshotOf(p.main, ['Parts/.DS_Store']);
+  assert.ok(expected.files.some((f) => f.path === 'Parts/.DS_Store'));
+  const saved = await captureRevision(p.main, p.vault, input(p, 'Second', { expectedSnapshot: expected }));
+  assert.deepEqual(saved.revision.manifest.files.map((f) => f.path), ['Parts/.DS_Store', 'Parts/Collar.SLDPRT']);
+});
+
+test('expectedSnapshot: untracked OS clutter that appears but is not listed is ignored, and the save goes ahead', async () => {
+  const p = await project();
+  await p.main.writeFileText(part, 'one');
+  const expected = await snapshotOf(p.main);
+  await p.main.writeFileText(['Parts', 'Thumbs.db'], 'thumbs');
+  const saved = await captureRevision(p.main, p.vault, input(p, 'First', { expectedSnapshot: expected }));
+  assert.deepEqual(saved.revision.manifest.files.map((f) => f.path), ['Parts/Collar.SLDPRT']);
+});
+
+test('expectedSnapshot listing a path or folder twice is a programming error, not a working-folder change; nothing is written', async () => {
+  const p = await project();
+  await p.main.writeFileText(part, 'one');
+  await p.main.getDirectory(['Drawings'], { create: true });
+  const good = await snapshotOf(p.main);
+  const before = await vaultTree(p);
+  for (const bad of [{ ...good, files: [...good.files, good.files[0]] }, { ...good, directories: [...good.directories, good.directories[0]] }]) {
+    await assert.rejects(
+      captureRevision(p.main, p.vault, input(p, 'First', { expectedSnapshot: bad })),
+      (error: unknown) => error instanceof Error && !(error instanceof WorkingFilesChangedError) && /Invalid expected snapshot/.test(error.message),
+    );
+  }
+  assert.equal(await vaultTree(p), before);
+});
+
 const mismatches: { name: string; change: (p: P) => Promise<void> }[] = [
   { name: 'file added', change: (p) => p.main.writeFileText(['Parts', 'New.SLDPRT'], 'new') },
   { name: 'file removed', change: (p) => p.main.removeEntry(['Parts', 'Keep.SLDPRT']) },
   { name: 'file bytes changed (same size)', change: (p) => p.main.writeFileText(part, 'TWO') },
   { name: 'folder added', change: async (p) => { await p.main.getDirectory(['Extra'], { create: true }); } },
+  { name: 'file renamed by letter case only', change: async (p) => { await p.main.removeEntry(part); await p.main.writeFileText(['Parts', 'collar.SLDPRT'], 'two'); } },
   { name: 'folder removed', change: (p) => p.main.removeEntry(['Drawings', 'Empty'], { recursive: true }) },
 ];
 

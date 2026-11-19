@@ -298,11 +298,13 @@ export async function scanBranchChanges(
     signal?: AbortSignal;
     /** Display-only scans: reuse the hash of a file whose size and date are unchanged. Never pass for capture. */
     knownHashes?: KnownHashes;
+    /** Paths to treat as tracked besides the baseline's files (OS clutter listed here is kept, not skipped). */
+    alsoTrackedPaths?: Iterable<string>;
   }
 ): Promise<ScanResult> {
   const scannedAt = new Date().toISOString();
   const rawEnumerated = await enumerateWorkingFolder(workingDir, options);
-  const expectedPaths = new Set((baselineManifest?.files ?? []).map((f) => f.path));
+  const expectedPaths = new Set([...(baselineManifest?.files ?? []).map((f) => f.path), ...(options?.alsoTrackedPaths ?? [])]);
   const partitioned = partitionSystemFiles(rawEnumerated.files, expectedPaths);
   const droppedErrors = partitionSystemErrors(rawEnumerated.errors, rawEnumerated.files, expectedPaths);
   partitioned.skipped.push(...droppedErrors.skipped);

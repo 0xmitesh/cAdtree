@@ -5,7 +5,7 @@ import {
   validateDirectoryIsolation,
 } from './fs-adapter';
 import { hashString } from './hash';
-import { withProjectWriterLock } from './locks';
+import { assertHoldsProjectWriterLock, withProjectWriterLock, type ProjectWriterLock } from './locks';
 import { applicationCaptureBlock, branchApplications, linkApplicationCapture } from './application-records';
 import { assertCaseWritable } from './case-lifecycle';
 import { componentRecordPath, prepareComponentRecord, publishComponentRecord } from './component-identity';
@@ -49,18 +49,24 @@ export class WorkingFilesChangedError extends Error {
   }
 }
 
+/** Duplicate entries are a caller bug, not a working-folder change. */
+function assertValidSnapshot(expected: ExpectedWorkingSnapshot): void {
+  const paths = expected.files.map((f) => f.path);
+  if (new Set(paths).size !== paths.length) throw new Error('Invalid expected snapshot: a file path is listed twice.');
+  if (new Set(expected.directories).size !== expected.directories.length) throw new Error('Invalid expected snapshot: a folder is listed twice.');
+}
+
 /** True when the scan's tracked files and folders are exactly the expected ones. */
 function scanMatchesSnapshot(scan: ScanResult, expected: ExpectedWorkingSnapshot): boolean {
   const files = [...scan.added, ...scan.modified.map((m) => m.current), ...scan.unchanged];
   if (files.length !== expected.files.length) return false;
   const expectedFiles = new Map(expected.files.map((f) => [f.path, f]));
-  if (expectedFiles.size !== expected.files.length) return false;
   for (const file of files) {
     const want = expectedFiles.get(file.path);
     if (!want || want.sha256 !== file.sha256 || want.size !== file.size) return false;
   }
   const expectedDirs = new Set(expected.directories);
-  if (expectedDirs.size !== expected.directories.length || scan.directories.length !== expectedDirs.size) return false;
+  if (scan.directories.length !== expectedDirs.size) return false;
   return scan.directories.every((dir) => expectedDirs.has(dir));
 }
 
@@ -105,7 +111,7 @@ export async function captureRevision(
     message: 'Acquiring single-writer project lock...',
   });
 
-  return withProjectWriterLock(projectId, () => captureUnderLock(workingDir, vaultDir, input, projectId));
+  return withProjectWriterLock(projectId, (lock) => captureUnderLock(workingDir, vaultDir, input, projectId, lock));
 }
 
 /**
@@ -117,21 +123,27 @@ export async function captureRevision(
  * mode), so a nested acquisition would wait for the outer one to release - which
  * only happens after the nested call returns. That is a deadlock, not reentrancy.
  *
- * Preconditions (checked by `captureRevision` before it takes the lock): the
- * caller holds the writer lock for `projectId`, and `workingDir` and `vaultDir`
- * have passed `validateDirectoryIsolation`. The vault is reloaded here and must
- * still have `projectId`.
+ * Preconditions: the caller holds the writer lock for `projectId` and passes
+ * the `lock` token `withProjectWriterLock` gave it (checked here), and
+ * `workingDir` and `vaultDir` have passed `validateDirectoryIsolation` (checked
+ * by `captureRevision` before it takes the lock). The vault is reloaded here and
+ * must still have `projectId`.
  */
 export async function captureUnderLock(
   workingDir: FileSystemDirectoryAdapter,
   vaultDir: FileSystemDirectoryAdapter,
   input: CaptureRevisionInput,
-  projectId: string
+  projectId: string,
+  lock: ProjectWriterLock
 ): Promise<CaptureRevisionResult> {
+  assertHoldsProjectWriterLock(lock, projectId);
   const cleanSummary = input.summary.trim();
   if (!cleanSummary) {
     throw new Error('Revision summary is required.');
   }
+  if (input.expectedSnapshot) assertValidSnapshot(input.expectedSnapshot);
+  // Files the caller expects to save count as tracked, so listed OS clutter is kept.
+  const expectedPaths = input.expectedSnapshot?.files.map((f) => f.path) ?? [];
 
   if (input.signal?.aborted) {
     throw new DOMException('Capture cancelled before starting.', 'AbortError');
@@ -224,6 +236,7 @@ export async function captureUnderLock(
     baselineManifest,
     {
       signal: input.signal,
+      alsoTrackedPaths: expectedPaths,
       onProgress: (filePath, count, bytes) => {
         input.onProgress?.({
           phase: 'scanning_source',
@@ -375,7 +388,7 @@ export async function captureUnderLock(
   const rawPostCapture = await enumerateWorkingFolder(workingDir, {
     signal: input.signal,
   });
-  const baselinePaths = new Set((baselineManifest?.files ?? []).map((f) => f.path));
+  const baselinePaths = new Set([...(baselineManifest?.files ?? []).map((f) => f.path), ...expectedPaths]);
   const postCaptureInventory = {
     ...rawPostCapture,
     errors: partitionSystemErrors(rawPostCapture.errors, rawPostCapture.files, baselinePaths).errors,

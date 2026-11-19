@@ -183,7 +183,13 @@ export interface ProgressUpdate {
   message: string;
 }
 
-/** The exact working-folder content a capture must find (tracked files and folders, paths relative to the working folder). */
+/**
+ * The exact tracked result a capture must find in the working folder (paths
+ * relative to it): every file the new revision must contain, OS clutter
+ * included when it is meant to be saved (a listed clutter file counts as
+ * tracked), and every folder. Untracked clutter that is not listed is ignored,
+ * as in any capture. Paths must be unique.
+ */
 export interface ExpectedWorkingSnapshot {
   files: { path: string; sha256: string; size: number }[];
   directories: string[];
@@ -206,8 +212,9 @@ export interface CaptureRevisionInput {
   reviewedChangesSignature?: string;
   /**
    * When given, capture's own fresh full scan must match it exactly (same file
-   * paths, SHA-256 and sizes, same folders); otherwise capture throws
-   * `WorkingFilesChangedError` before writing anything.
+   * paths, SHA-256 and sizes, same folders; see `ExpectedWorkingSnapshot` for
+   * clutter); otherwise capture throws `WorkingFilesChangedError` before
+   * writing anything.
    */
   expectedSnapshot?: ExpectedWorkingSnapshot;
   onProgress?: (progress: ProgressUpdate) => void;
