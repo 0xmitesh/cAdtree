@@ -9,14 +9,14 @@ import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sam
 import { nativeDirectory } from "../../tests/native-fs";
 import { DEFAULT_TEST_USER } from "../../tests/test-auth";
 import { appBusy, currentBranchId, openHomeWorkspace } from "../../tests/app-controls";
-import { clearAllConvenienceMetadata, getWorkspacePath, saveWorkspacePath, setConvenienceAccountScope } from "../engine/idb-store";
+import { clearAllConvenienceMetadata, getWorkspacePath, saveWorkspacePath } from "../engine/idb-store";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 import { importReferenceAttachment, retrieveReferenceAttachment, updateProjectReference } from "../engine/references";
 import { openExistingVault } from "../engine/vault-service";
 
 Object.assign(globalThis, { indexedDB });
-afterEach(async () => { cleanup(); await clearAllConvenienceMetadata(); setConvenienceAccountScope(DEFAULT_TEST_USER.uid); Reflect.deleteProperty(window, "showDirectoryPicker"); });
+afterEach(async () => { cleanup(); await clearAllConvenienceMetadata(); Reflect.deleteProperty(window, "showDirectoryPicker"); });
 const signature = async (dir: InMemoryFileSystemAdapter) => inventorySignature(await readVerifiedInventory(dir));
 async function openSample() {
   const sample = await compareApplyRecoverSample(), ui = render(<App />);
@@ -26,17 +26,11 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("Troubleshooting's reset explains its cross-account scope, cancels without changes and resets connections without deleting CAD history", async () => {
+test("Troubleshooting's reset explains its browser-wide scope, cancels without changes and resets connections without deleting CAD history", async () => {
   const { sample, ui, nav } = await openSample();
   const other = nativeDirectory(new InMemoryFileSystemAdapter("Other workspace"));
-  async function foreignPath() {
-    setConvenienceAccountScope("another-account");
-    try { return await getWorkspacePath("foreign-workspace", other); }
-    finally { setConvenienceAccountScope(DEFAULT_TEST_USER.uid); }
-  }
-  setConvenienceAccountScope("another-account");
+  const foreignPath = () => getWorkspacePath("foreign-workspace", other);
   await saveWorkspacePath("foreign-workspace", "D:\\Other", other);
-  setConvenienceAccountScope(DEFAULT_TEST_USER.uid);
   assert.equal(await foreignPath(), "D:\\Other");
   const before = await signature(sample.home);
   fireEvent.click(nav.getByRole("button", { name: "Settings" }));
@@ -46,7 +40,7 @@ test("Troubleshooting's reset explains its cross-account scope, cancels without 
   assert.equal(reset.closest("details")!.querySelector("summary")!.textContent, "Reset folder connections");
   fireEvent.click(reset);
   let dialog = within(ui.getByRole("dialog", { name: "Reset all remembered folder connections?" }));
-  assert.match(ui.getByRole("dialog").textContent!, /across all accounts and workspaces/);
+  assert.match(ui.getByRole("dialog").textContent!, /across all workspaces/);
   assert.match(ui.getByRole("dialog").textContent!, /does not delete CAD files/);
   fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
   assert.equal(await foreignPath(), "D:\\Other");

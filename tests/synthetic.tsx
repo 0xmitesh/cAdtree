@@ -18,8 +18,7 @@ import { captureRevision } from "../src/engine/revision-service";
 import { importReferenceAttachment, updateProjectReference, createReferenceReview } from "../src/engine/references";
 import { scanBranchChanges } from "../src/engine/scanner";
 import { getBranchBaseline } from "../src/engine/branch-state";
-import { rememberHome, saveWorkspacePath, setConvenienceAccountScope } from "../src/engine/idb-store";
-import { resolveAuthAdapter } from "../src/auth/firebase-auth";
+import { rememberHome, saveWorkspacePath } from "../src/engine/idb-store";
 import { DEFAULT_TEST_USER } from "./test-auth";
 
 const message = document.getElementById("preparing")!;
@@ -318,8 +317,6 @@ async function start() {
     (total, p) => total + p.project!.vaultState.revisions.length,
     0,
   );
-  const account = resolveAuthAdapter().getCurrentState?.();
-  setConvenienceAccountScope(account?.ready && account.user ? account.user.uid : null);
   // Display-only address for browser sample storage; no OS folder is accessed.
   await saveWorkspacePath(home.identity.homeId, 'C:\\cAdtree Samples', (home.root as RealFileSystemAdapter).handle);
   await rememberHome({

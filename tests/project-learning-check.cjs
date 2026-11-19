@@ -68,7 +68,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
           await page.getByText('Reset folder connections',{exact:true}).click();
           await page.getByRole('button',{name:'Reset all remembered folder connections in this browser',exact:true}).click();
           const reset=page.getByRole('dialog',{name:'Reset all remembered folder connections?',exact:true});
-          assert.match(await reset.innerText(),/across all accounts and workspaces/);
+          assert.match(await reset.innerText(),/across all workspaces/);
           assert.equal(await reset.evaluate(el=>el.scrollWidth<=el.clientWidth),true);
           await page.screenshot({path:path.join(artifacts,`browser-reset-${viewport.width}.png`)});
           await reset.getByRole('button',{name:'Cancel',exact:true}).click();

@@ -13,7 +13,6 @@ import {
   getWorkspacePath,
   type RememberedHome,
   bindWorkspacePathToRoot,
-  setConvenienceAccountScope,
 } from "./engine/idb-store";
 import type { AuthAdapter } from "./auth/firebase-auth";
 import { AccountStatusControl } from "./components/AccountControls";
@@ -152,35 +151,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanStale, setIsScanStale] = useState(false);
 
-  const resetActiveSessionUi = () => {
-    contextVersion.current++;
-    setLearningOpen(false);
-    setManagedProject(null);
-    setProjectUnavailable(null);
-    setVaultState(null);
-    setVaultDir(null);
-    setWorkingFolders({});
-    setWorkingDir(null);
-    setScanResult(null);
-    setActiveBranchId(MAIN_BRANCH_ID);
-    setActiveTab("connect");
-    setStatusBanner(null);
-    setWorkspace(null);
-    setHome(null);
-    setHomeView(true);
-    setIntroView(false);
-    setManagedWorkspaceKey(null);
-    setPendingHome(null);
-    setExplorerOpen(false);
-    homeAddressCache.current = [];
-    setHomeAddress(null);
-    draftCache.current.clear();
-    branchContexts.current.clear();
-    setRememberedWorkspace(null);
-    setRememberedHome(null);
-    setConvenienceEpoch((value) => value + 1);
-  };
-
   // Called here so its auth subscription effect keeps its place among App's effects.
   const {
     authState,
@@ -188,11 +158,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     signInPrompt,
     setSignInPrompt,
     signOutPending,
-    setSignOutPending,
-    pendingSignOutRef,
-    pendingAccountSnapshotRef,
-    applyAuthSnapshot,
-    executeSignOut,
     handleRequestSignOut,
     requestSignIn,
     handleContinueWithGoogle,
@@ -200,40 +165,26 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     handleForgotPassword,
   } = useAuthSession({
     auth,
-    resetActiveSessionUi,
-    setRememberedWorkspace,
-    setRememberedHome,
-    // Declared below by useOperation and the home actions; read only after this render.
-    getOperationRef: () => operationRef,
+    // Declared below by useOperation; read only after this render.
     setBannerScope: (scope) => setBannerScope(scope),
     setStatusBanner: (banner) => setStatusBanner(banner),
   });
 
+  // The browser remembers the last home and workspace, signed in or not.
   useEffect(() => {
-    const uid = authState.ready && authState.user ? authState.user.uid : null;
-    setConvenienceAccountScope(uid);
-    if (!uid) {
-      setRememberedWorkspace(null);
-      setRememberedHome(null);
-      return;
-    }
     let cancelled = false;
     void getRememberedWorkspace().then((value) => {
-      if (!cancelled && authStateRef.current.user?.uid === uid) {
-        setRememberedWorkspace(value);
-      }
+      if (!cancelled) setRememberedWorkspace(value);
     });
     void getRememberedHome()
       .then((value) => {
-        if (!cancelled && authStateRef.current.user?.uid === uid) {
-          setRememberedHome(value);
-        }
+        if (!cancelled) setRememberedHome(value);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [authState.ready, authState.user?.uid]);
+  }, []);
 
   // Declared here so its unmount effect keeps its place among App's effects.
   const {
@@ -249,11 +200,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     handleCancelOperation,
   } = useOperation({
     activeTab,
-    pendingSignOutRef,
-    pendingAccountSnapshotRef,
-    setSignOutPending,
-    executeSignOut,
-    applyAuthSnapshot,
   });
   useEffect(() => {
     setIsScanStale(false);
@@ -1130,7 +1076,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setActiveTab,
     setStatusBanner,
   });
-  const busy = operation !== null || signOutPending;
+  const busy = operation !== null;
   const isScanning = operation === "scan";
   const isCapturing = operation === "capture";
   const isVerifyingAll = operation === "verify";
@@ -1165,11 +1111,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       } : { view: "intro" };
   useViewHistory({
     view,
-    scope: authState.user?.uid ?? "signed-out",
-    ready: authState.ready,
+    scope: "local",
+    ready: true,
     busy,
     onVisit: async (target) => {
-      if (operationRef.current || pendingSignOutRef.current) return false;
+      if (operationRef.current) return false;
       // Back/Forward leaves the page too: its banner stays behind. A visit that cannot move keeps it.
       setLearningOpen(false);
       setExplorerOpen(false);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type AccountUser,
   type AuthAdapter,
@@ -6,31 +6,21 @@ import {
   isSignInCancelled,
   resolveAuthAdapter,
 } from "../auth/firebase-auth";
-import {
-  type RememberedHome,
-  type RememberedWorkspace,
-  setConvenienceAccountScope,
-} from "../engine/idb-store";
 import type { BannerScope, SignInPrompt, StatusBanner } from "./types";
 
 export type UseAuthSessionArgs = {
   auth?: AuthAdapter;
-  resetActiveSessionUi: () => void;
-  setRememberedWorkspace: (value: RememberedWorkspace | null) => void;
-  setRememberedHome: (value: RememberedHome | null) => void;
-  // The values below come from code App declares after this hook; they are read only when called.
-  getOperationRef: () => RefObject<AbortController | null>;
   setBannerScope: (scope: BannerScope) => void;
   setStatusBanner: (banner: StatusBanner | null) => void;
 };
 
-/** Sign-in and sign-out: the account state, the sign-in dialog's handlers, and sign-out deferred while an operation runs. */
+/**
+ * The optional account: its state, the sign-in dialog's handlers and sign-out.
+ * Signing in or out only changes the account shown in the app. It never closes the open project,
+ * never changes what the browser remembers, and no local action waits for it.
+ */
 export function useAuthSession({
   auth,
-  resetActiveSessionUi,
-  setRememberedWorkspace,
-  setRememberedHome,
-  getOperationRef,
   setBannerScope,
   setStatusBanner,
 }: UseAuthSessionArgs) {
@@ -39,87 +29,38 @@ export function useAuthSession({
     authAdapterRef.current = resolveAuthAdapter(auth);
   }
   const authAdapter = authAdapterRef.current;
-  const [authState, setAuthState] = useState<AuthSnapshot>(() => {
-    const initial = authAdapter.getCurrentState?.() ?? {
-      ready: false,
-      user: null,
-    };
-    setConvenienceAccountScope(
-      initial.ready && initial.user ? initial.user.uid : null,
-    );
-    return initial;
-  });
+  const [authState, setAuthState] = useState<AuthSnapshot>(
+    () => authAdapter.getCurrentState?.() ?? { ready: false, user: null },
+  );
   const authStateRef = useRef<AuthSnapshot>(authState);
   authStateRef.current = authState;
   const [signInPrompt, setSignInPrompt] = useState<SignInPrompt | null>(null);
   const [signOutPending, setSignOutPending] = useState(false);
-  const pendingSignOutRef = useRef(false);
-  const pendingAccountSnapshotRef = useRef<AuthSnapshot | null>(null);
 
   const applyAuthSnapshot = (next: AuthSnapshot) => {
-    const prevUid = authStateRef.current.user?.uid ?? null;
-    const nextUid = next.ready && next.user ? next.user.uid : null;
-    setConvenienceAccountScope(nextUid);
     authStateRef.current = next;
     setAuthState(next);
-    if (prevUid !== null && prevUid !== nextUid) {
-      resetActiveSessionUi();
-    } else if (nextUid === null) {
-      setRememberedWorkspace(null);
-      setRememberedHome(null);
-    }
   };
 
-  useEffect(() => {
-    return authAdapter.subscribe((next) => {
-      const prevUid = authStateRef.current.user?.uid ?? null;
-      const nextUid = next.ready && next.user ? next.user.uid : null;
-      if (getOperationRef().current && prevUid !== null && prevUid !== nextUid) {
-        pendingAccountSnapshotRef.current = next;
-        setSignOutPending(true);
-        return;
-      }
-      // A later auth event can return to the account whose write is still running.
-      // Discard any superseded switch rather than applying it after completion.
-      if (getOperationRef().current && pendingAccountSnapshotRef.current) {
-        pendingAccountSnapshotRef.current = null;
-        setSignOutPending(pendingSignOutRef.current);
-      }
-      applyAuthSnapshot(next);
-    });
-  }, [authAdapter]);
+  useEffect(() => authAdapter.subscribe(applyAuthSnapshot), [authAdapter]);
 
-  const executeSignOut = async () => {
+  const handleRequestSignOut = async () => {
+    if (signOutPending) return;
     setSignOutPending(true);
     try {
       await authAdapter.signOut();
+      setSignInPrompt(null);
+      applyAuthSnapshot({ ready: true, user: null });
     } catch (error) {
-      pendingSignOutRef.current = false;
       setBannerScope("workspace");
       setStatusBanner({
         type: "error",
         message:
           error instanceof Error ? error.message : "Could not sign out.",
       });
+    } finally {
       setSignOutPending(false);
-      return;
     }
-    pendingSignOutRef.current = false;
-    pendingAccountSnapshotRef.current = null;
-    setSignOutPending(false);
-    setSignInPrompt(null);
-    applyAuthSnapshot({ ready: true, user: null });
-    resetActiveSessionUi();
-  };
-
-  const handleRequestSignOut = () => {
-    if (signOutPending || pendingSignOutRef.current) return;
-    pendingSignOutRef.current = true;
-    if (getOperationRef().current) {
-      setSignOutPending(true);
-      return;
-    }
-    void executeSignOut();
   };
 
   const requestSignIn = () => {
@@ -247,11 +188,6 @@ export function useAuthSession({
     signInPrompt,
     setSignInPrompt,
     signOutPending,
-    setSignOutPending,
-    pendingSignOutRef,
-    pendingAccountSnapshotRef,
-    applyAuthSnapshot,
-    executeSignOut,
     handleRequestSignOut,
     requestSignIn,
     handleContinueWithGoogle,

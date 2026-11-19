@@ -93,17 +93,16 @@ test("Cadtree home is a hierarchy toggle, not a second workspace-list command", 
   await traverse('back');assert.ok(ui.getByRole('heading',{name:'Tutorial Workspace.'}));
 });
 
-test("Old browser-history entries cannot restore another account's project", async()=>{
+test("Signing in as another account keeps the open project and the browser-history entries", async()=>{
   const {ui,nav,auth,sample}=await openSample();
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
   const before=inventorySignature(await readVerifiedInventory(sample.home));
   await act(async()=>auth.setUser(SECOND_TEST_USER));
   assert.ok(ui.getByText('Second Engineer'));
+  assert.ok(ui.getByRole('heading',{name:'Changes.'}));
   await traverse('back');
-  assert.equal(ui.queryByRole('heading',{name:'History.'}),null);
-  assert.equal(ui.queryByRole('heading',{name:'Changes.'}),null);
-  assert.equal(ui.container.querySelector('.revision-detail'),null);
-  assert.ok(ui.getByRole('heading',{name:'Welcome to cAdtree'}));
+  assert.ok(ui.getByRole('heading',{name:'History.'}));
+  assert.equal(ui.queryByRole('heading',{name:'Welcome to cAdtree'}),null);
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)),before);
 });
 
