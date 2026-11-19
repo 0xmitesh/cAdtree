@@ -67,6 +67,7 @@ import { refreshGuidesAfter, workspaceGuideTargets } from "./app/offline-guide-r
 import { NavigationRail } from "./app/NavigationRail";
 import { ProjectViews } from "./app/ProjectViews";
 import { useAuthSession } from "./app/useAuthSession";
+import { useAutoRefresh } from "./app/useAutoRefresh";
 import { useApplicationActions } from "./app/useApplicationActions";
 import { useBranchActions } from "./app/useBranchActions";
 import { useCaptureActions } from "./app/useCaptureActions";
@@ -195,6 +196,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     statusBanner,
     setStatusBanner,
     operationRef,
+    backgroundRef,
     contextVersion,
     perform,
     handleCancelOperation,
@@ -942,7 +944,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const { scan, handleScanCurrent, handleCaptureRevision } = useCaptureActions({
+  const { scan, autoScanCurrent, handleScanCurrent, handleCaptureRevision } = useCaptureActions({
     vaultDir,
     workingDir,
     workingFolders,
@@ -950,6 +952,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     managedProject,
     workspace,
     authStateRef,
+    scanResult,
     perform,
     assertProjectWritable,
     refindOpenProject,
@@ -960,6 +963,30 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingDir,
     setScanResult,
     setStatusBanner,
+  });
+  // Quiet refresh of the page on screen: on focus, and after Apply or Bring back (see useAutoRefresh).
+  const { checking: isChecking, request: requestAutoRefresh, refreshNow: refreshPageNow } = useAutoRefresh({
+    backgroundRef,
+    operationRef,
+    contextVersion,
+    dialogOpen: Boolean(pendingHome || addressPrompt || learningOpen || explorerOpen || accountDialog),
+    run: async (context) => {
+      // Reads only: access that is gone is left to the Reconnect path, never asked for here.
+      if (homeView) {
+        if (introView || !home) return;
+        if ((await home.root.queryPermission("read")) !== "granted") return;
+        const next = await openHome(home.root);
+        if (next.identity.homeId === home.identity.homeId && context.current()) setHome(next);
+        return;
+      }
+      if (projectView) return autoScanCurrent(context);
+      if (!workspace) return;
+      if ((await workspace.root.queryPermission("read")) !== "granted") return;
+      const current = await openWorkspace(workspace.root);
+      if (!context.current()) return;
+      setWorkspace(current);
+      if (managedProject) await refindOpenProject(context, current);
+    },
   });
   // Install a project only after all explicit connections have passed identity checks.
   const installProject = async (
@@ -996,6 +1023,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     perform,
     assertProjectWritable,
     applyVaultState,
+    requestAutoRefresh,
     setScanResult,
     setStatusBanner,
   });
@@ -1382,6 +1410,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   scanResult={scanResult}
                   isScanStale={isScanStale}
                   isScanning={isScanning}
+                  isChecking={isChecking}
                   isCapturing={isCapturing}
                   isVerifyingAll={isVerifyingAll}
                   isCreatingBranch={isCreatingBranch}

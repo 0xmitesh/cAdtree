@@ -29,6 +29,8 @@ export interface ChangesCaptureViewProps {
   scanResult: ScanResult | null;
   isScanStale: boolean;
   isScanning: boolean;
+  /** A quiet background check of the files is running (shown as a small line, never blocks anything). */
+  isChecking?: boolean;
   isCapturing: boolean;
   progress: ProgressUpdate | null;
   statusBanner: { type: "success" | "error" | "info"; message: string } | null;
@@ -71,6 +73,7 @@ export function ChangesCaptureView({
   scanResult: scan,
   isScanStale,
   isScanning,
+  isChecking = false,
   isCapturing,
   progress,
   onScan,
@@ -266,7 +269,7 @@ export function ChangesCaptureView({
             ? " · Since " + formatRevisionNumber(head.manifest.displayNumber)
             : " · First revision"}
         </span>
-        <span>
+        <span data-scanned-at={scan?.scannedAt}>
           {scan
             ? "Scanned " +
               formatTimestamp(scan.scannedAt) +
@@ -274,6 +277,7 @@ export function ChangesCaptureView({
                 ? " · May have changed since scan"
                 : " · Latest scan")
             : "Scan needed"}
+          {isChecking ? <span className="muted small" data-testid="auto-check"> · Checking files…</span> : null}
         </span>
       </div>
       {operationBlockReason ? <Notice>{operationBlockReason}</Notice> : null}

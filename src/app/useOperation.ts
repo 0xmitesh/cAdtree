@@ -22,6 +22,8 @@ export function useOperation({
   const [statusBanner, setStatusBanner] = useState<StatusBanner | null>(null);
   // Synchronous guards also cover rapid double clicks before React renders disabled controls.
   const operationRef = useRef<AbortController | null>(null);
+  // The quiet background refresh (useAutoRefresh). A user operation always wins: it stops the refresh first.
+  const backgroundRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
 
   useEffect(
@@ -39,6 +41,7 @@ export function useOperation({
   ): Promise<T | undefined> => {
     const { rethrow = false, banner = true } =
       typeof options === "boolean" ? { rethrow: options } : options;
+    backgroundRef.current?.abort();
     if (operationRef.current) {
       if (rethrow)
         throw new Error("Finish or cancel the current operation first.");
@@ -95,6 +98,7 @@ export function useOperation({
     statusBanner,
     setStatusBanner,
     operationRef,
+    backgroundRef,
     contextVersion,
     perform,
     handleCancelOperation,

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  act,
   fireEvent,
   waitFor,
   within,
@@ -64,5 +65,24 @@ export async function openTestHome(ui: RenderResult, home: InMemoryFileSystemAda
 export async function openHomeWorkspace(ui: RenderResult, home: InMemoryFileSystemAdapter) {
   await openTestHome(ui, home);
   fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
+  await waitFor(() => assert.equal(appBusy(ui), false));
+}
+
+/** The time of the scan the Changes page shows, or null when it shows none yet. */
+export const scannedAt = (ui: RenderResult) =>
+  ui.container.querySelector("[data-scanned-at]")?.getAttribute("data-scanned-at") ?? null;
+
+/**
+ * Triggers the automatic rescan the way a user does (returning to the window) and waits until a newer scan is
+ * shown. Replaces clicking the removed "Scan for changes" button.
+ */
+export async function waitForScan(ui: RenderResult) {
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  const before = scannedAt(ui);
+  await act(async () => {
+    window.dispatchEvent(new window.Event("focus"));
+  });
+  await waitFor(() => assert.notEqual(scannedAt(ui), before), { timeout: 5000 });
+  await waitFor(() => assert.equal(ui.queryByTestId("auto-check"), null), { timeout: 5000 });
   await waitFor(() => assert.equal(appBusy(ui), false));
 }

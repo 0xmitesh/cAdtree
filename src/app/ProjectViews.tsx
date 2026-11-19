@@ -43,6 +43,7 @@ export type ProjectViewsProps = {
   scanResult: ScanResult | null;
   isScanStale: boolean;
   isScanning: boolean;
+  isChecking: boolean;
   isCapturing: boolean;
   isVerifyingAll: boolean;
   isCreatingBranch: boolean;
@@ -97,6 +98,7 @@ export function ProjectViews({
   scanResult,
   isScanStale,
   isScanning,
+  isChecking,
   isCapturing,
   isVerifyingAll,
   isCreatingBranch,
@@ -175,6 +177,7 @@ export function ProjectViews({
             }
             isScanStale={isScanStale}
             isScanning={isScanning}
+            isChecking={isChecking && branch.branchId === activeBranchId}
             isCapturing={isCapturing}
             progress={progress}
             statusBanner={null}

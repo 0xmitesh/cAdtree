@@ -24,3 +24,6 @@ dom.window.HTMLDialogElement.prototype.close = function () {
 };
 import { installGlobalTestAuth } from "./test-auth";
 installGlobalTestAuth();
+// The quiet background refresh waits seconds in the app; tests shorten it (see useAutoRefresh).
+import { autoRefreshTiming } from "../src/app/useAutoRefresh";
+Object.assign(autoRefreshTiming, { debounceMs: 20, minIntervalMs: 0, retryMs: 20 });
