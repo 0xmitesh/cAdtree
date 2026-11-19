@@ -59,10 +59,7 @@ export function useAutoRefresh(args: AutoRefreshArgs) {
     const { operationRef, backgroundRef, contextVersion } = latest.current;
     const running = backgroundRef.current && !backgroundRef.current.signal.aborted;
     if (operationRef.current || running || (!options.immediate && dialogIsOpen())) return false;
-    const now = Date.now();
-    if (!options.immediate && now - lastStart.current < autoRefreshTiming.minIntervalMs)
-      return true;
-    lastStart.current = now;
+    lastStart.current = Date.now();
     const controller = new AbortController();
     const version = contextVersion.current;
     const id = ++runId.current;
@@ -97,18 +94,18 @@ export function useAutoRefresh(args: AutoRefreshArgs) {
     let attempts = 0;
     const attempt = () => {
       timer.current = null;
+      // Too soon after the last run: wait out the rest of the interval (this one timer is the only pending run).
+      const wait = lastStart.current + autoRefreshTiming.minIntervalMs - Date.now();
+      if (!options.immediate && wait > 0) {
+        timer.current = setTimeout(attempt, wait);
+        return;
+      }
       void start(options).then((started) => {
         if (started || attempts++ >= autoRefreshTiming.maxRetries) return;
         timer.current = setTimeout(attempt, autoRefreshTiming.retryMs);
       });
     };
     timer.current = setTimeout(attempt, autoRefreshTiming.debounceMs);
-  };
-
-  /** Refresh right now (the interrupted-Apply panel's Refresh). Does nothing while an operation runs. */
-  const refreshNow = async () => {
-    clearTimer();
-    await start({ immediate: true });
   };
 
   const requestRef = useRef(request);
@@ -128,5 +125,5 @@ export function useAutoRefresh(args: AutoRefreshArgs) {
     };
   }, []);
 
-  return { checking, request, refreshNow };
+  return { checking, request };
 }

@@ -8,6 +8,11 @@ import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sam
 import { appBusy, currentBranchId, openHomeWorkspace, scannedAt, selectBranch, waitForScan } from "../../tests/app-controls";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { createProject } from "../engine/workspace-service";
+import { autoRefreshTiming } from "../app/useAutoRefresh";
+import { ChangesCaptureView } from "./ChangesCaptureView";
+import { scenarioState } from "../../tests/history-data";
+import { knownHashesFor } from "../engine/scanner";
+import type { ScanResult } from "../engine/types";
 
 Object.assign(globalThis, { indexedDB });
 afterEach(async () => {
@@ -229,4 +234,79 @@ test("perform stops the quiet scan first", async () => {
   result.current.backgroundRef.current = background;
   await hookAct(async () => { await result.current.perform("scan", async () => {}); });
   assert.equal(background.signal.aborted, true);
+});
+
+test("a focus soon after the last run is postponed to the end of the interval, not dropped", async () => {
+  const { sample, ui } = await openSample();
+  const saved = autoRefreshTiming.minIntervalMs;
+  autoRefreshTiming.minIntervalMs = 600;
+  try {
+    await waitForScan(ui);
+    const first = scannedAt(ui);
+    await sample.main.writeFileText(["Postponed.txt"], "later");
+    await focusWindow();
+    await sleep(200);
+    assert.equal(scannedAt(ui), first, "still inside the interval: nothing has run yet");
+    assert.equal(ui.queryByText("Postponed.txt"), null);
+    await waitFor(() => assert.ok(ui.getByText("Postponed.txt")), { timeout: 3000 });
+  } finally {
+    autoRefreshTiming.minIntervalMs = saved;
+  }
+});
+
+test("a check that cannot read the folder marks the result as not up to date, quietly, with a Retry that works", async () => {
+  const { sample, ui } = await openSample();
+  sample.home.setHooks({ readPermission: "prompt" });
+  await focusWindow();
+  await waitFor(() => assert.ok(ui.getByTestId("check-failed")));
+  assert.match(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Not up to date/);
+  assert.doesNotMatch(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Latest scan/);
+  assert.equal(ui.container.querySelector("[role='alert']"), null, "no banner for a background check");
+  sample.home.setHooks({ readPermission: "granted" });
+  const before = scannedAt(ui);
+  fireEvent.click(within(ui.getByTestId("check-failed")).getByRole("button", { name: "Retry" }));
+  await waitFor(() => assert.notEqual(scannedAt(ui), before));
+  await waitFor(() => assert.equal(ui.queryByTestId("check-failed"), null));
+});
+
+test("with no result yet, a failed check says so and offers Retry instead of 'Scan needed'", () => {
+  let retried = 0;
+  const ui = render(
+    <ChangesCaptureView
+      vaultState={scenarioState("single")}
+      activeBranchId="branch-main"
+      workingFolderName="CAD working"
+      vaultFolderName="Vault"
+      scanResult={null}
+      isScanStale={false}
+      isScanning={false}
+      isChecking={false}
+      checkFailed
+      isCapturing={false}
+      progress={null}
+      statusBanner={null}
+      onScan={async () => { retried++; }}
+      onCapture={async () => {}}
+      onCancelOperation={() => {}}
+      onReattachWorkingFolder={async () => {}}
+    />,
+  );
+  assert.equal(ui.queryByText(/Scan needed/), null);
+  assert.ok(ui.getByText(/Couldn't check files/));
+  fireEvent.click(ui.getByRole("button", { name: "Retry" }));
+  assert.equal(retried, 1);
+});
+
+test("the hash cache is never used across cases", () => {
+  const file = { path: "a.txt", size: 1, sha256: "x", lastModified: 1000 };
+  const previous = {
+    scannedAt: new Date(100_000).toISOString(),
+    branchId: "case-A",
+    added: [file],
+    modified: [],
+    unchanged: [],
+  } as unknown as ScanResult;
+  assert.equal(knownHashesFor(previous, "case-B"), undefined);
+  assert.equal(knownHashesFor(null, "case-A"), undefined);
+  assert.deepEqual([...knownHashesFor(previous, "case-A")!.keys()], ["a.txt"]);
 });

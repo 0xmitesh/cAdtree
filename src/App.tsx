@@ -151,6 +151,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [activeBranchId, setActiveBranchId] = useState(MAIN_BRANCH_ID);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanStale, setIsScanStale] = useState(false);
+  // The last check of the files failed (quiet "Couldn't check files" line); cleared by the next successful scan.
+  const [checkFailed, setCheckFailed] = useState(false);
 
   // Called here so its auth subscription effect keeps its place among App's effects.
   const {
@@ -285,6 +287,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const leaveProject = () => {
     contextVersion.current++;
+    setCheckFailed(false);
     setLearningOpen(false);
     setManagedProject(null);
     setProjectUnavailable(null);
@@ -945,10 +948,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders,
     setWorkingDir,
     setScanResult,
+    setCheckFailed,
     setStatusBanner,
   });
   // Quiet refresh of the page on screen: on focus, and after Apply or Bring back (see useAutoRefresh).
-  const { checking: isChecking, request: requestAutoRefresh, refreshNow: refreshPageNow } = useAutoRefresh({
+  const { checking: isChecking, request: requestAutoRefresh } = useAutoRefresh({
     backgroundRef,
     operationRef,
     contextVersion,
@@ -987,6 +991,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     keepTab = false,
   ) => {
     setProjectSession((previous) => previous + 1);
+    setCheckFailed(false);
     setVaultDir(vault);
     setVaultState(state);
     setWorkingFolders(folders);
@@ -1415,7 +1420,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleReattachWorkingFolder={handleReattachWorkingFolder}
                   handleCreateBranch={handleCreateBranch}
                   handleScanCurrent={handleScanCurrent}
-                  refreshApplicationStatus={refreshPageNow}
+                  checkFailed={checkFailed}
                   handleCaptureRevision={handleCaptureRevision}
                   handlePrepareApplication={handlePrepareApplication}
                   handleRefreshApplicationReview={handleRefreshApplicationReview}

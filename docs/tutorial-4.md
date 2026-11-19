@@ -99,7 +99,7 @@ Alt text: Real shared header shows Working case Lightweight bracket above Histor
 
 ### Step 6 of 6 — Keep both histories
 
-Continue saving meaningful revisions in whichever design direction you are working on: save CAD files, scan and review Changes, then Save revision.
+Continue saving meaningful revisions in whichever design direction you are working on: save CAD files, review Changes (cAdtree checks your files automatically), then Save revision.
 
 - The case's first changed save follows Rev 003. In this example, Lightweight bracket gets Rev 004 and Rev 005; Main later gets Rev 006 with Rev 003 as its parent. Numbers run across the whole project, not from one on each case.
 - Both histories keep their connection to the starting revision. Do not delete a useful alternative just because it did not become Main.

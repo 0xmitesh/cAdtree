@@ -119,6 +119,11 @@ export function knownHashesFromScan(previous: ScanResult): KnownHashes {
   return known;
 }
 
+/** The reusable hashes of the on-screen result, only when it belongs to the case being scanned. */
+export function knownHashesFor(previous: ScanResult | null, branchId: string): KnownHashes | undefined {
+  return previous && previous.branchId === branchId ? knownHashesFromScan(previous) : undefined;
+}
+
 /**
  * Recursively enumerates all files and subdirectories under `workingDir`.
  * Subdirectory counts and paths exclude the selected working folder root itself,
