@@ -172,7 +172,7 @@ export async function readComponentEvidence(vault: FileSystemDirectoryAdapter, s
 /** Initial heads are separate registration boundaries. No equivalence is guessed
  * between distinct pre-upgrade branches or earlier reused filenames. */
 export async function writeComponentBoundary(vault: FileSystemDirectoryAdapter, state: VaultState) {
-  if (state.corruptedRecords.length || Object.keys(state.damagedBranchHeads).length || Object.keys(state.competingHeads).length || state.applicationOperations?.some(op => !['captured', 'abandoned', 'recovered'].includes(op.status))) throw new Error('Resolve history/application evidence before enabling component tracking.');
+  if (state.corruptedRecords.length || Object.keys(state.damagedBranchHeads).length || Object.keys(state.competingHeads).length || state.applicationOperations?.some(op => !['captured', 'abandoned', 'recovered', 'done'].includes(op.status))) throw new Error('Resolve history/application evidence before enabling component tracking.');
   if (state.components?.status === 'available') return;
   if (await vault.hasFile(readyPath)) throw new Error('Existing component evidence is damaged or unsupported; it cannot be replaced.');
   let boundary: Boundary;

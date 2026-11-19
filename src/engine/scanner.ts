@@ -300,13 +300,19 @@ export async function scanBranchChanges(
     knownHashes?: KnownHashes;
     /** Paths to treat as tracked besides the baseline's files (OS clutter listed here is kept, not skipped). */
     alsoTrackedPaths?: Iterable<string>;
+    /** Treat untracked OS clutter like any file (Discard moves it with its folder; never for capture). */
+    keepSystemFiles?: boolean;
   }
 ): Promise<ScanResult> {
   const scannedAt = new Date().toISOString();
   const rawEnumerated = await enumerateWorkingFolder(workingDir, options);
   const expectedPaths = new Set([...(baselineManifest?.files ?? []).map((f) => f.path), ...(options?.alsoTrackedPaths ?? [])]);
-  const partitioned = partitionSystemFiles(rawEnumerated.files, expectedPaths);
-  const droppedErrors = partitionSystemErrors(rawEnumerated.errors, rawEnumerated.files, expectedPaths);
+  const partitioned = options?.keepSystemFiles
+    ? { files: rawEnumerated.files, skipped: [] as string[] }
+    : partitionSystemFiles(rawEnumerated.files, expectedPaths);
+  const droppedErrors = options?.keepSystemFiles
+    ? { errors: rawEnumerated.errors, skipped: [] as string[] }
+    : partitionSystemErrors(rawEnumerated.errors, rawEnumerated.files, expectedPaths);
   partitioned.skipped.push(...droppedErrors.skipped);
   partitioned.skipped.sort();
   const enumerated = {
