@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgressUpdate, VaultState } from "../engine/types";
 import { caseLifecycle } from "../engine/case-lifecycle";
+import { UnsavedCaseChangesError } from "../engine/case-lifecycle-service";
 import { Modal, Notice, OperationProgress } from "./ui";
 import { designCaseActivities } from "../engine/case-activity";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
@@ -10,6 +11,7 @@ export function DesignCases({
   activeBranchId,
   busy,
   progress,
+  showHidden = false,
   onChange,
   onCancel,
 }: {
@@ -17,10 +19,14 @@ export function DesignCases({
   activeBranchId: string;
   busy: boolean;
   progress: ProgressUpdate | null;
+  /** Show hidden cases (faded, with Unhide). History's "Show hidden cases" switch. */
+  showHidden?: boolean;
+  /** "archived" hides the case, "active" unhides it. */
   onChange: (
     branchId: string,
     status: "active" | "archived",
     expectedVersion: string | null,
+    acknowledgedChangesSignature?: string,
   ) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -33,21 +39,20 @@ export function DesignCases({
     branchId: string;
     status: "active" | "archived";
     version: string | null;
+    /** Unsaved changes the user was warned about (from the engine's fresh scan). */
+    unsaved?: { message: string; signature: string };
   } | null>(null);
   const [error, setError] = useState("");
   const [completed, setCompleted] = useState<{
     branchId: string;
     status: "active" | "archived";
   } | null>(null);
-  const archivedSummary = useRef<HTMLElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const errorFocus = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!action && completed) {
-      (completed.status === "archived"
-        ? archivedSummary.current
-        : buttons.current.get(completed.branchId)
-      )?.focus();
+      (buttons.current.get(completed.branchId) ?? heading.current)?.focus();
       setCompleted(null);
     }
   }, [action, completed, state]);
@@ -55,7 +60,7 @@ export function DesignCases({
     if (error) errorFocus.current?.focus();
   }, [error]);
   const cases = state.branches.filter((branch) => !branch.isMain);
-  const archived = cases.filter(
+  const hidden = cases.filter(
     (branch) => caseLifecycle(state, branch.branchId).status === "archived",
   );
   const unavailable = cases.filter(
@@ -65,37 +70,53 @@ export function DesignCases({
     if (!action || busy) return;
     setError("");
     try {
-      await onChange(action.branchId, action.status, action.version);
+      await onChange(
+        action.branchId,
+        action.status,
+        action.version,
+        action.unsaved?.signature,
+      );
       setCompleted({ branchId: action.branchId, status: action.status });
       setAction(null);
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error));
+      if (error instanceof UnsavedCaseChangesError)
+        setAction({
+          ...action,
+          unsaved: { message: error.message, signature: error.changesSignature },
+        });
+      else setError(error instanceof Error ? error.message : String(error));
     }
   };
   const row = (branch: (typeof cases)[number]) => {
     const lifecycle = caseLifecycle(state, branch.branchId);
+    const isHidden = lifecycle.status === "archived";
     const isCurrent = branch.branchId === activeBranchId;
     const activity = activities.get(branch.branchId)!;
+    const unsaved = isHidden ? (lifecycle.unsavedAtHide ?? 0) : 0;
     return (
-      <div className="settings-row case-row" key={branch.branchId}>
+      <div
+        className={`settings-row case-row${isHidden ? " hidden-case" : ""}`}
+        key={branch.branchId}
+      >
         <div>
           <strong>{branch.name}</strong>
           <p>
-            {lifecycle.status === "archived"
-              ? "Archived"
+            {isHidden
+              ? "Hidden"
               : lifecycle.status === "unavailable"
                 ? "Lifecycle unavailable"
                 : "Active"}
             {isCurrent ? " · Current working case" : ""}
+            {unsaved ? (
+              <span className="case-unsaved-badge">
+                {unsaved} unsaved {unsaved === 1 ? "change" : "changes"}
+              </span>
+            ) : null}
           </p>
           {lifecycle.status === "unavailable" ? (
             <p className="case-lifecycle-error">
               {lifecycle.error} Inspect the retained lifecycle evidence; this
               case is not assumed Active.
-            </p>
-          ) : isCurrent && lifecycle.status === "active" ? (
-            <p className="small">
-              Switch to another working case before archiving.
             </p>
           ) : null}
           {activity.baseline.status === "unavailable" ||
@@ -139,53 +160,54 @@ export function DesignCases({
               if (element) buttons.current.set(branch.branchId, element);
               else buttons.current.delete(branch.branchId);
             }}
-            aria-label={`${lifecycle.status === "archived" ? "Reopen" : "Archive"} case ${branch.name}`}
-            disabled={busy || (isCurrent && lifecycle.status === "active")}
+            aria-label={`${isHidden ? "Unhide case" : "Hide case"} ${branch.name}`}
+            disabled={busy}
             onClick={() => {
               setError("");
               setAction({
                 branchId: branch.branchId,
-                status: lifecycle.status === "archived" ? "active" : "archived",
+                status: isHidden ? "active" : "archived",
                 version: lifecycle.version,
               });
             }}
           >
-            {lifecycle.status === "archived" ? "Reopen case" : "Archive case"}
+            {isHidden ? "Unhide" : "Hide case"}
           </button>
         ) : null}
       </div>
     );
   };
+  const hiding = action?.status === "archived";
   return (
     <section className="panel design-cases" aria-label="Design cases">
       <div className="panel-heading">
-        <h2>Design cases</h2>
+        <h2 ref={heading} tabIndex={-1}>
+          Design cases
+        </h2>
         <span className="muted small">
-          {cases.length - archived.length - unavailable} active ·{" "}
-          {archived.length} archived
+          {cases.length - hidden.length - unavailable} shown · {hidden.length}{" "}
+          hidden
           {unavailable ? ` · ${unavailable} unavailable` : ""}
         </span>
       </div>
       <p className="case-lifecycle-help small">
-        Main cannot be archived. Archiving preserves the working folder and all saved
-        history. Archived revisions remain available in History, Compare and
-        Export.
+        Hiding a case keeps its folder and saved history. Main can't be hidden.
       </p>
       {cases
         .filter(
           (branch) =>
+            showHidden ||
             caseLifecycle(state, branch.branchId).status !== "archived",
         )
         .map(row)}
       {!cases.length ? (
         <p className="case-lifecycle-help">No design cases yet.</p>
+      ) : hidden.length && !showHidden ? (
+        <p className="case-lifecycle-help small muted">
+          {hidden.length} hidden {hidden.length === 1 ? "case" : "cases"}. Turn
+          on Show hidden cases to see {hidden.length === 1 ? "it" : "them"}.
+        </p>
       ) : null}
-      {archived.length ? <details className="case-archive-disclosure">
-        <summary ref={archivedSummary}>
-          Archived cases ({archived.length})
-        </summary>
-        {archived.map(row)}
-      </details> : cases.length ? <p className="case-lifecycle-help">No archived cases.</p> : null}
       {comparison ? (
         <CompareRevisionsDialog
           state={state}
@@ -197,11 +219,7 @@ export function DesignCases({
       ) : null}
       {action ? (
         <Modal
-          title={
-            action.status === "archived"
-              ? "Archive design case"
-              : "Reopen design case"
-          }
+          title={hiding ? "Hide design case" : "Unhide design case"}
           busy={busy}
           onClose={() => setAction(null)}
         >
@@ -215,15 +233,16 @@ export function DesignCases({
             </strong>
           </p>
           <p>
-            {action.status === "archived"
-              ? "The connected working folder will be checked against this case's saved baseline, including empty folders. Uncaptured changes, unreadable evidence or pending applications block archiving. In-app drafts remain intact."
-              : "Reopen this same case for future work. Its identity, history, baseline and working folder are retained. Normal connection checks apply when work resumes."}
+            {hiding
+              ? "The case leaves History and the Explorer. Its folder and saved revisions stay in place; turn on Show hidden cases to see it again."
+              : "The case shows again in History and the Explorer. No files change, and you stay on the case you are working on."}
           </p>
-          <p>
-            {action.status === "archived"
-              ? "Only lifecycle metadata changes. Working files and saved revisions stay in place."
-              : "No files are restored and the working case is not switched automatically."}
-          </p>
+          {hiding && action.branchId === activeBranchId ? (
+            <p>You are working on this case. cAdtree switches you to Main after hiding it.</p>
+          ) : null}
+          {action.unsaved ? (
+            <Notice type="info">{action.unsaved.message}</Notice>
+          ) : null}
           {error ? (
             <div ref={errorFocus} tabIndex={-1}>
               <Notice type="error">{error}</Notice>
@@ -243,7 +262,7 @@ export function DesignCases({
               disabled={busy}
               onClick={() => void confirm()}
             >
-              {action.status === "archived" ? "Archive case" : "Reopen case"}
+              {hiding ? "Hide case" : "Unhide"}
             </button>
           </div>
         </Modal>

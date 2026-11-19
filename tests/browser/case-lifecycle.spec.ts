@@ -2,7 +2,7 @@ import { waitForScan } from "./rescan";
 import { pickFile } from "./file-picker";
 import { test, expect } from "@playwright/test";
 for (const width of [1366, 390])
-  test(`actual App: archive, discover, inspect, reload and reopen a case at ${width}px`, async ({
+  test(`actual App: hide, discover, inspect, reload and unhide a case at ${width}px`, async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -14,13 +14,25 @@ for (const width of [1366, 390])
       const url = "/tests/apply-preview-seed.ts";
       return (await import(/* @vite-ignore */ url)).seedApplyPreviewReview();
     });
-    const read = () =>
+    const readOnce = () =>
       page.evaluate(async (fixture) => {
         const url = "/tests/case-lifecycle-fixture.ts";
         return (await import(/* @vite-ignore */ url)).readLifecycleFixture(
           fixture,
         );
       }, fixture);
+    // The offline guide is refreshed in the background after hide/unhide; a read
+    // that meets its temporary .crswap file is retried once the write settles.
+    const read = async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await readOnce();
+        } catch (error) {
+          if (attempt >= 5 || !String(error).includes(".crswap")) throw error;
+          await page.waitForTimeout(250);
+        }
+      }
+    };
     const before = await read();
     await page.reload();
     await page
@@ -71,8 +83,8 @@ for (const width of [1366, 390])
         await row.click();
       },
     };
-    const archiveButton = page.getByRole("button", {
-      name: "Archive case Part-X redesign",
+    const hideButton = page.getByRole("button", {
+      name: "Hide case Part-X redesign",
       exact: true,
     });
     if (width === 1366) {
@@ -80,12 +92,17 @@ for (const width of [1366, 390])
       await select.selectOption(fixture.safeCaseId);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await showCases();
-      await expect(archiveButton).toBeDisabled();
-      await expect(
-        page.getByText("Switch to another working case before archiving.", {
-          exact: true,
-        }),
-      ).toBeVisible();
+      // The working case can be hidden; the dialog says the app switches to Main.
+      await hideButton.click();
+      const current = page.getByRole("dialog", {
+        name: "Hide design case",
+        exact: true,
+      });
+      await expect(current).toContainText(
+        "You are working on this case. cAdtree switches you to Main after hiding it.",
+      );
+      await current.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(current).toHaveCount(0);
       await page.evaluate(async (fixture) => {
         const url = "/tests/case-lifecycle-fixture.ts";
         await (
@@ -128,54 +145,56 @@ for (const width of [1366, 390])
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     }
     await showCases();
-    const archive = async () => {
-      await archiveButton.click();
+    const hide = async () => {
+      await hideButton.click();
       const modal = page.getByRole("dialog", {
-        name: "Archive design case",
+        name: "Hide design case",
         exact: true,
       });
-      await expect(modal).toContainText("In-app drafts remain intact");
+      await expect(modal).toContainText(
+        "Its folder and saved revisions stay in place",
+      );
       await modal
-        .getByRole("button", { name: "Archive case", exact: true })
+        .getByRole("button", { name: "Hide case", exact: true })
         .click();
       await expect(modal).toHaveCount(0);
       await expect(
-        page.getByText("Archived cases (1)", { exact: true }),
+        page.getByRole("heading", { name: "Design cases", exact: true }),
       ).toBeFocused();
+      await expect(
+        page.getByText("1 hidden case. Turn on Show hidden cases to see it.", {
+          exact: true,
+        }),
+      ).toBeVisible();
     };
-    const showArchivedCases = async () => {
-      if (
-        (await page
-          .locator(".case-archive-disclosure")
-          .getAttribute("open")) === null
-      )
-        await page.getByText("Archived cases (1)", { exact: true }).click();
+    const showHiddenCases = async () => {
+      await page.locator(".history-hidden-toggle input").check();
     };
-    const reopen = async () => {
-      await showArchivedCases();
+    const unhide = async () => {
+      await showHiddenCases();
       await page
         .getByRole("button", {
-          name: "Reopen case Part-X redesign",
+          name: "Unhide case Part-X redesign",
           exact: true,
         })
         .click();
       const modal = page.getByRole("dialog", {
-        name: "Reopen design case",
+        name: "Unhide design case",
         exact: true,
       });
       await modal
-        .getByRole("button", { name: "Reopen case", exact: true })
+        .getByRole("button", { name: "Unhide", exact: true })
         .click();
       await expect(modal).toHaveCount(0);
       await expect(page.getByRole("region", { name: "Project context"})).toHaveAttribute('data-branch-id', 'branch-main');
     };
-    await archive();
+    await hide();
     await expect(page.getByRole("region", { name: "Project context"})).toHaveAttribute('data-branch-id', 'branch-main');
     await expect(
       page.locator(`[role="treeitem"][data-branch-id="${fixture.safeCaseId}"]`),
     ).toHaveCount(0);
     if (width === 1366) {
-      await reopen();
+      await unhide();
       await settings();
       await select.selectOption(fixture.safeCaseId);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
@@ -198,7 +217,7 @@ for (const width of [1366, 390])
       await select.selectOption("branch-main");
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await showCases();
-      await archive();
+      await hide();
     }
     const archived = await read();
     expect(archived.unchangedFingerprint).toBe(before.unchangedFingerprint);
@@ -208,11 +227,9 @@ for (const width of [1366, 390])
     expect(archived.state.branches).toEqual(before.state.branches);
     expect(archived.state.revisions).toEqual(before.state.revisions);
     await browse();
-    await page
-      .getByRole("checkbox", { name: "Show archived cases", exact: true })
-      .check();
+    await page.locator(".tree-hidden-toggle input:visible").check();
     const archivedNode = tree.getByRole("treeitem", {
-      name: "Part-X redesign · Archived, Actuator preview, Application preview review",
+      name: "Part-X redesign · Hidden, Actuator preview, Application preview review",
       exact: true,
     });
     await expect(archivedNode).toHaveAttribute("aria-disabled", "true");
@@ -221,10 +238,10 @@ for (const width of [1366, 390])
         .getByRole("dialog", { name: "Browse folders" })
         .getByRole("button", { name: "Close dialog", exact: true })
         .click();
-    await showArchivedCases();
+    await showHiddenCases();
     await expect(
       page.getByRole("button", {
-        name: "Reopen case Part-X redesign",
+        name: "Unhide case Part-X redesign",
         exact: true,
       }),
     ).toBeVisible();
@@ -234,18 +251,18 @@ for (const width of [1366, 390])
         .evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
     ).toBe(true);
     await page.screenshot({
-      path: `artifacts/screenshots/case-archive-${width}.png`,
+      path: `artifacts/screenshots/case-hidden-${width}.png`,
     });
     await nav.getByRole("button", { name: "History", exact: true }).click();
     await page
       .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })
       .press("Enter");
     await expect(page.locator(".detail-meta")).toContainText(
-      "Part-X redesign · Archived",
+      "Part-X redesign · Hidden",
     );
     await expect(
       page.getByRole("button", {
-        name: "Part-X redesign · Archived",
+        name: "Part-X redesign · Hidden",
         exact: true,
       }),
     ).toBeVisible();
@@ -272,7 +289,7 @@ for (const width of [1366, 390])
     });
     await expect(
       review.getByRole("region", { name: "Source saved revision" }),
-    ).toContainText("Part-X redesign · Archived");
+    ).toContainText("Part-X redesign · Hidden");
     await page.keyboard.press("Escape");
     await expect(
       page.getByRole("region", { name: "Project context" }),
@@ -308,7 +325,7 @@ for (const width of [1366, 390])
         .click();
     }
     await showCases();
-    await reopen();
+    await unhide();
     const after = await read();
     expect(after.unchangedFingerprint).toBe(before.unchangedFingerprint);
     expect(after.state.caseLifecycles[fixture.safeCaseId].status).toBe(
@@ -318,6 +335,6 @@ for (const width of [1366, 390])
     expect(after.state.revisions).toEqual(before.state.revisions);
     expect(errors).toEqual([]);
     await page.screenshot({
-      path: `artifacts/screenshots/case-reopened-${width}.png`,
+      path: `artifacts/screenshots/case-unhidden-${width}.png`,
     });
   });

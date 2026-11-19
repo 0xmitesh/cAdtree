@@ -2999,7 +2999,7 @@ input::placeholder {
 .detail-preview-action {
   padding: 0 22px 12px;
 }
-.tree-archive-toggle {
+.tree-hidden-toggle {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3007,13 +3007,14 @@ input::placeholder {
   padding: 2px 10px 9px;
   color: #c1d2cf;
 }
-.tree-archive-help {
+.tree-hidden-help {
   font-size: 11px;
   padding: 0 10px 6px;
   color: #c1d2cf;
 }
-.tree-row.archived {
+.tree-row.hidden-case {
   color: #c1d2cf;
+  font-style: italic;
 }
 .case-lifecycle-help {
   padding: 12px 22px;
@@ -3036,16 +3037,42 @@ input::placeholder {
 .case-lifecycle-error {
   color: #a04c2f;
 }
-.case-archive-disclosure {
-  padding: 12px 22px;
-}
 .history-design-cases { margin: 0 0 20px; padding: 12px 0 0; }
 .history-design-cases > summary { color: var(--teal); font-size: 14px; font-weight: 600; cursor: pointer; }
 .history-design-cases > .design-cases { margin-top: 12px; }
-.case-archive-disclosure summary {
-  cursor: pointer;
+.case-row.hidden-case > div,
+.case-row.hidden-case > div strong {
+  color: var(--muted);
+}
+.case-unsaved-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fbefe4;
+  color: #8a4b1f;
+  font-size: 12px;
+}
+.history-hidden-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
-  color: #087f80;
+  white-space: nowrap;
+}
+/* Hidden cases: muted text (readable contrast); only the dot is faded. */
+.graph-row.hidden-case .graph-label,
+.graph-row.hidden-case .graph-label strong,
+.revision-list-row.hidden-case,
+.revision-list-row.hidden-case strong,
+.branch-filter.hidden-case {
+  color: var(--muted);
+}
+.graph-row.hidden-case .graph-dot {
+  opacity: 0.55;
+}
+.branch-filter.hidden-case {
+  border-style: dashed;
 }
 @media (max-width: 600px) {
   .case-row {

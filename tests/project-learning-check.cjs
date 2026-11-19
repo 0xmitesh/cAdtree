@@ -78,7 +78,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
         await page.screenshot({path:path.join(artifacts,`working-case-${view.toLowerCase()}-${viewport.width}.png`)});
       }
       assert.equal(await page.locator('.revision-detail').innerText(),selected);
-      assert.equal(await page.getByRole('checkbox',{name:'Show archived cases',exact:true}).count(),0);
+      assert.equal(await page.getByRole('checkbox',{name:'Show hidden cases',exact:true}).count(),0);
       assert.equal(await page.locator('.detail-tabs').getByRole('button',{name:'Changed files',exact:true}).count(),1);
       assert.equal(await page.locator('.detail-tabs').getByRole('button',{name:'Saved references',exact:true}).count(),1);
       await page.getByRole('button',{name:'Create design case from this revision',exact:true}).click();
@@ -150,7 +150,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.locator('.history-design-cases > summary').click();
       const cases=page.getByRole('region',{name:'Design cases',exact:true});
       assert.equal(await page.locator('.settings-page .design-cases').count(),0);
-      assert.equal(await cases.getByRole('button',{name:'Archive case Main',exact:true}).count(),0);
+      assert.equal(await cases.getByRole('button',{name:'Hide case Main',exact:true}).count(),0);
       assert.equal(await cases.getByLabel('Saved activity and divergence for Lightweight bracket',{exact:true}).count(),0);
       await cases.getByRole('button',{name:'Compare Lightweight bracket with Main',exact:true}).click();
       const comparison=page.getByRole('dialog',{name:'Compare saved revisions',exact:true});
@@ -158,18 +158,18 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await comparison.getByRole('button',{name:'Close comparison',exact:true}).click();
       assert.equal(await page.evaluate(()=>window.sample.signature()),reviewBefore);
       const workingBefore=await page.evaluate(()=>window.sample.working());
-      await cases.getByRole('button',{name:'Archive case Lightweight bracket',exact:true}).click();
-      let confirmation=page.getByRole('dialog',{name:'Archive design case',exact:true});
+      await cases.getByRole('button',{name:'Hide case Lightweight bracket',exact:true}).click();
+      let confirmation=page.getByRole('dialog',{name:'Hide design case',exact:true});
       await confirmation.getByRole('button',{name:'Cancel',exact:true}).click();
       assert.equal((await page.evaluate(()=>window.sample.state())).lifecycle,'active');
-      await cases.getByRole('button',{name:'Archive case Lightweight bracket',exact:true}).click();
-      await confirmation.getByRole('button',{name:'Archive case',exact:true}).click();await confirmation.waitFor({state:'hidden'});
+      await cases.getByRole('button',{name:'Hide case Lightweight bracket',exact:true}).click();
+      await confirmation.getByRole('button',{name:'Hide case',exact:true}).click();await confirmation.waitFor({state:'hidden'});
       assert.equal((await page.evaluate(()=>window.sample.state())).lifecycle,'archived');
-      await cases.getByText('Archived cases (1)',{exact:true}).click();
+      await page.locator('.history-hidden-toggle input').check();
       await cases.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(artifacts,`history-design-cases-${viewport.width}.png`)});
-      await cases.getByRole('button',{name:'Reopen case Lightweight bracket',exact:true}).click();
-      confirmation=page.getByRole('dialog',{name:'Reopen design case',exact:true});
-      await confirmation.getByRole('button',{name:'Reopen case',exact:true}).click();await confirmation.waitFor({state:'hidden'});
+      await cases.getByRole('button',{name:'Unhide case Lightweight bracket',exact:true}).click();
+      confirmation=page.getByRole('dialog',{name:'Unhide design case',exact:true});
+      await confirmation.getByRole('button',{name:'Unhide',exact:true}).click();await confirmation.waitFor({state:'hidden'});
       assert.deepEqual(await page.evaluate(()=>window.sample.state()),{revisions:6,lifecycle:'active'});
       assert.deepEqual(await page.evaluate(()=>window.sample.working()),workingBefore);
       assert.equal(await page.getByRole("region", { name: "Project context",exact:true}).getAttribute('data-branch-id'),'branch-main');

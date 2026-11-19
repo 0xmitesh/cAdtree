@@ -225,7 +225,7 @@ test('project map: header, latest files, branches, revisions, references, integr
   // Branches and cases.
   assert.ok(lines.includes('    Branch ID: branch-main'));
   assert.ok(lines.includes(`    Branch ID: ${f.caseId}`));
-  assert.ok(lines.includes('    Status: archived'));
+  assert.ok(lines.includes('    Status: hidden'));
   assert.ok(lines.includes('    Status: active'));
   assert.ok(lines.includes(`    Started from: Rev 001 (${f.revisionIds[0]})`));
   assert.ok(lines.includes('    Reason: Reduce mass'));
@@ -304,7 +304,7 @@ test('refresh writes the Map and one listing per revision; a second refresh rewr
   const map = await readText(f, [MAP]);
   assert.match(map, /Generated: 2026-11-16T10:00:00\.000Z/);
   assert.match(map, new RegExp(`Covers up to: Rev 002 \\(${f.revisionIds[1]}\\)`));
-  assert.match(map, /Status: archived/);
+  assert.match(map, /Status: hidden/);
   assert.match(map, /Lighter collar: working\/Lighter collar/);
   for (const [index, id] of f.revisionIds.entries()) {
     const text = await readText(f, listingPath(id));

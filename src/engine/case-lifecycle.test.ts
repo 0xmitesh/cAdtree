@@ -7,8 +7,11 @@ import {
 import { captureRevision } from "./revision-service";
 import { initializeProjectVault, openExistingVault } from "./vault-service";
 import { createDesignBranch } from "./branch-service";
-import { caseLifecycle, lifecyclePath } from "./case-lifecycle";
-import { changeCaseLifecycle } from "./case-lifecycle-service";
+import { caseLifecycle, lifecyclePath, sealLifecycle } from "./case-lifecycle";
+import {
+  changeCaseLifecycle,
+  UnsavedCaseChangesError,
+} from "./case-lifecycle-service";
 import { inventorySignature, readVerifiedInventory } from "./copy-service";
 import { prepareApplyPreview, buildApplyPreview } from "./apply-preview";
 import {
@@ -247,7 +250,9 @@ test("dirty files, empty-directory changes, missing connections and unreadable e
     if (kind === "missing") delete f.folders[f.a.branch.branchId];
     await assert.rejects(
       f.change("archived"),
-      /uncaptured|unreadable|Reconnect/,
+      kind === "unreadable" || kind === "missing"
+        ? /can't be read|unreadable|Reconnect/
+        : /unsaved change/,
     );
     f.parent.setHooks({ onBeforeRead: undefined });
     assert.deepEqual((await f.state()).caseLifecycles, {});
@@ -284,7 +289,7 @@ test("applied, unresolved and unavailable application evidence blocks archive th
     }
     await assert.rejects(
       f.change("archived"),
-      /pending or unavailable application/,
+      mode === "applied" ? /Finish saving first/ : /unfinished or unreadable/,
     );
     assert.deepEqual((await f.state()).caseLifecycles, {});
   }
@@ -296,15 +301,15 @@ test("archived destinations reject capture, preparation and an already-prepared 
   await f.change("archived");
   await assert.rejects(
     f.save(f.a.branch.branchId, "Blocked capture"),
-    /archived/,
+    /hidden/,
   );
   await assert.rejects(
     prepareApplication(f.vault, request, f.options),
-    /archived/,
+    /hidden/,
   );
   await assert.rejects(
     applyPreparedApplication(f.vault, prepared, f.options),
-    /archived/,
+    /hidden/,
   );
   await f.change("active");
   await applyPreparedApplication(f.vault, prepared, f.options);
@@ -327,7 +332,7 @@ test("archived sources retain graph/file history, Compare, notes, application, n
     graph.nodes.some(
       (node) =>
         node.id === f.revisionA.revision.manifest.revisionId &&
-        node.branchName.endsWith(" · Archived"),
+        node.branchName.endsWith(" · Hidden"),
     ),
   );
   assert.ok(
@@ -553,4 +558,123 @@ test("adoption and workspace migration retain lifecycle metadata, branch publica
     }),
     /Reconnect/,
   );
+});
+test("Hide case: a clean case records 0 unsaved changes; unhide records none", async () => {
+  const f = await fixture();
+  const hidden = await f.change("archived");
+  const lifecycle = caseLifecycle(hidden.state, f.a.branch.branchId);
+  assert.equal(lifecycle.status, "archived");
+  assert.equal(lifecycle.unsavedAtHide, 0);
+  const record = JSON.parse(
+    await f.vault.readFileText(lifecyclePath(f.a.branch.branchId, 1)),
+  );
+  assert.equal(record.status, "archived");
+  assert.equal(record.unsavedAtHide, 0);
+  const shown = await f.change("active");
+  assert.equal(caseLifecycle(shown.state, f.a.branch.branchId).status, "active");
+  assert.equal(
+    caseLifecycle(shown.state, f.a.branch.branchId).unsavedAtHide,
+    undefined,
+  );
+  assert.equal(
+    "unsavedAtHide" in
+      JSON.parse(
+        await f.vault.readFileText(lifecyclePath(f.a.branch.branchId, 2)),
+      ),
+    false,
+  );
+});
+test("Hide case with unsaved changes: warns first, hides only with the matching signature and keeps the files", async () => {
+  const f = await fixture();
+  const dir = f.a.workingDir;
+  await dir.writeFileText(part.split("/"), "unsaved edit");
+  await dir.writeFileText(["New.txt"], "new file");
+  await dir.getDirectory(["New folder"], { create: true });
+  const working = await snapshot(dir);
+  const warning = await f.change("archived").then(
+    () => assert.fail("hide must stop for a warning"),
+    (error: unknown) => error as UnsavedCaseChangesError,
+  );
+  assert.ok(warning instanceof UnsavedCaseChangesError);
+  assert.equal(warning.stale, false);
+  assert.equal(warning.changeCount, 3);
+  assert.match(
+    warning.message,
+    /This case has 3 unsaved changes\. They stay in its folder and show again when you unhide it\./,
+  );
+  assert.deepEqual((await f.state()).caseLifecycles, {});
+  // A further edit after the warning: the acknowledged signature is stale.
+  await dir.writeFileText(["Another.txt"], "edited after the warning");
+  const stale = await f
+    .change("archived", f.a.branch.branchId, {
+      acknowledgedChangesSignature: warning.changesSignature,
+    })
+    .then(
+      () => assert.fail("a stale acknowledgement must not hide"),
+      (error: unknown) => error as UnsavedCaseChangesError,
+    );
+  assert.ok(stale instanceof UnsavedCaseChangesError);
+  assert.equal(stale.stale, true);
+  assert.equal(stale.changeCount, 4);
+  assert.match(stale.message, /differ from what you saw/);
+  assert.deepEqual((await f.state()).caseLifecycles, {});
+  const hidden = await f.change("archived", f.a.branch.branchId, {
+    acknowledgedChangesSignature: stale.changesSignature,
+  });
+  const lifecycle = caseLifecycle(hidden.state, f.a.branch.branchId);
+  assert.equal(lifecycle.status, "archived");
+  assert.equal(lifecycle.unsavedAtHide, 4);
+  assert.equal(await dir.readFileText(part.split("/")), "unsaved edit");
+  assert.equal(await dir.readFileText(["Another.txt"]), "edited after the warning");
+  assert.notEqual(await snapshot(dir), working);
+  // Still read-only while hidden; unhide shows the same changes again.
+  await assert.rejects(f.save(f.a.branch.branchId, "Blocked"), /hidden/);
+  await f.change("active");
+  await f.save(f.a.branch.branchId, "Saved after unhide");
+});
+test("Hide case refuses scan errors, Main and the current case even with an acknowledgement", async () => {
+  const f = await fixture();
+  await f.a.workingDir.writeFileText(part.split("/"), "unsaved edit");
+  f.parent.setHooks({
+    onBeforeRead: (path) => {
+      if (path.endsWith("P.SLDPRT")) throw new Error("unreadable part");
+    },
+  });
+  await assert.rejects(
+    f.change("archived", f.a.branch.branchId, {
+      acknowledgedChangesSignature: "anything",
+    }),
+    /can't be read/,
+  );
+  f.parent.setHooks({ onBeforeRead: undefined });
+  await assert.rejects(
+    f.change("archived", "branch-main", { acknowledgedChangesSignature: "x" }),
+    /Main cannot be hidden/,
+  );
+  await assert.rejects(
+    f.change("archived", f.a.branch.branchId, {
+      activeBranchId: f.a.branch.branchId,
+    }),
+    /Switch to another case/,
+  );
+  assert.deepEqual((await f.state()).caseLifecycles, {});
+});
+test("lifecycle records with an invalid unsavedAtHide are unavailable", async () => {
+  for (const value of [-1, 1.5, "2"]) {
+    const f = await fixture();
+    await f.change("archived");
+    const path = lifecyclePath(f.a.branch.branchId, 1);
+    const { checksum: _checksum, ...body } = JSON.parse(
+      await f.vault.readFileText(path),
+    );
+    body.unsavedAtHide = value;
+    await f.vault.writeFileText(
+      path,
+      JSON.stringify(sealLifecycle(body)),
+    );
+    assert.equal(
+      caseLifecycle(await f.state(), f.a.branch.branchId).status,
+      "unavailable",
+    );
+  }
 });

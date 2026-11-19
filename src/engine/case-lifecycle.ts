@@ -7,6 +7,8 @@ export interface CaseLifecycle {
   status: "active" | "archived" | "unavailable";
   version: string | null;
   sequence: number;
+  /** Unsaved changes (files and folders) the case had when it was hidden. */
+  unsavedAtHide?: number;
   error?: string;
 }
 export interface CaseLifecycleRecord {
@@ -16,8 +18,11 @@ export interface CaseLifecycleRecord {
   branchRecordSha256: string;
   sequence: number;
   previousSha256: string | null;
+  /** On disk "archived" means hidden; the value is kept so existing records stay valid. */
   status: "active" | "archived";
   changedAt: string;
+  /** Hide records only: how many unsaved changes stayed in the case's folder. */
+  unsavedAtHide?: number;
   checksum: string;
 }
 const legacy: CaseLifecycle = { status: "active", version: null, sequence: 0 };
@@ -35,7 +40,7 @@ export function caseWriteBlock(
 ): string | undefined {
   const lifecycle = caseLifecycle(state, branchId);
   return lifecycle.status === "archived"
-    ? "This case is archived. Reopen it in Settings → Design cases before saving or applying changes."
+    ? "This case is hidden. Unhide it in History → Design cases before saving or changing its files."
     : lifecycle.status === "unavailable"
       ? `Case lifecycle evidence is unavailable. Inspect the retained lifecycle records before writing. ${lifecycle.error ?? ""}`
       : undefined;
@@ -49,7 +54,7 @@ export function caseLabel(state: VaultState, branchId: string) {
     state.branches.find((branch) => branch.branchId === branchId)?.name ??
     "Unknown branch";
   const status = caseLifecycle(state, branchId).status;
-  return `${name}${status === "archived" ? " · Archived" : status === "unavailable" ? " · Lifecycle unavailable" : ""}`;
+  return `${name}${status === "archived" ? " · Hidden" : status === "unavailable" ? " · Lifecycle unavailable" : ""}`;
 }
 export function sealLifecycle(
   body: Omit<CaseLifecycleRecord, "checksum">,
@@ -140,6 +145,10 @@ export async function readCaseLifecycles(
             !["active", "archived"].includes(record.status) ||
             record.status === current.status ||
             typeof record.changedAt !== "string" ||
+            (record.unsavedAtHide !== undefined &&
+              (record.status !== "archived" ||
+                !Number.isSafeInteger(record.unsavedAtHide) ||
+                record.unsavedAtHide < 0)) ||
             !Number.isFinite(Date.parse(record.changedAt)) ||
             !checksum ||
             checksum !== hashString(JSON.stringify(body))
@@ -151,6 +160,9 @@ export async function readCaseLifecycles(
             status: record.status,
             version: checksum,
             sequence: record.sequence,
+            ...(record.unsavedAtHide !== undefined
+              ? { unsavedAtHide: record.unsavedAtHide }
+              : {}),
           };
         }
         result[branchId] = current;

@@ -60,51 +60,125 @@ test('History owns the existing case activity/Compare panel without changing ins
   assert.equal((summary as HTMLInputElement).value,'Keep this engineering draft');
 });
 
-test('History Archive/Reopen retains Main protection, dirty-case refusal, explicit confirmation and saved history',async()=>{
+test('History Hide case/Unhide: Main protection, unsaved-changes warning, badge, Show hidden cases and saved history',async()=>{
   const s=await compareApplyRecoverSample();
   const ui=render(<App/>);await openHomeWorkspace(ui,s.home);
   fireEvent.click(ui.getByRole('button',{name:'Open project'}));
   await waitFor(()=>assert.equal(appBusy(ui),false));
   const disclosure=ui.container.querySelector<HTMLDetailsElement>('.history-design-cases')!;
   fireEvent.click(disclosure.querySelector('summary')!);
-  assert.equal(ui.queryByRole('button',{name:'Archive case Main'}),null);
-  const bytes=await s.caseFolder.readFileBytes(['Bracket.SLDPRT']);
-  const mainBefore=inventorySignature(await readVerifiedInventory(s.main));
-  const caseBefore=inventorySignature(await readVerifiedInventory(s.caseFolder));
+  assert.equal(ui.queryByRole('button',{name:'Hide case Main'}),null);
   const state=()=>resolveManagedProject(s.workspace.root,s.project.record.containerPath);
   const saved=(await state()).vaultState.revisions.map(r=>r.manifest.revisionId);
-  await s.caseFolder.writeFileText(['Bracket.SLDPRT'],'An uncaptured case edit');
-  fireEvent.click(ui.getByRole('button',{name:'Archive case Lightweight bracket'}));
-  let dialog=within(ui.getByRole('dialog',{name:'Archive design case'}));
-  assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId]?.status??'active','active');
-  fireEvent.click(dialog.getByRole('button',{name:'Archive case'}));
-  await waitFor(()=>assert.ok(dialog.getByRole('alert')));
-  assert.match(dialog.getByRole('alert').textContent!,/uncaptured|baseline|changes/i);
-  // The refusal is shown once, in the dialog: the page banner behind it does not repeat it.
-  assert.equal(ui.getAllByText(/Save a revision or resolve them explicitly before archiving/).length,1);
+  const caseRevisions=(await state()).vaultState.revisions.filter(r=>r.manifest.branchId===s.caseId).map(r=>r.manifest.displayNumber);
+  assert.ok(caseRevisions.length);
+  const revisionButton=(n:number)=>ui.queryByRole('button',{name:new RegExp(`^Rev ${String(n).padStart(3,'0')}:`)});
+  assert.ok(revisionButton(caseRevisions[0]));
+  const mainBefore=inventorySignature(await readVerifiedInventory(s.main));
+  await s.caseFolder.writeFileText(['Bracket.SLDPRT'],'An unsaved case edit');
+  const caseBefore=inventorySignature(await readVerifiedInventory(s.caseFolder));
+  fireEvent.click(ui.getByRole('button',{name:'Hide case Lightweight bracket'}));
+  let dialog=within(ui.getByRole('dialog',{name:'Hide design case'}));
+  fireEvent.click(dialog.getByRole('button',{name:'Hide case'}));
+  // First confirm: the fresh scan finds the unsaved change and warns; nothing is hidden yet.
+  await waitFor(()=>assert.match(ui.getByRole('dialog').textContent!,/This case has 1 unsaved change\. They stay in its folder and show again when you unhide it\./));
+  assert.equal(ui.getAllByText(/They stay in its folder/).length,1);
   assert.equal(ui.container.querySelector('.app-status-feedback'),null);
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId]?.status??'active','active');
-  await s.caseFolder.writeFileBytes(['Bracket.SLDPRT'],bytes);
-  fireEvent.click(dialog.getByRole('button',{name:'Archive case'}));
-  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null,'Archive confirmation closes after success'));
-  const archived=ui.getByText('Archived cases (1)');
-  await waitFor(()=>assert.ok(document.activeElement===archived,'archive returns focus to the archived-case disclosure'));
+  // A further edit after the warning: the engine refuses and shows the fresh count.
+  await s.caseFolder.writeFileText(['Extra.txt'],'Another unsaved file');
+  fireEvent.click(dialog.getByRole('button',{name:'Hide case'}));
+  await waitFor(()=>assert.match(ui.getByRole('dialog').textContent!,/differ from what you saw.*2 unsaved changes/));
+  assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId]?.status??'active','active');
+  fireEvent.click(dialog.getByRole('button',{name:'Hide case'}));
+  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null,'Hide confirmation closes after success'));
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].status,'archived');
-  fireEvent.click(archived);
-  fireEvent.click(ui.getByRole('button',{name:'Reopen case Lightweight bracket'}));
-  dialog=within(ui.getByRole('dialog',{name:'Reopen design case'}));
+  assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].unsavedAtHide,2);
+  // Hidden: its row and its own revisions leave History until Show hidden cases is on.
+  assert.equal(ui.queryByRole('button',{name:'Unhide case Lightweight bracket'}),null);
+  assert.equal(revisionButton(caseRevisions[0]),null);
+  const toggle=ui.container.querySelector<HTMLInputElement>('.history-hidden-toggle input')!;
+  fireEvent.click(toggle);
+  await waitFor(()=>assert.ok(revisionButton(caseRevisions[0])));
+  assert.ok(revisionButton(caseRevisions[0])!.closest('.hidden-case'));
+  const row=ui.getByRole('button',{name:'Unhide case Lightweight bracket'}).closest('.case-row')!;
+  assert.match(row.textContent!,/Hidden/);
+  assert.match(row.textContent!,/2 unsaved changes/);
+  fireEvent.click(ui.getByRole('button',{name:'Unhide case Lightweight bracket'}));
+  dialog=within(ui.getByRole('dialog',{name:'Unhide design case'}));
   fireEvent.click(dialog.getByRole('button',{name:'Cancel'}));
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].status,'archived');
-  fireEvent.click(ui.getByRole('button',{name:'Reopen case Lightweight bracket'}));
-  dialog=within(ui.getByRole('dialog',{name:'Reopen design case'}));
-  fireEvent.click(dialog.getByRole('button',{name:'Reopen case'}));
-  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null,'Reopen confirmation closes after success'));
+  fireEvent.click(ui.getByRole('button',{name:'Unhide case Lightweight bracket'}));
+  dialog=within(ui.getByRole('dialog',{name:'Unhide design case'}));
+  fireEvent.click(dialog.getByRole('button',{name:'Unhide'}));
+  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null,'Unhide confirmation closes after success'));
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].status,'active');
   assert.equal(currentBranchId(ui),'branch-main');
   assert.deepEqual((await state()).vaultState.revisions.map(r=>r.manifest.revisionId),saved);
   assert.equal(inventorySignature(await readVerifiedInventory(s.main)),mainBefore);
-  assert.equal(inventorySignature(await readVerifiedInventory(s.caseFolder)),caseBefore);
+  assert.notEqual(inventorySignature(await readVerifiedInventory(s.caseFolder)),caseBefore);
+  assert.equal(await s.caseFolder.readFileText(['Bracket.SLDPRT']),'An unsaved case edit');
+  assert.equal(await s.caseFolder.readFileText(['Extra.txt']),'Another unsaved file');
+});
+
+test('Hiding the working case switches the app to Main',async()=>{
+  const s=await compareApplyRecoverSample();
+  const ui=render(<App/>);await openHomeWorkspace(ui,s.home);
+  fireEvent.click(ui.getByRole('button',{name:'Open project'}));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
   await selectBranch(ui,s.caseId);
-  assert.equal((ui.getByRole('button',{name:'Archive case Lightweight bracket'}) as HTMLButtonElement).disabled,true);
-  assert.equal(ui.queryByRole('button',{name:'Archive case Main'}),null);
+  assert.equal(currentBranchId(ui),s.caseId);
+  const nav=within(ui.getByRole('navigation',{name:'Primary navigation'}));
+  fireEvent.click(nav.getByRole('button',{name:'History'}));
+  const disclosure=ui.container.querySelector<HTMLDetailsElement>('.history-design-cases')!;
+  fireEvent.click(disclosure.querySelector('summary')!);
+  fireEvent.click(ui.getByRole('button',{name:'Hide case Lightweight bracket'}));
+  const dialog=within(ui.getByRole('dialog',{name:'Hide design case'}));
+  assert.match(ui.getByRole('dialog').textContent!,/You are working on this case\. cAdtree switches you to Main/);
+  fireEvent.click(dialog.getByRole('button',{name:'Hide case'}));
+  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null));
+  await waitFor(()=>assert.equal(currentBranchId(ui),'branch-main'));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  const state=await resolveManagedProject(s.workspace.root,s.project.record.containerPath);
+  assert.equal(state.vaultState.caseLifecycles?.[s.caseId].status,'archived');
+  assert.equal(state.vaultState.caseLifecycles?.[s.caseId].unsavedAtHide,0);
+  await waitFor(()=>assert.match(ui.container.textContent!,/Hid Lightweight bracket\..*You are now working on Main\./));
+  // The hidden case leaves the Explorer until Show hidden cases is on there; it is then read-only.
+  assert.equal(ui.container.querySelector(`.desktop-workspace-tree [role="treeitem"][data-branch-id="${s.caseId}"]`),null);
+  fireEvent.click(ui.container.querySelector<HTMLInputElement>('.desktop-workspace-tree .tree-hidden-toggle input, .tree-hidden-toggle input')!);
+  const row=await waitFor(()=>{const r=ui.container.querySelector(`[role="treeitem"][data-branch-id="${s.caseId}"]`);assert.ok(r);return r;});
+  assert.equal(row.getAttribute('aria-disabled'),'true');
+  assert.match(row.textContent!,/Lightweight bracket · Hidden/);
+  assert.ok(row.classList.contains('hidden-case'));
+});
+
+test('Hiding the working case: if switching to Main fails, the banner says so and keeps the reason',async()=>{
+  const s=await compareApplyRecoverSample();
+  const ui=render(<App/>);await openHomeWorkspace(ui,s.home);
+  fireEvent.click(ui.getByRole('button',{name:'Open project'}));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  await selectBranch(ui,s.caseId);
+  const nav=within(ui.getByRole('navigation',{name:'Primary navigation'}));
+  fireEvent.click(nav.getByRole('button',{name:'History'}));
+  fireEvent.click(ui.container.querySelector<HTMLDetailsElement>('.history-design-cases > summary')!);
+  // Once the hide record is written, Main's working folder disappears, so the switch to Main fails.
+  const working=await s.workspace.root.getDirectory([...s.project.record.containerPath.split('/'),'working']);
+  let removed=false;
+  s.home.setHooks({onAfterWrite:async(path:string)=>{
+    if(!removed&&path.includes('case-lifecycle/')){removed=true;await working.removeEntry(['main'],{recursive:true});}
+  }});
+  fireEvent.click(ui.getByRole('button',{name:'Hide case Lightweight bracket'}));
+  fireEvent.click(within(ui.getByRole('dialog',{name:'Hide design case'})).getByRole('button',{name:'Hide case'}));
+  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  s.home.setHooks({onAfterWrite:undefined});
+  assert.ok(removed);
+  const state=await resolveManagedProject(s.workspace.root,s.project.record.containerPath).catch(()=>null);
+  if(state) assert.equal(state.vaultState.caseLifecycles?.[s.caseId].status,'archived');
+  const banner=await waitFor(()=>{const b=ui.container.querySelector('.app-status-feedback');assert.ok(b&&/Hid Lightweight bracket\./.test(b.textContent!));return b;});
+  const text=banner.textContent!;
+  // The case did change to Main, but checking Main failed: that failure stays in the banner
+  // (before the fix, a plain success message replaced it).
+  assert.equal(currentBranchId(ui),'branch-main');
+  assert.match(text,/You are now working on Main\. This managed project is read-only\..*Directory "main" not found/);
 });

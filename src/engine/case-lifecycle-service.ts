@@ -15,9 +15,33 @@ import type { VaultState } from "./types";
 export interface ChangeCaseLifecycle {
   projectId: string;
   branchId: string;
+  /** The working case after this change; it can't be the case being hidden. To hide the
+   * current case the app passes Main here, hides the case, then switches to Main. */
   activeBranchId: string;
+  /** "archived" is Hide case; "active" is Unhide. */
   status: "active" | "archived";
   expectedVersion: string | null;
+  /** Hide only: the changes signature of the case's unsaved changes the user was warned about. */
+  acknowledgedChangesSignature?: string;
+}
+
+/** Hide stopped because the case has unsaved changes that were not acknowledged
+ * (or that differ from the ones acknowledged). Nothing was written; the counts
+ * and signature come from a fresh full-hash scan. */
+export class UnsavedCaseChangesError extends Error {
+  constructor(
+    message: string,
+    readonly changeCount: number,
+    readonly changesSignature: string,
+    readonly stale: boolean,
+  ) {
+    super(message);
+    this.name = "UnsavedCaseChangesError";
+  }
+}
+
+export function unsavedChangesWarning(count: number) {
+  return `This case has ${count} unsaved ${count === 1 ? "change" : "changes"}. They stay in its folder and show again when you unhide it.`;
 }
 export interface LifecycleOptions extends CopyOptions {
   workingFolders: WorkingFolderBindings;
@@ -47,7 +71,7 @@ export async function changeCaseLifecycle(
       );
     const branch = matches[0];
     if (branch.isMain)
-      throw new Error("Main cannot be archived or reopened as a case.");
+      throw new Error("Main cannot be hidden.");
     if (!["active", "archived"].includes(request.status))
       throw new Error("Unknown case lifecycle action.");
     if (
@@ -55,7 +79,7 @@ export async function changeCaseLifecycle(
       request.branchId === request.activeBranchId
     )
       throw new Error(
-        "Switch to another active branch before archiving this case. No branch was switched automatically.",
+        "Switch to another case before hiding this one. No case was switched automatically.",
       );
     const current = caseLifecycle(state, request.branchId);
     if (current.status === "unavailable")
@@ -71,19 +95,25 @@ export async function changeCaseLifecycle(
       throw new Error(
         "Reconnect the vault with write permission before changing lifecycle metadata.",
       );
+    let unsavedAtHide: number | undefined;
     if (request.status === "archived") {
+      const operations = branchApplications(state, request.branchId);
       if (
-        branchApplications(state, request.branchId).some((op) =>
-          ["unresolved", "unavailable", "applied"].includes(op.status),
+        operations.some((op) =>
+          ["unresolved", "unavailable"].includes(op.status),
         )
       )
         throw new Error(
-          "This case has a pending or unavailable application. Use its existing recovery, Save revision or explicit abandonment controls before archiving.",
+          "This case has an unfinished or unreadable Bring back or Copy. Use its recovery in History before hiding the case.",
+        );
+      if (operations.some((op) => op.status === "applied"))
+        throw new Error(
+          "This case has a Bring back or Copy that isn't saved yet. Finish saving first, then hide the case.",
         );
       const baseline = getBranchBaseline(state, request.branchId);
       if (!baseline)
         throw new Error(
-          "A trustworthy saved baseline is required before archiving.",
+          "A trustworthy saved baseline is required before hiding this case.",
         );
       const folders = options.resolveWorkingFolders
         ? await options.resolveWorkingFolders(state)
@@ -104,18 +134,39 @@ export async function changeCaseLifecycle(
               totalFiles: count,
               processedBytes: bytes,
               totalBytes: bytes,
-              message: `Checking case before archive: ${path}…`,
+              message: `Checking case before hiding: ${path}…`,
             }),
         },
       );
       if (scan.errors.length)
         throw new Error(
-          `Case working evidence is unreadable or invalid: ${scan.errors.map((error) => `${error.path}: ${error.error}`).join("; ")}. Reconnect or resolve it before archiving.`,
+          `Some of this case's files can't be read: ${scan.errors.map((error) => `${error.path}: ${error.error}`).join("; ")}. Reconnect or resolve them before hiding the case.`,
         );
-      if (scan.hasChanges)
-        throw new Error(
-          "This case has uncaptured file or directory changes. Save a revision or resolve them explicitly before archiving. Working files and in-app drafts were left intact.",
-        );
+      // Unsaved changes may stay in the folder, but only the ones the user was
+      // warned about: this scan hashed every file again (no cache).
+      if (scan.hasChanges) {
+        const count =
+          scan.added.length +
+          scan.modified.length +
+          scan.deleted.length +
+          scan.addedDirectories.length +
+          scan.deletedDirectories.length;
+        if (request.acknowledgedChangesSignature === undefined)
+          throw new UnsavedCaseChangesError(
+            unsavedChangesWarning(count),
+            count,
+            scan.changesSignature,
+            false,
+          );
+        if (request.acknowledgedChangesSignature !== scan.changesSignature)
+          throw new UnsavedCaseChangesError(
+            `The case's unsaved changes differ from what you saw. Review again: ${unsavedChangesWarning(count)}`,
+            count,
+            scan.changesSignature,
+            true,
+          );
+        unsavedAtHide = count;
+      } else unsavedAtHide = 0;
       const refreshed = await openExistingVault(vault);
       const refreshedBaseline = getBranchBaseline(refreshed, request.branchId);
       if (
@@ -138,7 +189,7 @@ export async function changeCaseLifecycle(
           !(await working.isSameEntry(checked[request.branchId]!))
         )
           throw new Error(
-            "The case working connection changed during review. Refresh before archiving.",
+            "The case working connection changed during review. Refresh before hiding the case.",
           );
       }
     }
@@ -152,6 +203,7 @@ export async function changeCaseLifecycle(
       previousSha256: current.version,
       status: request.status,
       changedAt: new Date().toISOString(),
+      ...(unsavedAtHide !== undefined ? { unsavedAtHide } : {}),
     });
     const path = lifecyclePath(request.branchId, record.sequence);
     const text = JSON.stringify(record, null, 2);

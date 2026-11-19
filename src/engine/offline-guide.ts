@@ -317,7 +317,7 @@ export function buildProjectMap(input: ProjectMapInput): string {
     const lifecycle = caseLifecycle(state, branch.branchId);
     doc.line(`${oneLine(branch.name)}${branch.isMain ? ' (Main)' : ''}`);
     doc.kv('Branch ID', branch.branchId, 4).kv('Working folder', workingPath(branch.branchId), 4);
-    doc.kv('Status', lifecycle.status === 'unavailable' ? 'unavailable (its lifecycle records could not be read)' : lifecycle.status, 4);
+    doc.kv('Status', lifecycle.status === 'unavailable' ? 'unavailable (its lifecycle records could not be read)' : lifecycle.status === 'archived' ? 'hidden' : lifecycle.status, 4);
     doc.kv('Started from', branch.startingRevisionId ? revisionLabel(state, branch.startingRevisionId) : 'the start of the project', 4);
     doc.kv('Created', branch.createdAt, 4).kv('Reason', branch.reason, 4);
   }
@@ -613,13 +613,12 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       '<Project> - <Branch> - R<nn>; reference attachments go into a References folder inside it. Nothing in your ' +
       'project changes.',
   ]);
-  steps(doc, 'Archive a design case', [
+  steps(doc, 'Hide a design case', [
     'Choose History. The Design cases panel lists each case.',
-    'Choose Archive case next to the case. Main cannot be archived, the case you are currently working on cannot be ' +
-      'archived (switch to another case first), and a ' +
-      'case with unsaved working changes must be saved first.',
-    'Read the confirmation and choose Archive case. The working folder and all saved history stay in place. To use ' +
-      'the case again, open Archived cases and choose Reopen case.',
+    'Choose Hide case next to the case. Main cannot be hidden. If you are working on that case, cAdtree switches you ' +
+      'to Main. If the case has unsaved changes, cAdtree tells you how many; they stay in its folder.',
+    'Choose Hide case to confirm. The working folder and all saved history stay in place. To use the case again, ' +
+      'turn on Show hidden cases and choose Unhide.',
   ]);
 
   doc.heading('9. Storage format reference (for anyone writing a recovery tool)');
@@ -710,8 +709,10 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'links: a list of referenceId, versionId, origin ("project" for a project-wide reference, "revision" for one ' +
       'added for this revision), locator, explanation, componentPath',
   ]);
-  record('case-lifecycle/<branchId>.<sequence>.json', 'The history of a design case being archived or reopened.', [
-    'branchId, sequence (1, 2, ...; the file name carries it as six digits: <branchId>.000001.json), status ("active" or "archived"), changedAt, previousSha256',
+  record('case-lifecycle/<branchId>.<sequence>.json', 'The history of a design case being hidden or unhidden.', [
+    'branchId, sequence (1, 2, ...; the file name carries it as six digits: <branchId>.000001.json), status ("active", ' +
+      'or "archived", which means hidden), changedAt, previousSha256, unsavedAtHide (hide records: how many unsaved ' +
+      'changes stayed in the case\'s folder)',
     'The record with the highest sequence is current. A case without records is active.',
   ]);
   record('applications/<branchId>/<operationId>/', 'One Apply operation (a merge, or Bring back) onto a branch.', [

@@ -69,6 +69,9 @@ export function RevisionGraph({
   const width = Math.max(490, labelX + 350);
   const height = Math.max(300, graph.nodes.length * rowHeight + 28);
   const edgeColors = [...new Set(graph.edges.map((edge) => edge.color))];
+  const hiddenNode = new Set(
+    graph.nodes.filter((node) => node.hidden).map((node) => node.id),
+  );
   const register = (id: string, element: HTMLButtonElement | null) => {
     if (element) refs.current.set(id, element);
     else refs.current.delete(id);
@@ -177,7 +180,7 @@ export function RevisionGraph({
           {graph.branches.map((branch) => (
             <button
               key={branch.id}
-              className="branch-filter"
+              className={`branch-filter${branch.hidden ? " hidden-case" : ""}`}
               style={{ "--branch-color": branch.color } as React.CSSProperties}
               aria-pressed={highlightBranchId === branch.id}
               disabled={
@@ -305,7 +308,13 @@ export function RevisionGraph({
                           : `M ${child.x} ${startY} V ${endY - 48} C ${child.x} ${endY - 16}, ${parent.x} ${endY - 28}, ${parent.x} ${endY}`
                       }
                       stroke={edge.color}
-                      opacity={ancestry?.has(edge.child) ? 0.95 : 0.7}
+                      opacity={
+                        hiddenNode.has(edge.child)
+                          ? 0.3
+                          : ancestry?.has(edge.child)
+                            ? 0.95
+                            : 0.7
+                      }
                       strokeWidth={ancestry?.has(edge.child) ? 3 : 2.25}
                       fill="none"
                       markerEnd={`url(#${markerPrefix}-parent-${edgeColors.indexOf(edge.color)})`}
@@ -323,7 +332,7 @@ export function RevisionGraph({
                   <div
                     key={node.id}
                     data-file-history-kind={fileRecords?.get(node.id)?.kind}
-                    className={`graph-row ${selected ? "selected" : ""} ${ancestry?.has(node.id) ? "in-case" : ""}`}
+                    className={`graph-row ${selected ? "selected" : ""} ${ancestry?.has(node.id) ? "in-case" : ""}${node.hidden ? " hidden-case" : ""}`}
                     style={
                       {
                         top: position.y - 42,
@@ -437,7 +446,7 @@ export function RevisionGraph({
                 key={node.id}
                 ref={(element) => register(node.id, element)}
                 data-file-history-kind={fileRecords?.get(node.id)?.kind}
-                className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry?.has(node.id) ? "in-case" : ""}`}
+                className={`revision-list-row ${selectedId === node.id ? "selected" : ""} ${ancestry?.has(node.id) ? "in-case" : ""}${node.hidden ? " hidden-case" : ""}`}
                 aria-pressed={selectedId === node.id}
                 onClick={() => onSelect(node.id)}
                 onKeyDown={(event) => keyboard(event, index)}

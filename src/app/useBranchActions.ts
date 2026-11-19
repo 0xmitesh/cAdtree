@@ -4,7 +4,7 @@ import type { CreateBranchParams } from "../components/CreateBranchDialog";
 import type { WorkingFolderBindings } from "../engine/branch-state";
 import { changeCaseLifecycle } from "../engine/case-lifecycle-service";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
-import type { ScanResult, VaultState } from "../engine/types";
+import { MAIN_BRANCH_ID, type ScanResult, type VaultState } from "../engine/types";
 import { openExistingVault } from "../engine/vault-service";
 import { createManagedBranch, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
 import { projectGuideTarget, refreshGuidesAfter } from "./offline-guide-refresh";
@@ -44,7 +44,7 @@ export type UseBranchActionsArgs = {
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
 };
 
-/** Design cases: switch the working case, create a case, archive or reopen one, and reattach working folders. */
+/** Design cases: switch the working case, create a case, hide or unhide one, and reattach working folders. */
 export function useBranchActions({
   vaultDir,
   vaultState,
@@ -71,7 +71,13 @@ export function useBranchActions({
   setScanResult,
   setStatusBanner,
 }: UseBranchActionsArgs) {
-  const handleSelectBranch = async (branchId: string) => {
+  /** Switch the working case. With `outcome`, failures are thrown instead of
+   * shown, and `outcome` says whether the case changed and what notice the
+   * switch would have shown (the caller builds its own banner). */
+  const selectBranch = async (
+    branchId: string,
+    outcome?: { switched: boolean; notice: StatusBanner | null },
+  ) => {
     if (
       operationRef.current ||
       !vaultState ||
@@ -91,6 +97,7 @@ export function useBranchActions({
         throw new Error("Selected branch is missing. Reopen the vault.");
       assertCaseWritable(state, branchId);
       setActiveBranchId(branchId);
+      if (outcome) outcome.switched = true;
       setWorkingDir(null);
       const folder = workingFolders[branchId];
       let readable = false;
@@ -119,24 +126,31 @@ export function useBranchActions({
             branchId,
           )
         : "";
-      if (context.current())
-        setStatusBanner(
-          !readable || warning
-            ? {
-                type: "info",
-                message:
-                  `${readable ? "" : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`.trim(),
-              }
-            : null,
-        );
-    });
+      const notice: StatusBanner | null =
+        !readable || warning
+          ? {
+              type: "info",
+              message:
+                `${readable ? "" : "Connect this branch’s working folder explicitly to scan or save."} ${warning}`.trim(),
+            }
+          : null;
+      if (outcome) outcome.notice = notice;
+      if (context.current()) setStatusBanner(notice);
+    }, outcome ? { rethrow: true, banner: false } : false);
   };
+  const handleSelectBranch = (branchId: string) => selectBranch(branchId);
+  /** Hide case ("archived") or Unhide ("active"). Hiding the working case
+   * switches the app to Main once the case is hidden. */
   const handleCaseLifecycle = async (
     branchId: string,
     status: "active" | "archived",
     expectedVersion: string | null,
+    acknowledgedChangesSignature?: string,
   ) => {
     if (!vaultDir || !vaultState) throw new Error("Open the project first.");
+    const hidingWorkingCase =
+      status === "archived" && branchId === activeBranchId;
+    let message = "";
     await perform(
       "scan",
       async (context) => {
@@ -147,27 +161,27 @@ export function useBranchActions({
             (await vaultDir.requestPermission("readwrite")) !== "granted"
           )
             throw new Error(
-              "Write access to the vault is required for lifecycle metadata.",
+              "Write access to the project is required to hide or unhide a case.",
             );
           const result = await changeCaseLifecycle(
             vaultDir,
             {
               projectId: vaultState.project.projectId,
               branchId,
-              activeBranchId,
+              activeBranchId: hidingWorkingCase ? MAIN_BRANCH_ID : activeBranchId,
               status,
               expectedVersion,
+              acknowledgedChangesSignature,
             },
             applicationOptions(context),
           );
-          // Archived or reopened: update the Map's case status.
+          // Hidden or unhidden: update the Map's case status.
           refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
+          const name = result.state.branches.find((branch) => branch.branchId === branchId)?.name;
+          message = `${status === "archived" ? `Hid ${name}. Turn on Show hidden cases in History or Explorer to see it again.` : `${name} is shown again.`} ${result.warning ?? ""}`.trim();
           if (context.current()) {
             applyVaultState(result.state);
-            setStatusBanner({
-              type: "success",
-              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in History → Design cases or Show archived cases in Explorer." : "The working case has not been switched."} ${result.warning ?? ""}`,
-            });
+            if (!hidingWorkingCase) setStatusBanner({ type: "success", message });
           }
         } finally {
           if (context.current()) {
@@ -179,9 +193,36 @@ export function useBranchActions({
           }
         }
       },
-      // The archive/reopen dialog shows a failure itself: no second copy in the page banner.
+      // The hide/unhide dialog shows a failure itself: no second copy in the page banner.
       { rethrow: true, banner: false },
     );
+    if (hidingWorkingCase) {
+      // The case is hidden (read-only): leave it for Main. Say "now working on
+      // Main" only if the switch happened, and keep what the switch reported.
+      const outcome: { switched: boolean; notice: StatusBanner | null } = {
+        switched: false,
+        notice: null,
+      };
+      let failure = "";
+      try {
+        await selectBranch(MAIN_BRANCH_ID, outcome);
+      } catch (error) {
+        failure = error instanceof Error ? error.message : String(error);
+      }
+      setStatusBanner(
+        outcome.switched
+          ? {
+              type: failure ? "error" : outcome.notice ? outcome.notice.type : "success",
+              message: [message, "You are now working on Main.", outcome.notice?.message, failure]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : {
+              type: failure ? "error" : "info",
+              message: `${message} cAdtree couldn't switch to Main${failure ? `: ${failure}` : "."} Choose Main in the Explorer.`,
+            },
+      );
+    }
   };
   const handleReattachWorkingFolder = async () => {
     if (managedProject && workspace) await refreshWorkspace();

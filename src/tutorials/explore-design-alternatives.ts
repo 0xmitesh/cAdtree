@@ -124,7 +124,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
       points: [
         "The case's first changed save follows Rev 003. In this example, Lightweight bracket gets Rev 004 and Rev 005; Main later gets Rev 006 with Rev 003 as its parent. Numbers run across the whole project, not from one on each case.",
         "Both histories keep their connection to the starting revision. Do not delete a useful alternative just because it did not become Main.",
-        "Finished alternatives can be archived in History → Design cases while preserving their working folder and saved history. Main cannot be archived.",
+        "Finished alternatives can be hidden in History → Design cases while keeping their working folder and saved history. Main cannot be hidden.",
       ],
       visuals: [
         {

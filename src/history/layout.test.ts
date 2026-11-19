@@ -167,3 +167,105 @@ test("no recorded evidence, no link: uncaptured, missing, damaged or self source
   ];
   assert.deepEqual(layoutRevisions(unreadable, "branch-main").copies, []);
 });
+function hideCase(state: ReturnType<typeof scenarioState>, branchId: string) {
+  state.caseLifecycles = {
+    ...(state.caseLifecycles ?? {}),
+    [branchId]: { status: "archived", version: "v1", sequence: 1 },
+  };
+  return state;
+}
+const assertNoLineFromNowhere = (graph: ReturnType<typeof layoutRevisions>) => {
+  const ids = new Set(graph.nodes.map((n) => n.id));
+  for (const e of graph.edges) assert.ok(ids.has(e.child) && ids.has(e.parent));
+  for (const c of graph.copies) assert.ok(ids.has(c.child) && ids.has(c.source));
+  for (const b of graph.branches) for (const h of b.headIds) assert.ok(ids.has(h));
+};
+test("Hide case: a hidden case's own revisions and chip leave the graph; Show hidden cases brings them back faded", () => {
+  const state = hideCase(scenarioState("branches"), "prototype");
+  const full = layoutRevisions(state, "branch-main");
+  const shown = layoutRevisions(state, "branch-main", { hideHiddenCases: false });
+  assert.deepEqual(shown, full);
+  assert.deepEqual(
+    full.nodes.filter((n) => n.hidden).map((n) => n.id),
+    ["p2", "p1"],
+  );
+  assert.equal(full.branches.find((b) => b.id === "prototype")?.hidden, true);
+  const hidden = layoutRevisions(state, "branch-main", { hideHiddenCases: true });
+  assert.deepEqual(
+    hidden.nodes.map((n) => n.id),
+    ["r6", "r5", "r4", "r3", "r2", "r1"],
+  );
+  assert.deepEqual(hidden.branches.map((b) => b.id), ["branch-main"]);
+  assert.equal(hidden.lanes, 1);
+  assert.ok(hidden.nodes.every((n) => !n.hidden && n.heads.join() !== "Prototype · Hidden"));
+  assertNoLineFromNowhere(hidden);
+  // Colours stay the same when hidden cases are shown again.
+  assert.equal(
+    full.branches.find((b) => b.id === "branch-main")!.color,
+    hidden.branches.find((b) => b.id === "branch-main")!.color,
+  );
+  // Nothing is hidden without a hidden case.
+  const plain = scenarioState("branches");
+  assert.deepEqual(
+    layoutRevisions(plain, "branch-main", { hideHiddenCases: true }),
+    layoutRevisions(plain, "branch-main"),
+  );
+});
+test("Hide case: revisions a shown case branched from or copied from stay (faded) with their ancestors", () => {
+  const state = hideCase(scenarioState("branches"), "prototype");
+  // A shown case started from the hidden case's p1 and has no revisions of its own yet.
+  state.branches.push({
+    ...state.branches[0],
+    branchId: "child",
+    name: "Child",
+    isMain: false,
+    startingRevisionId: "p1",
+  });
+  state.branchHeads.child = "p1";
+  // Main's r6 copied files from the hidden case's p2.
+  withCopy(state, "r6", "p2");
+  const graph = layoutRevisions(state, "branch-main", { hideHiddenCases: true });
+  const ids = graph.nodes.map((n) => n.id);
+  assert.ok(ids.includes("p1") && ids.includes("p2"));
+  assert.deepEqual(
+    graph.nodes.filter((n) => n.hidden).map((n) => n.id).sort(),
+    ["p1", "p2"],
+  );
+  assert.ok(graph.edges.some((e) => e.child === "p1" && e.parent === "r2"));
+  assert.deepEqual(
+    graph.copies.map((c) => [c.child, c.source]),
+    [["r6", "p2"]],
+  );
+  assert.deepEqual(graph.branches.map((b) => b.id), ["branch-main", "child"]);
+  assertNoLineFromNowhere(graph);
+  // Without the copy, p2 (only the hidden case's own work) leaves the graph.
+  const noCopy = hideCase(scenarioState("branches"), "prototype");
+  noCopy.branches.push({ ...state.branches.at(-1)! });
+  noCopy.branchHeads.child = "p1";
+  const graph2 = layoutRevisions(noCopy, "branch-main", { hideHiddenCases: true });
+  assert.ok(graph2.nodes.some((n) => n.id === "p1"));
+  assert.ok(!graph2.nodes.some((n) => n.id === "p2"));
+  assertNoLineFromNowhere(graph2);
+});
+test("Hide case: the working case is never left out, and a hidden case's copy of shown work leaves no dangling line", () => {
+  const state = hideCase(scenarioState("branches"), "prototype");
+  const working = layoutRevisions(state, "prototype", { hideHiddenCases: true });
+  assert.ok(working.nodes.some((n) => n.id === "p2" && !n.hidden));
+  // p2 (hidden) copied from Main's r5: the hidden child goes, so does its copy line.
+  withCopy(state, "p2", "r5");
+  const graph = layoutRevisions(state, "branch-main", { hideHiddenCases: true });
+  assert.deepEqual(graph.copies, []);
+  assertNoLineFromNowhere(graph);
+});
+test("Hide case: a shown revision's damaged parent on a hidden case stays visible beside its warning", () => {
+  const state = hideCase(scenarioState("branches"), "prototype");
+  state.revisions.find((r) => r.manifest.revisionId === "p1")!.integrityStatus = "corrupted";
+  state.revisions.push(revision("m7", "p1", 9));
+  state.branchHeads["branch-main"] = "m7";
+  const graph = layoutRevisions(state, "branch-main", { hideHiddenCases: true });
+  const ids = graph.nodes.map((n) => n.id);
+  assert.ok(ids.includes("m7") && ids.includes("p1"));
+  assert.ok(ids.includes("r2"), "the damaged parent's own ancestors stay too");
+  assert.ok(!ids.includes("p2"));
+  assert.ok(graph.nodes.find((n) => n.id === "m7")!.warnings.some((w) => /damaged/.test(w)));
+});

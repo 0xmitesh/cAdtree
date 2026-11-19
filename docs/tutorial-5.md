@@ -2,6 +2,8 @@
 
 R4 update: Design cases now lives in History; affected archive guidance and screenshots were refreshed. Original implementation/validation history below is retained.
 
+Hide case update (2026-11-19): Archive case became **Hide case** (Reopen case became **Unhide**, Show archived cases became **Show hidden cases**). Step 7's text and section 6 describe the new behaviour; the step 7 screenshots (and their alt text, now written for the new wording) still show the old Archive wording until they are captured again.
+
 Implemented on branch `codex/tutorial-5-compare-apply-recover` from merged main `9797d7f290d58303ab6badda3dc277eac020021f` (Tutorial 4 / PR #26). Only the final tutorial and its Learn-card availability were added. No engine, working-screen, viewer, carousel or product-style changes.
 
 ## 1. Final step structure
@@ -116,7 +118,7 @@ Choose Prepare application to check the destination, then review Confirm working
 - Check Destination: Main, its connected folder, baseline Rev 006, Source Rev 005 and the exact additions, replacements and deletions. Save and close relevant CAD documents, check the confirmation and choose Apply confirmed changes.
 - Apply changes working files; no revision is saved yet. Open Main manually in CAD, check references and rebuild, then save and close after adjustments. In Changes, cAdtree checks your files automatically; review and Save revision: Main Rev 007 in this example.
 
-Note: Keep other apps and sync from writing during Apply; cAdtree cannot lock them or make multiple file writes atomic. Apply does not delete or archive the Design Case.
+Note: Keep other apps and sync from writing during Apply; cAdtree cannot lock them or make multiple file writes atomic. Apply does not delete or hide the Design Case.
 
 Visual 1 (cAdtree): **1. Confirm Main, its working location and the exact file actions.**
 
@@ -171,26 +173,26 @@ Asset: [step-6-brought-back.png](../public/tutorials/compare-apply-recover/step-
 
 ### Step 7 of 7 — Preserve the Design Case
 
-Finished Design Cases do not need to be deleted. Archive the experiment while preserving its working folder and saved history.
+Finished Design Cases do not need to be deleted. Hide the experiment while keeping its working folder and saved history.
 
-- Keep Main active. In History, expand Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.
-- Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your working case.
+- In History, expand Design cases, find Lightweight bracket and choose Hide case, then confirm Hide case. If the case has unsaved changes, cAdtree tells you how many; they stay in its folder. If you are working on the case, cAdtree switches you to Main.
+- Hiding is independent of Apply; it keeps useful alternatives whether or not you adopted them. Main cannot be hidden. Turn on Show hidden cases to see a hidden case again and choose Unhide; unhiding does not switch your working case.
 
 Visual 1 (cAdtree): **1. With Main active, expand Design cases in History and find the finished case.**
 
-Alt text: Real History Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.
+Alt text: Real History Design cases lists Lightweight bracket as Active with Hide case focused while Main is the active working direction.
 
 Asset: [step-7-archive-action.png](../public/tutorials/compare-apply-recover/step-7-archive-action.png)
 
-Visual 2 (cAdtree): **2. Review the preservation notice and confirm Archive case.**
+Visual 2 (cAdtree): **2. Read the notice and confirm Hide case.**
 
-Alt text: Real Archive design case dialog identifies Lightweight bracket, explains the clean-baseline check and retained files/history, and focuses Archive case.
+Alt text: Real Hide design case dialog identifies Lightweight bracket, explains that its folder and saved revisions stay in place, and focuses Hide case.
 
 Asset: [step-7-archive-confirmation.png](../public/tutorials/compare-apply-recover/step-7-archive-confirmation.png)
 
-Visual 3 (cAdtree): **3. The archived case remains available to inspect or reopen later.**
+Visual 3 (cAdtree): **3. The hidden case remains available to inspect or unhide later.**
 
-Alt text: Real Archived cases section shows Lightweight bracket as Archived with Reopen case available; saved history and the working folder remain retained.
+Alt text: Real Design cases panel with Show hidden cases on shows Lightweight bracket as Hidden with Unhide available; saved history and the working folder remain.
 
 Asset: [step-7-archived-case.png](../public/tutorials/compare-apply-recover/step-7-archived-case.png)
 
@@ -202,7 +204,7 @@ History selects the revision to inspect. Its Compare button opens Compare saved 
 
 Added, Deleted, Modified and Unchanged describe saved path presence and content hashes. Modified does not mean geometry changed; metadata edits in a CAD file can also change its bytes. Compare shows overall engineering notes and per-file notes at the two endpoints, plus directory additions/deletions including empty directories. It does not summarize all intervening notes, scan working files, verify stored binary objects, evaluate CAD compatibility or infer feature, geometry or stress changes. Missing, corrupt, ambiguous or invalid endpoint metadata makes the comparison unavailable. The tutorial uses the normal History route rather than teaching the secondary Compare with Main route in Design cases.
 
-Terminology retained from the build: Main, Design cases, branch, Compare, Compare saved revisions, From revision, To revision, Swap, Review changes to apply, Base, Source, Destination, Prepare application, Confirm working-file application, Apply confirmed changes, Bring back onto Main…, Prepare bring-back, Bring back confirmed changes, Export, Archive case and Reopen case. The product still exposes branch in some UI; there is no global rename and no new Merge action or Git lesson.
+Terminology retained from the build: Main, Design cases, branch, Compare, Compare saved revisions, From revision, To revision, Swap, Review changes to apply, Base, Source, Destination, Prepare application, Confirm working-file application, Apply confirmed changes, Bring back onto Main…, Prepare bring-back, Bring back confirmed changes, Export, Hide case, Show hidden cases and Unhide. The product still exposes branch in some UI; there is no global rename and no new Merge action or Git lesson.
 
 Sources inspected: `src/components/CompareRevisionsDialog.tsx`, `src/engine/snapshot-comparison.ts`, `src/components/HistoryRecoveryView.tsx`.
 
@@ -230,11 +232,11 @@ Export writes a separate folder named `<Project> - <Branch> - R<nn>` (a clash ge
 
 Sources inspected: `src/components/HistoryRecoveryView.tsx`, `src/components/ApplyPreviewDialog.tsx`, `src/engine/workspace-service.ts`, `src/components/ApplicationStatus.tsx`, `src/engine/application-service.ts`.
 
-## 6. Actual Archive behavior
+## 6. Actual Hide case behavior
 
-History → Design cases provides Archive case and the Archive design case confirmation. Only a non-Main case that is not the active working direction can be archived. Main stays active in the sample. Archiving checks the case’s clean saved baseline including directories; uncaptured changes, pending applications or unavailable evidence block it.
+History → Design cases provides Hide case and the Hide design case confirmation. Any non-Main case can be hidden; hiding the case you are working on switches you to Main. cAdtree checks the case's files again (every file hashed). Unsaved changes are allowed after a warning that names how many there are; they stay in the case's folder. An unfinished or unsaved Bring back/Copy, or files that can't be read, block it.
 
-Archive changes lifecycle metadata only. Working files, saved revisions and history remain available, independently of whether any work was applied. Archived cases exposes Reopen case. Reopening changes lifecycle state without switching the active direction or restoring files. No case-deletion action was found. The tutorial briefly mentions reopen without adding an archive-management walkthrough.
+Hide changes lifecycle metadata only. Working files, saved revisions and history remain, independently of whether any work was applied. Hidden cases leave History and the Explorer; **Show hidden cases** shows them faded, with **Unhide**. Unhiding changes lifecycle state without switching the working case or restoring files. No case-deletion action exists.
 
 Sources inspected: `src/components/DesignCases.tsx`, `src/engine/case-lifecycle-service.ts`.
 

@@ -2,7 +2,7 @@ import { waitForScan } from "./rescan";
 import { pickFile, fileInput } from "./file-picker";
 import { test, expect } from "@playwright/test";
 for (const width of [1366, 390])
-  test(`actual App: inspect archived case activity and Compare with Main without writes or context loss at ${width}px`, async ({
+  test(`actual App: inspect hidden case activity and Compare with Main without writes or context loss at ${width}px`, async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -71,6 +71,8 @@ for (const width of [1366, 390])
       })
       .fill("Part session draft");
     await nav.getByRole("button", { name: "History", exact: true }).click();
+    // The case is hidden: show hidden cases so its own revisions are listed (faded).
+    await page.locator(".history-hidden-toggle input").check();
     const filePicker = fileInput(page);
     await pickFile(page, "Parts/Part-X.SLDPRT");
     await page
@@ -90,7 +92,6 @@ for (const width of [1366, 390])
       name: "Design cases",
       exact: true,
     });
-    await cases.getByText("Archived cases (1)", { exact: true }).click();
     await expect(
       cases.getByLabel("Saved activity and divergence for Part-X redesign", {
         exact: true,
@@ -98,7 +99,7 @@ for (const width of [1366, 390])
     ).toHaveCount(0);
     await expect(
       cases.getByRole("button", {
-        name: "Reopen case Part-X redesign",
+        name: "Unhide case Part-X redesign",
         exact: true,
       }),
     ).toBeVisible();
@@ -128,7 +129,7 @@ for (const width of [1366, 390])
       dialog.getByRole("combobox", { name: "To revision" }),
     ).toHaveValue(fixture.ids[1]);
     await expect(dialog).toContainText("Scope: All project files");
-    await expect(dialog).toContainText("Part-X redesign · Archived");
+    await expect(dialog).toContainText("Part-X redesign · Hidden");
     await expect(
       dialog.getByRole("region", {
         name: "From overall notes at Rev 003",
