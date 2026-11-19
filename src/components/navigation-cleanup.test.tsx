@@ -66,10 +66,10 @@ test("Hidden-case controls appear only when needed and disappear after unhiding 
   fireEvent.click(within(ui.getByRole("dialog", { name: "Hide design case" })).getByRole("button", { name: "Hide case" }));
   // One switch in the Explorer, one in History.
   await waitFor(() => assert.equal(ui.getAllByRole("checkbox", { name: "Show hidden cases" }).length, 2));
-  assert.equal(ui.queryByRole("button", { name: "Unhide Lightweight bracket" }), null);
+  assert.equal(ui.queryByRole("button", { name: "Unhide case Lightweight bracket" }), null);
   assert.ok(ui.getByText("1 hidden case. Turn on Show hidden cases to see it."));
   fireEvent.click(ui.container.querySelector<HTMLInputElement>(".history-hidden-toggle input")!);
-  fireEvent.click(ui.getByRole("button", { name: "Unhide Lightweight bracket" }));
+  fireEvent.click(ui.getByRole("button", { name: "Unhide case Lightweight bracket" }));
   fireEvent.click(within(ui.getByRole("dialog", { name: "Unhide design case" })).getByRole("button", { name: "Unhide" }));
   await waitFor(() => assert.equal(ui.queryAllByRole("checkbox", { name: "Show hidden cases" }).length, 0));
   // Focus moves in a later effect than the one that removes the hidden-case controls, so wait for it. Compare with `===` inside

@@ -69,7 +69,7 @@ test("Hide case/Unhide require explicit confirmation; Main can't be hidden; hidd
     <DesignCases {...props} state={hidden} activeBranchId="branch-main" />,
   );
   assert.equal(
-    ui.queryByRole("button", { name: `Unhide ${branch.name}` }),
+    ui.queryByRole("button", { name: `Unhide case ${branch.name}` }),
     null,
   );
   assert.match(ui.container.textContent!, /1 hidden case\. Turn on Show hidden cases to see it\./);
@@ -82,7 +82,7 @@ test("Hide case/Unhide require explicit confirmation; Main can't be hidden; hidd
     />,
   );
   const row = ui
-    .getByRole("button", { name: `Unhide ${branch.name}` })
+    .getByRole("button", { name: `Unhide case ${branch.name}` })
     .closest(".case-row")!;
   assert.ok(row.classList.contains("hidden-case"));
   assert.match(row.textContent!, /Hidden/);
@@ -91,7 +91,7 @@ test("Hide case/Unhide require explicit confirmation; Main can't be hidden; hidd
     "3 unsaved changes",
   );
   fireEvent.click(
-    ui.getByRole("button", { name: `Unhide ${branch.name}` }),
+    ui.getByRole("button", { name: `Unhide case ${branch.name}` }),
   );
   fireEvent.click(
     within(ui.getByRole("dialog")).getByRole("button", { name: "Unhide" }),

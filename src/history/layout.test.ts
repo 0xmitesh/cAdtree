@@ -257,3 +257,15 @@ test("Hide case: the working case is never left out, and a hidden case's copy of
   assert.deepEqual(graph.copies, []);
   assertNoLineFromNowhere(graph);
 });
+test("Hide case: a shown revision's damaged parent on a hidden case stays visible beside its warning", () => {
+  const state = hideCase(scenarioState("branches"), "prototype");
+  state.revisions.find((r) => r.manifest.revisionId === "p1")!.integrityStatus = "corrupted";
+  state.revisions.push(revision("m7", "p1", 9));
+  state.branchHeads["branch-main"] = "m7";
+  const graph = layoutRevisions(state, "branch-main", { hideHiddenCases: true });
+  const ids = graph.nodes.map((n) => n.id);
+  assert.ok(ids.includes("m7") && ids.includes("p1"));
+  assert.ok(ids.includes("r2"), "the damaged parent's own ancestors stay too");
+  assert.ok(!ids.includes("p2"));
+  assert.ok(graph.nodes.find((n) => n.id === "m7")!.warnings.some((w) => /damaged/.test(w)));
+});

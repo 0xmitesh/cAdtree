@@ -15,7 +15,8 @@ import type { VaultState } from "./types";
 export interface ChangeCaseLifecycle {
   projectId: string;
   branchId: string;
-  /** The working case after this change. Hiding it is refused: the app switches first (to Main). */
+  /** The working case after this change; it can't be the case being hidden. To hide the
+   * current case the app passes Main here, hides the case, then switches to Main. */
   activeBranchId: string;
   /** "archived" is Hide case; "active" is Unhide. */
   status: "active" | "archived";

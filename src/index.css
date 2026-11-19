@@ -3014,7 +3014,7 @@ input::placeholder {
 }
 .tree-row.hidden-case {
   color: #c1d2cf;
-  opacity: 0.7;
+  font-style: italic;
 }
 .case-lifecycle-help {
   padding: 12px 22px;
@@ -3040,8 +3040,9 @@ input::placeholder {
 .history-design-cases { margin: 0 0 20px; padding: 12px 0 0; }
 .history-design-cases > summary { color: var(--teal); font-size: 14px; font-weight: 600; cursor: pointer; }
 .history-design-cases > .design-cases { margin-top: 12px; }
-.case-row.hidden-case > div {
-  opacity: 0.65;
+.case-row.hidden-case > div,
+.case-row.hidden-case > div strong {
+  color: var(--muted);
 }
 .case-unsaved-badge {
   display: inline-block;
@@ -3059,10 +3060,19 @@ input::placeholder {
   font-size: 13px;
   white-space: nowrap;
 }
-.graph-row.hidden-case,
+/* Hidden cases: muted text (readable contrast); only the dot is faded. */
+.graph-row.hidden-case .graph-label,
+.graph-row.hidden-case .graph-label strong,
 .revision-list-row.hidden-case,
+.revision-list-row.hidden-case strong,
 .branch-filter.hidden-case {
-  opacity: 0.5;
+  color: var(--muted);
+}
+.graph-row.hidden-case .graph-dot {
+  opacity: 0.55;
+}
+.branch-filter.hidden-case {
+  border-style: dashed;
 }
 @media (max-width: 600px) {
   .case-row {

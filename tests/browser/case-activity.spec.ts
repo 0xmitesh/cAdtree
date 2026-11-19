@@ -99,7 +99,7 @@ for (const width of [1366, 390])
     ).toHaveCount(0);
     await expect(
       cases.getByRole("button", {
-        name: "Unhide Part-X redesign",
+        name: "Unhide case Part-X redesign",
         exact: true,
       }),
     ).toBeVisible();

@@ -174,7 +174,7 @@ for (const width of [1366, 390])
       await showHiddenCases();
       await page
         .getByRole("button", {
-          name: "Unhide Part-X redesign",
+          name: "Unhide case Part-X redesign",
           exact: true,
         })
         .click();
@@ -241,7 +241,7 @@ for (const width of [1366, 390])
     await showHiddenCases();
     await expect(
       page.getByRole("button", {
-        name: "Unhide Part-X redesign",
+        name: "Unhide case Part-X redesign",
         exact: true,
       }),
     ).toBeVisible();

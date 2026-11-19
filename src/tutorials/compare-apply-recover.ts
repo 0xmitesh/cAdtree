@@ -180,19 +180,19 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
       visuals: [
         {
           src: "/tutorials/compare-apply-recover/step-7-archive-action.png",
-          alt: "Real History Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.",
+          alt: "Real History Design cases lists Lightweight bracket as Active with Hide case focused while Main is the active working direction.",
           caption: "1. With Main active, expand Design cases in History and find the finished case.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/compare-apply-recover/step-7-archive-confirmation.png",
-          alt: "Real Archive design case dialog identifies Lightweight bracket, explains the clean-baseline check and retained files/history, and focuses Archive case.",
+          alt: "Real Hide design case dialog identifies Lightweight bracket, explains that its folder and saved revisions stay in place, and focuses Hide case.",
           caption: "2. Read the notice and confirm Hide case.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/compare-apply-recover/step-7-archived-case.png",
-          alt: "Real Archived cases section shows Lightweight bracket as Archived with Reopen case available; saved history and the working folder remain retained.",
+          alt: "Real Design cases panel with Show hidden cases on shows Lightweight bracket as Hidden with Unhide available; saved history and the working folder remain.",
           caption: "3. The hidden case remains available to inspect or unhide later.",
           kind: "cadtree",
         },

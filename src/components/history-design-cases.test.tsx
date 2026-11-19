@@ -95,20 +95,20 @@ test('History Hide case/Unhide: Main protection, unsaved-changes warning, badge,
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].status,'archived');
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].unsavedAtHide,2);
   // Hidden: its row and its own revisions leave History until Show hidden cases is on.
-  assert.equal(ui.queryByRole('button',{name:'Unhide Lightweight bracket'}),null);
+  assert.equal(ui.queryByRole('button',{name:'Unhide case Lightweight bracket'}),null);
   assert.equal(revisionButton(caseRevisions[0]),null);
   const toggle=ui.container.querySelector<HTMLInputElement>('.history-hidden-toggle input')!;
   fireEvent.click(toggle);
   await waitFor(()=>assert.ok(revisionButton(caseRevisions[0])));
   assert.ok(revisionButton(caseRevisions[0])!.closest('.hidden-case'));
-  const row=ui.getByRole('button',{name:'Unhide Lightweight bracket'}).closest('.case-row')!;
+  const row=ui.getByRole('button',{name:'Unhide case Lightweight bracket'}).closest('.case-row')!;
   assert.match(row.textContent!,/Hidden/);
   assert.match(row.textContent!,/2 unsaved changes/);
-  fireEvent.click(ui.getByRole('button',{name:'Unhide Lightweight bracket'}));
+  fireEvent.click(ui.getByRole('button',{name:'Unhide case Lightweight bracket'}));
   dialog=within(ui.getByRole('dialog',{name:'Unhide design case'}));
   fireEvent.click(dialog.getByRole('button',{name:'Cancel'}));
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId].status,'archived');
-  fireEvent.click(ui.getByRole('button',{name:'Unhide Lightweight bracket'}));
+  fireEvent.click(ui.getByRole('button',{name:'Unhide case Lightweight bracket'}));
   dialog=within(ui.getByRole('dialog',{name:'Unhide design case'}));
   fireEvent.click(dialog.getByRole('button',{name:'Unhide'}));
   await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null,'Unhide confirmation closes after success'));
@@ -150,4 +150,35 @@ test('Hiding the working case switches the app to Main',async()=>{
   assert.equal(row.getAttribute('aria-disabled'),'true');
   assert.match(row.textContent!,/Lightweight bracket · Hidden/);
   assert.ok(row.classList.contains('hidden-case'));
+});
+
+test('Hiding the working case: if switching to Main fails, the banner says so and keeps the reason',async()=>{
+  const s=await compareApplyRecoverSample();
+  const ui=render(<App/>);await openHomeWorkspace(ui,s.home);
+  fireEvent.click(ui.getByRole('button',{name:'Open project'}));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  await selectBranch(ui,s.caseId);
+  const nav=within(ui.getByRole('navigation',{name:'Primary navigation'}));
+  fireEvent.click(nav.getByRole('button',{name:'History'}));
+  fireEvent.click(ui.container.querySelector<HTMLDetailsElement>('.history-design-cases > summary')!);
+  // Once the hide record is written, Main's working folder disappears, so the switch to Main fails.
+  const working=await s.workspace.root.getDirectory([...s.project.record.containerPath.split('/'),'working']);
+  let removed=false;
+  s.home.setHooks({onAfterWrite:async(path:string)=>{
+    if(!removed&&path.includes('case-lifecycle/')){removed=true;await working.removeEntry(['main'],{recursive:true});}
+  }});
+  fireEvent.click(ui.getByRole('button',{name:'Hide case Lightweight bracket'}));
+  fireEvent.click(within(ui.getByRole('dialog',{name:'Hide design case'})).getByRole('button',{name:'Hide case'}));
+  await waitFor(()=>assert.ok(ui.queryByRole('dialog')===null));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  s.home.setHooks({onAfterWrite:undefined});
+  assert.ok(removed);
+  const state=await resolveManagedProject(s.workspace.root,s.project.record.containerPath).catch(()=>null);
+  if(state) assert.equal(state.vaultState.caseLifecycles?.[s.caseId].status,'archived');
+  const banner=await waitFor(()=>{const b=ui.container.querySelector('.app-status-feedback');assert.ok(b&&/Hid Lightweight bracket\./.test(b.textContent!));return b;});
+  const text=banner.textContent!;
+  // The case did change to Main, but checking Main failed: that failure stays in the banner
+  // (before the fix, a plain success message replaced it).
+  assert.equal(currentBranchId(ui),'branch-main');
+  assert.match(text,/You are now working on Main\. This managed project is read-only\..*Directory "main" not found/);
 });

@@ -160,7 +160,7 @@ export function DesignCases({
               if (element) buttons.current.set(branch.branchId, element);
               else buttons.current.delete(branch.branchId);
             }}
-            aria-label={`${isHidden ? "Unhide" : "Hide case"} ${branch.name}`}
+            aria-label={`${isHidden ? "Unhide case" : "Hide case"} ${branch.name}`}
             disabled={busy}
             onClick={() => {
               setError("");

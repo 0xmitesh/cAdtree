@@ -167,7 +167,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       assert.equal((await page.evaluate(()=>window.sample.state())).lifecycle,'archived');
       await page.locator('.history-hidden-toggle input').check();
       await cases.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(artifacts,`history-design-cases-${viewport.width}.png`)});
-      await cases.getByRole('button',{name:'Unhide Lightweight bracket',exact:true}).click();
+      await cases.getByRole('button',{name:'Unhide case Lightweight bracket',exact:true}).click();
       confirmation=page.getByRole('dialog',{name:'Unhide design case',exact:true});
       await confirmation.getByRole('button',{name:'Unhide',exact:true}).click();await confirmation.waitFor({state:'hidden'});
       assert.deepEqual(await page.evaluate(()=>window.sample.state()),{revisions:6,lifecycle:'active'});

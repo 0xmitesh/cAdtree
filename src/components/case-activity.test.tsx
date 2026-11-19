@@ -71,7 +71,7 @@ test("unavailable ancestry leaves healthy endpoint comparison available, and hid
     case: { status: "archived", sequence: 1, version: "version" },
   };
   const ui = render(<DesignCases state={state} {...controls} showHidden />);
-  assert.ok(ui.getByRole("button", { name: "Unhide Alternative" }));
+  assert.ok(ui.getByRole("button", { name: "Unhide case Alternative" }));
   const button = ui.getByRole("button", {
     name: "Compare Alternative with Main",
   }) as HTMLButtonElement;

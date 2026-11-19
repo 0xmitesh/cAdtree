@@ -149,7 +149,12 @@ export function layoutRevisions(
       let cursor = id ?? undefined;
       while (cursor && records.has(cursor) && !kept.has(cursor)) {
         kept.add(cursor);
-        cursor = parent.get(cursor);
+        // Follow the drawn edge, or else the recorded parent when it is readable at
+        // all (a damaged or duplicate parent stays visible next to its warning).
+        const recorded = records.get(cursor)!.manifest.parentRevisionId;
+        cursor =
+          parent.get(cursor) ??
+          (recorded && records.has(recorded) ? recorded : undefined);
       }
     };
     for (const [id, revision] of records)

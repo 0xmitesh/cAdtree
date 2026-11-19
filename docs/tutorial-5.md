@@ -2,7 +2,7 @@
 
 R4 update: Design cases now lives in History; affected archive guidance and screenshots were refreshed. Original implementation/validation history below is retained.
 
-Hide case update (2026-11-19): Archive case became **Hide case** (Reopen case became **Unhide**, Show archived cases became **Show hidden cases**). Step 7's text and section 6 describe the new behaviour; the step 7 screenshots still show the old Archive wording until they are captured again.
+Hide case update (2026-11-19): Archive case became **Hide case** (Reopen case became **Unhide**, Show archived cases became **Show hidden cases**). Step 7's text and section 6 describe the new behaviour; the step 7 screenshots (and their alt text, now written for the new wording) still show the old Archive wording until they are captured again.
 
 Implemented on branch `codex/tutorial-5-compare-apply-recover` from merged main `9797d7f290d58303ab6badda3dc277eac020021f` (Tutorial 4 / PR #26). Only the final tutorial and its Learn-card availability were added. No engine, working-screen, viewer, carousel or product-style changes.
 
@@ -180,19 +180,19 @@ Finished Design Cases do not need to be deleted. Hide the experiment while keepi
 
 Visual 1 (cAdtree): **1. With Main active, expand Design cases in History and find the finished case.**
 
-Alt text: Real History Design cases lists Lightweight bracket as Active with Archive case focused while Main is the active working direction.
+Alt text: Real History Design cases lists Lightweight bracket as Active with Hide case focused while Main is the active working direction.
 
 Asset: [step-7-archive-action.png](../public/tutorials/compare-apply-recover/step-7-archive-action.png)
 
 Visual 2 (cAdtree): **2. Read the notice and confirm Hide case.**
 
-Alt text: Real Archive design case dialog identifies Lightweight bracket, explains the clean-baseline check and retained files/history, and focuses Archive case.
+Alt text: Real Hide design case dialog identifies Lightweight bracket, explains that its folder and saved revisions stay in place, and focuses Hide case.
 
 Asset: [step-7-archive-confirmation.png](../public/tutorials/compare-apply-recover/step-7-archive-confirmation.png)
 
 Visual 3 (cAdtree): **3. The hidden case remains available to inspect or unhide later.**
 
-Alt text: Real Archived cases section shows Lightweight bracket as Archived with Reopen case available; saved history and the working folder remain retained.
+Alt text: Real Design cases panel with Show hidden cases on shows Lightweight bracket as Hidden with Unhide available; saved history and the working folder remain.
 
 Asset: [step-7-archived-case.png](../public/tutorials/compare-apply-recover/step-7-archived-case.png)
 
@@ -204,7 +204,7 @@ History selects the revision to inspect. Its Compare button opens Compare saved 
 
 Added, Deleted, Modified and Unchanged describe saved path presence and content hashes. Modified does not mean geometry changed; metadata edits in a CAD file can also change its bytes. Compare shows overall engineering notes and per-file notes at the two endpoints, plus directory additions/deletions including empty directories. It does not summarize all intervening notes, scan working files, verify stored binary objects, evaluate CAD compatibility or infer feature, geometry or stress changes. Missing, corrupt, ambiguous or invalid endpoint metadata makes the comparison unavailable. The tutorial uses the normal History route rather than teaching the secondary Compare with Main route in Design cases.
 
-Terminology retained from the build: Main, Design cases, branch, Compare, Compare saved revisions, From revision, To revision, Swap, Review changes to apply, Base, Source, Destination, Prepare application, Confirm working-file application, Apply confirmed changes, Bring back onto Main…, Prepare bring-back, Bring back confirmed changes, Export, Archive case and Reopen case. The product still exposes branch in some UI; there is no global rename and no new Merge action or Git lesson.
+Terminology retained from the build: Main, Design cases, branch, Compare, Compare saved revisions, From revision, To revision, Swap, Review changes to apply, Base, Source, Destination, Prepare application, Confirm working-file application, Apply confirmed changes, Bring back onto Main…, Prepare bring-back, Bring back confirmed changes, Export, Hide case, Show hidden cases and Unhide. The product still exposes branch in some UI; there is no global rename and no new Merge action or Git lesson.
 
 Sources inspected: `src/components/CompareRevisionsDialog.tsx`, `src/engine/snapshot-comparison.ts`, `src/components/HistoryRecoveryView.tsx`.
 
