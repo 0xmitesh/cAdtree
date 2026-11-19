@@ -157,7 +157,7 @@ test("saving a revision refreshes the Map and writes the revision listing; a fai
   }
 });
 
-test("creating a design case and archiving it refresh the Map", async () => {
+test("creating a design case and hiding it refresh the Map", async () => {
   const f = await seeded();
   const ui = render(<App />);
   await openProject(ui, f.home);
@@ -177,14 +177,14 @@ test("creating a design case and archiving it refresh the Map", async () => {
   assert.match(map, /Status: active/);
   assert.doesNotMatch(map, /Status: hidden/);
 
-  // The new case is the working case: switch back to Main, then archive it.
+  // The new case is the working case: switch back to Main, then hide it.
   const branch = (await openExistingVault(f.project.vaultDir)).branches.find((b) => b.name === "Lighter collar")!;
   assert.equal(currentBranchId(ui), branch.branchId);
   await selectBranch(ui, "branch-main");
   fireEvent.click(ui.getByRole("button", { name: "History" }));
   fireEvent.click(ui.container.querySelector(".history-design-cases > summary")!);
-  fireEvent.click(ui.getByRole("button", { name: "Archive case Lighter collar" }));
-  fireEvent.click(within(ui.getByRole("dialog", { name: "Archive design case" })).getByRole("button", { name: "Archive case" }));
+  fireEvent.click(ui.getByRole("button", { name: "Hide case Lighter collar" }));
+  fireEvent.click(within(ui.getByRole("dialog", { name: "Hide design case" })).getByRole("button", { name: "Hide case" }));
   await waitFor(async () => assert.match(await readText(f.root, f.mapPath), /Status: hidden/));
   await idle(ui);
 });

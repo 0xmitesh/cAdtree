@@ -55,25 +55,26 @@ test("Troubleshooting's reset explains its browser-wide scope, cancels without c
   assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
 });
 
-test("Archive controls appear only when needed and disappear after reopening the last archived case", async () => {
+test("Hidden-case controls appear only when needed and disappear after unhiding the last hidden case", async () => {
   const { sample, ui } = await openSample();
   const beforeMain = inventorySignature(await readVerifiedInventory(sample.main));
   const beforeCase = inventorySignature(await readVerifiedInventory(sample.caseFolder));
-  assert.equal(ui.queryByRole("checkbox", { name: "Show archived cases" }), null);
+  assert.equal(ui.queryAllByRole("checkbox", { name: "Show hidden cases" }).length, 0);
   fireEvent.click(ui.container.querySelector(".history-design-cases > summary")!);
-  assert.ok(ui.getByText("No archived cases."));
-  assert.equal(ui.queryByText("Archived cases (0)"), null);
-  fireEvent.click(ui.getByRole("button", { name: "Archive case Lightweight bracket" }));
-  fireEvent.click(within(ui.getByRole("dialog", { name: "Archive design case" })).getByRole("button", { name: "Archive case" }));
-  await waitFor(() => assert.ok(ui.getByRole("checkbox", { name: "Show archived cases" })));
-  fireEvent.click(ui.getByText("Archived cases (1)"));
-  fireEvent.click(ui.getByRole("button", { name: "Reopen case Lightweight bracket" }));
-  fireEvent.click(within(ui.getByRole("dialog", { name: "Reopen design case" })).getByRole("button", { name: "Reopen case" }));
-  await waitFor(() => assert.ok(ui.queryByRole("checkbox", { name: "Show archived cases" }) === null));
-  assert.ok(ui.getByText("No archived cases."));
-  // Focus moves in a later effect than the one that removes the archived controls, so wait for it. Compare with `===` inside
+  assert.equal(ui.queryByText(/hidden cases?\. Turn on Show hidden cases/), null);
+  fireEvent.click(ui.getByRole("button", { name: "Hide case Lightweight bracket" }));
+  fireEvent.click(within(ui.getByRole("dialog", { name: "Hide design case" })).getByRole("button", { name: "Hide case" }));
+  // One switch in the Explorer, one in History.
+  await waitFor(() => assert.equal(ui.getAllByRole("checkbox", { name: "Show hidden cases" }).length, 2));
+  assert.equal(ui.queryByRole("button", { name: "Unhide Lightweight bracket" }), null);
+  assert.ok(ui.getByText("1 hidden case. Turn on Show hidden cases to see it."));
+  fireEvent.click(ui.container.querySelector<HTMLInputElement>(".history-hidden-toggle input")!);
+  fireEvent.click(ui.getByRole("button", { name: "Unhide Lightweight bracket" }));
+  fireEvent.click(within(ui.getByRole("dialog", { name: "Unhide design case" })).getByRole("button", { name: "Unhide" }));
+  await waitFor(() => assert.equal(ui.queryAllByRole("checkbox", { name: "Show hidden cases" }).length, 0));
+  // Focus moves in a later effect than the one that removes the hidden-case controls, so wait for it. Compare with `===` inside
   // `assert.ok`: a failed `assert.equal` on two jsdom elements spends ~15 s inspecting the DOM and reports only "test failed".
-  await waitFor(() => assert.ok(document.activeElement === ui.getByRole("button", { name: "Archive case Lightweight bracket" }), "focus returns to the Archive case button"));
+  await waitFor(() => assert.ok(document.activeElement === ui.getByRole("button", { name: "Hide case Lightweight bracket" }), "focus returns to the Hide case button"));
   assert.equal(inventorySignature(await readVerifiedInventory(sample.main)), beforeMain);
   assert.equal(inventorySignature(await readVerifiedInventory(sample.caseFolder)), beforeCase);
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   File,
@@ -26,7 +26,7 @@ import {
   type ApplicationController,
 } from "./ApplyPreviewDialog";
 import { AppliedFrom, AppliedFromDetails } from "./ApplicationStatus";
-import { caseLabel } from "../engine/case-lifecycle";
+import { caseLabel, caseLifecycle } from "../engine/case-lifecycle";
 import { applyModeFor, type ApplyMode } from "../engine/apply-preview";
 import { CompareRevisionsDialog } from "./CompareRevisionsDialog";
 import { RevisionGraph } from "./RevisionGraph";
@@ -39,7 +39,8 @@ import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialo
 import { RevisionReferenceContext } from './RevisionReferenceContext';
 
 export interface HistoryRecoveryViewProps {
-  caseControls?: ReactNode;
+  /** The Design cases panel; it gets the "Show hidden cases" switch's value. */
+  caseControls?: ReactNode | ((showHidden: boolean) => ReactNode);
   onRetrieveReference?: (referenceId: string, versionId: string) => Promise<void>;
   onExportForReview?: ExportReviewAction;
   isExporting?: boolean;
@@ -76,9 +77,21 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     onVerifySingleRevisionObjects,
     onCancelOperation,
   } = props;
+  const [showHidden, setShowHidden] = useState(false);
+  const hasHiddenCases = vaultState.branches.some(
+    (branch) =>
+      !branch.isMain && caseLifecycle(vaultState, branch.branchId).status === "archived",
+  );
+  // The switch disappears with the last hidden case; start from "off" when one is hidden again.
+  useEffect(() => {
+    if (!hasHiddenCases) setShowHidden(false);
+  }, [hasHiddenCases]);
   const fullGraph = useMemo(
-    () => layoutRevisions(vaultState, activeBranchId),
-    [vaultState, activeBranchId],
+    () =>
+      layoutRevisions(vaultState, activeBranchId, {
+        hideHiddenCases: !showHidden,
+      }),
+    [vaultState, activeBranchId, showHidden],
   );
   const [filePath, setFilePath] = useState("");
   const componentId = filePath.startsWith('component:') ? filePath.slice(10) : null;
@@ -232,6 +245,16 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           </div>
         </div>
         <div className="project-heading-controls">
+          {hasHiddenCases ? (
+            <label className="history-hidden-toggle">
+              <input
+                type="checkbox"
+                checked={showHidden}
+                onChange={(event) => setShowHidden(event.target.checked)}
+              />
+              Show hidden cases
+            </label>
+          ) : null}
           <div className="segmented" aria-label="History display">
             <button
               className={mode === "graph" ? "active" : ""}
@@ -255,7 +278,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
       {props.caseControls ? (
         <details className="disclosure history-design-cases">
           <summary>Design cases</summary>
-          {props.caseControls}
+          {typeof props.caseControls === "function"
+            ? props.caseControls(showHidden)
+            : props.caseControls}
         </details>
       ) : null}
       {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Files are listed by path and snapshot comparison remains available.</Notice> : null}

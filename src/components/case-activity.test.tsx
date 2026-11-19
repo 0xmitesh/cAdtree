@@ -61,7 +61,7 @@ test("the design cases panel has no Saved activity and divergence section; Compa
   );
   assert.equal(ui.queryByRole("dialog"), null);
 });
-test("unavailable ancestry leaves healthy endpoint comparison available, and archived discovery/reopen stay intact", () => {
+test("unavailable ancestry leaves healthy endpoint comparison available, and hidden discovery/unhide stay intact", () => {
   const state = fixture();
   state.revisions.push(revision("c3", "r1", 3, "case"));
   state.branchHeads.case = "c3";
@@ -70,9 +70,8 @@ test("unavailable ancestry leaves healthy endpoint comparison available, and arc
   state.caseLifecycles = {
     case: { status: "archived", sequence: 1, version: "version" },
   };
-  const ui = render(<DesignCases state={state} {...controls} />);
-  fireEvent.click(ui.getByText("Archived cases (1)", { exact: true }));
-  assert.ok(ui.getByRole("button", { name: "Reopen case Alternative" }));
+  const ui = render(<DesignCases state={state} {...controls} showHidden />);
+  assert.ok(ui.getByRole("button", { name: "Unhide Alternative" }));
   const button = ui.getByRole("button", {
     name: "Compare Alternative with Main",
   }) as HTMLButtonElement;

@@ -81,7 +81,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     () => new Set(["home"]),
   );
   const [focusedKey, setFocusedKey] = useState("home");
-  const [showArchived, setShowArchived] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const rows = useRef(new Map<string, HTMLDivElement>());
   const workspaceKey = props.workspace
     ? (props.managedWorkspaceKey ??
@@ -96,9 +96,13 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       ? `${projectKey}/branch:${props.activeBranchId}`
       : (workspaceKey ?? "home");
 
-  let hasArchived = Boolean(props.activeVault?.branches.some(
+  let hasHidden = Boolean(props.activeVault?.branches.some(
     branch => caseLifecycle(props.activeVault!, branch.branchId).status === "archived",
   ));
+  // Reset the switch once no hidden case is known (computed while building the tree below).
+  useEffect(() => {
+    if (!hasHidden) setShowHidden(false);
+  });
   const projects = (
     workspace: WorkspaceState,
     key: string,
@@ -116,7 +120,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         : entry.project?.vaultState;
       const unavailable = !entry.project || entry.status === "duplicate";
       if (vault?.branches.some(branch => caseLifecycle(vault, branch.branchId).status === "archived"))
-        hasArchived = true;
+        hasHidden = true;
       return {
         key: keyForProject,
         label: entry.name,
@@ -131,7 +135,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             (branch) =>
               !vault ||
               caseLifecycle(vault, branch.branchId).status !== "archived" ||
-              showArchived ||
+              showHidden ||
               (active && branch.branchId === props.activeBranchId),
           )
           .map((branch) => ({
@@ -153,7 +157,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             ),
             issue:
               vault && caseLifecycle(vault, branch.branchId).status !== "active"
-                ? "Reopen archived cases in History → Design cases. Unavailable lifecycle records require inspection."
+                ? "Unhide hidden cases in History → Design cases. Unavailable lifecycle records require inspection."
                 : undefined,
             open: () => props.onProject(homeEntry, entry, branch.branchId),
           })),
@@ -280,17 +284,17 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
           <ChevronsDownUp size={14} />
         </button>
       </div>
-      {hasArchived ? <label className="tree-archive-toggle">
+      {hasHidden ? <label className="tree-hidden-toggle">
         <input
           type="checkbox"
-          checked={showArchived}
-          onChange={(event) => setShowArchived(event.target.checked)}
+          checked={showHidden}
+          onChange={(event) => setShowHidden(event.target.checked)}
         />
-        Show archived cases
+        Show hidden cases
       </label> : null}
-      {hasArchived && showArchived ? (
-        <p className="tree-archive-help">
-          Reopen cases in History → Design cases.
+      {hasHidden && showHidden ? (
+        <p className="tree-hidden-help">
+          Unhide cases in History → Design cases.
         </p>
       ) : null}
       <div
@@ -333,7 +337,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                 props.busy || node.unavailable || node.readOnly || undefined
               }
               tabIndex={node.key === tabKey ? 0 : -1}
-              className={`tree-row ${node.kind}${node.unavailable ? " unavailable" : ""}${node.readOnly ? " archived" : ""}`}
+              className={`tree-row ${node.kind}${node.unavailable ? " unavailable" : ""}${node.readOnly ? " hidden-case" : ""}`}
               title={node.issue ? `${node.label} — ${node.issue}` : node.label}
               style={{ "--tree-depth": node.depth } as CSSProperties}
               onFocus={() => setFocusedKey(node.key)}

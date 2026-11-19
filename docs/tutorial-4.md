@@ -103,7 +103,7 @@ Continue saving meaningful revisions in whichever design direction you are worki
 
 - The case's first changed save follows Rev 003. In this example, Lightweight bracket gets Rev 004 and Rev 005; Main later gets Rev 006 with Rev 003 as its parent. Numbers run across the whole project, not from one on each case.
 - Both histories keep their connection to the starting revision. Do not delete a useful alternative just because it did not become Main.
-- Finished alternatives can be archived in History → Design cases while preserving their working folder and saved history. Main cannot be archived.
+- Finished alternatives can be hidden in History → Design cases while keeping their working folder and saved history. Main cannot be hidden.
 
 Visual 1 (Concept): **Separate histories share an origin; revision numbers belong to the whole project.**
 
@@ -128,7 +128,7 @@ Closing hint: **Next: compare, apply and recover designs.**
 | Case origin | Started from Rev 003 on Main (for this sample) |
 | Settings location | Working folder |
 | File shortcut | Copy folder path |
-| Lifecycle actions | Archive case; Reopen case |
+| Lifecycle actions | Hide case; Unhide |
 
 Tutorial copy and creation controls use Design Case. Working case selects the current direction; persisted branch identities and internal APIs are unchanged.
 

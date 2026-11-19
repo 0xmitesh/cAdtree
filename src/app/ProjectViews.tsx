@@ -214,16 +214,17 @@ export function ProjectViews({
       </div>
       <div hidden={activeTab !== "history"}>
         <HistoryRecoveryView
-          caseControls={
+          caseControls={(showHidden) => (
             <DesignCases
               state={vaultState}
               activeBranchId={activeBranchId}
               busy={busy}
               progress={progress}
+              showHidden={showHidden}
               onCancel={handleCancelOperation}
               onChange={handleCaseLifecycle}
             />
-          }
+          )}
           onRetrieveReference={handleRetrieveReference}
           application={{
             prepare: handlePrepareApplication,

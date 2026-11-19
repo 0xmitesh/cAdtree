@@ -1,5 +1,5 @@
 import type { ReconstructedRevision, VaultState } from "../engine/types";
-import { caseLabel } from "../engine/case-lifecycle";
+import { caseLabel, caseLifecycle } from "../engine/case-lifecycle";
 
 export const branchColors = [
   "#087f80",
@@ -19,6 +19,8 @@ export interface GraphNode {
   heads: string[];
   latest: boolean;
   warnings: string[];
+  /** The revision belongs to a hidden case (shown faded). */
+  hidden: boolean;
 }
 export interface GraphCopy {
   child: string;
@@ -35,6 +37,8 @@ export interface RevisionGraph {
     headIds: string[];
     current: boolean;
     available?: boolean;
+    /** A hidden case (only listed when hidden cases are shown). */
+    hidden?: boolean;
   }[];
   edges: { child: string; parent: string; color: string }[];
   /** Secondary provenance links, never topology: a revision saved after files
@@ -46,18 +50,44 @@ export interface RevisionGraph {
   latestId: string | null;
 }
 
+export interface LayoutOptions {
+  /** Leave hidden cases out (History's default view). Their revisions that a
+   * shown case branched from or copied from stay, marked hidden, together with
+   * their ancestors, so no shown line starts from nowhere. Engine callers
+   * leave this off and get the complete graph. */
+  hideHiddenCases?: boolean;
+}
+
 /** Pure metadata-only projection. No timestamps, file access, or stored state mutations.
  * Parent edges are the sole source of topology. Broken/ambiguous ancestry stays visible.
  */
 export function layoutRevisions(
   state: VaultState,
   activeBranchId: string,
+  options: LayoutOptions = {},
 ): RevisionGraph {
-  const branches = [...state.branches].sort(
+  const allBranches = [...state.branches].sort(
     (a, b) =>
       Number(b.isMain) - Number(a.isMain) ||
       a.branchId.localeCompare(b.branchId),
   );
+  // The working case is never treated as hidden, even if its record says so.
+  const hiddenBranches = new Set(
+    allBranches
+      .filter(
+        (b) =>
+          !b.isMain &&
+          b.branchId !== activeBranchId &&
+          caseLifecycle(state, b.branchId).status === "archived",
+      )
+      .map((b) => b.branchId),
+  );
+  const leaveOut = Boolean(options.hideHiddenCases && hiddenBranches.size);
+  const branches = leaveOut
+    ? allBranches.filter((b) => !hiddenBranches.has(b.branchId))
+    : allBranches;
+  // Colours follow the complete branch list so they don't change when hidden cases are shown.
+  const colorIndex = new Map(allBranches.map((b, i) => [b.branchId, i]));
   const branchLane = new Map(branches.map((b, i) => [b.branchId, i]));
   const records = new Map<string, ReconstructedRevision>();
   const duplicate = new Set<string>();
@@ -112,6 +142,39 @@ export function layoutRevisions(
       }
     }
     chain.forEach((member) => done.add(member));
+  }
+  if (leaveOut) {
+    const kept = new Set<string>();
+    const keep = (id: string | null | undefined) => {
+      let cursor = id ?? undefined;
+      while (cursor && records.has(cursor) && !kept.has(cursor)) {
+        kept.add(cursor);
+        cursor = parent.get(cursor);
+      }
+    };
+    for (const [id, revision] of records)
+      if (!hiddenBranches.has(revision.manifest.branchId)) keep(id);
+    for (const branch of branches) {
+      keep(branch.startingRevisionId);
+      keep(state.branchHeads[branch.branchId]);
+      state.competingHeads[branch.branchId]?.forEach(keep);
+    }
+    for (const op of state.applicationOperations ?? []) {
+      const child = op.capturedRevisionId;
+      if (
+        op.status === "captured" &&
+        child &&
+        records.has(child) &&
+        !hiddenBranches.has(records.get(child)!.manifest.branchId)
+      )
+        keep(op.record?.plan?.sourceRevisionId);
+    }
+    // Kept revisions include every ancestor, so no kept revision loses its parent edge.
+    for (const id of [...records.keys()])
+      if (!kept.has(id)) {
+        records.delete(id);
+        parent.delete(id);
+      }
   }
   const children = new Map<string, string[]>();
   for (const [child, pid] of parent)
@@ -168,7 +231,7 @@ export function layoutRevisions(
   for (const [bid, heads] of Object.entries(state.competingHeads)) {
     if (heads.length)
       warnings.push(
-        `${branches.find((b) => b.branchId === bid)?.name ?? "Unknown branch"} has ${heads.length} competing heads. Saving is blocked until resolved.`,
+        `${allBranches.find((b) => b.branchId === bid)?.name ?? "Unknown branch"} has ${heads.length} competing heads. Saving is blocked until resolved.`,
       );
     for (const id of heads) warn(id, "Competing branch head");
   }
@@ -182,11 +245,13 @@ export function layoutRevisions(
       branchName: caseLabel(state, revision.manifest.branchId),
       color:
         branchColors[
-          (branchLane.get(revision.manifest.branchId) ?? 0) %
-            branchColors.length
+          (colorIndex.get(revision.manifest.branchId) ??
+            branchLane.get(revision.manifest.branchId) ??
+            0) % branchColors.length
         ],
       latest: id === latestId,
       warnings: nodeWarnings.get(id) ?? [],
+      hidden: hiddenBranches.has(revision.manifest.branchId),
       heads: branches
         .filter(
           (b) =>
@@ -223,11 +288,12 @@ export function layoutRevisions(
   }
   return {
     nodes,
-    branches: branches.map((branch, index) => ({
+    branches: branches.map((branch) => ({
       id: branch.branchId,
       name: caseLabel(state, branch.branchId),
-      color: branchColors[index % branchColors.length],
+      color: branchColors[colorIndex.get(branch.branchId)! % branchColors.length],
       current: branch.branchId === activeBranchId,
+      ...(hiddenBranches.has(branch.branchId) ? { hidden: true } : {}),
       headIds: [
         ...new Set([
           ...(state.branchHeads[branch.branchId]

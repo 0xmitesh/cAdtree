@@ -4,7 +4,7 @@ import type { CreateBranchParams } from "../components/CreateBranchDialog";
 import type { WorkingFolderBindings } from "../engine/branch-state";
 import { changeCaseLifecycle } from "../engine/case-lifecycle-service";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
-import type { ScanResult, VaultState } from "../engine/types";
+import { MAIN_BRANCH_ID, type ScanResult, type VaultState } from "../engine/types";
 import { openExistingVault } from "../engine/vault-service";
 import { createManagedBranch, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
 import { projectGuideTarget, refreshGuidesAfter } from "./offline-guide-refresh";
@@ -44,7 +44,7 @@ export type UseBranchActionsArgs = {
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
 };
 
-/** Design cases: switch the working case, create a case, archive or reopen one, and reattach working folders. */
+/** Design cases: switch the working case, create a case, hide or unhide one, and reattach working folders. */
 export function useBranchActions({
   vaultDir,
   vaultState,
@@ -131,12 +131,18 @@ export function useBranchActions({
         );
     });
   };
+  /** Hide case ("archived") or Unhide ("active"). Hiding the working case
+   * switches the app to Main once the case is hidden. */
   const handleCaseLifecycle = async (
     branchId: string,
     status: "active" | "archived",
     expectedVersion: string | null,
+    acknowledgedChangesSignature?: string,
   ) => {
     if (!vaultDir || !vaultState) throw new Error("Open the project first.");
+    const hidingWorkingCase =
+      status === "archived" && branchId === activeBranchId;
+    let message = "";
     await perform(
       "scan",
       async (context) => {
@@ -147,27 +153,27 @@ export function useBranchActions({
             (await vaultDir.requestPermission("readwrite")) !== "granted"
           )
             throw new Error(
-              "Write access to the vault is required for lifecycle metadata.",
+              "Write access to the project is required to hide or unhide a case.",
             );
           const result = await changeCaseLifecycle(
             vaultDir,
             {
               projectId: vaultState.project.projectId,
               branchId,
-              activeBranchId,
+              activeBranchId: hidingWorkingCase ? MAIN_BRANCH_ID : activeBranchId,
               status,
               expectedVersion,
+              acknowledgedChangesSignature,
             },
             applicationOptions(context),
           );
-          // Archived or reopened: update the Map's case status.
+          // Hidden or unhidden: update the Map's case status.
           refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
+          const name = result.state.branches.find((branch) => branch.branchId === branchId)?.name;
+          message = `${status === "archived" ? `Hid ${name}. Turn on Show hidden cases in History or Explorer to see it again.${hidingWorkingCase ? " You are now working on Main." : ""}` : `${name} is shown again.`} ${result.warning ?? ""}`.trim();
           if (context.current()) {
             applyVaultState(result.state);
-            setStatusBanner({
-              type: "success",
-              message: `${status === "archived" ? "Archived" : "Reopened"} ${result.state.branches.find((branch) => branch.branchId === branchId)?.name}. ${status === "archived" ? "Find archived cases in History → Design cases or Show archived cases in Explorer." : "The working case has not been switched."} ${result.warning ?? ""}`,
-            });
+            if (!hidingWorkingCase) setStatusBanner({ type: "success", message });
           }
         } finally {
           if (context.current()) {
@@ -179,9 +185,14 @@ export function useBranchActions({
           }
         }
       },
-      // The archive/reopen dialog shows a failure itself: no second copy in the page banner.
+      // The hide/unhide dialog shows a failure itself: no second copy in the page banner.
       { rethrow: true, banner: false },
     );
+    if (hidingWorkingCase) {
+      // The case is hidden (read-only): leave it for Main.
+      await handleSelectBranch(MAIN_BRANCH_ID);
+      setStatusBanner({ type: "success", message });
+    }
   };
   const handleReattachWorkingFolder = async () => {
     if (managedProject && workspace) await refreshWorkspace();

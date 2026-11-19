@@ -110,7 +110,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
         "Check Destination: Main, its connected folder, baseline Rev 006, Source Rev 005 and the exact additions, replacements and deletions. Save and close relevant CAD documents, check the confirmation and choose Apply confirmed changes.",
         "Apply changes working files; no revision is saved yet. Open Main manually in CAD, check references and rebuild, then save and close after adjustments. In Changes, cAdtree checks your files automatically; review and Save revision: Main Rev 007 in this example.",
       ],
-      note: "Keep other apps and sync from writing during Apply; cAdtree cannot lock them or make multiple file writes atomic. Apply does not delete or archive the Design Case.",
+      note: "Keep other apps and sync from writing during Apply; cAdtree cannot lock them or make multiple file writes atomic. Apply does not delete or hide the Design Case.",
       visuals: [
         {
           src: "/tutorials/compare-apply-recover/step-5-confirm-actions.png",
@@ -172,10 +172,10 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
     {
       id: "preserve-the-case",
       title: "Preserve the Design Case",
-      summary: "Finished Design Cases do not need to be deleted. Archive the experiment while preserving its working folder and saved history.",
+      summary: "Finished Design Cases do not need to be deleted. Hide the experiment while keeping its working folder and saved history.",
       points: [
-        "Keep Main active. In History, expand Design cases, find Lightweight bracket and choose Archive case. Review Archive design case, then confirm Archive case. Uncaptured case edits or pending applications must be resolved first.",
-        "Archive is independent of Apply; it preserves useful alternatives whether or not you adopted them. Main cannot be archived. Archived cases can be reopened later with Reopen case; reopening does not switch your working case.",
+        "In History, expand Design cases, find Lightweight bracket and choose Hide case, then confirm Hide case. If the case has unsaved changes, cAdtree tells you how many; they stay in its folder. If you are working on the case, cAdtree switches you to Main.",
+        "Hiding is independent of Apply; it keeps useful alternatives whether or not you adopted them. Main cannot be hidden. Turn on Show hidden cases to see a hidden case again and choose Unhide; unhiding does not switch your working case.",
       ],
       visuals: [
         {
@@ -187,13 +187,13 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
         {
           src: "/tutorials/compare-apply-recover/step-7-archive-confirmation.png",
           alt: "Real Archive design case dialog identifies Lightweight bracket, explains the clean-baseline check and retained files/history, and focuses Archive case.",
-          caption: "2. Review the preservation notice and confirm Archive case.",
+          caption: "2. Read the notice and confirm Hide case.",
           kind: "cadtree",
         },
         {
           src: "/tutorials/compare-apply-recover/step-7-archived-case.png",
           alt: "Real Archived cases section shows Lightweight bracket as Archived with Reopen case available; saved history and the working folder remain retained.",
-          caption: "3. The archived case remains available to inspect or reopen later.",
+          caption: "3. The hidden case remains available to inspect or unhide later.",
           kind: "cadtree",
         },
       ],
