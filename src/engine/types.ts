@@ -183,6 +183,12 @@ export interface ProgressUpdate {
   message: string;
 }
 
+/** The exact working-folder content a capture must find (tracked files and folders, paths relative to the working folder). */
+export interface ExpectedWorkingSnapshot {
+  files: { path: string; sha256: string; size: number }[];
+  directories: string[];
+}
+
 export interface CaptureRevisionInput {
   /** Test seam: supplies each candidate revision record ID. Defaults to newRecordId(). */
   newRevisionId?: () => string;
@@ -198,6 +204,12 @@ export interface CaptureRevisionInput {
   notes: RevisionNotes;
   fileNotes?: FileSpecificNote[];
   reviewedChangesSignature?: string;
+  /**
+   * When given, capture's own fresh full scan must match it exactly (same file
+   * paths, SHA-256 and sizes, same folders); otherwise capture throws
+   * `WorkingFilesChangedError` before writing anything.
+   */
+  expectedSnapshot?: ExpectedWorkingSnapshot;
   onProgress?: (progress: ProgressUpdate) => void;
   signal?: AbortSignal;
 }
