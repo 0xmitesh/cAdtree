@@ -1,5 +1,9 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { FileConflictError, splitAndValidatePath } from "./fs-adapter";
+import {
+  FileConflictError,
+  splitAndValidatePath,
+  validateDirectoryIsolation,
+} from "./fs-adapter";
 import {
   prepareApplyPreview,
   buildApplyPreview,
@@ -27,7 +31,11 @@ import {
 } from "./branch-state";
 import { getObjectPathSegments, verifyStoredObject } from "./object-store";
 import { hashStream, hashString } from "./hash";
-import { withProjectWriterLock } from "./locks";
+import {
+  assertHoldsProjectWriterLock,
+  withProjectWriterLock,
+  type ProjectWriterLock,
+} from "./locks";
 import { eventIdBase, eventIdCandidate } from "./ids";
 import {
   isSystemClutterName,
@@ -40,9 +48,18 @@ import {
   throwIfCancelled,
   type CopyOptions,
 } from "./copy-service";
-import { openExistingVault } from "./vault-service";
+import { formatRevisionNumber, openExistingVault } from "./vault-service";
+import {
+  captureUnderLock,
+  type CaptureRevisionResult,
+} from "./revision-service";
 import { assertCaseWritable } from "./case-lifecycle";
-import type { FileEntry, VaultState } from "./types";
+import type {
+  CaptureRevisionInput,
+  FileEntry,
+  RevisionNotes,
+  VaultState,
+} from "./types";
 
 export interface ApplicationOptions extends CopyOptions {
   /** Clock for new event IDs; defaults to the current time. Tests inject a fixed one. */
@@ -435,8 +452,31 @@ export async function applyPreparedApplication(
   prepared: PreparedApplication,
   options: ApplicationOptions,
 ): Promise<ApplicationOperation> {
-  const review = prepared.review;
-  return withProjectWriterLock(review.projectId, async () => {
+  return withProjectWriterLock(prepared.review.projectId, async (lock) =>
+    (await applyUnderLock(vault, prepared.review, options, lock, prepared.connection)).op,
+  );
+}
+/**
+ * The apply steps shared by `applyPreparedApplication` and `applyAndSave`, for a
+ * caller that already holds the project writer lock (`lock`). Checks, then writes
+ * (plan, staged copies, attempt/written events, folder and file changes, full
+ * inventory check, `applied` last). `expectedConnection`, when given, must be the
+ * destination folder the plan was prepared against.
+ */
+async function applyUnderLock(
+  vault: FileSystemDirectoryAdapter,
+  review: ApplicationReview,
+  options: ApplicationOptions,
+  lock: ProjectWriterLock,
+  expectedConnection?: FileSystemDirectoryAdapter,
+): Promise<{
+  op: ApplicationOperation;
+  plan: ApplyPreviewPlan;
+  working: FileSystemDirectoryAdapter;
+  state: VaultState;
+}> {
+  assertHoldsProjectWriterLock(lock, review.projectId);
+  {
     throwIfCancelled(options.signal);
     const state = await openExistingVault(vault);
     const { plan, context } = recompute(state, review);
@@ -447,10 +487,11 @@ export async function applyPreparedApplication(
       review.destinationBranchId,
       options,
     );
-    if (!(await working.isSameEntry(prepared.connection)))
+    if (expectedConnection && !(await working.isSameEntry(expectedConnection)))
       throw new Error(
         "Destination connection changed after preparation. Refresh and review again.",
       );
+    await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
     await cleanDestination(working, state, review, options);
     // A fresh operation ID is never reused. A durable plan precedes staging; a
     // durable attempt precedes each write. Any uncertain outcome remains discoverable.
@@ -690,7 +731,154 @@ export async function applyPreparedApplication(
     throwIfCancelled(options.signal);
     await appendApplicationEvent(vault, op, { kind: "applied" });
     op.status = "applied";
-    return op;
+    return { op, plan, working, state };
+  }
+}
+export interface ApplyAndSaveOptions extends ApplicationOptions {
+  /** Test seam passed to the save: supplies each candidate revision record ID. */
+  newRevisionId?: CaptureRevisionInput["newRevisionId"];
+}
+/**
+ * `applyAndSave` either saved the result, or wrote it and then could not save it.
+ * Anything that fails before the `applied` event is thrown, as with
+ * `applyPreparedApplication` (nothing written, or an `unresolved` operation that
+ * the existing recovery undoes).
+ */
+export type ApplyAndSaveResult =
+  | ({
+      status: "saved";
+      operation: ApplicationOperation;
+      summary: string;
+    } & CaptureRevisionResult)
+  | {
+      /** The working files hold the verified result; the operation stays
+       * `applied`. A normal save (summary/notes below as a prefill) links its
+       * provenance once, as after a manual Apply. */
+      status: "not-saved";
+      operation: ApplicationOperation;
+      summary: string;
+      notes: RevisionNotes;
+      reason: string;
+      error: unknown;
+    };
+/** "Brought back Rev 003" or "Copied 2 files from <case>". */
+export function applySaveSummary(
+  state: VaultState,
+  record: ApplicationRecord,
+): string {
+  if ((record.plan.mode ?? "merge") === "revert") {
+    const source = state.revisions.find(
+      (r) => r.manifest.revisionId === record.plan.sourceRevisionId,
+    );
+    return source
+      ? `Brought back ${formatRevisionNumber(source.manifest.displayNumber)}`
+      : "Brought back an earlier revision";
+  }
+  const name =
+    state.branches.find((b) => b.branchId === record.sourceBranchId)?.name ??
+    "a design case";
+  const files = changedActions(record).length;
+  if (!files) {
+    const folders = record.plan.folderActions.length;
+    return `Copied ${folders} folder change${folders === 1 ? "" : "s"} from ${name}`;
+  }
+  return `Copied ${files} file${files === 1 ? "" : "s"} from ${name}`;
+}
+/**
+ * Bring back (revert) or Copy files from a case (merge), then save the result as
+ * a revision, all under ONE project writer lock (the lock cannot be taken twice:
+ * see `captureUnderLock`). The apply steps are exactly `applyPreparedApplication`'s;
+ * the save is a normal capture whose fresh scan must equal the plan's result
+ * (`expectedSnapshot`), so an edit made meanwhile is never swept in. Provenance is
+ * linked by capture exactly as for a manual save after Apply (`captured` status,
+ * identity transfers, the graph's copy links). The optional reason becomes the
+ * revision's Why (`notes.problem`).
+ */
+export async function applyAndSave(
+  vault: FileSystemDirectoryAdapter,
+  review: ApplicationReview,
+  options: ApplyAndSaveOptions,
+): Promise<ApplyAndSaveResult> {
+  return withProjectWriterLock(review.projectId, async (lock) => {
+    const { op, plan, working, state } = await applyUnderLock(
+      vault,
+      review,
+      options,
+      lock,
+    );
+    const summary = applySaveSummary(state, op.record!);
+    const notes: RevisionNotes = {
+      problem: (review.reason ?? "").trim(),
+      modification: "",
+      observations: "",
+    };
+    try {
+      const saved = await captureUnderLock(
+        working,
+        vault,
+        {
+          branchId: review.destinationBranchId,
+          summary,
+          notes,
+          expectedSnapshot: {
+            files: plan.resultFiles.map(({ path, sha256, size }) => ({
+              path,
+              sha256,
+              size,
+            })),
+            directories: [...plan.resultDirectories],
+          },
+          workingFolders: options.workingFolders,
+          resolveWorkingFolders: options.resolveWorkingFolders,
+          newRevisionId: options.newRevisionId,
+          signal: options.signal,
+          onProgress: options.onProgress,
+        },
+        review.projectId,
+        lock,
+      );
+      const linked = branchApplications(
+        saved.vaultState,
+        review.destinationBranchId,
+      ).find((o) => o.operationId === op.operationId);
+      return { status: "saved", operation: linked ?? op, summary, ...saved };
+    } catch (error) {
+      // The write succeeded; only the save did not. If the save did publish
+      // before failing (e.g. a lost acknowledgement), report it as saved.
+      try {
+        const reloaded = await openExistingVault(vault);
+        const current = branchApplications(
+          reloaded,
+          review.destinationBranchId,
+        ).find((o) => o.operationId === op.operationId);
+        const revision =
+          current?.status === "captured"
+            ? reloaded.revisions.find(
+                (r) => r.manifest.revisionId === current.capturedRevisionId,
+              )
+            : undefined;
+        if (current && revision)
+          return {
+            status: "saved",
+            operation: current,
+            summary,
+            revision,
+            vaultState: reloaded,
+            cacheWarning: `The revision was published, but its last step reported: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        if (current) op.status = current.status;
+      } catch {
+        // Keep the in-memory `applied` operation; the vault is re-read later.
+      }
+      return {
+        status: "not-saved",
+        operation: op,
+        summary,
+        notes,
+        reason: error instanceof Error ? error.message : String(error),
+        error,
+      };
+    }
   });
 }
 export async function recoverApplication(
