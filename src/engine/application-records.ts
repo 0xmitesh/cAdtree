@@ -191,7 +191,7 @@ function validateRecord(
     ].every(safeId) ||
     ((plan.mode ?? "merge") === "revert" &&
       plan.baseRevisionId !== plan.destinationRevisionId) ||
-    !plan.reason?.trim() ||
+    typeof plan.reason !== "string" ||
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||
     !Array.isArray(plan.actions) ||
