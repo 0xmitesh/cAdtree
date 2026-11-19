@@ -39,7 +39,6 @@ export interface AppDialogsProps {
     password: string,
   ) => Promise<void>;
   handleForgotPassword: (email: string) => Promise<void>;
-  onContinuePickerAfterSignIn: () => void;
 }
 
 /** Dialogs hosted by the shell: home address, learning, folder browser and sign-in. */
@@ -67,7 +66,6 @@ export function AppDialogs({
   handleContinueWithGoogle,
   handleSubmitEmailAuth,
   handleForgotPassword,
-  onContinuePickerAfterSignIn,
 }: AppDialogsProps) {
   return (
     <>
@@ -116,12 +114,6 @@ export function AppDialogs({
       ) : null}
       {signInPrompt ? (
         <AccountSignInModal
-          step={signInPrompt.step}
-          createHomePicker={
-            signInPrompt.action.kind === "connect-home"
-              ? signInPrompt.action.create
-              : undefined
-          }
           signingIn={signInPrompt.signingIn}
           error={signInPrompt.error}
           info={signInPrompt.info}
@@ -139,7 +131,6 @@ export function AppDialogs({
               prev ? { ...prev, error: null, info: null } : null,
             );
           }}
-          onContinuePicker={onContinuePickerAfterSignIn}
           onCancel={() => {
             if (!signInPrompt.signingIn) setSignInPrompt(null);
           }}

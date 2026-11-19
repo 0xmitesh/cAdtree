@@ -191,7 +191,7 @@ test("initial session gate waits for Firebase auth resolution before restoring r
   );
 });
 
-test("signed-out workspace actions prompt for Google sign-in, handle cancellation and failure, and resume after sign-in", async () => {
+test("a signed-out visitor creates a home with no sign-in dialog; the Account sign-in handles cancel, failure and success without touching the open home", async () => {
   const emptyHome = new InMemoryFileSystemAdapter("Cadtree");
   let pickerCalls = 0;
   Object.assign(window, {
@@ -204,71 +204,66 @@ test("signed-out workspace actions prompt for Google sign-in, handle cancellatio
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  // 1. Cancelled sign-in leaves visitor on public page without invoking picker
-  auth.setSignInOutcome({ type: "cancel" });
   fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const signInDialog = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
-  fireEvent.click(
-    within(signInDialog).getByRole("button", {
-      name: /Continue with Google/i,
-    }),
-  );
-  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
-  assert.equal(pickerCalls, 0);
-  assert.equal(ui.queryByRole("alert"), null);
-
-  // 2. Failed sign-in shows retryable error without opening folder
-  auth.setSignInOutcome({
-    type: "error",
-    message: "Network connection failed during Google sign-in.",
-  });
-  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const retryDialog = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
-  fireEvent.click(
-    within(retryDialog).getByRole("button", {
-      name: /Continue with Google/i,
-    }),
-  );
-  await waitFor(() =>
-    assert.match(
-      within(retryDialog).getByRole("alert").textContent!,
-      /Network connection failed/,
-    ),
-  );
-  assert.equal(pickerCalls, 0);
-
-  // 3. Retry succeeds and resumes intended Start my Cadtree home action
-  auth.setSignInOutcome({ type: "success", user: DEFAULT_TEST_USER });
-  fireEvent.click(
-    within(retryDialog).getByRole("button", {
-      name: /Continue with Google/i,
-    }),
-  );
   await waitFor(() =>
     assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
   );
   assert.equal(pickerCalls, 1);
+  assert.equal(ui.queryByRole("dialog", { name: "Sign in to cAdtree" }), null);
   await completeHomeAddress(ui, "D:\\Cadtree");
   await waitFor(() =>
     assert.ok(ui.getByRole("heading", { name: "My workspaces." })),
   );
+  assert.equal(auth.getSignInPayloads().length, 0);
+
+  // 1. Cancelled sign-in closes the dialog and changes nothing.
+  auth.setSignInOutcome({ type: "cancel" });
+  fireEvent.click(ui.getByRole("button", { name: "Sign in" }));
+  const first = await waitFor(() =>
+    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
+  );
+  fireEvent.click(
+    within(first).getByRole("button", { name: /Continue with Google/i }),
+  );
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.equal(ui.queryByRole("alert"), null);
+
+  // 2. A failed sign-in shows a retryable error.
+  auth.setSignInOutcome({
+    type: "error",
+    message: "Network connection failed during Google sign-in.",
+  });
+  fireEvent.click(ui.getByRole("button", { name: "Sign in" }));
+  const retry = await waitFor(() =>
+    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
+  );
+  fireEvent.click(
+    within(retry).getByRole("button", { name: /Continue with Google/i }),
+  );
+  await waitFor(() =>
+    assert.match(
+      within(retry).getByRole("alert").textContent!,
+      /Network connection failed/,
+    ),
+  );
+
+  // 3. Success closes the dialog; the open home stays open.
+  auth.setSignInOutcome({ type: "success", user: DEFAULT_TEST_USER });
+  fireEvent.click(
+    within(retry).getByRole("button", { name: /Continue with Google/i }),
+  );
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
+  assert.ok(ui.getByRole("heading", { name: "My workspaces." }));
+  assert.equal(pickerCalls, 1);
   assert.deepEqual(auth.getSignInPayloads(), [[], [], []]);
 });
 
 test("Sign In / Create Account tabs, Email & Password authentication, and Forgot password flow", async () => {
-  const emptyHome = new InMemoryFileSystemAdapter("Cadtree");
-  Object.assign(window, {
-    showDirectoryPicker: async () => nativeDirectory(emptyHome),
-  });
-
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
+  fireEvent.click(ui.getByRole("button", { name: "Sign in" }));
   const modal = await waitFor(() =>
     ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
   );
@@ -314,61 +309,14 @@ test("Sign In / Create Account tabs, Email & Password authentication, and Forgot
     within(modal).getByRole("button", { name: "Create Account" }),
   );
 
-  await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
-  );
+  await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
+  assert.ok(ui.getByText(DEFAULT_TEST_USER.displayName!));
   assert.deepEqual(auth.getSignInPayloads(), [
     [{ method: "create-account", email: "engineer@company.com" }],
   ]);
 });
 
-test("when native directory picker requires a fresh click after async sign-in, Continue button completes the flow", async () => {
-  const emptyHome = new InMemoryFileSystemAdapter("Cadtree");
-  let pickerAttempt = 0;
-  Object.assign(window, {
-    showDirectoryPicker: async () => {
-      pickerAttempt++;
-      if (pickerAttempt === 1) {
-        throw new DOMException(
-          "Must be handling a user gesture to show a directory picker.",
-          "SecurityError",
-        );
-      }
-      return nativeDirectory(emptyHome);
-    },
-  });
-
-  const auth = createTestAuthController({ ready: true, user: null });
-  auth.setSignInOutcome({ type: "success", user: DEFAULT_TEST_USER });
-  const ui = render(<App auth={auth.adapter} />);
-
-  fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
-  const modal = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
-  fireEvent.click(
-    within(modal).getByRole("button", { name: /Continue with Google/i }),
-  );
-
-  const continueDialog = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Start Cadtree home" }),
-  );
-  assert.match(
-    continueDialog.textContent!,
-    /Signed in\. Click Continue to choose your local folder\./,
-  );
-  assert.equal(ui.queryByRole("alert"), null);
-
-  fireEvent.click(
-    within(continueDialog).getByRole("button", { name: "Continue" }),
-  );
-  await waitFor(() =>
-    assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
-  );
-  assert.equal(pickerAttempt, 2);
-});
-
-test("signed-in user can capture revisions offline and sign-out waits for an in-progress write before clearing UI", async () => {
+test("signed-in user can capture revisions offline and sign out while the save runs", async () => {
   Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
   const homeRoot = new InMemoryFileSystemAdapter("Cadtree");
   const home = await createHome(homeRoot);

@@ -11,7 +11,7 @@ import {
   type RememberedWorkspace,
   setConvenienceAccountScope,
 } from "../engine/idb-store";
-import type { BannerScope, PendingAuthAction, SignInPrompt, StatusBanner } from "./types";
+import type { BannerScope, SignInPrompt, StatusBanner } from "./types";
 
 export type UseAuthSessionArgs = {
   auth?: AuthAdapter;
@@ -22,11 +22,6 @@ export type UseAuthSessionArgs = {
   getOperationRef: () => RefObject<AbortController | null>;
   setBannerScope: (scope: BannerScope) => void;
   setStatusBanner: (banner: StatusBanner | null) => void;
-  completeAuthenticatedSignIn: (
-    account: AccountUser,
-    intendedAction: PendingAuthAction,
-  ) => Promise<void>;
-  connectHomeInternal: (create: boolean, saved?: RememberedHome) => Promise<void>;
 };
 
 /** Sign-in and sign-out: the account state, the sign-in dialog's handlers, and sign-out deferred while an operation runs. */
@@ -38,8 +33,6 @@ export function useAuthSession({
   getOperationRef,
   setBannerScope,
   setStatusBanner,
-  completeAuthenticatedSignIn,
-  connectHomeInternal,
 }: UseAuthSessionArgs) {
   const authAdapterRef = useRef<AuthAdapter | null>(null);
   if (!authAdapterRef.current || auth) {
@@ -129,18 +122,16 @@ export function useAuthSession({
     void executeSignOut();
   };
 
-  const requestSignIn = (action: PendingAuthAction) => {
-    setSignInPrompt({
-      step: "sign-in",
-      action,
-      signingIn: false,
-      error: null,
-      info: null,
-    });
+  const requestSignIn = () => {
+    setSignInPrompt({ signingIn: false, error: null, info: null });
+  };
+  // Signing in only changes the account shown in the app; it never touches the open session.
+  const completeSignIn = (account: AccountUser) => {
+    applyAuthSnapshot({ ready: true, user: account });
+    setSignInPrompt(null);
   };
   const handleContinueWithGoogle = async () => {
     if (!signInPrompt || signInPrompt.signingIn) return;
-    const intendedAction = signInPrompt.action;
     setSignInPrompt({
       ...signInPrompt,
       signingIn: true,
@@ -149,15 +140,13 @@ export function useAuthSession({
     });
     try {
       const account = await authAdapter.signInWithGoogle();
-      await completeAuthenticatedSignIn(account, intendedAction);
+      completeSignIn(account);
     } catch (error) {
       if (isSignInCancelled(error)) {
         setSignInPrompt(null);
         return;
       }
       setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
         signingIn: false,
         error:
           error instanceof Error
@@ -190,7 +179,6 @@ export function useAuthSession({
       });
       return;
     }
-    const intendedAction = signInPrompt.action;
     setSignInPrompt({
       ...signInPrompt,
       signingIn: true,
@@ -203,11 +191,9 @@ export function useAuthSession({
         : authAdapter.signInWithEmail;
       if (!emailAction) throw new Error("Email authentication is unavailable. Use Continue with Google.");
       const account = await emailAction.call(authAdapter, trimmedEmail, password);
-      await completeAuthenticatedSignIn(account, intendedAction);
+      completeSignIn(account);
     } catch (error) {
       setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
         signingIn: false,
         error:
           error instanceof Error
@@ -230,7 +216,6 @@ export function useAuthSession({
       });
       return;
     }
-    const intendedAction = signInPrompt.action;
     setSignInPrompt({
       ...signInPrompt,
       signingIn: true,
@@ -241,16 +226,12 @@ export function useAuthSession({
       if (!authAdapter.sendPasswordReset) throw new Error("Password reset is unavailable. Try again later.");
       await authAdapter.sendPasswordReset(trimmedEmail);
       setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
         signingIn: false,
         error: null,
         info: `Password reset email sent to ${trimmedEmail}. Check your inbox.`,
       });
     } catch (error) {
       setSignInPrompt({
-        step: "sign-in",
-        action: intendedAction,
         signingIn: false,
         error:
           error instanceof Error
@@ -260,16 +241,6 @@ export function useAuthSession({
       });
     }
   };
-  const handleContinuePickerAfterSignIn = () => {
-    if (!signInPrompt || signInPrompt.action.kind !== "connect-home") {
-      setSignInPrompt(null);
-      return;
-    }
-    const { create, saved } = signInPrompt.action;
-    setSignInPrompt(null);
-    void connectHomeInternal(create, saved);
-  };
-
   return {
     authState,
     authStateRef,
@@ -286,6 +257,5 @@ export function useAuthSession({
     handleContinueWithGoogle,
     handleSubmitEmailAuth,
     handleForgotPassword,
-    handleContinuePickerAfterSignIn,
   };
 }

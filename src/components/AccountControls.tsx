@@ -60,8 +60,6 @@ export function AccountStatusControl({
 }
 
 export interface AccountSignInModalProps {
-  step: "sign-in" | "continue-picker";
-  createHomePicker?: boolean;
   signingIn: boolean;
   error: string | null;
   info?: string | null;
@@ -73,13 +71,10 @@ export interface AccountSignInModalProps {
   ) => void;
   onForgotPassword?: (email: string) => void;
   onClearFeedback?: () => void;
-  onContinuePicker: () => void;
   onCancel: () => void;
 }
 
 export function AccountSignInModal({
-  step,
-  createHomePicker,
   signingIn,
   error,
   info,
@@ -87,47 +82,11 @@ export function AccountSignInModal({
   onSubmitEmail,
   onForgotPassword,
   onClearFeedback,
-  onContinuePicker,
   onCancel,
 }: AccountSignInModalProps) {
   const [mode, setMode] = useState<"sign-in" | "create-account">("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  if (step === "continue-picker") {
-    return (
-      <Modal
-        title={createHomePicker ? "Start Cadtree home" : "Open Cadtree home"}
-        busy={signingIn}
-        onClose={onCancel}
-      >
-        <div className="stack">
-          <p className="muted">
-            Signed in. Click Continue to choose your local folder.
-          </p>
-          {error ? <Notice type="error">{error}</Notice> : null}
-        </div>
-        <div className="modal-actions">
-          <button
-            type="button"
-            className="button secondary"
-            disabled={signingIn}
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="button primary"
-            disabled={signingIn}
-            onClick={onContinuePicker}
-          >
-            Continue
-          </button>
-        </div>
-      </Modal>
-    );
-  }
 
   const handleFormSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -139,8 +98,8 @@ export function AccountSignInModal({
     <Modal title="Sign in to cAdtree" busy={signingIn} onClose={onCancel}>
       <div className="auth-modal-body">
         <p className="muted auth-modal-subtitle">
-          Sign in or create a free account to open or create local workspaces
-          and projects. Your CAD files stay on your device.
+          Sign in or create a free account. You do not need one to use cAdtree
+          on your own computer, and your CAD files always stay on your device.
         </p>
 
         <div className="auth-mode-tabs" role="tablist" aria-label="Account mode">

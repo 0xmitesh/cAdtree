@@ -19,11 +19,6 @@ export type Perform = ReturnType<typeof useOperation>["perform"];
 /** Re-finds the open project before a write; throws when it is unavailable or was renamed. */
 export type AssertProjectWritable = (context: Context, readOnlyOperation?: boolean) => Promise<ManagedProject | null>;
 
-export type PendingAuthAction =
-  | { kind: "connect-home"; create: boolean; saved?: RememberedHome }
-  | { kind: "my-workspaces" }
-  | { kind: "callback"; run: () => Promise<void> | void };
-
 export type BannerScope = "workspace" | "project";
 
 export type StatusBanner = {
@@ -40,8 +35,6 @@ export type PendingHome = {
 };
 
 export type SignInPrompt = {
-  step: "sign-in" | "continue-picker";
-  action: PendingAuthAction;
   signingIn: boolean;
   error: string | null;
   info?: string | null;
