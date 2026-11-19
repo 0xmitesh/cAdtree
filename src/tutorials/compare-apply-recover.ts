@@ -108,7 +108,7 @@ export const COMPARE_APPLY_RECOVER_TUTORIAL: TutorialDefinition = {
       points: [
         "Preparation needs read/write access and a destination matching its saved baseline. Save uncaptured Main work as a normal revision, then refresh and review again.",
         "Check Destination: Main, its connected folder, baseline Rev 006, Source Rev 005 and the exact additions, replacements and deletions. Save and close relevant CAD documents, check the confirmation and choose Apply confirmed changes.",
-        "Apply changes working files; no revision is saved yet. Open Main manually in CAD, check references and rebuild, then save and close after adjustments. In Changes, scan, review and Save revision: Main Rev 007 in this example.",
+        "Apply changes working files; no revision is saved yet. Open Main manually in CAD, check references and rebuild, then save and close after adjustments. In Changes, cAdtree checks your files automatically; review and Save revision: Main Rev 007 in this example.",
       ],
       note: "Keep other apps and sync from writing during Apply; cAdtree cannot lock them or make multiple file writes atomic. Apply does not delete or archive the Design Case.",
       visuals: [

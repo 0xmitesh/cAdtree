@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  act,
   fireEvent,
   waitFor,
   within,
@@ -65,4 +66,53 @@ export async function openHomeWorkspace(ui: RenderResult, home: InMemoryFileSyst
   await openTestHome(ui, home);
   fireEvent.click(ui.getByRole("button", { name: "Open workspace" }));
   await waitFor(() => assert.equal(appBusy(ui), false));
+}
+
+/** The time of the scan the Changes page shows, or null when it shows none yet. */
+export const scannedAt = (ui: RenderResult) =>
+  ui.container.querySelector("[data-scanned-at]")?.getAttribute("data-scanned-at") ?? null;
+
+/**
+ * Triggers the automatic rescan the way a user does (returning to the window) and waits until a newer scan is
+ * shown. Replaces clicking the removed "Scan for changes" button.
+ */
+export async function waitForScan(ui: RenderResult) {
+  await waitFor(() => assert.equal(appBusy(ui), false));
+  const before = scannedAt(ui);
+  await act(async () => {
+    window.dispatchEvent(new window.Event("focus"));
+  });
+  await waitFor(() => assert.notEqual(scannedAt(ui), before), { timeout: 5000 });
+  await waitFor(() => assert.equal(ui.queryByTestId("auto-check"), null), { timeout: 5000 });
+  await waitFor(() => assert.equal(appBusy(ui), false));
+}
+
+/**
+ * Starts a slow user operation (Settings, Troubleshooting, "Verify all file contents") and holds it open until
+ * `release()`. Stands in for the removed "Scan for changes" button wherever a test needs an operation in flight.
+ */
+export async function holdOperation(ui: RenderResult, home: InMemoryFileSystemAdapter) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  home.setHooks({
+    onBeforeRead: async (path) => {
+      if (path.includes("/objects/")) await gate;
+    },
+  });
+  fireEvent.click(
+    within(ui.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Settings" }),
+  );
+  const page = within(ui.container.querySelector<HTMLElement>(".settings-page")!);
+  fireEvent.click(page.getByText("Troubleshooting", { selector: "summary" }));
+  fireEvent.click(page.getByRole("button", { name: "Verify all file contents" }));
+  await waitFor(() => assert.equal(appBusy(ui), true));
+  return {
+    release: async () => {
+      await act(async () => release());
+      await waitFor(() => assert.equal(appBusy(ui), false));
+      home.setHooks({ onBeforeRead: undefined });
+    },
+  };
 }

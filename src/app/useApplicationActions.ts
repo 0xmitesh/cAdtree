@@ -26,6 +26,8 @@ export type UseApplicationActionsArgs = {
   perform: Perform;
   assertProjectWritable: AssertProjectWritable;
   applyVaultState: (next: VaultState) => void;
+  /** Asks for a quiet rescan of the page (useAutoRefresh); `immediate` skips the minimum interval. */
+  requestAutoRefresh: (options?: { immediate?: boolean }) => void;
   setScanResult: Dispatch<SetStateAction<ScanResult | null>>;
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
 };
@@ -42,6 +44,7 @@ export function useApplicationActions({
   perform,
   assertProjectWritable,
   applyVaultState,
+  requestAutoRefresh,
   setScanResult,
   setStatusBanner,
 }: UseApplicationActionsArgs) {
@@ -99,7 +102,8 @@ export function useApplicationActions({
     if (!vaultDir) return;
     try {
       applyVaultState(await openExistingVault(vaultDir));
-      setScanResult(null);
+      // The files just changed: the result on screen stays until a quiet rescan replaces it.
+      requestAutoRefresh({ immediate: true });
     } catch {
       /* The operation's original permission/outcome error remains visible. */
     }

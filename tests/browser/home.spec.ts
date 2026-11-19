@@ -1,3 +1,4 @@
+import { waitForScan } from "./rescan";
 import { test, expect } from "@playwright/test";
 
 // Real browser filesystem handles and IndexedDB, synthetic origin-private data only.
@@ -286,9 +287,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
     .getByRole("navigation")
     .getByRole("button", { name: "Changes" })
     .click();
-  await page
-    .getByRole("button", { name: "Scan for changes", exact: true })
-    .click();
+  await waitForScan(page);
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page
     .getByRole("textbox", { name: /Revision summary/ })

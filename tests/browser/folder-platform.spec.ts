@@ -1,3 +1,4 @@
+import { waitForScan } from "./rescan";
 import { test, expect } from '@playwright/test';
 
 // These addresses simulate platform syntax. The browser runs on the host OS;
@@ -47,7 +48,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   const separator = rootAddress.startsWith('/') ? '/' : '\\';
   const folder = (relative: string) => rootAddress + separator + relative.split('/').join(separator);
   await nav('Changes');
-  await page.getByRole('button', { name: 'Scan for changes', exact: true }).click();
+  await waitForScan(page);
   await save('Initial component');
   await page.getByRole('button', { name: /Show 1 unchanged files/ }).click();
   await page.getByLabel(/^File actions/).click();
@@ -72,7 +73,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
     return { relative: project.workingPaths[branchId!] };
   }, { branchId, original, renamed });
   await nav('Changes');
-  await page.getByRole('button', { name: 'Scan for changes', exact: true }).click();
+  await waitForScan(page);
   await page.getByLabel(new RegExp(`^File actions — ${original.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`)).click();
   await page.getByRole('button', { name: /^Match to a new file/ }).click();
   await page.getByRole('dialog', { name: 'Match to a new file' }).getByRole('combobox').selectOption(renamed);

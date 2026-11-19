@@ -9,7 +9,7 @@ import {
 } from "../engine/branch-state";
 import type { ReferenceReview } from "../engine/references";
 import { captureRevision, ReviewStaleError } from "../engine/revision-service";
-import { scanBranchChanges } from "../engine/scanner";
+import { knownHashesFor, scanBranchChanges, type KnownHashes } from "../engine/scanner";
 import type { FileSpecificNote, ScanResult, VaultState } from "../engine/types";
 import { formatRevisionNumber, openExistingVault } from "../engine/vault-service";
 import { resolveManagedProject, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
@@ -25,6 +25,8 @@ export type UseCaptureActionsArgs = {
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
   authStateRef: RefObject<AuthSnapshot>;
+  /** The result on screen; the automatic scan reuses its hashes for files that did not change. */
+  scanResult: ScanResult | null;
   perform: Perform;
   assertProjectWritable: AssertProjectWritable;
   refindOpenProject: (context: Context, prescanned?: WorkspaceState) => Promise<OpenProjectLookup | null>;
@@ -34,6 +36,8 @@ export type UseCaptureActionsArgs = {
   setWorkingFolders: Dispatch<SetStateAction<WorkingFolderBindings>>;
   setWorkingDir: Dispatch<SetStateAction<FileSystemDirectoryAdapter | null>>;
   setScanResult: Dispatch<SetStateAction<ScanResult | null>>;
+  /** True when the last check of the files failed (shown as a quiet "Couldn't check files" line with Retry). */
+  setCheckFailed: (failed: boolean) => void;
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
 };
 
@@ -46,6 +50,7 @@ export function useCaptureActions({
   managedProject,
   workspace,
   authStateRef,
+  scanResult,
   perform,
   assertProjectWritable,
   refindOpenProject,
@@ -55,6 +60,7 @@ export function useCaptureActions({
   setWorkingFolders,
   setWorkingDir,
   setScanResult,
+  setCheckFailed,
   setStatusBanner,
 }: UseCaptureActionsArgs) {
   const scan = async (
@@ -68,6 +74,8 @@ export function useCaptureActions({
     } | null,
     // Called when the open project was re-found at a new folder during this scan (the banner is already set).
     onRebound?: (notice: string) => void,
+    // Only the automatic scan passes this (display only): capture always hashes every byte itself.
+    knownHashes?: KnownHashes,
   ) => {
     let folder = folders[branchId];
     let state: VaultState;
@@ -130,6 +138,7 @@ export function useCaptureActions({
     const baseline = getBranchBaseline(state, branchId);
     const result = await scanBranchChanges(folder, branchId, baseline, {
       signal: context.signal,
+      knownHashes,
       onProgress: (path, files, bytes) =>
         context.progress({
           phase: "scanning_source",
@@ -141,8 +150,34 @@ export function useCaptureActions({
           message: `Scanning ${path}…`,
         }),
     });
-    if (context.current()) setScanResult(result);
+    if (context.current()) {
+      setScanResult(result);
+      setCheckFailed(false);
+    }
     return result;
+  };
+  /**
+   * The quiet rescan of the active case (see useAutoRefresh): same scan, but outside `perform`, no banner, and
+   * files whose size and date match the result on screen are not read again. A failure keeps the last result.
+   */
+  const autoScanCurrent = async (context: Context) => {
+    if (!vaultDir) return;
+    try {
+      await scan(
+        vaultDir,
+        workingFolders,
+        activeBranchId,
+        context,
+        undefined,
+        undefined,
+        knownHashesFor(scanResult, activeBranchId),
+      );
+    } catch (error) {
+      // Not current any more: say so quietly (no banner). A cancelled scan is not a failure.
+      if (context.current() && !(error instanceof DOMException && error.name === "AbortError"))
+        setCheckFailed(true);
+      throw error;
+    }
   };
   const handleScanCurrent = async () => {
     if (!vaultDir) return;
@@ -224,16 +259,16 @@ export function useCaptureActions({
           setVaultState(result.vaultState);
           setScanResult(null);
           // Publication succeeded even if a subsequent scan loses folder access.
-          let scanWarning = "";
           try {
             await scan(vaultDir, workingFolders, branchId, context);
-          } catch (error) {
-            scanWarning = `Rescan needed: ${error instanceof Error ? error.message : String(error)}`;
+          } catch {
+            // The page then says "Couldn't check files" with a Retry.
+            if (context.current()) setCheckFailed(true);
           }
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this working case. ${result.cacheWarning ?? ""} ${scanWarning}`,
+              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this working case. ${result.cacheWarning ?? ""}`,
             });
         } catch (error) {
           if (error instanceof ReviewStaleError && context.current())
@@ -244,5 +279,5 @@ export function useCaptureActions({
       true,
     );
   };
-  return { scan, handleScanCurrent, handleCaptureRevision };
+  return { scan, autoScanCurrent, handleScanCurrent, handleCaptureRevision };
 }

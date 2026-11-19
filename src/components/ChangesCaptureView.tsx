@@ -29,6 +29,10 @@ export interface ChangesCaptureViewProps {
   scanResult: ScanResult | null;
   isScanStale: boolean;
   isScanning: boolean;
+  /** A quiet background check of the files is running (shown as a small line, never blocks anything). */
+  isChecking?: boolean;
+  /** The last check of the files failed: the result on screen (if any) is not current. */
+  checkFailed?: boolean;
   isCapturing: boolean;
   progress: ProgressUpdate | null;
   statusBanner: { type: "success" | "error" | "info"; message: string } | null;
@@ -71,6 +75,8 @@ export function ChangesCaptureView({
   scanResult: scan,
   isScanStale,
   isScanning,
+  isChecking = false,
+  checkFailed = false,
   isCapturing,
   progress,
   onScan,
@@ -248,16 +254,6 @@ export function ChangesCaptureView({
           </h1>
           <p>What changed, and why it matters.</p>
         </div>
-        <div className="project-heading-controls">
-          <button
-            className="button secondary"
-            disabled={busy || !workingFolderName}
-            onClick={onScan}
-          >
-            <RefreshCw size={16} />
-            {isScanning ? "Scanning…" : "Scan for changes"}
-          </button>
-        </div>
       </div>
       <div className="scan-strip">
         <span>
@@ -266,14 +262,27 @@ export function ChangesCaptureView({
             ? " · Since " + formatRevisionNumber(head.manifest.displayNumber)
             : " · First revision"}
         </span>
-        <span>
+        <span data-scanned-at={scan?.scannedAt}>
           {scan
             ? "Scanned " +
               formatTimestamp(scan.scannedAt) +
-              (isScanStale
-                ? " · May have changed since scan"
-                : " · Latest scan")
-            : "Scan needed"}
+              (checkFailed
+                ? " · Not up to date"
+                : isScanStale
+                  ? " · May have changed since scan"
+                  : " · Latest scan")
+            : checkFailed || isChecking
+              ? null
+              : "Not checked yet"}
+          {isChecking ? <span className="muted small" data-testid="auto-check"> · Checking files…</span> : null}
+          {checkFailed && !isChecking ? (
+            <span className="muted small" data-testid="check-failed">
+              {scan ? " · " : ""}Couldn't check files ·{" "}
+              <button className="text-button" disabled={busy || !workingFolderName} onClick={onScan}>
+                Retry
+              </button>
+            </span>
+          ) : null}
         </span>
       </div>
       {operationBlockReason ? <Notice>{operationBlockReason}</Notice> : null}

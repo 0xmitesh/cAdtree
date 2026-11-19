@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FolderOpen, Plus, RefreshCw } from "lucide-react";
+import { FolderOpen, Plus } from "lucide-react";
 import {
   homeWorkspaceGroups,
   type HomeState,
@@ -29,7 +29,6 @@ export function HomeWorkspacesView(props: {
   onCreate: (name: string) => Promise<void>;
   onBring: () => Promise<void>;
   onOpen: (entry: HomeWorkspaceEntry) => Promise<void>;
-  onRefresh: () => Promise<void>;
   onCancel: () => void;
 }) {
   const options = useRef<HTMLDetailsElement>(null);
@@ -140,14 +139,6 @@ export function HomeWorkspacesView(props: {
             <p>
               {homeWorkspaceGroups(props.home.workspaces).length} workspaces
             </p>
-            <button
-              className="text-button"
-              disabled={props.busy}
-              onClick={() => void run(props.onRefresh)}
-            >
-              <RefreshCw size={14} />
-              Refresh home
-            </button>
           </div>
           {!props.home.workspaces.length ? (
             <div className="panel projects-empty">

@@ -5,7 +5,7 @@ import { indexedDB } from "fake-indexeddb";
 import { act, render, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
-import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace, selectBranch, waitForScan } from "../../tests/app-controls";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import { copyVerifiedTree } from "../engine/copy-service";
 import { createProject } from "../engine/workspace-service";
@@ -77,7 +77,7 @@ test("Capture draft and last-used case survive renaming the project folder", asy
   await selectBranch(ui, sample.caseId);
   await idle(ui);
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   fireEvent.change(ui.getByRole("textbox", { name: /Revision summary/ }), { target: { value: "Draft kept across rename" } });
   // Leave for another project, then rename the first one on disk.
@@ -111,7 +111,7 @@ test("Back reopens a renamed project by ID, at its new folder", async () => {
   const moved = await sample.workspace.root.getDirectory([...NEW.split("/"), "working", "main"]);
   await moved.writeFileText(["After-rename.txt"], "new file");
   fireEvent.click(within(ui.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Changes" }));
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await idle(ui);
   assert.ok(ui.getByText("After-rename.txt"));
 });

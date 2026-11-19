@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-libra
 import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
-import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace, selectBranch, waitForScan, holdOperation } from "../../tests/app-controls";
 import { createTestAuthController, SECOND_TEST_USER } from "../../tests/test-auth";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
@@ -33,7 +33,7 @@ test("Logo is an intro button; main-view Back/Forward preserves current project,
   await sample.caseFolder.writeFileText(['Bracket.SLDPRT'],'Pending experiment');
   await selectBranch(ui,sample.caseId);
   fireEvent.click(nav.getByRole("button",{name:"Changes"}));
-  fireEvent.click(ui.getByRole('button',{name:'Scan for changes'}));
+  await waitForScan(ui);
   await waitFor(()=>assert.equal(appBusy(ui),false));
   const summary=ui.getByRole("textbox",{name:/Revision summary/});
   fireEvent.change(summary,{target:{value:"Keep this pending decision"}});
@@ -106,25 +106,21 @@ test("Signing in as another account keeps the open project and the browser-histo
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)),before);
 });
 
-test("Back waits for a running scan and then restores the requested main view", async()=>{
+test("Back waits for a running operation and then restores the requested main view", async()=>{
   const {ui,nav,sample}=await openSample();
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
-  let release!:()=>void;
-  const gate=new Promise<void>(resolve=>{release=resolve});
-  sample.home.setHooks({onBeforeListEntries:async()=>{await gate}});
-  fireEvent.click(ui.getByRole('button',{name:'Scan for changes'}));
-  await waitFor(()=>assert.equal(appBusy(ui),true));
-  await traverse('back');assert.ok(ui.getByRole('heading',{name:'Changes.'}));
-  await act(async()=>release());
-  await waitFor(()=>assert.equal(appBusy(ui),false));
-  await waitFor(()=>assert.ok(ui.getByRole('heading',{name:'History.'})));
+  const held=await holdOperation(ui,sample.home);
+  assert.ok(ui.getByRole('heading',{name:'Settings.'}));
+  await traverse('back');assert.ok(ui.getByRole('heading',{name:'Settings.'}));
+  await held.release();
+  await waitFor(()=>assert.ok(ui.getByRole('heading',{name:'Changes.'})));
 });
 
 test("Returning from a different project revalidates its location and retains the earlier project's note draft", async()=>{
   const {sample,ui,nav}=await openSample(undefined,true);
   await sample.main.writeFileText(['Bracket.SLDPRT'],'An unsaved Main experiment');
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
-  fireEvent.click(ui.getByRole('button',{name:'Scan for changes'}));
+  await waitForScan(ui);
   await waitFor(()=>assert.equal(appBusy(ui),false));
   fireEvent.change(ui.getByRole('textbox',{name:/Revision summary/}),{target:{value:'Earlier project draft'}});
   fireEvent.click(nav.getByRole('button',{name:'My workspaces'}));

@@ -570,7 +570,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'Button names are shown as they appear on screen.',
   );
   steps(doc, 'Save a revision', [
-    'Close your CAD documents, then choose Changes on the left and choose Scan for changes.',
+    'Close your CAD documents, then choose Changes on the left. cAdtree checks your files by itself and lists what changed.',
     'Check the changed files. Enter a Revision summary (required). Optionally choose + Add a description ' +
       '(with More detail for Why and What you noticed) or + Attach reference files.',
     'Choose Save revision. The new revision appears in History.',
@@ -591,7 +591,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'The dialog "Make <branch> match <revision>" lists every difference, all selected. Deselect any you do not ' +
       'want, enter the Engineering reason for bringing this back, and choose Prepare bring-back.',
     'Close your CAD documents, tick the confirmation, and choose Bring back confirmed changes.',
-    'Only the working files change. Check them in your CAD program, then choose Changes, Scan for changes and Save ' +
+    'Only the working files change. Check them in your CAD program, then choose Changes and Save ' +
       'revision. History shows the revision as brought back.',
   ]);
   steps(doc, 'Merge a design case (Apply)', [

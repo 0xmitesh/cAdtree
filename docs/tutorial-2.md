@@ -12,7 +12,7 @@ Windows: one generated Windows 11 File Explorer instructional image with a curso
 
 ## Workflow findings
 
-- The current labels are Scan for changes, Copy folder path, Revision summary, Add note and Save revision. Notes use Problem or intent, Engineering change and Observations. Overall engineering notes are optional.
+- The current labels are Copy folder path, Revision summary, Add note and Save revision. Notes use Problem or intent, Engineering change and Observations. Overall engineering notes are optional.
 - An empty managed project has no per-file Copy folder path control yet. The tutorial first directs the user to Settings → Working folder (workspace-relative), then placing files and scanning makes the existing per-file shortcut available. No new path shortcut or filesystem behavior was added.
 - Before the first capture, all three files are Added, including the file edited since an earlier scan. A Modified example would require a saved baseline, so this tutorial accurately shows Added and saves the actual first revision.
 - The revision detail header displays Rev 001; its graph node uses R001. Save revision rescans the files and may require renewed review if the file set changed. It saves the complete project state, not a selected file.
@@ -45,7 +45,7 @@ Alt text: Real cAdtree Settings, Folder connections: Working folder ends in proj
 
 Asset: `/tutorials/save-first-revision/step-2-working-folder.png`
 
-Visual 2 — cAdtree: 2. Open Changes, click Scan for changes, then use Copy folder path beside a listed file.
+Visual 2 — cAdtree: 2. Open Changes, then use Copy folder path beside a listed file.
 
 Alt text: Real Changes list containing Bracket.SLDPRT, BracketAssembly.SLDASM and Mount.SLDPRT, with Bracket's Copy folder path icon highlighted.
 
@@ -61,27 +61,27 @@ Asset: `/tutorials/save-first-revision/step-2-windows-address.png`
 
 Edit Bracket.SLDPRT and save it normally in your CAD application.
 
-- Save and close the CAD documents before returning to cAdtree to scan.
-- cAdtree detects saved file changes when you scan; it does not interpret geometry or monitor CAD edits in real time.
+- Save and close the CAD documents before returning to cAdtree.
+- cAdtree checks your saved files when you return to it; it does not interpret geometry or monitor CAD edits in real time.
 
-Visual 1 — Concept: Edit in CAD → Save normally → Close documents → Scan in cAdtree.
+Visual 1 — Concept: Edit in CAD → Save normally → Close documents → Return to cAdtree.
 
-Alt text: Edit and save Bracket.SLDPRT in CAD, close the CAD documents, then use Scan for changes in cAdtree.
+Alt text: Edit and save Bracket.SLDPRT in CAD, close the CAD documents, then return to cAdtree.
 
 Asset: `/tutorials/save-first-revision/step-3-normal-cad-work.svg`
 
 ### Step 4: Review detected changes
 
-In Changes, click Scan for changes after saving and closing your CAD documents.
+In Changes, review the list after saving and closing your CAD documents; cAdtree checks your files when you return to it.
 
 - Review each listed file before saving a revision.
 - On the first revision, files appear as Added. After a baseline exists, an edited file can appear as Modified.
 
 Notice: A revision saves the complete project state. File selections apply only to notes.
 
-Visual 1 — cAdtree: 1. Click Scan for changes to refresh the list from your saved files.
+Visual 1 — cAdtree: 1. cAdtree refreshes the list from your saved files by itself.
 
-Alt text: Real Bracket Assembly project header with Working case Main above Changes and the Scan for changes button highlighted.
+Alt text: Real Bracket Assembly project header with Working case Main above Changes.
 
 Asset: `/tutorials/save-first-revision/step-4-scan.png`
 

@@ -37,7 +37,7 @@ export const SAVE_FIRST_REVISION_TUTORIAL: TutorialDefinition = {
         {
           src: "/tutorials/save-first-revision/step-2-copy-folder-path.png",
           alt: "Real Changes list containing Bracket.SLDPRT, BracketAssembly.SLDASM and Mount.SLDPRT, with Bracket's Copy folder path icon highlighted.",
-          caption: "2. Open Changes, click Scan for changes, then use Copy folder path beside a listed file.",
+          caption: "2. Open Changes, then use Copy folder path beside a listed file.",
           kind: "cadtree",
         },
         {
@@ -53,20 +53,20 @@ export const SAVE_FIRST_REVISION_TUTORIAL: TutorialDefinition = {
       title: "Make a change",
       summary: "Edit Bracket.SLDPRT and save it normally in your CAD application.",
       points: [
-        "Save and close the CAD documents before returning to cAdtree to scan.",
-        "cAdtree detects saved file changes when you scan; it does not interpret geometry or monitor CAD edits in real time.",
+        "Save and close the CAD documents before returning to cAdtree.",
+        "cAdtree checks your saved files when you return to it; it does not interpret geometry or monitor CAD edits in real time.",
       ],
       visuals: [{
         src: "/tutorials/save-first-revision/step-3-normal-cad-work.svg",
-        alt: "Edit and save Bracket.SLDPRT in CAD, close the CAD documents, then use Scan for changes in cAdtree.",
-        caption: "Edit in CAD → Save normally → Close documents → Scan in cAdtree.",
+        alt: "Edit and save Bracket.SLDPRT in CAD, close the CAD documents, then return to cAdtree.",
+        caption: "Edit in CAD → Save normally → Close documents → Return to cAdtree.",
         kind: "concept",
       }],
     },
     {
       id: "review-changes",
       title: "Review detected changes",
-      summary: "In Changes, click Scan for changes after saving and closing your CAD documents.",
+      summary: "In Changes, review the list after saving and closing your CAD documents; cAdtree checks your files when you return to it.",
       points: [
         "Review each listed file before saving a revision.",
         "On the first revision, files appear as Added. After a baseline exists, an edited file can appear as Modified.",
@@ -75,8 +75,8 @@ export const SAVE_FIRST_REVISION_TUTORIAL: TutorialDefinition = {
       visuals: [
         {
           src: "/tutorials/save-first-revision/step-4-scan.png",
-          alt: "Real Bracket Assembly project header with Working case Main above Changes and the Scan for changes button highlighted.",
-          caption: "1. Click Scan for changes to refresh the list from your saved files.",
+          alt: "Real Bracket Assembly project header with Working case Main above Changes.",
+          caption: "1. cAdtree refreshes the list from your saved files by itself.",
           kind: "cadtree",
         },
         {

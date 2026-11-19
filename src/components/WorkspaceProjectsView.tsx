@@ -1,7 +1,7 @@
 import { DUPLICATE_PROJECT_REASON } from "../engine/workspace-service";
 import { pickDirectory } from "../utils/folder-access";
 import { useRef, useState } from "react";
-import { FolderOpen, Plus, RefreshCw } from "lucide-react";
+import { FolderOpen, Plus } from "lucide-react";
 import {
   RealFileSystemAdapter,
   type FileSystemDirectoryAdapter,
@@ -21,7 +21,6 @@ export interface WorkspaceProjectsViewProps {
   workspaceAddress?: string;
   busy: boolean;
   progress: ProgressUpdate | null;
-  onRefresh: () => Promise<void>;
   onCreate: (name: string) => Promise<void>;
   onImport: (source: FileSystemDirectoryAdapter) => Promise<void>;
   onOpenProject: (entry: WorkspaceProjectEntry) => Promise<void>;
@@ -115,13 +114,6 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
       <section className="recent-projects">
         <div className="section-heading">
           <h2>Workspace projects</h2>
-          <button
-            className="text-button"
-            disabled={busy}
-            onClick={() => run(props.onRefresh)}
-          >
-            <RefreshCw size={14} /> Refresh workspace
-          </button>
         </div>
         {!groups.size ? (
           <div className="panel projects-empty">

@@ -43,6 +43,7 @@ export type ProjectViewsProps = {
   scanResult: ScanResult | null;
   isScanStale: boolean;
   isScanning: boolean;
+  isChecking: boolean;
   isCapturing: boolean;
   isVerifyingAll: boolean;
   isCreatingBranch: boolean;
@@ -59,6 +60,7 @@ export type ProjectViewsProps = {
   handleReattachWorkingFolder: BranchActions["handleReattachWorkingFolder"];
   handleCreateBranch: BranchActions["handleCreateBranch"];
   handleScanCurrent: CaptureActions["handleScanCurrent"];
+  checkFailed: boolean;
   handleCaptureRevision: CaptureActions["handleCaptureRevision"];
   handlePrepareApplication: ApplicationActions["handlePrepareApplication"];
   handleRefreshApplicationReview: ApplicationActions["handleRefreshApplicationReview"];
@@ -97,6 +99,7 @@ export function ProjectViews({
   scanResult,
   isScanStale,
   isScanning,
+  isChecking,
   isCapturing,
   isVerifyingAll,
   isCreatingBranch,
@@ -113,6 +116,7 @@ export function ProjectViews({
   handleReattachWorkingFolder,
   handleCreateBranch,
   handleScanCurrent,
+  checkFailed,
   handleCaptureRevision,
   handlePrepareApplication,
   handleRefreshApplicationReview,
@@ -175,6 +179,8 @@ export function ProjectViews({
             }
             isScanStale={isScanStale}
             isScanning={isScanning}
+            isChecking={isChecking && branch.branchId === activeBranchId}
+            checkFailed={checkFailed && branch.branchId === activeBranchId}
             isCapturing={isCapturing}
             progress={progress}
             statusBanner={null}

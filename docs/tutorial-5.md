@@ -114,7 +114,7 @@ Choose Prepare application to check the destination, then review Confirm working
 
 - Preparation needs read/write access and a destination matching its saved baseline. Save uncaptured Main work as a normal revision, then refresh and review again.
 - Check Destination: Main, its connected folder, baseline Rev 006, Source Rev 005 and the exact additions, replacements and deletions. Save and close relevant CAD documents, check the confirmation and choose Apply confirmed changes.
-- Apply changes working files; no revision is saved yet. Open Main manually in CAD, check references and rebuild, then save and close after adjustments. In Changes, scan, review and Save revision: Main Rev 007 in this example.
+- Apply changes working files; no revision is saved yet. Open Main manually in CAD, check references and rebuild, then save and close after adjustments. In Changes, cAdtree checks your files automatically; review and Save revision: Main Rev 007 in this example.
 
 Note: Keep other apps and sync from writing during Apply; cAdtree cannot lock them or make multiple file writes atomic. Apply does not delete or archive the Design Case.
 
@@ -216,7 +216,7 @@ Prepare application checks the bound destination, read/write permission for work
 
 Confirm working-file application identifies project, destination, exact connected location, saved baseline, source, reason and exact additions/replacements/deletions. Apply confirmed changes remains disabled until the saved/closed-CAD acknowledgement is checked. Applying revalidates under the project writer lock, verifies staged source content and preserves before-state evidence. It cannot lock CAD/sync writers or provide an atomic transaction over multiple file writes.
 
-Application completed explicitly reports Applied to working files — revision not yet saved. The engineer opens the destination manually in CAD, checks native references/rebuild and adjusts as needed, saves/closes, then scans/reviews/saves a normal revision in Changes. That revision retains the destination parent and Copied from source provenance. Apply does not save a revision automatically, delete/archive the source or imply CAD compatibility.
+Application completed explicitly reports Applied to working files — revision not yet saved. The engineer opens the destination manually in CAD, checks native references/rebuild and adjusts as needed, saves/closes, then reviews and saves a normal revision in Changes (cAdtree checks your files automatically). That revision retains the destination parent and Copied from source provenance. Apply does not save a revision automatically, delete/archive the source or imply CAD compatibility.
 
 Sources inspected: `src/components/ApplyPreviewDialog.tsx`, `src/components/ApplicationStatus.tsx`, `src/engine/apply-preview.ts`, `src/engine/application-service.ts`, `src/App.tsx`.
 

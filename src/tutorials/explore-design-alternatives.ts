@@ -120,7 +120,7 @@ export const EXPLORE_DESIGN_ALTERNATIVES_TUTORIAL: TutorialDefinition = {
     {
       id: "keep-histories",
       title: "Keep both histories",
-      summary: "Continue saving meaningful revisions in whichever design direction you are working on: save CAD files, scan and review Changes, then Save revision.",
+      summary: "Continue saving meaningful revisions in whichever design direction you are working on: save CAD files, review Changes (cAdtree checks your files automatically), then Save revision.",
       points: [
         "The case's first changed save follows Rev 003. In this example, Lightweight bracket gets Rev 004 and Rev 005; Main later gets Rev 006 with Rev 003 as its parent. Numbers run across the whole project, not from one on each case.",
         "Both histories keep their connection to the starting revision. Do not delete a useful alternative just because it did not become Main.",

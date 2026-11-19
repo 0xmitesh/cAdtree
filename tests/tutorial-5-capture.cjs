@@ -112,7 +112,10 @@ start().catch(e=>{document.body.textContent=String(e.stack||e);console.error(e);
     assert.equal(applied.main.files.some(f => f.path === 'Spacer.SLDPRT'), false);
     await completed.getByRole('button', { name: 'Return to History', exact: true }).click();
     await page.getByRole('button', { name: 'Review and save revision', exact: true }).click();
-    await page.getByRole('button', { name: 'Scan for changes', exact: true }).click(); await idle();
+    // Changes rescans by itself after Apply: nudge it as returning to the window does, then wait for it to settle.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await page.waitForTimeout(1500);
+    await page.waitForFunction(() => document.querySelector('[data-scanned-at]') && !document.querySelector('[data-testid="auto-check"]')); await idle();
     await page.getByRole('textbox', { name: 'Revision summary' }).fill('Adopt lightweight bracket after review');
     await page.getByRole('button', { name: 'Save revision', exact: true }).click(); await idle();
     await nav.getByRole('button', { name: 'History', exact: true }).click();

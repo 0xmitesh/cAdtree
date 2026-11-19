@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/re
 import userEvent from "@testing-library/user-event";
 import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
-import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
+import { appBusy, currentBranchId, openHomeWorkspace, selectBranch, waitForScan } from "../../tests/app-controls";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 
@@ -26,7 +26,7 @@ test("Project Learn preserves the working case, inspected revision, scan and all
   await selectBranch(ui, sample.caseId);
   const nav = within(ui.getByRole("navigation", { name: "Primary navigation" }));
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  fireEvent.click(ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ui);
   await waitFor(() => assert.equal(appBusy(ui), false));
   const summary = ui.getByRole("textbox", { name: /Revision summary/ });
   fireEvent.change(summary, { target: { value: "Keep this pending summary" } });

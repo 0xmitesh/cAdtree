@@ -67,6 +67,7 @@ import { refreshGuidesAfter, workspaceGuideTargets } from "./app/offline-guide-r
 import { NavigationRail } from "./app/NavigationRail";
 import { ProjectViews } from "./app/ProjectViews";
 import { useAuthSession } from "./app/useAuthSession";
+import { useAutoRefresh } from "./app/useAutoRefresh";
 import { useApplicationActions } from "./app/useApplicationActions";
 import { useBranchActions } from "./app/useBranchActions";
 import { useCaptureActions } from "./app/useCaptureActions";
@@ -150,6 +151,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [activeBranchId, setActiveBranchId] = useState(MAIN_BRANCH_ID);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanStale, setIsScanStale] = useState(false);
+  // The last check of the files failed (quiet "Couldn't check files" line); cleared by the next successful scan.
+  const [checkFailed, setCheckFailed] = useState(false);
 
   // Called here so its auth subscription effect keeps its place among App's effects.
   const {
@@ -195,6 +198,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     statusBanner,
     setStatusBanner,
     operationRef,
+    backgroundRef,
     contextVersion,
     perform,
     handleCancelOperation,
@@ -283,6 +287,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const leaveProject = () => {
     contextVersion.current++;
+    setCheckFailed(false);
     setLearningOpen(false);
     setManagedProject(null);
     setProjectUnavailable(null);
@@ -442,23 +447,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         );
         if (context.current())
           await installHome(next, selected.root, path, selected.saved, warning);
-      },
-      true,
-    );
-  };
-  const refreshHome = async () => {
-    if (!home) return;
-    await perform(
-      "connect",
-      async (context) => {
-        if ((await home.root.requestPermission("readwrite")) !== "granted")
-          throw new Error("Reconnect the Cadtree home to renew access.");
-        const next = await openHome(home.root);
-        if (next.identity.homeId !== home.identity.homeId)
-          throw new Error(
-            "Cadtree home identity changed. Open the intended home explicitly.",
-          );
-        if (context.current()) setHome(next);
       },
       true,
     );
@@ -659,7 +647,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       )
     )
       throw new Error(
-        "This branch is no longer available. Refresh the workspace.",
+        "This branch is no longer available. Return to the workspace and try again.",
       );
     const preferred =
       requestedBranchId ??
@@ -772,7 +760,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             chosen.workspaceId !== homeWorkspace.workspaceId
           )
             throw new Error(
-              "This workspace is unavailable. Refresh home to inspect its connections.",
+              "This workspace is unavailable. Return to the home page to see its connections.",
             );
           current = chosen.workspace;
           if (context.current()) setHome(discovered);
@@ -808,7 +796,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           )
         )
           throw new Error(
-            "This branch is no longer available. Refresh the workspace.",
+            "This branch is no longer available. Return to the workspace and try again.",
           );
         if (!context.current()) return;
         setWorkspace(current);
@@ -942,7 +930,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       true,
     );
   };
-  const { scan, handleScanCurrent, handleCaptureRevision } = useCaptureActions({
+  const { scan, autoScanCurrent, handleScanCurrent, handleCaptureRevision } = useCaptureActions({
     vaultDir,
     workingDir,
     workingFolders,
@@ -950,6 +938,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     managedProject,
     workspace,
     authStateRef,
+    scanResult,
     perform,
     assertProjectWritable,
     refindOpenProject,
@@ -959,7 +948,39 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setWorkingFolders,
     setWorkingDir,
     setScanResult,
+    setCheckFailed,
     setStatusBanner,
+  });
+  // Quiet refresh of the page on screen: on focus, and after Apply or Bring back (see useAutoRefresh).
+  const { checking: isChecking, request: requestAutoRefresh } = useAutoRefresh({
+    backgroundRef,
+    operationRef,
+    contextVersion,
+    dialogOpen: Boolean(pendingHome || addressPrompt || learningOpen || explorerOpen || accountDialog),
+    run: async (context) => {
+      // Reads only: access that is gone is left to the Reconnect path, never asked for here.
+      if (homeView) {
+        if (introView || !home) return;
+        if ((await home.root.queryPermission("read")) !== "granted") return;
+        const next = await openHome(home.root);
+        if (next.identity.homeId === home.identity.homeId && context.current()) setHome(next);
+        return;
+      }
+      if (projectView) return autoScanCurrent(context);
+      if (!workspace) return;
+      if ((await workspace.root.queryPermission("read")) !== "granted") return;
+      const current = await openWorkspace(workspace.root);
+      if (!context.current()) return;
+      setWorkspace(current);
+      if (managedProject) {
+        const found = await refindOpenProject(context, current);
+        // A rename made in Explorer or Finder is worth saying once; everything else stays quiet.
+        if (found?.kind === "ok" && found.renamed && context.current()) {
+          setBannerScope("workspace");
+          setStatusBanner({ type: "info", message: renamedNotice(found.project) });
+        }
+      }
+    },
   });
   // Install a project only after all explicit connections have passed identity checks.
   const installProject = async (
@@ -970,6 +991,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     keepTab = false,
   ) => {
     setProjectSession((previous) => previous + 1);
+    setCheckFailed(false);
     setVaultDir(vault);
     setVaultState(state);
     setWorkingFolders(folders);
@@ -996,6 +1018,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     perform,
     assertProjectWritable,
     applyVaultState,
+    requestAutoRefresh,
     setScanResult,
     setStatusBanner,
   });
@@ -1349,7 +1372,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 onCreate={addHomeWorkspace}
                 onBring={() => addHomeWorkspace()}
                 onOpen={openHomeEntry}
-                onRefresh={refreshHome}
                 onCancel={handleCancelOperation}
               />
             ) : workspace && (activeTab === "connect" || !vaultState || !vaultDir) ? (
@@ -1359,7 +1381,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                 workspaceAddress={workspaceBudgetAddress}
                 busy={busy}
                 progress={progress}
-                onRefresh={refreshWorkspace}
                 onCreate={(name) => addManagedProject(name)}
                 onImport={(source) => addManagedProject(source.name, source)}
                 onOpenProject={openManaged}
@@ -1382,6 +1403,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   scanResult={scanResult}
                   isScanStale={isScanStale}
                   isScanning={isScanning}
+                  isChecking={isChecking}
                   isCapturing={isCapturing}
                   isVerifyingAll={isVerifyingAll}
                   isCreatingBranch={isCreatingBranch}
@@ -1398,6 +1420,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleReattachWorkingFolder={handleReattachWorkingFolder}
                   handleCreateBranch={handleCreateBranch}
                   handleScanCurrent={handleScanCurrent}
+                  checkFailed={checkFailed}
                   handleCaptureRevision={handleCaptureRevision}
                   handlePrepareApplication={handlePrepareApplication}
                   handleRefreshApplicationReview={handleRefreshApplicationReview}

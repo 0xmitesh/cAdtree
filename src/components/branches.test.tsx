@@ -3,7 +3,7 @@ import {
   openHomeWorkspace,
   appBusy,
   currentBranchId,
-  selectBranch,
+  selectBranch, waitForScan,
 } from "../../tests/app-controls";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -168,7 +168,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
       name: "Changes",
     }),
   );
-  fireEvent.click(ctx.ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ctx.ui);
   await waitFor(() =>
     assert.ok(ctx.ui.getByRole("heading", { name: "1 changed file" })),
   );
@@ -201,7 +201,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
       name: "Changes",
     }),
   );
-  fireEvent.click(ctx.ui.getByRole("button", { name: "Scan for changes" }));
+  await waitForScan(ctx.ui);
   await waitFor(() =>
     assert.ok(ctx.ui.getByRole("heading", { name: "1 changed file" })),
   );

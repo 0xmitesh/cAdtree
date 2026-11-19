@@ -5,6 +5,7 @@ import {
   type SignInOutcome,
 } from "./test-auth";
 import type { AccountUser, AuthSnapshot } from "../src/auth/firebase-auth";
+import { autoRefreshTiming } from "../src/app/useAutoRefresh";
 
 const STORAGE_KEY = "__cadtree_browser_test_auth__";
 const OUTCOME_KEY = "__cadtree_browser_test_auth_outcome__";
@@ -96,3 +97,6 @@ controller.adapter.subscribe((snapshot) => {
     return controller.getState();
   },
 };
+
+// The quiet background refresh waits seconds in the app; browser tests shorten it (see useAutoRefresh).
+Object.assign(autoRefreshTiming, { debounceMs: 50, minIntervalMs: 0, retryMs: 50 });

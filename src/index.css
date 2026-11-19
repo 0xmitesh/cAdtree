@@ -2636,12 +2636,6 @@ input::placeholder {
 .project-context-case strong {
   color: #253338;
 }
-.changes-page .project-heading-controls {
-  align-items: flex-end;
-}
-.changes-page .project-heading-controls > .button {
-  min-height: 40px;
-}
 .page-heading {
   flex-wrap: wrap;
 }
