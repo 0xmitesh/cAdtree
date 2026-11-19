@@ -6,6 +6,8 @@ import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import App from "../App";
 import {
   OFFLINE_SIGN_IN_MESSAGE,
+  SIGN_IN_UNAVAILABLE_MESSAGE,
+  SignInUnavailableError,
   createLazyAuthAdapter,
   type AccountUser,
   type AuthAdapter,
@@ -103,4 +105,24 @@ test("opening the Account dialog starts loading the sign-in code; the app alone 
   await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Account" })));
   assert.equal(preloads, 1);
   assert.match(ui.getByRole("dialog").textContent!, /You do not need an account/);
+});
+
+test("a failure that is not about the connection says sign-in is unavailable; sign-out after a failed load is friendly too", async () => {
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const adapter = createLazyAuthAdapter(async () => { throw new SignInUnavailableError(new Error("bad config")); }, async () => false);
+    await assert.rejects(adapter.signInWithGoogle(), { message: SIGN_IN_UNAVAILABLE_MESSAGE });
+    const failing = createLazyAuthAdapter(async () => { throw new Error("Failed to fetch dynamically imported module"); }, async () => false);
+    await assert.rejects(failing.signInWithGoogle(), { message: OFFLINE_SIGN_IN_MESSAGE });
+    // A failed load that is still in flight when signing out gives the friendly message, not the raw error.
+    let rejectLoad!: (error: Error) => void;
+    const pending = createLazyAuthAdapter(() => new Promise<AuthAdapter>((_, reject) => { rejectLoad = reject; }), async () => false);
+    pending.preload!();
+    const out = pending.signOut();
+    rejectLoad(new Error("Failed to fetch dynamically imported module"));
+    await assert.rejects(out, { message: OFFLINE_SIGN_IN_MESSAGE });
+  } finally {
+    console.error = quiet;
+  }
 });

@@ -15,6 +15,7 @@ import firebaseConfig from "../../firebase-applet-config.json";
 
 import {
   SignInCancelledError,
+  SignInUnavailableError,
   isSignInCancelled,
   type AccountUser,
   type AuthAdapter,
@@ -81,6 +82,18 @@ function getFirebaseAuthInstance(): Auth {
   const auth = getAuth(app);
   cachedAuthInstance = auth;
   return auth;
+}
+
+/** What the lazy adapter loads: refuses (as "unavailable") when Firebase cannot be set up. */
+export function loadFirebaseAuthAdapter(): AuthAdapter {
+  const config = firebaseConfig as { apiKey?: string; authDomain?: string };
+  if (!config.apiKey || !config.authDomain) throw new SignInUnavailableError(new Error("Firebase configuration is missing."));
+  try {
+    getFirebaseAuthInstance();
+  } catch (error) {
+    throw new SignInUnavailableError(error);
+  }
+  return getFirebaseAuthAdapter();
 }
 
 export function getFirebaseAuthAdapter(): AuthAdapter {

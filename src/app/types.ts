@@ -34,7 +34,7 @@ export type PendingHome = {
   requestId: string;
 };
 
-export type SignInPrompt = {
+export type AccountDialog = {
   signingIn: boolean;
   error: string | null;
   info?: string | null;

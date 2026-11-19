@@ -6,7 +6,7 @@ import {
   isSignInCancelled,
   resolveAuthAdapter,
 } from "../auth/firebase-auth";
-import type { BannerScope, SignInPrompt, StatusBanner } from "./types";
+import type { BannerScope, AccountDialog, StatusBanner } from "./types";
 
 export type UseAuthSessionArgs = {
   auth?: AuthAdapter;
@@ -34,7 +34,7 @@ export function useAuthSession({
   );
   const authStateRef = useRef<AuthSnapshot>(authState);
   authStateRef.current = authState;
-  const [signInPrompt, setSignInPrompt] = useState<SignInPrompt | null>(null);
+  const [accountDialog, setAccountDialog] = useState<AccountDialog | null>(null);
   const [signOutPending, setSignOutPending] = useState(false);
 
   const applyAuthSnapshot = (next: AuthSnapshot) => {
@@ -49,7 +49,7 @@ export function useAuthSession({
     setSignOutPending(true);
     try {
       await authAdapter.signOut();
-      setSignInPrompt(null);
+      setAccountDialog(null);
       applyAuthSnapshot({ ready: true, user: null });
     } catch (error) {
       setBannerScope("workspace");
@@ -66,17 +66,17 @@ export function useAuthSession({
   // Opens the Account dialog. This is also what starts loading the sign-in code.
   const openAccount = () => {
     authAdapter.preload?.();
-    setSignInPrompt({ signingIn: false, error: null, info: null });
+    setAccountDialog({ signingIn: false, error: null, info: null });
   };
   // Signing in only changes the account shown in the app; it never touches the open session.
   const completeSignIn = (account: AccountUser) => {
     applyAuthSnapshot({ ready: true, user: account });
-    setSignInPrompt(null);
+    setAccountDialog(null);
   };
   const handleContinueWithGoogle = async () => {
-    if (!signInPrompt || signInPrompt.signingIn) return;
-    setSignInPrompt({
-      ...signInPrompt,
+    if (!accountDialog || accountDialog.signingIn) return;
+    setAccountDialog({
+      ...accountDialog,
       signingIn: true,
       error: null,
       info: null,
@@ -86,10 +86,10 @@ export function useAuthSession({
       completeSignIn(account);
     } catch (error) {
       if (isSignInCancelled(error)) {
-        setSignInPrompt(null);
+        setAccountDialog(null);
         return;
       }
-      setSignInPrompt({
+      setAccountDialog({
         signingIn: false,
         error:
           error instanceof Error
@@ -104,26 +104,26 @@ export function useAuthSession({
     email: string,
     password: string,
   ) => {
-    if (!signInPrompt || signInPrompt.signingIn) return;
+    if (!accountDialog || accountDialog.signingIn) return;
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setSignInPrompt({
-        ...signInPrompt,
+      setAccountDialog({
+        ...accountDialog,
         error: "Enter your email address.",
         info: null,
       });
       return;
     }
     if (!password || password.length < 6) {
-      setSignInPrompt({
-        ...signInPrompt,
+      setAccountDialog({
+        ...accountDialog,
         error: "Password must be at least 6 characters.",
         info: null,
       });
       return;
     }
-    setSignInPrompt({
-      ...signInPrompt,
+    setAccountDialog({
+      ...accountDialog,
       signingIn: true,
       error: null,
       info: null,
@@ -136,7 +136,7 @@ export function useAuthSession({
       const account = await emailAction.call(authAdapter, trimmedEmail, password);
       completeSignIn(account);
     } catch (error) {
-      setSignInPrompt({
+      setAccountDialog({
         signingIn: false,
         error:
           error instanceof Error
@@ -149,18 +149,18 @@ export function useAuthSession({
     }
   };
   const handleForgotPassword = async (email: string) => {
-    if (!signInPrompt || signInPrompt.signingIn) return;
+    if (!accountDialog || accountDialog.signingIn) return;
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setSignInPrompt({
-        ...signInPrompt,
+      setAccountDialog({
+        ...accountDialog,
         error: "Enter your email address first to receive a password reset link.",
         info: null,
       });
       return;
     }
-    setSignInPrompt({
-      ...signInPrompt,
+    setAccountDialog({
+      ...accountDialog,
       signingIn: true,
       error: null,
       info: null,
@@ -168,13 +168,13 @@ export function useAuthSession({
     try {
       if (!authAdapter.sendPasswordReset) throw new Error("Password reset is unavailable. Try again later.");
       await authAdapter.sendPasswordReset(trimmedEmail);
-      setSignInPrompt({
+      setAccountDialog({
         signingIn: false,
         error: null,
         info: `Password reset email sent to ${trimmedEmail}. Check your inbox.`,
       });
     } catch (error) {
-      setSignInPrompt({
+      setAccountDialog({
         signingIn: false,
         error:
           error instanceof Error
@@ -187,8 +187,8 @@ export function useAuthSession({
   return {
     authState,
     authStateRef,
-    signInPrompt,
-    setSignInPrompt,
+    accountDialog,
+    setAccountDialog,
     signOutPending,
     handleRequestSignOut,
     openAccount,

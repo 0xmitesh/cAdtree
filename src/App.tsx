@@ -155,8 +155,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const {
     authState,
     authStateRef,
-    signInPrompt,
-    setSignInPrompt,
+    accountDialog,
+    setAccountDialog,
     signOutPending,
     handleRequestSignOut,
     openAccount,
@@ -1436,8 +1436,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             setLearningOpen={setLearningOpen}
             explorerOpen={explorerOpen}
             setExplorerOpen={setExplorerOpen}
-            signInPrompt={signInPrompt}
-            setSignInPrompt={setSignInPrompt}
+            accountDialog={accountDialog}
+            setAccountDialog={setAccountDialog}
             accountUser={authState.user}
             signOutPending={signOutPending}
             onSignOut={handleRequestSignOut}

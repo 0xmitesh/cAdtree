@@ -10,7 +10,7 @@ import {
 import type { AccountUser } from "../auth/firebase-auth";
 import type { HomeState } from "../engine/home-service";
 import type { VaultState } from "../engine/types";
-import type { BannerScope, PendingHome, SignInPrompt, StatusBanner } from "./types";
+import type { BannerScope, PendingHome, AccountDialog, StatusBanner } from "./types";
 
 export interface AppDialogsProps {
   busy: boolean;
@@ -31,8 +31,8 @@ export interface AppDialogsProps {
   setLearningOpen: Dispatch<SetStateAction<boolean>>;
   explorerOpen: boolean;
   setExplorerOpen: Dispatch<SetStateAction<boolean>>;
-  signInPrompt: SignInPrompt | null;
-  setSignInPrompt: Dispatch<SetStateAction<SignInPrompt | null>>;
+  accountDialog: AccountDialog | null;
+  setAccountDialog: Dispatch<SetStateAction<AccountDialog | null>>;
   accountUser: AccountUser | null;
   signOutPending: boolean;
   onSignOut: () => void;
@@ -65,8 +65,8 @@ export function AppDialogs({
   setLearningOpen,
   explorerOpen,
   setExplorerOpen,
-  signInPrompt,
-  setSignInPrompt,
+  accountDialog,
+  setAccountDialog,
   accountUser,
   signOutPending,
   onSignOut,
@@ -119,14 +119,14 @@ export function AppDialogs({
           </div>
         </Modal>
       ) : null}
-      {signInPrompt ? (
+      {accountDialog ? (
         <AccountModal
           user={accountUser}
           signOutPending={signOutPending}
           onSignOut={onSignOut}
-          signingIn={signInPrompt.signingIn}
-          error={signInPrompt.error}
-          info={signInPrompt.info}
+          signingIn={accountDialog.signingIn}
+          error={accountDialog.error}
+          info={accountDialog.info}
           onContinueWithGoogle={() => {
             void handleContinueWithGoogle();
           }}
@@ -137,12 +137,12 @@ export function AppDialogs({
             void handleForgotPassword(email);
           }}
           onClearFeedback={() => {
-            setSignInPrompt((prev) =>
+            setAccountDialog((prev) =>
               prev ? { ...prev, error: null, info: null } : null,
             );
           }}
           onCancel={() => {
-            if (!signInPrompt.signingIn) setSignInPrompt(null);
+            if (!accountDialog.signingIn) setAccountDialog(null);
           }}
         />
       ) : null}

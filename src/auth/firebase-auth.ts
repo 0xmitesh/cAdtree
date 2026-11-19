@@ -52,6 +52,16 @@ export function isSignInCancelled(error: unknown): boolean {
 export const OFFLINE_SIGN_IN_MESSAGE =
   "Sign-in needs an internet connection. Check your connection and try again.";
 
+export const SIGN_IN_UNAVAILABLE_MESSAGE = "Sign-in isn't available right now. Try again later.";
+
+/** Firebase loaded but cannot be used (for example a missing or bad configuration). */
+export class SignInUnavailableError extends Error {
+  constructor(cause?: unknown) {
+    super(SIGN_IN_UNAVAILABLE_MESSAGE, cause === undefined ? undefined : { cause });
+    this.name = "SignInUnavailableError";
+  }
+}
+
 const SIGNED_OUT: AuthSnapshot = { ready: true, user: null };
 
 /** True when Firebase has stored a signed-in user in this browser (read without loading Firebase). */
@@ -97,7 +107,7 @@ async function hasSavedSession(): Promise<boolean> {
  */
 export function createLazyAuthAdapter(
   loadFirebase: () => Promise<AuthAdapter> = async () =>
-    (await import("./firebase-adapter")).getFirebaseAuthAdapter(),
+    (await import("./firebase-adapter")).loadFirebaseAuthAdapter(),
   savedSessionCheck: () => Promise<boolean> = hasSavedSession,
 ): AuthAdapter {
   let latest: AuthSnapshot = SIGNED_OUT;
@@ -125,15 +135,24 @@ export function createLazyAuthAdapter(
     }
     return loading;
   };
+  // A load that fails because the code could not be fetched is a connection problem; anything else
+  // (such as a bad Firebase configuration) is "not available", with the detail kept in the console.
+  const loadFriendly = async (): Promise<AuthAdapter> => {
+    try {
+      return await load();
+    } catch (error) {
+      if (error instanceof SignInUnavailableError) {
+        console.error("Sign-in is unavailable:", error.cause ?? error);
+        throw error;
+      }
+      throw new Error(OFFLINE_SIGN_IN_MESSAGE);
+    }
+  };
   const ready = async (): Promise<AuthAdapter> => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       throw new Error(OFFLINE_SIGN_IN_MESSAGE);
     }
-    try {
-      return await load();
-    } catch {
-      throw new Error(OFFLINE_SIGN_IN_MESSAGE);
-    }
+    return loadFriendly();
   };
   const scheduleSavedSessionCheck = () => {
     if (checkedForSavedSession) return;
@@ -183,7 +202,7 @@ export function createLazyAuthAdapter(
         publish(SIGNED_OUT);
         return;
       }
-      const inner = await load();
+      const inner = await loadFriendly();
       await inner.signOut();
       publish(SIGNED_OUT);
     },
