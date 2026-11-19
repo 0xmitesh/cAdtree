@@ -63,7 +63,9 @@ export function useAuthSession({
     }
   };
 
-  const requestSignIn = () => {
+  // Opens the Account dialog. This is also what starts loading the sign-in code.
+  const openAccount = () => {
+    authAdapter.preload?.();
     setSignInPrompt({ signingIn: false, error: null, info: null });
   };
   // Signing in only changes the account shown in the app; it never touches the open session.
@@ -189,7 +191,7 @@ export function useAuthSession({
     setSignInPrompt,
     signOutPending,
     handleRequestSignOut,
-    requestSignIn,
+    openAccount,
     handleContinueWithGoogle,
     handleSubmitEmailAuth,
     handleForgotPassword,

@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { AccountSignInModal } from "../components/AccountControls";
+import { AccountModal } from "../components/AccountControls";
 import { FolderAddressDialog } from "../components/FolderAddressDialog";
 import { ProjectLearningModal } from "../components/ProjectLearningModal";
 import { Modal } from "../components/ui";
@@ -7,6 +7,7 @@ import {
   WorkspaceTree,
   type WorkspaceTreeProps,
 } from "../components/WorkspaceTree";
+import type { AccountUser } from "../auth/firebase-auth";
 import type { HomeState } from "../engine/home-service";
 import type { VaultState } from "../engine/types";
 import type { BannerScope, PendingHome, SignInPrompt, StatusBanner } from "./types";
@@ -32,6 +33,9 @@ export interface AppDialogsProps {
   setExplorerOpen: Dispatch<SetStateAction<boolean>>;
   signInPrompt: SignInPrompt | null;
   setSignInPrompt: Dispatch<SetStateAction<SignInPrompt | null>>;
+  accountUser: AccountUser | null;
+  signOutPending: boolean;
+  onSignOut: () => void;
   handleContinueWithGoogle: () => Promise<void>;
   handleSubmitEmailAuth: (
     mode: "sign-in" | "create-account",
@@ -63,6 +67,9 @@ export function AppDialogs({
   setExplorerOpen,
   signInPrompt,
   setSignInPrompt,
+  accountUser,
+  signOutPending,
+  onSignOut,
   handleContinueWithGoogle,
   handleSubmitEmailAuth,
   handleForgotPassword,
@@ -113,7 +120,10 @@ export function AppDialogs({
         </Modal>
       ) : null}
       {signInPrompt ? (
-        <AccountSignInModal
+        <AccountModal
+          user={accountUser}
+          signOutPending={signOutPending}
+          onSignOut={onSignOut}
           signingIn={signInPrompt.signingIn}
           error={signInPrompt.error}
           info={signInPrompt.info}

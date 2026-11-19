@@ -1,17 +1,10 @@
-import { getApp, getApps, initializeApp } from "firebase/app";
-import {
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword,
-  getAuth,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  type Auth,
-  type User,
-} from "firebase/auth";
-import firebaseConfig from "../../firebase-applet-config.json";
+/**
+ * Account types and the lazy sign-in adapter.
+ *
+ * Signing in is optional: nothing in the app waits for it. This module does not import Firebase.
+ * The Firebase code lives in firebase-adapter.ts and is loaded with import() only when the Account
+ * control is opened, or after the first paint when a saved session may exist in this browser.
+ */
 
 export interface AccountUser {
   uid: string;
@@ -32,6 +25,8 @@ export interface AuthAdapter {
   sendPasswordReset?(email: string): Promise<void>;
   signOut(): Promise<void>;
   getCurrentState?(): AuthSnapshot;
+  /** Starts loading the sign-in code ahead of a click (the real adapter loads Firebase lazily). */
+  preload?(): void;
 }
 
 export class SignInCancelledError extends Error {
@@ -54,224 +49,148 @@ export function isSignInCancelled(error: unknown): boolean {
   );
 }
 
-export function isUserActivationError(error: unknown): boolean {
-  if (!error) return false;
-  if (error instanceof Error && error.cause && error.cause !== error) {
-    return isUserActivationError(error.cause);
+export const OFFLINE_SIGN_IN_MESSAGE =
+  "Sign-in needs an internet connection. Check your connection and try again.";
+
+const SIGNED_OUT: AuthSnapshot = { ready: true, user: null };
+
+/** True when Firebase has stored a signed-in user in this browser (read without loading Firebase). */
+async function hasSavedSession(): Promise<boolean> {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      if (localStorage.key(i)?.startsWith("firebase:authUser:")) return true;
+    }
+  } catch {
+    /* Storage may be unavailable. */
   }
-  if (error instanceof DOMException && error.name === "SecurityError") {
-    return true;
+  try {
+    if (typeof indexedDB === "undefined" || !indexedDB) return false;
+    const names = await indexedDB.databases?.();
+    if (!names?.some((entry) => entry.name === "firebaseLocalStorageDb")) return false;
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("firebaseLocalStorageDb");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      if (!db.objectStoreNames.contains("firebaseLocalStorage")) return false;
+      const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+        const request = db
+          .transaction("firebaseLocalStorage", "readonly")
+          .objectStore("firebaseLocalStorage")
+          .getAllKeys();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      return keys.some((key) => typeof key === "string" && key.startsWith("firebase:authUser:"));
+    } finally {
+      db.close();
+    }
+  } catch {
+    return false;
   }
-  const name = (error as { name?: unknown }).name;
-  const message =
-    error instanceof Error ? error.message : String(error ?? "");
-  return (
-    name === "SecurityError" ||
-    /user gesture|user activation|must be handling a user gesture/i.test(
-      message,
-    )
-  );
 }
 
-function toAccountUser(user: User): AccountUser {
-  return {
-    uid: user.uid,
-    email: user.email,
-    displayName: user.displayName,
+/**
+ * The adapter the app uses by default. It starts as signed out and ready, and never makes the app wait.
+ * Firebase is loaded on demand; when it reports a saved user the state is upgraded.
+ */
+export function createLazyAuthAdapter(
+  loadFirebase: () => Promise<AuthAdapter> = async () =>
+    (await import("./firebase-adapter")).getFirebaseAuthAdapter(),
+  savedSessionCheck: () => Promise<boolean> = hasSavedSession,
+): AuthAdapter {
+  let latest: AuthSnapshot = SIGNED_OUT;
+  const listeners = new Set<(state: AuthSnapshot) => void>();
+  let loading: Promise<AuthAdapter> | null = null;
+  let checkedForSavedSession = false;
+
+  const publish = (next: AuthSnapshot) => {
+    latest = next;
+    for (const listener of [...listeners]) listener(next);
   };
-}
+  const load = (): Promise<AuthAdapter> => {
+    if (!loading) {
+      loading = loadFirebase().then((inner) => {
+        // Reports the saved user once Firebase has read it, and every later change.
+        inner.subscribe((state) => {
+          if (state.ready) publish(state);
+        });
+        return inner;
+      });
+      // A failed load (for example offline with an uncached chunk) can be retried by the next call.
+      loading.catch(() => {
+        loading = null;
+      });
+    }
+    return loading;
+  };
+  const ready = async (): Promise<AuthAdapter> => {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error(OFFLINE_SIGN_IN_MESSAGE);
+    }
+    try {
+      return await load();
+    } catch {
+      throw new Error(OFFLINE_SIGN_IN_MESSAGE);
+    }
+  };
+  const scheduleSavedSessionCheck = () => {
+    if (checkedForSavedSession) return;
+    checkedForSavedSession = true;
+    // After the first paint, so the app is never held up by it.
+    setTimeout(() => {
+      void savedSessionCheck().then((saved) => {
+        if (saved) void load().catch(() => {});
+      });
+    }, 0);
+  };
 
-function formatEmailAuthError(error: unknown, mode: "sign-in" | "sign-up" | "reset"): string {
-  const code = (error as { code?: unknown })?.code;
-  if (
-    code === "auth/invalid-credential" ||
-    code === "auth/wrong-password" ||
-    code === "auth/user-not-found"
-  ) {
-    return "Incorrect email or password. Try again or create an account.";
-  }
-  if (code === "auth/email-already-in-use") {
-    return "An account with this email already exists. Switch to Sign In or reset your password.";
-  }
-  if (code === "auth/weak-password") {
-    return "Password must be at least 6 characters.";
-  }
-  if (code === "auth/invalid-email") {
-    return "Enter a valid email address.";
-  }
-  if (code === "auth/operation-not-allowed") {
-    return "Email sign-in is unavailable right now. Try Continue with Google.";
-  }
-  if (code === "auth/too-many-requests") {
-    return "Too many attempts. Wait a moment and try again.";
-  }
-  if (code === "auth/network-request-failed") {
-    return "Network connection failed. Check your connection and try again.";
-  }
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  if (mode === "reset") {
-    return "Could not send password reset email. Try again.";
-  }
-  return mode === "sign-up"
-    ? "Account creation could not be completed. Try again."
-    : "Sign-in could not be completed. Try again.";
-}
-
-let cachedAuthInstance: Auth | null = null;
-let cachedFirebaseAdapter: AuthAdapter | null = null;
-
-function getFirebaseAuthInstance(): Auth {
-  if (cachedAuthInstance) return cachedAuthInstance;
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  cachedAuthInstance = auth;
-  return auth;
-}
-
-export function getFirebaseAuthAdapter(): AuthAdapter {
-  if (cachedFirebaseAdapter) return cachedFirebaseAdapter;
-  let latestState: AuthSnapshot = { ready: false, user: null };
-  cachedFirebaseAdapter = {
-    getCurrentState: () => latestState,
+  return {
+    getCurrentState: () => latest,
     subscribe(listener) {
-      let active = true;
-      const emit = (user: User | null) => {
-        if (!active) return;
-        latestState = {
-          ready: true,
-          user: user ? toAccountUser(user) : null,
-        };
-        listener(latestState);
+      listeners.add(listener);
+      listener(latest);
+      scheduleSavedSessionCheck();
+      return () => {
+        listeners.delete(listener);
       };
-      try {
-        const auth = getFirebaseAuthInstance();
-        const fallbackTimer = setTimeout(() => {
-          if (!latestState.ready) {
-            emit(auth.currentUser);
-          }
-        }, 1200);
-        void auth
-          .authStateReady()
-          .then(() => {
-            clearTimeout(fallbackTimer);
-            if (!latestState.ready) {
-              emit(auth.currentUser);
-            }
-          })
-          .catch(() => {
-            clearTimeout(fallbackTimer);
-            if (!latestState.ready) {
-              emit(auth.currentUser);
-            }
-          });
-        const unsubscribe = onAuthStateChanged(
-          auth,
-          (user) => {
-            clearTimeout(fallbackTimer);
-            emit(user);
-          },
-          () => {
-            clearTimeout(fallbackTimer);
-            emit(null);
-          },
-        );
-        return () => {
-          active = false;
-          clearTimeout(fallbackTimer);
-          unsubscribe();
-        };
-      } catch {
-        latestState = { ready: true, user: null };
-        listener(latestState);
-        return () => {
-          active = false;
-        };
-      }
+    },
+    preload() {
+      void load().catch(() => {});
     },
     async signInWithGoogle() {
-      const auth = getFirebaseAuthInstance();
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      try {
-        const credential = await signInWithPopup(auth, provider);
-        const account = toAccountUser(credential.user);
-        latestState = { ready: true, user: account };
-        return account;
-      } catch (error) {
-        if (isSignInCancelled(error)) {
-          throw new SignInCancelledError();
-        }
-        const code = (error as { code?: unknown })?.code;
-        if (code === "auth/unauthorized-domain") {
-          throw new Error(
-            "Google sign-in is not authorized for this domain in Firebase Authentication settings.",
-          );
-        }
-        if (code === "auth/popup-blocked") {
-          throw new Error(
-            "Sign-in popup was blocked by the browser. Allow popups for this site and try again.",
-          );
-        }
-        if (code === "auth/network-request-failed") {
-          throw new Error(
-            "Network connection failed during Google sign-in. Check your connection and try again.",
-          );
-        }
-        throw new Error(
-          error instanceof Error && error.message
-            ? error.message
-            : "Google sign-in could not be completed. Try again.",
-        );
-      }
+      return (await ready()).signInWithGoogle();
     },
-    async signInWithEmail(email: string, password: string) {
-      const auth = getFirebaseAuthInstance();
-      try {
-        const credential = await signInWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password,
-        );
-        const account = toAccountUser(credential.user);
-        latestState = { ready: true, user: account };
-        return account;
-      } catch (error) {
-        throw new Error(formatEmailAuthError(error, "sign-in"));
-      }
+    async signInWithEmail(email, password) {
+      const inner = await ready();
+      if (!inner.signInWithEmail) throw new Error("Email authentication is unavailable. Use Continue with Google.");
+      return inner.signInWithEmail(email, password);
     },
-    async signUpWithEmail(email: string, password: string) {
-      const auth = getFirebaseAuthInstance();
-      try {
-        const credential = await createUserWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password,
-        );
-        const account = toAccountUser(credential.user);
-        latestState = { ready: true, user: account };
-        return account;
-      } catch (error) {
-        throw new Error(formatEmailAuthError(error, "sign-up"));
-      }
+    async signUpWithEmail(email, password) {
+      const inner = await ready();
+      if (!inner.signUpWithEmail) throw new Error("Email authentication is unavailable. Use Continue with Google.");
+      return inner.signUpWithEmail(email, password);
     },
-    async sendPasswordReset(email: string) {
-      const auth = getFirebaseAuthInstance();
-      try {
-        await sendPasswordResetEmail(auth, email.trim());
-      } catch (error) {
-        throw new Error(formatEmailAuthError(error, "reset"));
-      }
+    async sendPasswordReset(email) {
+      const inner = await ready();
+      if (!inner.sendPasswordReset) throw new Error("Password reset is unavailable. Try again later.");
+      return inner.sendPasswordReset(email);
     },
     async signOut() {
-      const auth = getFirebaseAuthInstance();
-      await firebaseSignOut(auth);
-      latestState = { ready: true, user: null };
+      // Only a loaded Firebase can hold a signed-in user; without it there is nothing to sign out of.
+      if (!loading) {
+        publish(SIGNED_OUT);
+        return;
+      }
+      const inner = await load();
+      await inner.signOut();
+      publish(SIGNED_OUT);
     },
   };
-  return cachedFirebaseAdapter;
 }
+
+let defaultAdapter: AuthAdapter | null = null;
 
 export function resolveAuthAdapter(explicit?: AuthAdapter): AuthAdapter {
   if (explicit) return explicit;
@@ -281,5 +200,6 @@ export function resolveAuthAdapter(explicit?: AuthAdapter): AuthAdapter {
     ).__CADTREE_TEST_AUTH__;
     if (testAdapter) return testAdapter;
   }
-  return getFirebaseAuthAdapter();
+  defaultAdapter ??= createLazyAuthAdapter();
+  return defaultAdapter;
 }

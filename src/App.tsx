@@ -15,7 +15,7 @@ import {
   bindWorkspacePathToRoot,
 } from "./engine/idb-store";
 import type { AuthAdapter } from "./auth/firebase-auth";
-import { AccountStatusControl } from "./components/AccountControls";
+import { accountLabel } from "./components/AccountControls";
 import {
   resolveWorkingFilePath,
   resolveWorkingFolderPath,
@@ -159,7 +159,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     setSignInPrompt,
     signOutPending,
     handleRequestSignOut,
-    requestSignIn,
+    openAccount,
     handleContinueWithGoogle,
     handleSubmitEmailAuth,
     handleForgotPassword,
@@ -1299,19 +1299,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             setLearningOpen(false);
           }}
           onAllWorkspaces={allWorkspaces}
+          accountLabel={accountLabel(authState.user)}
+          onAccount={openAccount}
           onBrowseFolders={() => setExplorerOpen(true)}
           onLearn={() => setLearningOpen(true)}
         />
         <div className="workspace-shell">
           <div className="shell-top-bar">
-            <AccountStatusControl
-              ready={authState.ready}
-              user={authState.user}
-              busy={busy}
-              signOutPending={signOutPending}
-              onSignIn={requestSignIn}
-              onSignOut={handleRequestSignOut}
-            />
             <span className="local-indicator compact-local-indicator">
               <i />
               Local workspace
@@ -1444,6 +1438,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
             setExplorerOpen={setExplorerOpen}
             signInPrompt={signInPrompt}
             setSignInPrompt={setSignInPrompt}
+            accountUser={authState.user}
+            signOutPending={signOutPending}
+            onSignOut={handleRequestSignOut}
             handleContinueWithGoogle={handleContinueWithGoogle}
             handleSubmitEmailAuth={handleSubmitEmailAuth}
             handleForgotPassword={handleForgotPassword}

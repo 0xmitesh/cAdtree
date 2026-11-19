@@ -216,6 +216,41 @@ h3 {
   margin-top: 2px;
   color: #91a8a1;
 }
+.rail-account {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  background: transparent;
+  color: #c4cfcd;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 13px;
+  min-width: 0;
+}
+.rail-account:hover {
+  background: #2e4043;
+}
+.rail-account span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rail-account strong {
+  font-weight: 500;
+}
+.rail-account small {
+  font-size: 11px;
+  color: #91a8a1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-account + .rail-bottom {
+  margin-top: 0;
+}
 .workspace-shell {
   margin-left: 204px;
   min-width: 0;
@@ -2044,6 +2079,7 @@ input::placeholder {
   }
   .wordmark span,
   .rail-caption,
+  .rail-account span,
   .navigation-rail nav > button span,
   .navigation-rail .project-navigation > button span,
   .rail-section-label,
@@ -2056,6 +2092,10 @@ input::placeholder {
   }
   .navigation-rail nav > button,
   .navigation-rail .project-navigation > button {
+    justify-content: center;
+    padding: 14px;
+  }
+  .rail-account {
     justify-content: center;
     padding: 14px;
   }
@@ -3376,28 +3416,6 @@ input::placeholder {
   position: static;
   display: flex;
 }
-.account-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.account-user-label {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #344b3b;
-  font-weight: 500;
-}
-.account-status-label {
-  color: var(--muted);
-}
-.account-action-button {
-  font-size: 11px;
-  padding: 2px 6px;
-}
 @media (max-width: 700px) {
   .shell-top-bar {
     right: 18px;
@@ -3406,13 +3424,6 @@ input::placeholder {
   }
   .shell-top-bar .compact-local-indicator {
     font-size: 10px;
-  }
-  .account-control,
-  .account-action-button {
-    font-size: 10px;
-  }
-  .account-user-label {
-    max-width: 110px;
   }
 }
 

@@ -6,6 +6,7 @@ import {
   ScanLine,
   HardDrive,
   GraduationCap,
+  UserRound,
 } from "lucide-react";
 import {
   SidebarResizeHandle,
@@ -34,6 +35,9 @@ export interface NavigationRailProps {
   navigate: (tab: ActiveTab) => void;
   onWordmarkClick: () => void;
   onAllWorkspaces: () => void;
+  /** The signed-in account's name, or null when nobody is signed in (signing in is optional). */
+  accountLabel: string | null;
+  onAccount: () => void;
   onBrowseFolders: () => void;
   onLearn: () => void;
 }
@@ -53,6 +57,8 @@ export function NavigationRail({
   navigate,
   onWordmarkClick,
   onAllWorkspaces,
+  accountLabel,
+  onAccount,
   onBrowseFolders,
   onLearn,
 }: NavigationRailProps) {
@@ -166,6 +172,20 @@ export function NavigationRail({
           </button>
         </div>
       </nav>
+      <button
+        type="button"
+        className="rail-account"
+        aria-label="Account"
+        aria-haspopup="dialog"
+        title={accountLabel ?? "Sign in is optional"}
+        onClick={onAccount}
+      >
+        <UserRound size={18} />
+        <span>
+          <strong>Account</strong>
+          <small>{accountLabel ?? "Optional"}</small>
+        </span>
+      </button>
       <div className="rail-bottom">
         <HardDrive size={17} />
         <div>

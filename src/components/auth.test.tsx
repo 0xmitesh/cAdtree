@@ -38,6 +38,21 @@ import {
 
 Object.assign(globalThis, { indexedDB });
 
+/** Opens the Account dialog from the navigation rail. */
+const openAccount = async (ui: ReturnType<typeof render>) => {
+  fireEvent.click(ui.getByRole("button", { name: "Account" }));
+  return await waitFor(() => ui.getByRole("dialog", { name: "Account" }));
+};
+/** The Account control says nobody is signed in. */
+const showsSignedOut = (ui: ReturnType<typeof render>) =>
+  within(ui.getByRole("button", { name: "Account" })).getByText("Optional");
+/** Signs out through the Account dialog. */
+const signOut = async (ui: ReturnType<typeof render>) => {
+  const dialog = await openAccount(ui);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Sign out" }));
+  await waitFor(() => assert.equal(ui.queryAllByRole("dialog").length, 0));
+};
+
 beforeEach(async () => {
   await clearAllConvenienceMetadata();
   resetGlobalTestAuth({ ready: true, user: DEFAULT_TEST_USER });
@@ -99,7 +114,7 @@ test("signed-out visitor can browse the homepage and complete a tutorial without
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  assert.ok(ui.getByRole("button", { name: "Sign in" }));
+  assert.ok(showsSignedOut(ui));
   assert.ok(ui.getByRole("heading", { name: "Learn cAdtree" }));
 
   fireEvent.click(within(ui.getByRole("article", { name: "Start with cAdtree" })).getByRole("button", { name: "Start tutorial" }));
@@ -172,7 +187,7 @@ test("a signed-out visitor creates a home, a workspace and a project with no sig
   Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(diskRoot) });
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
-  const noSignInDialog = () => assert.equal(ui.queryByRole("dialog", { name: "Sign in to cAdtree" }), null);
+  const noSignInDialog = () => assert.equal(ui.queryByRole("dialog", { name: "Account" }), null);
 
   fireEvent.click(ui.getByRole("button", { name: "Start my Cadtree home" }));
   await completeHomeAddress(ui, "D:\\Cadtree");
@@ -211,8 +226,8 @@ test("a signed-out visitor creates a home, a workspace and a project with no sig
   await waitFor(() => assert.ok(again.getByRole("button", { name: "Return to Cadtree" })));
   act(() => { controller.setUser(DEFAULT_TEST_USER); });
   assert.ok(again.getByRole("button", { name: "Return to Cadtree" }));
-  fireEvent.click(again.getByRole("button", { name: "Sign out" }));
-  await waitFor(() => assert.ok(again.getByRole("button", { name: "Sign in" })));
+  await signOut(again);
+  assert.ok(showsSignedOut(again));
   assert.ok(again.getByRole("button", { name: "Return to Cadtree" }));
   assert.equal((await getRememberedHome())!.homeId, remembered.homeId);
 });
@@ -255,7 +270,7 @@ test("a signed-out visitor creates a home with no sign-in dialog; the Account si
     assert.ok(ui.getByRole("dialog", { name: "Complete home setup" })),
   );
   assert.equal(pickerCalls, 1);
-  assert.equal(ui.queryByRole("dialog", { name: "Sign in to cAdtree" }), null);
+  assert.equal(ui.queryByRole("dialog", { name: "Account" }), null);
   await completeHomeAddress(ui, "D:\\Cadtree");
   await waitFor(() =>
     assert.ok(ui.getByRole("heading", { name: "My workspaces." })),
@@ -264,10 +279,7 @@ test("a signed-out visitor creates a home with no sign-in dialog; the Account si
 
   // 1. Cancelled sign-in closes the dialog and changes nothing.
   auth.setSignInOutcome({ type: "cancel" });
-  fireEvent.click(ui.getByRole("button", { name: "Sign in" }));
-  const first = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
+  const first = await openAccount(ui);
   fireEvent.click(
     within(first).getByRole("button", { name: /Continue with Google/i }),
   );
@@ -279,10 +291,7 @@ test("a signed-out visitor creates a home with no sign-in dialog; the Account si
     type: "error",
     message: "Network connection failed during Google sign-in.",
   });
-  fireEvent.click(ui.getByRole("button", { name: "Sign in" }));
-  const retry = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
+  const retry = await openAccount(ui);
   fireEvent.click(
     within(retry).getByRole("button", { name: /Continue with Google/i }),
   );
@@ -309,10 +318,7 @@ test("Sign In / Create Account tabs, Email & Password authentication, and Forgot
   const auth = createTestAuthController({ ready: true, user: null });
   const ui = render(<App auth={auth.adapter} />);
 
-  fireEvent.click(ui.getByRole("button", { name: "Sign in" }));
-  const modal = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Sign in to cAdtree" }),
-  );
+  const modal = await openAccount(ui);
 
   // Forgot password requires email address first
   fireEvent.click(
@@ -426,11 +432,9 @@ async function saveRevisionOffline(user: AccountUser | null) {
   });
   fireEvent.click(saveBtn);
   if (user) {
-    fireEvent.click(ui.getByRole("button", { name: "Sign out" }));
+    await signOut(ui);
     // Signing out leaves the save and the open project alone.
-    await waitFor(() =>
-      assert.ok(ui.getByRole("button", { name: "Sign in" })),
-    );
+    assert.ok(showsSignedOut(ui));
     assert.equal(auth.getSignOutCount(), 1);
   }
   await waitFor(() =>
@@ -444,7 +448,7 @@ async function saveRevisionOffline(user: AccountUser | null) {
     false,
   );
   assert.equal(ui.queryByRole("button", { name: "Start my Cadtree home" }), null);
-  assert.equal(ui.queryByRole("dialog", { name: "Sign in to cAdtree" }), null);
+  assert.equal(ui.queryByRole("dialog", { name: "Account" }), null);
 
   // Reopen the actual managed vault and verify the completed save.
   const reopened = await resolveManagedProject(ws.workspace.root, imported.record.containerPath);
@@ -482,10 +486,8 @@ test("signing out and signing in as another account keeps the open home, its wor
   );
   assert.ok(ui.getByRole("heading", { name: "Alice R&D" }));
 
-  fireEvent.click(ui.getByRole("button", { name: "Sign out" }));
-  await waitFor(() =>
-    assert.ok(ui.getByRole("button", { name: "Sign in" })),
-  );
+  await signOut(ui);
+  assert.ok(showsSignedOut(ui));
   assert.ok(ui.getByRole("heading", { name: "My workspaces." }));
   assert.ok(ui.getByRole("heading", { name: "Alice R&D" }));
 
