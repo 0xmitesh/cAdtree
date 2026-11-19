@@ -79,9 +79,9 @@ test('History Archive/Reopen retains Main protection, dirty-case refusal, explic
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId]?.status??'active','active');
   fireEvent.click(dialog.getByRole('button',{name:'Archive case'}));
   await waitFor(()=>assert.ok(dialog.getByRole('alert')));
-  assert.match(dialog.getByRole('alert').textContent!,/uncaptured|baseline|changes/i);
+  assert.match(dialog.getByRole('alert').textContent!,/unsaved change/i);
   // The refusal is shown once, in the dialog: the page banner behind it does not repeat it.
-  assert.equal(ui.getAllByText(/Save a revision or resolve them explicitly before archiving/).length,1);
+  assert.equal(ui.getAllByText(/They stay in its folder/).length,1);
   assert.equal(ui.container.querySelector('.app-status-feedback'),null);
   assert.equal((await state()).vaultState.caseLifecycles?.[s.caseId]?.status??'active','active');
   await s.caseFolder.writeFileBytes(['Bracket.SLDPRT'],bytes);

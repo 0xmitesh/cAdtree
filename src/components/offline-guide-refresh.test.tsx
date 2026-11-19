@@ -175,7 +175,7 @@ test("creating a design case and archiving it refresh the Map", async () => {
   const map = await readText(f.root, f.mapPath);
   assert.match(map, /Working folder: working\/Lighter collar/);
   assert.match(map, /Status: active/);
-  assert.doesNotMatch(map, /Status: archived/);
+  assert.doesNotMatch(map, /Status: hidden/);
 
   // The new case is the working case: switch back to Main, then archive it.
   const branch = (await openExistingVault(f.project.vaultDir)).branches.find((b) => b.name === "Lighter collar")!;
@@ -185,7 +185,7 @@ test("creating a design case and archiving it refresh the Map", async () => {
   fireEvent.click(ui.container.querySelector(".history-design-cases > summary")!);
   fireEvent.click(ui.getByRole("button", { name: "Archive case Lighter collar" }));
   fireEvent.click(within(ui.getByRole("dialog", { name: "Archive design case" })).getByRole("button", { name: "Archive case" }));
-  await waitFor(async () => assert.match(await readText(f.root, f.mapPath), /Status: archived/));
+  await waitFor(async () => assert.match(await readText(f.root, f.mapPath), /Status: hidden/));
   await idle(ui);
 });
 

@@ -87,7 +87,7 @@ test("unavailable ancestry leaves healthy endpoint comparison available, and arc
     ).value,
     "c3",
   );
-  assert.match(dialog.textContent!, /Alternative · Archived/);
+  assert.match(dialog.textContent!, /Alternative · Hidden/);
 });
 test("unknown committed ownership never displays zero saves or offers an automatic guessed baseline", () => {
   const state = fixture();
