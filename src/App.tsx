@@ -1109,7 +1109,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const {
     handleVerifySingleRevisionObjects,
     handleVerifyAllObjects,
-    handleSimulateClearMetadataAndReopenVault,
+    handleResetConnections,
   } = useDiagnosticsActions({
     vaultDir,
     vaultState,
@@ -1498,7 +1498,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleStopApplyingReference={handleStopApplyingReference}
                   handleVerifySingleRevisionObjects={handleVerifySingleRevisionObjects}
                   handleVerifyAllObjects={handleVerifyAllObjects}
-                  handleSimulateClearMetadataAndReopenVault={handleSimulateClearMetadataAndReopenVault}
+                  handleResetConnections={handleResetConnections}
                   onEnableComponentTracking={handleEnableComponentTracking}
                   onPrepareWrite={handlePrepareWrite}
                 />

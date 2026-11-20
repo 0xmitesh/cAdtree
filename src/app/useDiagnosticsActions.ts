@@ -185,12 +185,12 @@ export function useDiagnosticsActions({
         "Reset remembered folder connections and addresses across all workspaces in this browser. Saved history was reread from the vault. Reconnect working folders and re-enter their addresses when needed.",
     });
   };
-  const handleSimulateClearMetadataAndReopenVault = async () => {
+  const handleResetConnections = async () => {
     await perform("connect", clearConnections);
   };
   return {
     handleVerifySingleRevisionObjects,
     handleVerifyAllObjects,
-    handleSimulateClearMetadataAndReopenVault,
+    handleResetConnections,
   };
 }

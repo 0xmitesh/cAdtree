@@ -89,7 +89,7 @@ export type ProjectViewsProps = {
   handleStopApplyingReference: ReferenceActions["handleStopApplyingReference"];
   handleVerifySingleRevisionObjects: DiagnosticsActions["handleVerifySingleRevisionObjects"];
   handleVerifyAllObjects: DiagnosticsActions["handleVerifyAllObjects"];
-  handleSimulateClearMetadataAndReopenVault: DiagnosticsActions["handleSimulateClearMetadataAndReopenVault"];
+  handleResetConnections: DiagnosticsActions["handleResetConnections"];
   /** Built in App: uses App's operation and project setters. */
   onEnableComponentTracking: () => Promise<void>;
   /** Built in App: uses App's operation and project setters; undefined outside a managed project. */
@@ -151,7 +151,7 @@ export function ProjectViews({
   handleStopApplyingReference,
   handleVerifySingleRevisionObjects,
   handleVerifyAllObjects,
-  handleSimulateClearMetadataAndReopenVault,
+  handleResetConnections,
   onEnableComponentTracking,
   onPrepareWrite,
 }: ProjectViewsProps) {
@@ -368,9 +368,7 @@ export function ProjectViews({
           vaultState={vaultState}
           isVerifyingAll={isVerifyingAll}
           onVerifyAllObjects={handleVerifyAllObjects}
-          onSimulateClearMetadataAndReopenVault={
-            handleSimulateClearMetadataAndReopenVault
-          }
+          onResetConnections={handleResetConnections}
           workingFolderName={
             managedProject
               ? (managedProject.workingPaths[activeBranchId] ?? null)

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  normalizeWindowsWorkspacePath,
-  composeWindowsFilePaths,
-} from "../utils/windows-path";
+  normalizeFolderPath as normalizeWindowsWorkspacePath,
+  composeFilePaths as composeWindowsFilePaths,
+} from "../utils/folder-path";
 import {
   resolveWorkingFilePath,
 } from "./path-shortcuts";

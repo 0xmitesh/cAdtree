@@ -220,7 +220,7 @@ On Windows, `_test-home` has a deliberately deep path for reproducing path-budge
 - `docs/signup-integration.md`: authentication.
 - `docs/tutorial-*.md`: the tutorials.
 - Design notes for each item live in the claude.ai Project (e.g. `cAdtree_Item1_Readable_Folder_Names_Design_Note_2026-11-10`, `cAdtree_Item2_Path_Budget_Design_Note_2026-11-10`, `cAdtree_Remove_Restore_Copy_Design_Note_2026-11-11`).
-- **Historical, not current:** `IMPLEMENTATION.md`, `MILESTONE2.md`, `MILESTONE3.md`, `USABILITY_REFINEMENTS.md` and `docs/navigation-r*.md` record earlier milestones (they still describe Restore copy, old IDs and old counts). Don't treat them as the current design.
+- **Historical, not current:** `docs/archive/` (`IMPLEMENTATION.md`, `MILESTONE2.md`, `MILESTONE3.md`, `USABILITY_REFINEMENTS.md` and `navigation-r*.md`) records earlier milestones (they still describe Restore copy, old IDs and old counts). Don't treat them as the current design.
 
 ## 7. Settled decisions (reopen only with the founder)
 
