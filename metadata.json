@@ -1,6 +1,6 @@
 {
-  "name": "cAdtree — Local-First CAD Version Control",
-  "description": "Free, local-first version control web application for individual CAD engineers. Preserve saved project states, record engineering reasons, and recover verified snapshots.",
+  "name": "cAdtree — your files, every version",
+  "description": "Free, local-first version history for anyone who works with files: designers, engineers, artists, scientists. Save versions of your work, note why you changed it, and bring any version back.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
