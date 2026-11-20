@@ -70,6 +70,7 @@ import { useAuthSession } from "./app/useAuthSession";
 import { useAutoRefresh } from "./app/useAutoRefresh";
 import { useApplicationActions } from "./app/useApplicationActions";
 import { useDiscardActions } from "./app/useDiscardActions";
+import { useGetVersionActions } from "./app/useGetVersionActions";
 import { useBranchActions } from "./app/useBranchActions";
 import { useCaptureActions } from "./app/useCaptureActions";
 import { useDiagnosticsActions } from "./app/useDiagnosticsActions";
@@ -1040,6 +1041,20 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     // Called only after a discard, when the resolver below exists.
     projectFolderResolver: (relative) => projectFolderResolver(relative),
   });
+  const getVersionActions = useGetVersionActions({
+    vaultDir,
+    workingDir,
+    workingFolders,
+    activeBranchId,
+    managedProject,
+    workspace,
+    perform,
+    assertProjectWritable,
+    applicationOptions,
+    applyVaultState,
+    requestAutoRefresh,
+    setStatusBanner,
+  });
   const {
     handleSelectBranch,
     handleCaseLifecycle,
@@ -1476,6 +1491,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   reviewDiscard={reviewDiscard}
                   handleDiscard={handleDiscard}
                   discardBlock={discardBlock}
+                  getVersionActions={managedProject && workspace ? getVersionActions : undefined}
                   handleExportForReview={handleExportForReview}
                   handleRetrieveReference={handleRetrieveReference}
                   handleAddReferences={handleAddReferences}

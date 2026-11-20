@@ -49,7 +49,9 @@ export function ApplicationStatus({
       ? "Bring back"
       : op.record?.plan.mode === "discard"
         ? "Discard"
-        : "Copy";
+        : op.record?.plan.mode === "restore-file"
+          ? "Get this version"
+          : "Copy";
   const confirm = async () => {
     if (!confirmation || busy) return;
     setError("");
