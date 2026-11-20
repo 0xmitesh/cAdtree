@@ -587,26 +587,24 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'your CAD program. To work on the case, select it under the project in the Explorer.',
   ]);
   steps(doc, 'Bring an older revision back onto a branch (Bring back)', [
-    'Save any unsaved working changes as a revision first (they block Bring back). Select the branch in the Explorer ' +
-      'so that it is the active branch.',
+    'Select the branch in the Explorer so that it is the active branch. If it has unsaved changes, save them first: ' +
+      'the dialog offers Save my changes first.',
     "In History, select an earlier revision from that branch's history (for a design case this includes the Main revisions " +
       'before the case started) and choose Bring back onto <branch>… (for example ' +
       '"Bring back onto Main…").',
-    'The dialog "Make <branch> match <revision>" lists every difference, all selected. Deselect any you do not ' +
-      'want, enter the Engineering reason for bringing this back, and choose Prepare bring-back.',
-    'Close your CAD documents, tick the confirmation, and choose Bring back confirmed changes.',
-    'Only the working files change. Check them in your CAD program, then choose Changes and Save ' +
-      'revision. History shows the revision as brought back.',
+    'The dialog lists every file that will change (for example "12 files will change"). Add a Why if you like ' +
+      '(optional), close the files in your CAD program, and choose Bring back.',
+    'cAdtree changes the working files and saves the result as a new revision by itself, for example "Saved as ' +
+      'Rev 006. To undo, bring back Rev 005." History shows the revision as brought back.',
   ]);
-  steps(doc, 'Merge a design case (Apply)', [
-    'Select the branch that should receive the changes (for example Main) in the Explorer, so it is the active branch.',
-    'In History, select a revision of the design case and choose Review changes to apply.',
-    'Nothing is selected at first: choose the changes to apply. For a file changed on both sides, choose Keep ' +
-      'destination, Use source state or Leave unresolved. Enter the Engineering reason for proposed application.',
-    'Choose Prepare application, tick the confirmation checkbox (it confirms that your CAD documents are closed and the ' +
-      'destination is right), and choose Apply confirmed changes.',
-    'Only the working files change. Check them in your CAD program, then choose Changes and Save revision. The design ' +
-      'case is not deleted.',
+  steps(doc, 'Copy files from a design case', [
+    'Select the branch that should receive the files (for example Main) in the Explorer, so it is the active branch.',
+    'In History, select a revision of the design case and choose Copy files from <case>….',
+    'The files the case changed are listed and ticked; untick any you do not want. For a file changed on both sides, ' +
+      'choose Keep mine or Take theirs (there is no default). Add a Why if you like (optional).',
+    'Close the files in your CAD program and choose Copy files. cAdtree copies them and saves the result as a new ' +
+      'revision by itself. The design case is not deleted.',
+    "If the save itself fails, your working files are fine: choose Save now to save them with the normal Save.",
   ]);
   steps(doc, 'Export a copy', [
     'In History, select the revision you want to look at or share.',
@@ -719,9 +717,9 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'changes stayed in the case\'s folder)',
     'The record with the highest sequence is current. A case without records is active.',
   ]);
-  record('applications/<branchId>/<operationId>/', 'One Apply operation (a merge, or Bring back) onto a branch.', [
-    'plan.json: operationId, createdAt, sourceBranchId, review (mode "merge" or "revert", where "revert" is Bring ' +
-      'back; sourceRevisionId, destinationBranchId, reason), plan (the file actions)',
+  record('applications/<branchId>/<operationId>/', 'One Bring back or Copy files operation onto a branch.', [
+    'plan.json: operationId, createdAt, sourceBranchId, review (mode "merge" (Copy files) or "revert" (Bring ' +
+      'back); sourceRevisionId, destinationBranchId, reason), plan (the file actions)',
     'events/<number>.json: what happened, in order (kind, at); before/ and source/ hold numbered backups of files',
   ]);
   record('components/ and references/enrollment/', 'Bookkeeping about file identity across renames and about the reference library.', [

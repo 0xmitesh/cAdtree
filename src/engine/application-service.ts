@@ -111,7 +111,7 @@ export async function requestApplicationWriteAccess(
         throw new Error("Permission was not granted.");
     } catch (error) {
       throw new Error(
-        `Read/write access to "${folder.name}" is required. Use Prepare application or Recover again to renew permission, or reconnect the folder. ${error instanceof Error ? error.message : String(error)}`,
+        `Read/write access to "${folder.name}" is required. Try again to renew permission, or reconnect the folder. ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -179,7 +179,7 @@ function noUnfinished(state: VaultState, branchId: string) {
     branchApplications(state, branchId).some((op) => !isFinishedOperation(op))
   )
     throw new Error(
-      "This destination has an unfinished application. Review its status and recover, save or explicitly abandon it before another apply.",
+      "This destination has an unfinished application (an earlier Bring back or Copy). Undo it if it was interrupted, or choose Save now or Don't save it, before another Bring back or Copy.",
     );
 }
 async function cleanDestination(
@@ -1416,7 +1416,7 @@ export async function recoverApplication(
     );
     if (!op?.record || op.status !== "unresolved")
       throw new Error(
-        "Only a validated unfinished application can be recovered here. Unavailable evidence requires manual inspection; successful applications can be saved or abandoned.",
+        "Only a validated unfinished application can be recovered here. Unavailable evidence requires manual inspection; a Bring back or Copy that was written can be saved (Save now) or left unsaved (Don't save it).",
       );
     const working = await connections(vault, state, branchId, options);
     await appendApplicationEvent(vault, op, { kind: "recovery-start" });

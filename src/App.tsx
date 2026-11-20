@@ -1002,11 +1002,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   };
   const {
     applicationOptions,
-    handlePrepareApplication,
-    handleRefreshApplicationReview,
-    handleApplyApplication,
+    handleApplyAndSave,
     handleRecoverApplication,
-    handleAbandonApplication,
+    handleSaveNow,
+    handleDontSave,
+    notSavedReasons,
+    bringBackRequest,
+    capturePrefill,
   } = useApplicationActions({
     vaultDir,
     vaultState,
@@ -1019,7 +1021,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     assertProjectWritable,
     applyVaultState,
     requestAutoRefresh,
-    setScanResult,
     setStatusBanner,
   });
   const {
@@ -1422,11 +1423,13 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleScanCurrent={handleScanCurrent}
                   checkFailed={checkFailed}
                   handleCaptureRevision={handleCaptureRevision}
-                  handlePrepareApplication={handlePrepareApplication}
-                  handleRefreshApplicationReview={handleRefreshApplicationReview}
-                  handleApplyApplication={handleApplyApplication}
+                  handleApplyAndSave={handleApplyAndSave}
                   handleRecoverApplication={handleRecoverApplication}
-                  handleAbandonApplication={handleAbandonApplication}
+                  handleSaveNow={handleSaveNow}
+                  handleDontSave={handleDontSave}
+                  notSavedReasons={notSavedReasons}
+                  bringBackRequest={bringBackRequest}
+                  capturePrefill={capturePrefill}
                   handleExportForReview={handleExportForReview}
                   handleRetrieveReference={handleRetrieveReference}
                   handleAddReferences={handleAddReferences}

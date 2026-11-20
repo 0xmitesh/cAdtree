@@ -282,14 +282,12 @@ for (const width of [1366, 390])
       .getByRole("button", { name: "Close comparison", exact: true })
       .click();
     await page
-      .getByRole("button", { name: "Review changes to apply", exact: true })
+      .getByRole("button", { name: "Copy files from Part-X redesign · Hidden…", exact: true })
       .click();
     const review = page.getByRole("dialog", {
-      name: "Review changes to apply — preview",
+      name: "Copy files from Part-X redesign · Hidden",
     });
-    await expect(
-      review.getByRole("region", { name: "Source saved revision" }),
-    ).toContainText("Part-X redesign · Hidden");
+    await expect(review.getByRole("checkbox", { name: "Copy Parts/Part-X.SLDPRT" })).toBeChecked();
     await page.keyboard.press("Escape");
     await expect(
       page.getByRole("region", { name: "Project context" }),

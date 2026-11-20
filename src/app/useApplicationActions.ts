@@ -1,18 +1,22 @@
-import type { Dispatch, SetStateAction } from "react";
-import type { ApplicationReview } from "../engine/application-records";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
   abandonApplication,
-  applyPreparedApplication,
-  prepareApplication,
+  applySaveSummary,
+  applyAndSave,
   recoverApplication,
   requestApplicationWriteAccess,
-  type PreparedApplication,
+  type ApplyAndSaveResult,
 } from "../engine/application-service";
+import type {
+  ApplicationOperation,
+  ApplicationReview,
+} from "../engine/application-records";
 import type { WorkingFolderBindings } from "../engine/branch-state";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
-import type { ScanResult, VaultState } from "../engine/types";
-import { openExistingVault } from "../engine/vault-service";
+import type { RevisionNotes, VaultState } from "../engine/types";
+import { formatRevisionNumber, openExistingVault } from "../engine/vault-service";
 import { resolveManagedProject, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
+import { projectGuideTarget, refreshGuidesAfter } from "./offline-guide-refresh";
 import type { AssertProjectWritable, Context, Perform, StatusBanner } from "./types";
 
 export type UseApplicationActionsArgs = {
@@ -28,11 +32,27 @@ export type UseApplicationActionsArgs = {
   applyVaultState: (next: VaultState) => void;
   /** Asks for a quiet rescan of the page (useAutoRefresh); `immediate` skips the minimum interval. */
   requestAutoRefresh: (options?: { immediate?: boolean }) => void;
-  setScanResult: Dispatch<SetStateAction<ScanResult | null>>;
   setStatusBanner: Dispatch<SetStateAction<StatusBanner | null>>;
 };
 
-/** Apply (merge) and Bring back (revert): prepare, apply, recover and abandon an application on the active branch. */
+/** A request from outside History (the Undo link) to open Bring back for one revision. */
+export type BringBackRequest = { projectId: string; revisionId: string; nonce: number };
+/** The normal Save, prefilled after a Bring back or Copy that was written but not saved. */
+export type CapturePrefill = {
+  projectId: string;
+  /** The operation it saves: the prefill applies only while that operation is `applied`. */
+  operationId: string;
+  branchId: string;
+  summary: string;
+  notes: RevisionNotes;
+  key: string;
+};
+
+/**
+ * Bring back (revert) and Copy files from a case (merge) on the active branch:
+ * write and save in one step (engine `applyAndSave`), Save now when only the
+ * save failed, and the recovery of an interrupted write.
+ */
 export function useApplicationActions({
   vaultDir,
   vaultState,
@@ -45,9 +65,23 @@ export function useApplicationActions({
   assertProjectWritable,
   applyVaultState,
   requestAutoRefresh,
-  setScanResult,
   setStatusBanner,
 }: UseApplicationActionsArgs) {
+  // Why the save failed, per operation, for this session (the operation itself stays `applied`).
+  const [notSavedReasons, setNotSavedReasons] = useState<Record<string, string>>({});
+  const [bringBackRequest, setBringBackRequest] = useState<BringBackRequest | null>(null);
+  const [capturePrefill, setCapturePrefill] = useState<CapturePrefill | null>(null);
+  // Once its operation is saved or finished, the prefill is dropped for good.
+  const prefillStillPending =
+    !capturePrefill ||
+    (vaultState?.project.projectId === capturePrefill.projectId &&
+      (vaultState.applicationOperations ?? []).some(
+        (op) =>
+          op.operationId === capturePrefill.operationId && op.status === "applied",
+      ));
+  useEffect(() => {
+    if (!prefillStillPending) setCapturePrefill(null);
+  }, [prefillStillPending]);
   const applicationFolders = async (state: VaultState) => {
     if (!managedProject || !workspace) return workingFolders;
     const current = await resolveManagedProject(
@@ -65,39 +99,6 @@ export function useApplicationActions({
     signal: context.signal,
     onProgress: context.progress,
   });
-  const handlePrepareApplication = async (review: ApplicationReview) => {
-    if (!vaultDir || review.destinationBranchId !== activeBranchId)
-      throw new Error("Destination context changed. Refresh and review again.");
-    const result = await perform(
-      "apply",
-      async (context) => {
-        await assertProjectWritable(context);
-        await requestApplicationWriteAccess(vaultDir, workingDir);
-        return prepareApplication(
-          vaultDir,
-          review,
-          applicationOptions(context),
-        );
-      },
-      true,
-    );
-    if (!result) throw new Error("Application preparation did not finish.");
-    return result;
-  };
-  const handleRefreshApplicationReview = async () => {
-    if (!vaultDir) throw new Error("Reconnect the revision vault.");
-    await perform(
-      "scan",
-      async (context) => {
-        const state = await openExistingVault(vaultDir);
-        if (context.current()) {
-          applyVaultState(state);
-          setScanResult(null);
-        }
-      },
-      true,
-    );
-  };
   const refreshApplicationState = async () => {
     if (!vaultDir) return;
     try {
@@ -108,27 +109,104 @@ export function useApplicationActions({
       /* The operation's original permission/outcome error remains visible. */
     }
   };
-  const handleApplyApplication = async (prepared: PreparedApplication) => {
-    if (!vaultDir || prepared.review.destinationBranchId !== activeBranchId)
-      throw new Error("Destination context changed. Refresh and review again.");
+  const requestBringBack = (projectId: string, revisionId: string) =>
+    setBringBackRequest((previous) => ({
+      projectId,
+      revisionId,
+      nonce: (previous?.nonce ?? 0) + 1,
+    }));
+  const reportResult = (result: ApplyAndSaveResult) => {
+    if (result.status === "not-saved") {
+      setNotSavedReasons((previous) => ({
+        ...previous,
+        [result.operation.operationId]: result.reason,
+      }));
+      return;
+    }
+    const state = result.vaultState;
+    const previousId = result.operation.record?.plan.destinationRevisionId;
+    const previous = state.revisions.find(
+      (r) => r.manifest.revisionId === previousId,
+    );
+    const saved = formatRevisionNumber(result.revision.manifest.displayNumber);
+    setStatusBanner({
+      type: "success",
+      message: previous
+        ? `Saved as ${saved}. To undo, bring back ${formatRevisionNumber(previous.manifest.displayNumber)}.${result.cacheWarning ? ` ${result.cacheWarning}` : ""}`
+        : `Saved as ${saved}.`,
+      action: previous
+        ? {
+            label: "Undo",
+            run: () =>
+              requestBringBack(state.project.projectId, previous.manifest.revisionId),
+          }
+        : undefined,
+    });
+  };
+  const handleApplyAndSave = async (review: ApplicationReview) => {
+    if (!vaultDir || review.destinationBranchId !== activeBranchId)
+      throw new Error("The case changed. Close this and try again.");
+    return perform(
+      "apply",
+      async (context) => {
+        let saved = false;
+        try {
+          await assertProjectWritable(context);
+          await requestApplicationWriteAccess(vaultDir, workingDir);
+          const result = await applyAndSave(
+            vaultDir,
+            review,
+            applicationOptions(context),
+          );
+          saved = result.status === "saved";
+          if (context.current()) reportResult(result);
+          return result;
+        } finally {
+          if (context.current()) await refreshApplicationState();
+          if (saved && workspace && managedProject)
+            refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
+        }
+      },
+      { rethrow: true, banner: false },
+    );
+  };
+  /** Save now: the normal Save on Changes, with the summary and Why prefilled. */
+  const handleSaveNow = (op: ApplicationOperation) => {
+    if (!vaultState || !op.record) return;
+    setCapturePrefill({
+      projectId: vaultState.project.projectId,
+      operationId: op.operationId,
+      branchId: op.destinationBranchId,
+      summary: applySaveSummary(vaultState, op.record),
+      notes: { problem: op.record.plan.reason ?? "", modification: "", observations: "" },
+      key: `${op.operationId}:${Date.now()}`,
+    });
+  };
+  /** Don't save it: the working files stay; cAdtree stops waiting to save the operation. */
+  const handleDontSave = async (id: string) => {
+    if (!vaultDir || !vaultState) return;
     await perform(
       "apply",
       async (context) => {
         try {
           await assertProjectWritable(context);
-          await applyPreparedApplication(
+          await requestApplicationWriteAccess(vaultDir, workingDir);
+          await abandonApplication(
             vaultDir,
-            prepared,
-            applicationOptions(context),
+            vaultState.project.projectId,
+            activeBranchId,
+            id,
           );
-          if (context.current())
+          if (context.current()) {
+            setCapturePrefill((previous) =>
+              previous?.operationId === id ? null : previous,
+            );
             setStatusBanner({
               type: "success",
               message:
-                prepared.plan.mode === "revert"
-                  ? "Brought back into working files — revision not yet saved."
-                  : "Applied to working files — revision not yet saved.",
+                "cAdtree is no longer waiting to save it. Your working files were not changed.",
             });
+          }
         } finally {
           if (context.current()) await refreshApplicationState();
         }
@@ -159,28 +237,8 @@ export function useApplicationActions({
             setStatusBanner({
               type: "success",
               message:
-                "Affected file before-states recovered and verified. Unrelated files and directories were retained. Scan before saving.",
+                "The unfinished change was undone: the affected files are back as they were. Other files were not touched.",
             });
-        } finally {
-          if (context.current()) await refreshApplicationState();
-        }
-      },
-      true,
-    );
-  };
-  const handleAbandonApplication = async (id: string) => {
-    if (!vaultDir || !vaultState) return;
-    await perform(
-      "apply",
-      async (context) => {
-        try {
-          await assertProjectWritable(context);
-          await abandonApplication(
-            vaultDir,
-            vaultState.project.projectId,
-            activeBranchId,
-            id,
-          );
         } finally {
           if (context.current()) await refreshApplicationState();
         }
@@ -190,10 +248,12 @@ export function useApplicationActions({
   };
   return {
     applicationOptions,
-    handlePrepareApplication,
-    handleRefreshApplicationReview,
-    handleApplyApplication,
+    handleApplyAndSave,
     handleRecoverApplication,
-    handleAbandonApplication,
+    handleSaveNow,
+    handleDontSave,
+    notSavedReasons,
+    bringBackRequest,
+    capturePrefill: prefillStillPending ? capturePrefill : null,
   };
 }

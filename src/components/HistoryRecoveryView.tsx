@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeftRight,
   File,
@@ -45,6 +45,8 @@ export interface HistoryRecoveryViewProps {
   onExportForReview?: ExportReviewAction;
   isExporting?: boolean;
   application?: ApplicationController;
+  /** Opens Bring back for one revision (the Undo link after a save); a new `nonce` opens it again. */
+  bringBackRequest?: { revisionId: string; nonce: number };
   vaultState: VaultState;
   activeBranchId: string;
   progress: ProgressUpdate | null;
@@ -132,6 +134,18 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const [branchSource, setBranchSource] = useState<string | null>(null);
   const [exportRevisionId, setExportRevisionId] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const bringBackNonce = props.bringBackRequest?.nonce;
+  // A request made before this view mounted (e.g. before switching cases) is not replayed.
+  const handledNonce = useRef(bringBackNonce);
+  useEffect(() => {
+    const request = props.bringBackRequest;
+    if (!request || handledNonce.current === request.nonce) return;
+    handledNonce.current = request.nonce;
+    setSelectedId(request.revisionId);
+    setPreviewMode("revert");
+    setPreviewSourceId(request.revisionId);
+    // Only a new request (nonce) opens the dialog again.
+  }, [bringBackNonce]);
   const prepareWrite = async (action: () => void) => {
     if (!props.onPrepareWrite) {
       action();
@@ -432,7 +446,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   >
                     {applyMode === "revert"
                       ? `Bring back onto ${caseLabel(vaultState, activeBranchId)}…`
-                      : "Review changes to apply"}
+                      : `Copy files from ${caseLabel(vaultState, rev.manifest.branchId)}…`}
                   </button>
                 )}
               </div>
