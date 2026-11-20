@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ReplacePlanChangedError } from "../engine/apply-preview";
 import type { ProgressUpdate } from "../engine/types";
 import type { GetVersionCheck, GetVersionController } from "../app/useGetVersionActions";
 import { Modal, Notice, OperationProgress } from "./ui";
@@ -7,7 +8,8 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 /**
  * Confirmation for Get this version: checks the working folder first (a fresh
- * scan), then puts the file from the chosen revision into it on Confirm.
+ * scan), then puts the file from the chosen revision into it on Confirm. If the
+ * files changed after the check, the engine refuses and the dialog checks again.
  */
 export function GetVersionDialog({
   controller,
@@ -27,33 +29,53 @@ export function GetVersionDialog({
   const [check, setCheck] = useState<GetVersionCheck | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
+  const [stale, setStale] = useState(false);
+  const live = useRef(true);
+  const load = async () => {
+    setBusy(true);
+    try {
+      const result = await controller.check(revisionId, path);
+      if (live.current) setCheck(result);
+    } catch (e) {
+      if (live.current) setError(message(e));
+    } finally {
+      if (live.current) setBusy(false);
+    }
+  };
   useEffect(() => {
-    let live = true;
-    controller
-      .check(revisionId, path)
-      .then((result) => live && setCheck(result))
-      .catch((e) => live && setError(message(e)))
-      .finally(() => live && setBusy(false));
+    live.current = true;
+    void load();
     return () => {
-      live = false;
+      live.current = false;
     };
-    // Checked once, when the dialog opens.
+    // Checked once, when the dialog opens; a stale plan asks for another check.
   }, []);
   const confirm = async () => {
     if (!check) return;
     setBusy(true);
     setError("");
+    setStale(false);
     try {
       await controller.confirm(check);
       onClose();
     } catch (e) {
-      setError(message(e));
-      setBusy(false);
+      if (!live.current) return;
+      if (e instanceof ReplacePlanChangedError) {
+        setStale(true);
+        setCheck(null);
+        await load();
+      } else {
+        setError(message(e));
+        setBusy(false);
+      }
     }
   };
   const blocked = controller.blockedReason ?? check?.blockers.join(" ");
   return (
     <Modal title="Get this version" busy={busy} onClose={onClose}>
+      {stale ? (
+        <Notice type="error">Changes differ from what you saw; review again.</Notice>
+      ) : null}
       {error ? <Notice type="error">{error}</Notice> : null}
       {!check && !error ? <p className="muted">Checking your working folder…</p> : null}
       {check ? (

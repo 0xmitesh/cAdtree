@@ -11,6 +11,7 @@ import {
   isReplaceMode,
   replaceKeepsCopy,
   replacePlanHash,
+  ReplacePlanChangedError,
   type ApplyPreviewPlan,
   type ReplaceMode,
   type ReplacePlan,
@@ -30,6 +31,7 @@ import {
   sealApplication,
   type ApplicationOperation,
   type ApplicationRecord,
+  type OperationMode,
   type ApplicationReview,
 } from "./application-records";
 import {
@@ -87,14 +89,7 @@ export interface ApplicationOptions extends CopyOptions {
   workingFolders: WorkingFolderBindings;
   resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
 }
-export interface PreparedApplication {
-  review: ApplicationReview;
-  plan: ApplyPreviewPlan;
-  destinationName: string;
-  branchName: string;
-  connection: FileSystemDirectoryAdapter;
-}
-/** Called only from an explicit Prepare/Recover user gesture. Engine execution
+/** Called only from an explicit Confirm/Recover user gesture. Engine execution
  * only checks permissions; it never silently elevates a remembered connection. */
 export async function requestApplicationWriteAccess(
   vault: FileSystemDirectoryAdapter,
@@ -102,7 +97,7 @@ export async function requestApplicationWriteAccess(
 ) {
   if (!working)
     throw new Error(
-      "Reconnect the destination working folder before preparing application.",
+      "Reconnect the destination working folder first.",
     );
   for (const folder of [working, vault]) {
     if ((await folder.queryPermission("readwrite")) === "granted") continue;
@@ -174,13 +169,34 @@ async function connections(
     );
   return working;
 }
+/** What the user calls an operation of this mode. */
+function operationName(mode: OperationMode | undefined) {
+  switch (mode ?? "merge") {
+    case "revert":
+      return "Bring back";
+    case "discard":
+      return "Discard";
+    case "restore-file":
+      return "Get this version";
+    default:
+      return "Copy";
+  }
+}
 function noUnfinished(state: VaultState, branchId: string) {
-  if (
-    branchApplications(state, branchId).some((op) => !isFinishedOperation(op))
-  )
+  const op = branchApplications(state, branchId).find(
+    (candidate) => !isFinishedOperation(candidate),
+  );
+  if (!op) return;
+  if (!op.record)
     throw new Error(
-      "This destination has an unfinished application (an earlier Bring back or Copy). Undo it if it was interrupted, or choose Save now or Don't save it, before another Bring back or Copy.",
+      "This case has an unfinished operation whose record can't be read. See the notice at the top before starting another Bring back, Copy, Discard or Get this version.",
     );
+  const name = operationName(op.record.plan.mode);
+  throw new Error(
+    op.status === "applied"
+      ? `This case has an unfinished ${name}: its files were written but not saved. Choose Save now or Don't save it before starting another.`
+      : `This case has an unfinished ${name}. Undo the unfinished ${name} before starting another.`,
+  );
 }
 async function cleanDestination(
   working: FileSystemDirectoryAdapter,
@@ -285,36 +301,8 @@ async function assertFolderRemovalsReady(
     );
   for (const [path, names] of clutter)
     throw new Error(
-      `Folder "${path}" holds only system files (${names.join(", ")}). Delete them, or untick the folder, then prepare again. No working files were changed.`,
+      `Folder "${path}" holds only system files (${names.join(", ")}). Delete them, or untick the folder, then try again. No working files were changed.`,
     );
-}
-export async function prepareApplication(
-  vault: FileSystemDirectoryAdapter,
-  review: ApplicationReview,
-  options: ApplicationOptions,
-): Promise<PreparedApplication> {
-  return withProjectWriterLock(review.projectId, async () => {
-    throwIfCancelled(options.signal);
-    const state = await openExistingVault(vault);
-    const { plan } = recompute(state, review);
-    noUnfinished(state, review.destinationBranchId);
-    const connection = await connections(
-      vault,
-      state,
-      review.destinationBranchId,
-      options,
-    );
-    await cleanDestination(connection, state, review, options);
-    return {
-      review: structuredClone(review),
-      plan,
-      destinationName: connection.name,
-      branchName: state.branches.find(
-        (b) => b.branchId === review.destinationBranchId,
-      )!.name,
-      connection,
-    };
-  });
 }
 /** Absence is established by readable directory entries, never by hasFile (which
  * deliberately hides errors in some adapters). Reject case aliases and directory paths. */
@@ -696,28 +684,17 @@ async function writeOperation(
       });
     }
 }
-export async function applyPreparedApplication(
-  vault: FileSystemDirectoryAdapter,
-  prepared: PreparedApplication,
-  options: ApplicationOptions,
-): Promise<ApplicationOperation> {
-  return withProjectWriterLock(prepared.review.projectId, async (lock) =>
-    (await applyUnderLock(vault, prepared.review, options, lock, prepared.connection)).op,
-  );
-}
 /**
- * The apply steps shared by `applyPreparedApplication` and `applyAndSave`, for a
- * caller that already holds the project writer lock (`lock`). Checks, then writes
- * (plan, staged copies, attempt/written events, folder and file changes, full
- * inventory check, `applied` last). `expectedConnection`, when given, must be the
- * destination folder the plan was prepared against.
+ * The apply steps of `applyAndSave`, for a caller that already holds the project
+ * writer lock (`lock`). Checks, then writes (plan, staged copies, attempt/written
+ * events, folder and file changes, full inventory check, `applied` last). Exported
+ * so tests can stop at the `applied` state without saving.
  */
-async function applyUnderLock(
+export async function applyUnderLock(
   vault: FileSystemDirectoryAdapter,
   review: ApplicationReview,
   options: ApplicationOptions,
   lock: ProjectWriterLock,
-  expectedConnection?: FileSystemDirectoryAdapter,
 ): Promise<{
   op: ApplicationOperation;
   plan: ApplyPreviewPlan;
@@ -736,10 +713,6 @@ async function applyUnderLock(
       review.destinationBranchId,
       options,
     );
-    if (expectedConnection && !(await working.isSameEntry(expectedConnection)))
-      throw new Error(
-        "Destination connection changed after preparation. Refresh and review again.",
-      );
     await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
     await cleanDestination(working, state, review, options);
     const op = await startOperation(vault, options, {
@@ -804,9 +777,8 @@ export interface ApplyAndSaveOptions extends ApplicationOptions {
 }
 /**
  * `applyAndSave` either saved the result, or wrote it and then could not save it.
- * Anything that fails before the `applied` event is thrown, as with
- * `applyPreparedApplication` (nothing written, or an `unresolved` operation that
- * the existing recovery undoes).
+ * Anything that fails before the `applied` event is thrown (nothing written, or
+ * an `unresolved` operation that the existing recovery undoes).
  */
 export type ApplyAndSaveResult =
   | ({
@@ -851,7 +823,7 @@ export function applySaveSummary(
 /**
  * Bring back (revert) or Copy files from a case (merge), then save the result as
  * a revision, all under ONE project writer lock (the lock cannot be taken twice:
- * see `captureUnderLock`). The apply steps are exactly `applyPreparedApplication`'s;
+ * see `captureUnderLock`). The apply steps are `applyUnderLock`'s;
  * the save is a normal capture whose fresh scan must equal the plan's result
  * (`expectedSnapshot`), so an edit made meanwhile is never swept in. Provenance is
  * linked by capture exactly as for a manual save after Apply (`captured` status,
@@ -1043,11 +1015,12 @@ export async function replaceWorkingFiles(
       request.mode,
     );
     if (replacePlanHash(plan) !== request.expectedPlanHash)
-      throw new Error(
-        "Changes differ from what you saw; review again. Nothing was changed.",
-      );
+      throw new ReplacePlanChangedError();
     if (!plan.ready)
       throw new Error(`${plan.blockers.join(" ")} Nothing was changed.`);
+    // Refuse before any record is written; checked again just before the first
+    // working-folder write, for anything that appears while copies are kept.
+    await assertReplaceRemovalsReady(working, plan);
     if (replaceKeepsCopy(plan)) {
       const at = request.now ? request.now() : new Date();
       if (!(await freeDiscardedName(projectFolder, at))) throw tooManyDiscards(at);
@@ -1088,7 +1061,7 @@ export async function replaceWorkingFiles(
       kind: "kept",
       ...(kept.keptAs ? { keptAs: kept.keptAs } : {}),
     });
-    await assertReplaceRemovalsReady(working, op.record!);
+    await assertReplaceRemovalsReady(working, op.record!.plan, plan.mode);
     await writeOperation(vault, working, op, request);
     throwIfCancelled(request.signal);
     await appendApplicationEvent(vault, op, { kind: "applied" });
@@ -1369,17 +1342,26 @@ export function discardedNoteText(input: {
   return `${lines.join("\n")}\n`;
 }
 /**
- * Before the first working-folder write of a replace: each folder it removes
- * must hold nothing but what the plan removes (its files, clutter included, and
- * its removed subfolders). Something that appeared since the scan stops here.
+ * Before a replace writes anything (no record yet) and again before its first
+ * working-folder write: each folder it removes must hold nothing but what the
+ * plan removes (its files, clutter included, and its removed subfolders).
+ * Something that appeared since the scan stops here: before the operation
+ * started, with `ReplacePlanChangedError` (nothing was written, review again);
+ * once it has started (`startedMode`), with a plain error, because its record
+ * and kept copy exist and the unfinished operation must be undone first.
  */
 async function assertReplaceRemovalsReady(
   working: FileSystemDirectoryAdapter,
-  record: ApplicationRecord,
+  plan: Pick<ReplacePlan, "actions" | "folderActions">,
+  startedMode?: ReplaceMode,
 ) {
-  const removed = new Set(foldersToRemove(record).map((action) => action.path));
+  const removed = new Set(
+    plan.folderActions
+      .filter((action) => action.operation === "remove")
+      .map((action) => action.path),
+  );
   const deleted = new Set(
-    changedActions(record)
+    plan.actions
       .filter((action) => action.operation === "delete")
       .map((action) => action.path),
   );
@@ -1400,10 +1382,12 @@ async function assertReplaceRemovalsReady(
         appeared.push(child);
     }
   }
-  if (appeared.length)
-    throw new Error(
-      `Changes differ from what you saw: ${appeared.join(", ")}. Review again. No working files were changed.`,
-    );
+  if (!appeared.length) return;
+  if (!startedMode) throw new ReplacePlanChangedError(appeared);
+  const name = operationName(startedMode);
+  throw new Error(
+    `Changes differ from what you saw: ${appeared.join(", ")}. No working files were changed. Undo the unfinished ${name}, then try again.`,
+  );
 }
 export async function recoverApplication(
   vault: FileSystemDirectoryAdapter,

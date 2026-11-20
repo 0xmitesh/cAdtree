@@ -5,7 +5,8 @@ import { openExistingVault } from './vault-service';
 import { captureRevision, MAX_REVISION_ID_ATTEMPTS, revisionCompletionPath, revisionManifestPath } from './revision-service';
 import { createProject, createWorkspace, createManagedBranch, resolveManagedProject, type ManagedProject } from './workspace-service';
 import { prepareApplyPreview, buildApplyPreview, type PreviewChoice } from './apply-preview';
-import { applicationReview, prepareApplication, applyPreparedApplication } from './application-service';
+import { applicationReview } from './application-service';
+import { applyReviewed } from './fixtures';
 import { compareSavedRevisions } from './snapshot-comparison';
 import { restoreRevisionToFolder } from './recovery-service';
 import { prepareReviewExport, exportRevisionForReview } from './review-export';
@@ -47,8 +48,7 @@ async function applyOnto(vault: FileSystemDirectoryAdapter, workingFolders: Mana
   );
   assert.ok(Object.keys(selection).length > 0);
   const review = applicationReview(buildApplyPreview(prepared.context, selection, 'Apply'), selection);
-  const plan = await prepareApplication(vault, review, { workingFolders });
-  return applyPreparedApplication(vault, plan, { workingFolders });
+  return applyReviewed(vault, review, { workingFolders });
 }
 
 test('a new revision gets a record ID used by manifest, completion, component and reference files; every consumer works on it', async () => {

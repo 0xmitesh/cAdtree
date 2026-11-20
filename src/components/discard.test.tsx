@@ -11,7 +11,7 @@ import { scenarioState } from "../../tests/history-data";
 import { ChangesCaptureView } from "./ChangesCaptureView";
 import { DiscardDialog, type DiscardController } from "./DiscardDialog";
 import { ApplyPreviewDialog, type ApplicationController } from "./ApplyPreviewDialog";
-import type { ReplacePlan } from "../engine/apply-preview";
+import { ReplacePlanChangedError, type ReplacePlan } from "../engine/apply-preview";
 import type { FileEntry, ScanResult } from "../engine/types";
 import {
   discardAllPaths,
@@ -111,7 +111,7 @@ test("Discard dialog: deletions alone keep no copy, so there is no copy line", a
   assert.equal(ui.queryByTestId("discard-copy-line"), null);
 });
 
-test("Discard dialog: 'Changes differ' reviews again with a fresh plan; other errors are shown as they are", async () => {
+test("Discard dialog: a stale plan (ReplacePlanChangedError) reviews again with a fresh plan; other errors, even with the same words, are shown as they are", async () => {
   const first = reviewOf(fakePlan([action("A.txt", entry("A.txt", "2"), entry("A.txt"))]));
   const second = reviewOf(fakePlan([action("A.txt", entry("A.txt", "3"), entry("A.txt")), action("B.txt", entry("B.txt"), null)]));
   let attempt = 0;
@@ -119,10 +119,10 @@ test("Discard dialog: 'Changes differ' reviews again with a fresh plan; other er
   const { controller, calls } = fakeController([first, second], {
     discard: async () => {
       attempt++;
+      if (attempt === 1) throw new ReplacePlanChangedError();
+      if (attempt === 2) throw new Error("Changes differ from what you saw; review again. Not a typed error.");
       throw new Error(
-        attempt === 1
-          ? "Changes differ from what you saw; review again. Nothing was changed."
-          : "Too many discards in the same minute (2026-11-20 10.00). Wait a minute and try again. No working files were changed.",
+        "Too many discards in the same minute (2026-11-20 10.00). Wait a minute and try again. No working files were changed.",
       );
     },
   });
@@ -133,6 +133,11 @@ test("Discard dialog: 'Changes differ' reviews again with a fresh plan; other er
   await waitFor(() => assert.ok(ui.getByText("Changes differ from what you saw; review again.")));
   await waitFor(() => assert.match(ui.getByRole("dialog").textContent!, /2 changes will be discarded/));
   assert.equal(calls.review.length, 2, "the review was built again");
+  fireEvent.click(confirm());
+  await waitFor(() => assert.ok(ui.getByText("Changes differ from what you saw; review again. Not a typed error.")));
+  assert.equal(ui.queryByText("Changes differ from what you saw; review again."), null);
+  assert.equal(calls.review.length, 2, "text alone does not review again");
+  await waitFor(() => assert.equal(confirm().hasAttribute("disabled"), false));
   fireEvent.click(confirm());
   await waitFor(() => assert.ok(ui.getByText(/Wait a minute and try again\. No working files were changed\./)));
   assert.equal(closed, 0);

@@ -11,7 +11,8 @@ import { resolveManagedProject } from "../engine/workspace-service";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { prepareApplyPreview, buildApplyPreview } from "../engine/apply-preview";
-import { applicationReview, prepareApplication, applyPreparedApplication } from "../engine/application-service";
+import { applicationReview } from "../engine/application-service";
+import { applyReviewed } from '../engine/fixtures';
 import { appBusy, currentBranchId, openHomeWorkspace, selectBranch } from "../../tests/app-controls";
 
 Object.assign(globalThis, { indexedDB });
@@ -29,7 +30,7 @@ test("The final tutorial never compares, applies, recovers, switches or archives
   const choices = { "Bracket.SLDPRT": { selected: true, decision: "use-source" as const } };
   const review = applicationReview(buildApplyPreview(context.context, choices, "Retain this pending application during tutorial use"), choices);
   const options = { workingFolders: project.workingFolders };
-  await applyPreparedApplication(project.vaultDir, await prepareApplication(project.vaultDir, review, options), options);
+  await applyReviewed(project.vaultDir, review, options);
   await s.main.writeFileText(["Uncaptured.txt"], "Keep the engineer's later work");
   await s.caseFolder.writeFileText(["Bracket.SLDPRT"], "Keep this uncaptured alternative edit");
   let picks = 0;

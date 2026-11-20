@@ -14,7 +14,8 @@ import { createWorkspace, createProject, importProject, adoptProject, openWorksp
 import { createHome, bringWorkspaceIntoHome } from './home-service';
 import { copyVerifiedTree, inventorySignature, readVerifiedInventory } from './copy-service';
 import { prepareApplyPreview, buildApplyPreview } from './apply-preview';
-import { prepareApplication, applyPreparedApplication, applicationReview } from './application-service';
+import { applicationReview } from './application-service';
+import { applyReviewed } from './fixtures';
 import type { CaptureRevisionInput, VaultState } from './types';
 const notes = { problem: '', modification: '', observations: '' };
 const mainId = 'branch-main';
@@ -283,8 +284,7 @@ test('cross-branch rename and unrelated same-path replacement are blocked while 
   const choices = {'safe-new':{selected:true,decision:'use-source' as const}};
   const plan = buildApplyPreview(prep.context,choices,'Use addition');
   assert.equal(plan.ready,true);
-  const application = await prepareApplication(f.vault,applicationReview(plan,choices),{workingFolders:f.folders});
-  await applyPreparedApplication(f.vault,application,{workingFolders:f.folders});
+  await applyReviewed(f.vault,applicationReview(plan,choices),{workingFolders:f.folders});
   const captured = await f.save();
   assert.equal(mapping(captured.vaultState,captured.revision.manifest.revisionId,'safe-new'),mapping(source.vaultState,source.revision.manifest.revisionId,'safe-new'));
   // A different component at an existing path never inherits the source identity.
@@ -308,8 +308,7 @@ test('an applied addition cannot also be a confirmed rename target; rejection pr
   if (prepared.status !== 'available') throw new Error('Expected available preview');
   const choices = { 'new.SLDPRT': { selected: true, decision: 'use-source' as const } };
   const plan = buildApplyPreview(prepared.context, choices, 'Use addition');
-  const application = await prepareApplication(f.vault, applicationReview(plan, choices), { workingFolders: f.folders });
-  const applied = await applyPreparedApplication(f.vault, application, { workingFolders: f.folders });
+  const applied = await applyReviewed(f.vault, applicationReview(plan, choices), { workingFolders: f.folders });
   await f.working.removeEntry(['caliper.SLDPRT']);
   const { state, scan } = await f.scan();
   const review = createIdentityReview(state, scan, [{ from: 'caliper.SLDPRT', to: 'new.SLDPRT' }], []);
