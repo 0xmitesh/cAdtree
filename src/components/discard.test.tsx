@@ -10,6 +10,7 @@ import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { scenarioState } from "../../tests/history-data";
 import { ChangesCaptureView } from "./ChangesCaptureView";
 import { DiscardDialog, type DiscardController } from "./DiscardDialog";
+import { ApplyPreviewDialog, type ApplicationController } from "./ApplyPreviewDialog";
 import type { ReplacePlan } from "../engine/apply-preview";
 import type { FileEntry, ScanResult } from "../engine/types";
 import {
@@ -265,6 +266,40 @@ test("Changes: a read-only (blocked) case disables Discard; without a controller
   const plain = changesView(undefined);
   assert.equal(plain.queryByRole("button", { name: "Discard all…" }), null);
   assert.equal(plain.queryByRole("button", { name: "Discard — A.txt" }), null);
+});
+
+// ---- Bring back: Discard them ----
+function bringBackFixture() {
+  const state = scenarioState("branches");
+  state.revisions[2].manifest.files.push(entry("Old.txt", "9"));
+  return state;
+}
+
+test("Bring back with unsaved changes: Discard them opens Discard all for the case, then returns to Bring back", async () => {
+  const { controller: discard, calls } = fakeController([reviewOf(fakePlan([action("A.txt", entry("A.txt", "2"), entry("A.txt"))]))]);
+  let saveFirst = 0;
+  const application: ApplicationController = {
+    applyAndSave: async () => undefined,
+    progress: null,
+    cancel: () => {},
+    unsavedChanges: 1,
+    onSaveFirst: () => saveFirst++,
+    discard,
+  };
+  const ui = render(
+    <ApplyPreviewDialog state={bringBackFixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={application} onClose={() => {}} />,
+  );
+  assert.match(ui.getByRole("dialog").textContent!, /Save them first, or discard them \(a copy is kept in the Discarded folder\)\./);
+  assert.ok(ui.getByRole("button", { name: "Save my changes first" }));
+  fireEvent.click(ui.getByRole("button", { name: "Discard them" }));
+  await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Discard all changes in Main" })));
+  assert.deepEqual(calls.review, [["branch-main", "all"]]);
+  const confirm = ui.getByRole("button", { name: "Discard" });
+  await waitFor(() => assert.equal(confirm.hasAttribute("disabled"), false));
+  fireEvent.click(confirm);
+  await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" })));
+  assert.equal(calls.discard.length, 1);
+  assert.equal(saveFirst, 0);
 });
 
 // ---- The whole flow in the App with an in-memory home ----

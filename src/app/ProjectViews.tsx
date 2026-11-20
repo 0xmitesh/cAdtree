@@ -298,6 +298,7 @@ export function ProjectViews({
             cancel: handleCancelOperation,
             unsavedChanges,
             onSaveFirst: () => navigate("changes"),
+            discard: discardController(activeBranchId),
             blockedReason:
               caseWriteBlock(vaultState, activeBranchId) ??
               managedBlockReason ??
