@@ -120,7 +120,7 @@ for (const width of [1366, 390])
     await page.getByRole("button", { name: /V6: Copied 1 file from Part-X redesign/ }).press("Enter");
     await expect(page.getByText(/^Copied from V3 on Part-X redesign/)).toBeVisible();
     await page.locator(".revision-troubleshooting > summary").click();
-    await expect(page.getByText("Captured state matches the application decision", { exact: true })).toBeVisible();
+    await expect(page.getByText("Saved files match what you chose", { exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Project context" })).toHaveAttribute("data-branch-id", "branch-main");
     await page.locator(".applied-from-details").scrollIntoViewIfNeeded();
     await page.screenshot({ path: `artifacts/screenshots/application-provenance-${width}.png` });

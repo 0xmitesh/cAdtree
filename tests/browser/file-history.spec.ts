@@ -65,7 +65,7 @@ test("actual App: file history follows parents across cases, retains deleted pat
       (buttons) =>
         buttons.filter(
           (b) =>
-            Number(b.getAttribute("aria-label")!.match(/Rev (\d+)/)![1]) <= 10,
+            Number(b.getAttribute("aria-label")!.match(/V(\d+)/)![1]) <= 10,
         ).length,
     );
   expect(firstTen).toBe(4);
@@ -127,7 +127,7 @@ test("actual App: file history follows parents across cases, retains deleted pat
   await page.getByRole("button", { name: "Export a copy", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Export a copy" }),
-  ).toContainText("R10");
+  ).toContainText("V10");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page
     .getByRole("button", { name: "Show all cases", exact: true })

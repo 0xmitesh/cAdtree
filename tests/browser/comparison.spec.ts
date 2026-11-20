@@ -78,8 +78,8 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
   await expect(
     dialog.getByRole("region", { name: "To overall notes at V4" }),
   ).toContainText("Main release with 20 files");
-  await expect(dialog.getByText(/5 files · Metadata verified/)).toBeVisible();
-  await expect(dialog.getByText(/20 files · Metadata verified/)).toBeVisible();
+  await expect(dialog.getByText(/5 files · Records checked/)).toBeVisible();
+  await expect(dialog.getByText(/20 files · Records checked/)).toBeVisible();
   await page.screenshot({
     path: "artifacts/screenshots/comparison-desktop.png",
     fullPage: false,
