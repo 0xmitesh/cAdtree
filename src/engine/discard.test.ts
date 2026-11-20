@@ -417,12 +417,16 @@ test("discards in the same minute get a counter; deletions alone keep nothing", 
   assert.equal(result.keptAs, null);
   assert.equal(result.operation.status, "done");
   assert.equal(await f.main.readFileText(["Gone.txt"]), "gone");
-  // Past the ninth copy in one minute it stops before changing working files.
+  // Past the ninth copy in one minute it stops before anything is written,
+  // so no unfinished operation is left behind.
   for (let n = 6; n <= 9; n++)
     await f.projectFolder.getDirectory(["Discarded", `2026-11-19 14.05 (${n})`], { create: true });
   await f.w(f.main, "A.txt", "ten");
+  const opsBefore = (await f.ops()).length;
   await assert.rejects(f.discard(["A.txt"]), /Too many discards in the same minute/);
   assert.equal(await f.main.readFileText(["A.txt"]), "ten");
+  assert.equal((await f.ops()).length, opsBefore);
+  assert.ok((await f.ops()).every((op) => op.status === "done"));
 });
 
 test("a readable copy whose path is too long is skipped and listed; the vault keeps it", async () => {
@@ -439,6 +443,8 @@ test("a readable copy whose path is too long is skipped and listed; the vault ke
   assert.equal(await f.main.hasDirectory(["Deep"]), false);
   const kept = await f.projectFolder.getDirectory(["Discarded", "2026-11-19 14.05"]);
   assert.equal(await kept.readFileText(["A.txt"]), "short one");
+  // No partial readable copy is left behind.
+  assert.equal(await kept.hasFile(long.split("/")), false);
   const note = await kept.readFileText(["_DISCARDED cAdtree.txt"]);
   assert.match(note, /KEPT INSIDE cAdtree ONLY/);
   const index = result.operation.record!.plan.actions.findIndex((a) => a.path === long);
@@ -459,4 +465,46 @@ test("the project Map mentions Discarded/", async () => {
   const map = await f.projectFolder.readFileText(["_MAP cAdtree.txt"]);
   assert.match(map, /Discarded\/<date time>\//);
   assert.match(map, /_DISCARDED cAdtree\.txt/);
+});
+
+test("a failed read of the vault copy stops the discard before working files change", async () => {
+  const f = await setup();
+  await f.w(f.main, "A.txt", "precious edit");
+  let armed = false;
+  f.root.setHooks({
+    onBeforeWrite: (full) => {
+      if (full.endsWith("/events/000001.json")) armed = true; // the "staged" event
+    },
+    onBeforeRead: (full) => {
+      if (armed && full.includes("/before/")) throw new DOMException("gone", "NotFoundError");
+    },
+  });
+  await assert.rejects(f.discard(["A.txt"]), /gone/);
+  f.root.setHooks({ onBeforeWrite: undefined, onBeforeRead: undefined });
+  assert.equal(await f.main.readFileText(["A.txt"]), "precious edit");
+  const [op] = await f.ops();
+  assert.equal(op.status, "unresolved");
+  assert.equal(op.events.some((e) => e.kind === "attempt"), false);
+});
+
+test("selecting a folder that exists on both sides takes everything below it that differs", async () => {
+  const f = await setup();
+  await f.w(f.main, "Old/Inner.txt", "inner edited");
+  await f.w(f.main, "Old/Extra/new.txt", "new");
+  await f.w(f.main, "Other.txt", "unselected");
+  const { plan } = await f.plan(["Old"]);
+  assert.ok(plan.ready, plan.blockers.join(" "));
+  assert.deepEqual(plan.actions.map((a) => [a.path, a.operation]), [
+    ["Old/Extra/new.txt", "delete"],
+    ["Old/Inner.txt", "replace"],
+  ]);
+  assert.deepEqual(plan.folderActions.map((a) => [a.path, a.operation]), [["Old/Extra", "remove"]]);
+  // Overlapping selections are fine.
+  assert.ok((await f.plan(["Old", "Old/Extra", "Old/Inner.txt"])).plan.ready);
+  await f.discard(["Old"]);
+  assert.equal(await f.main.readFileText(["Old", "Inner.txt"]), "inner");
+  assert.equal(await f.main.hasDirectory(["Old", "Extra"]), false);
+  assert.equal(await f.main.readFileText(["Other.txt"]), "unselected");
+  // Nothing differs below it any more.
+  assert.match((await f.plan(["Old"])).plan.blockers.join(" "), /Old has no unsaved change/);
 });

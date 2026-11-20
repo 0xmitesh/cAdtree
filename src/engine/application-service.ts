@@ -1049,6 +1049,10 @@ export async function replaceWorkingFiles(
       );
     if (!plan.ready)
       throw new Error(`${plan.blockers.join(" ")} Nothing was changed.`);
+    if (replaceKeepsCopy(plan)) {
+      const at = request.now ? request.now() : new Date();
+      if (!(await freeDiscardedName(projectFolder, at))) throw tooManyDiscards(at);
+    }
     const choices = Object.fromEntries(
       [...plan.actions, ...plan.folderActions].map((action) => [
         action.path,
@@ -1101,12 +1105,11 @@ interface DiscardedEntry {
   insideOnly?: string;
   sha256?: string;
 }
-/** A write that failed because of the path (too long here, or an opaque browser refusal). */
-const isPathFailure = (error: unknown) =>
-  error instanceof PathTooLongError ||
-  (typeof DOMException !== "undefined" &&
-    error instanceof DOMException &&
-    (error.name === "InvalidStateError" || error.name === "NotFoundError"));
+/** The opaque refusal Chrome gives for a too-long path when the address is unknown. */
+const isOpaqueRefusal = (error: unknown) =>
+  typeof DOMException !== "undefined" &&
+  error instanceof DOMException &&
+  (error.name === "InvalidStateError" || error.name === "NotFoundError");
 /**
  * The readable copy of a discard, after staging and before any working-folder
  * write: `Discarded/<YYYY-MM-DD HH.MM local>` (counter on a clash, created with
@@ -1152,10 +1155,7 @@ async function keepDiscardedCopy(
       if (!(error instanceof FileConflictError)) throw error;
     }
   }
-  if (!name)
-    throw new Error(
-      `Too many discards in the same minute (${base}). Wait a minute and try again. No working files were changed.`,
-    );
+  if (!name) throw tooManyDiscards(at);
   const folder = await parent.getDirectory([name]);
   const entries: DiscardedEntry[] = [];
   for (const action of foldersToRemove(record).reverse()) {
@@ -1166,7 +1166,7 @@ async function keepDiscardedCopy(
       });
       entries.push({ path: action.path, kind: "new folder", copied: true });
     } catch (error) {
-      if (!isPathFailure(error)) throw error;
+      if (!(error instanceof PathTooLongError) && !isOpaqueRefusal(error)) throw error;
       entries.push({ path: action.path, kind: "new folder", copied: false });
     }
   }
@@ -1180,19 +1180,27 @@ async function keepDiscardedCopy(
     }
     const kind = action.after ? "edit" : "new file";
     const staged = stagedPath(op, "before", index);
+    const segments = splitAndValidatePath(action.path);
+    // Reading the vault copy is outside the path-failure handling: if it fails,
+    // the discard stops before any working file changes.
+    const source = await vault.readFileStream(staged);
     try {
-      const segments = splitAndValidatePath(action.path);
-      const result = await folder.writeFileStream(
-        segments,
-        await vault.readFileStream(staged),
-        { signal: options.signal, exclusive: true },
-      );
+      const result = await folder.writeFileStream(segments, source, {
+        signal: options.signal,
+        exclusive: true,
+      });
       if (result.bytesWritten !== action.before.size)
         throw new Error(`Incomplete discarded copy: ${action.path}`);
       await verifiedFile(folder, segments, action.before, options.signal);
       entries.push({ path: action.path, kind, copied: true, sha256: action.before.sha256 });
     } catch (error) {
-      if (!isPathFailure(error)) throw error;
+      if (!(error instanceof PathTooLongError)) {
+        if (!isOpaqueRefusal(error)) throw error;
+        // An opaque refusal counts as a path failure only while the vault copy
+        // is intact (re-verified here); otherwise it stops the discard.
+        await verifiedFile(vault, staged, action.before, options.signal);
+      }
+      await removePartialCopy(folder, segments);
       entries.push({
         path: action.path,
         kind,
@@ -1234,6 +1242,54 @@ async function keepDiscardedCopy(
     keptInsideOnly: entries.filter((e) => e.insideOnly).map((e) => e.path),
   };
 }
+/** Removes what a failed readable-copy write may have left (only that file, best effort). */
+async function removePartialCopy(
+  folder: FileSystemDirectoryAdapter,
+  segments: string[],
+) {
+  try {
+    const parent = await folder.getDirectory(segments.slice(0, -1));
+    if (
+      (await parent.listEntries()).some(
+        (entry) => entry.kind === "file" && entry.name === segments.at(-1),
+      )
+    )
+      await parent.removeEntry([segments.at(-1)!]);
+  } catch {
+    // Nothing was written there, or it cannot be removed: the note still says
+    // the readable copy is missing and where the vault keeps it.
+  }
+}
+/**
+ * Read-only: the first free `Discarded/` name for `at` (counter up to
+ * DISCARDED_MAX_COUNTER), or undefined when all are taken. Checked before an
+ * operation starts; the exclusive create later is the backstop.
+ */
+async function freeDiscardedName(
+  projectFolder: FileSystemDirectoryAdapter,
+  at: Date,
+): Promise<string | undefined> {
+  const base = discardedFolderBase(at);
+  const entry = (await projectFolder.listEntries()).find(
+    (e) => e.name === DISCARDED_FOLDER,
+  );
+  const taken = new Set(
+    entry?.kind === "directory"
+      ? (
+          await (await projectFolder.getDirectory([DISCARDED_FOLDER])).listEntries()
+        ).map((e) => clashKey(e.name))
+      : [],
+  );
+  for (let n = 1; n <= DISCARDED_MAX_COUNTER; n++) {
+    const candidate = withCounter(base, n);
+    if (!taken.has(clashKey(candidate))) return candidate;
+  }
+  return undefined;
+}
+const tooManyDiscards = (at: Date) =>
+  new Error(
+    `Too many discards in the same minute (${discardedFolderBase(at)}). Wait a minute and try again. No working files were changed.`,
+  );
 /** Text of `_DISCARDED cAdtree.txt`. Pure. */
 export function discardedNoteText(input: {
   at: Date;
@@ -1249,6 +1305,9 @@ export function discardedNoteText(input: {
     "",
     "This folder keeps copies of unsaved changes that were discarded in cAdtree.",
     "cAdtree never deletes it. Delete it yourself when you no longer need it.",
+    "The copies were made just before the working files were replaced. If that step was",
+    "interrupted and then undone in cAdtree, the files are back in the working folder as well",
+    "and these copies are spares.",
     "",
     `Discarded at (UTC): ${input.at.toISOString()}`,
     `Project: ${input.projectName}`,

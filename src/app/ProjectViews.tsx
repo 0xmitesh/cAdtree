@@ -5,7 +5,11 @@ import { DiagnosticsView } from "../components/DiagnosticsView";
 import { HistoryRecoveryView } from "../components/HistoryRecoveryView";
 import { ProjectContextHeader } from "../components/ProjectContextHeader";
 import { ReferencesView } from "../components/ReferencesView";
-import { applicationCaptureBlock, branchApplications } from "../engine/application-records";
+import {
+  applicationCaptureBlock,
+  branchApplications,
+  isFinishedOperation,
+} from "../engine/application-records";
 import { caseWriteBlock } from "../engine/case-lifecycle";
 import { componentWriteBlock } from "../engine/component-identity";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
@@ -240,10 +244,7 @@ export function ProjectViews({
               caseWriteBlock(vaultState, activeBranchId) ??
               managedBlockReason ??
               (branchApplications(vaultState, activeBranchId).some(
-                (op) =>
-                  !["captured", "recovered", "abandoned"].includes(
-                    op.status,
-                  ),
+                (op) => !isFinishedOperation(op),
               )
                 ? "Resolve the pending application for this branch before applying again."
                 : undefined),

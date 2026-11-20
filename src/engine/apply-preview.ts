@@ -686,22 +686,27 @@ export function buildReplacePlan(
       }
       const inWorking = workingDirs.has(path),
         inTarget = targetDirs.has(path);
-      if (inWorking === inTarget) {
-        blockers.push(
-          inWorking ? `${path} has no unsaved change.` : `Nothing to discard at ${path}.`,
-        );
+      if (!inWorking && !inTarget) {
+        blockers.push(`Nothing to discard at ${path}.`);
         continue;
       }
-      if (inWorking) {
-        // Remove the folder and everything in it (clutter included).
-        removes.add(path);
-        for (const dir of workingDirs) if (isBelow(dir, path) && !targetDirs.has(dir)) removes.add(dir);
-        for (const file of workingFiles.keys()) if (isBelow(file, path)) addFile(file, false);
-      } else {
-        creates.add(path);
-        for (const dir of targetDirs) if (isBelow(dir, path) && !workingDirs.has(dir)) creates.add(dir);
-        for (const file of targetFiles.keys()) if (isBelow(file, path)) addFile(file, false);
+      // The folder itself if it differs, and everything below it that differs
+      // (folders on one side only, files that differ), OS clutter included.
+      let differs = inWorking !== inTarget;
+      if (inWorking && !inTarget) removes.add(path);
+      if (inTarget && !inWorking) creates.add(path);
+      for (const dir of new Set([...workingDirs, ...targetDirs])) {
+        if (!isBelow(dir, path)) continue;
+        if (workingDirs.has(dir) === targetDirs.has(dir)) continue;
+        (workingDirs.has(dir) ? removes : creates).add(dir);
+        differs = true;
       }
+      for (const file of new Set([...workingFiles.keys(), ...targetFiles.keys()])) {
+        if (!isBelow(file, path)) continue;
+        if (!sameBytes(workingFiles.get(file) ?? null, targetFiles.get(file) ?? null)) differs = true;
+        addFile(file, false);
+      }
+      if (!differs) blockers.push(`${path} has no unsaved change.`);
     }
     // Every missing parent of a written file or created folder is created
     // explicitly, so recovery knows exactly which folders this operation made.
