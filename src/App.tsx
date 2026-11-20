@@ -69,6 +69,7 @@ import { ProjectViews } from "./app/ProjectViews";
 import { useAuthSession } from "./app/useAuthSession";
 import { useAutoRefresh } from "./app/useAutoRefresh";
 import { useApplicationActions } from "./app/useApplicationActions";
+import { useDiscardActions } from "./app/useDiscardActions";
 import { useBranchActions } from "./app/useBranchActions";
 import { useCaptureActions } from "./app/useCaptureActions";
 import { useDiagnosticsActions } from "./app/useDiagnosticsActions";
@@ -1023,6 +1024,22 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     requestAutoRefresh,
     setStatusBanner,
   });
+  const { reviewDiscard, handleDiscard, discardBlock } = useDiscardActions({
+    vaultDir,
+    vaultState,
+    workingDir,
+    workingFolders,
+    activeBranchId,
+    managedProject,
+    workspace,
+    perform,
+    assertProjectWritable,
+    applyVaultState,
+    requestAutoRefresh,
+    setStatusBanner,
+    // Called only after a discard, when the resolver below exists.
+    projectFolderResolver: (relative) => projectFolderResolver(relative),
+  });
   const {
     handleSelectBranch,
     handleCaseLifecycle,
@@ -1217,6 +1234,32 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       managedProject.record.containerPath,
       branchId,
     );
+    return shortcutHome && homeEntry?.directory
+      ? resolveHomeFilePath(shortcutHome, homeEntry, location)
+      : location;
+  };
+  /** A folder inside the open project (e.g. Discarded/<name>), for Copy path. Read-only. */
+  const projectFolderResolver = (relative: string) => async () => {
+    if (!workspace || !managedProject)
+      throw new Error(
+        "Full local folder paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
+      );
+    const project = await resolveManagedProject(workspace.root, managedProject.record.containerPath);
+    if (project.record.workspaceId !== workspace.identity.workspaceId || !project.ready || project.issues.length)
+      throw new Error(
+        "File path unavailable. Project locations need attention; reconnect the workspace and inspect its connection details.",
+      );
+    const relativeDirectory = `${project.record.containerPath}/${relative}`;
+    try {
+      await workspace.root.getDirectory(relativeDirectory.split("/"));
+    } catch {
+      throw new Error("Folder path unavailable. The folder is missing or cannot be read.");
+    }
+    const location = {
+      workspaceId: workspace.identity.workspaceId,
+      relativeDirectory,
+      filePath: "folder",
+    };
     return shortcutHome && homeEntry?.directory
       ? resolveHomeFilePath(shortcutHome, homeEntry, location)
       : location;
@@ -1430,6 +1473,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   notSavedReasons={notSavedReasons}
                   bringBackRequest={bringBackRequest}
                   capturePrefill={capturePrefill}
+                  reviewDiscard={reviewDiscard}
+                  handleDiscard={handleDiscard}
+                  discardBlock={discardBlock}
                   handleExportForReview={handleExportForReview}
                   handleRetrieveReference={handleRetrieveReference}
                   handleAddReferences={handleAddReferences}

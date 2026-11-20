@@ -24,6 +24,8 @@ import type { useApplicationActions } from "./useApplicationActions";
 import type { useBranchActions } from "./useBranchActions";
 import type { useCaptureActions } from "./useCaptureActions";
 import type { useDiagnosticsActions } from "./useDiagnosticsActions";
+import type { useDiscardActions } from "./useDiscardActions";
+import type { DiscardController } from "../components/DiscardDialog";
 import type { useReferenceActions } from "./useReferenceActions";
 import type { useReviewActions } from "./useReviewActions";
 
@@ -33,6 +35,7 @@ type ApplicationActions = ReturnType<typeof useApplicationActions>;
 type ReviewActions = ReturnType<typeof useReviewActions>;
 type ReferenceActions = ReturnType<typeof useReferenceActions>;
 type DiagnosticsActions = ReturnType<typeof useDiagnosticsActions>;
+type DiscardActions = ReturnType<typeof useDiscardActions>;
 
 export type ProjectViewsProps = {
   vaultState: VaultState;
@@ -74,6 +77,9 @@ export type ProjectViewsProps = {
   notSavedReasons: ApplicationActions["notSavedReasons"];
   bringBackRequest: ApplicationActions["bringBackRequest"];
   capturePrefill: ApplicationActions["capturePrefill"];
+  reviewDiscard: DiscardActions["reviewDiscard"];
+  handleDiscard: DiscardActions["handleDiscard"];
+  discardBlock: DiscardActions["discardBlock"];
   handleExportForReview: ReviewActions["handleExportForReview"];
   handleRetrieveReference: ReviewActions["handleRetrieveReference"];
   handleAddReferences: ReferenceActions["handleAddReferences"];
@@ -132,6 +138,9 @@ export function ProjectViews({
   notSavedReasons,
   bringBackRequest,
   capturePrefill,
+  reviewDiscard,
+  handleDiscard,
+  discardBlock,
   handleExportForReview,
   handleRetrieveReference,
   handleAddReferences,
@@ -160,6 +169,25 @@ export function ProjectViews({
       activeScan.addedDirectories.length +
       activeScan.deletedDirectories.length
     : 0;
+  const unfinishedBlock = (branchId: string) =>
+    branchApplications(vaultState, branchId).some((op) => !isFinishedOperation(op))
+      ? "Finish the earlier Bring back, Copy or Discard on this case first (see the notice at the top)."
+      : undefined;
+  const discardController = (branchId: string): DiscardController => ({
+    review: reviewDiscard,
+    discard: handleDiscard,
+    progress,
+    cancel: handleCancelOperation,
+    blockedReason:
+      discardBlock ??
+      componentWriteBlock(vaultState) ??
+      caseWriteBlock(vaultState, branchId) ??
+      unfinishedBlock(branchId) ??
+      managedBlockReason ??
+      (missingConnections.length
+        ? `Reconnect ${missingConnections.join(", ")} before discarding.`
+        : undefined),
+  });
   return (
     <>
       <ProjectContextHeader
@@ -234,6 +262,7 @@ export function ProjectViews({
             resolveFilePath={(path) =>
               workingFileResolver(branch.branchId, path)()
             }
+            discard={discardController(branch.branchId)}
             prefill={
               capturePrefill &&
               capturePrefill.projectId === vaultState.project.projectId &&

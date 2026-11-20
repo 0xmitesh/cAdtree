@@ -45,7 +45,11 @@ export function ApplicationStatus({
     ["applied", "unresolved", "unavailable"].includes(op.status),
   );
   const what = (op: ApplicationOperation) =>
-    op.record?.plan.mode === "revert" ? "Bring back" : "Copy";
+    op.record?.plan.mode === "revert"
+      ? "Bring back"
+      : op.record?.plan.mode === "discard"
+        ? "Discard"
+        : "Copy";
   const confirm = async () => {
     if (!confirmation || busy) return;
     setError("");

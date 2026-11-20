@@ -5,6 +5,7 @@ import {
   MessageLines,
   OperationProgress,
 } from "../components/ui";
+import { CopyFolderPathButton } from "../components/FilePathShortcuts";
 import type { ProgressUpdate, VaultState } from "../engine/types";
 import type { ManagedProject } from "../engine/workspace-service";
 import type { ActiveTab, BannerScope, StatusBanner } from "./types";
@@ -77,6 +78,13 @@ export function AppNotices({
               >
                 {statusBanner.action.label}
               </button></>
+            ) : null}
+            {statusBanner.copyFolder && projectView ? (
+              <>{" "}<CopyFolderPathButton
+                label={statusBanner.copyFolder.label}
+                resolve={statusBanner.copyFolder.resolve}
+                className="text-button"
+              /></>
             ) : null}
             {statusBanner.type === "error" &&
             /permission|reconnect|access|notallowed/i.test(

@@ -71,3 +71,20 @@ export async function failNextFixtureWorkingAcknowledgement(
     return result;
   };
 }
+/** The readable copies Discard kept in the project's Discarded folder: name → path → text. */
+export async function readDiscardedCopies(fixture: ApplicationFixtureLocation) {
+  const { root } = await folders(fixture);
+  const project = await root.getDirectory(fixture.vaultPath.slice(0, -1));
+  if (!(await project.hasDirectory(["Discarded"]))) return {};
+  const discarded = await project.getDirectory(["Discarded"]);
+  const copies: Record<string, Record<string, string>> = {};
+  for (const entry of await discarded.listEntries()) {
+    if (entry.kind !== "directory") continue;
+    const folder = await discarded.getDirectory([entry.name]);
+    const files: Record<string, string> = {};
+    for (const file of (await readVerifiedInventory(folder)).files)
+      files[file.path] = await folder.readFileText(file.path.split("/"));
+    copies[entry.name] = files;
+  }
+  return copies;
+}

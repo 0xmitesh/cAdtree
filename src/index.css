@@ -3510,3 +3510,7 @@ input::placeholder {
   flex-wrap: wrap;
   gap: 8px;
 }
+.changes-files .panel-heading .discard-all {
+  margin-left: auto;
+  margin-right: 10px;
+}

@@ -333,16 +333,24 @@ export function WorkspaceLocationSetting({
 }
 
 /** Copies a folder's full address (asks for the home address first when it is unknown). */
-export function CopyFolderPathButton({ resolve }: { resolve: ResolveFilePath }) {
+export function CopyFolderPathButton({
+  resolve,
+  label = "Copy path",
+  className = "button secondary",
+}: {
+  resolve: ResolveFilePath;
+  label?: string;
+  className?: string;
+}) {
   const context = useContext(Shortcuts);
   if (!context) return null;
   return (
     <button
       type="button"
-      className="button secondary"
+      className={className}
       onClick={() => context.copy({ resolve, containingFolder: true })}
     >
-      Copy path
+      {label}
     </button>
   );
 }
