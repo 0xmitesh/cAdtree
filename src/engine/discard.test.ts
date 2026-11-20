@@ -310,6 +310,55 @@ test("a file that appears in a folder being removed refuses the discard before a
   assert.equal(await f.main.readFileText(["Added", "late.txt"]), "late");
 });
 
+test("a file that appears in a folder being removed after the copy is kept stops before any working write; the discard is left unfinished, not reviewed again", async () => {
+  const f = await setup();
+  await f.w(f.main, "Added/x.txt", "x");
+  const p = await f.plan(["Added"]);
+  let appeared = false;
+  // The kept copy's note is written last, after the record and staged copies.
+  f.root.setHooks({
+    onBeforeWrite: async (full) => {
+      if (!appeared && full.includes("/Discarded/") && full.endsWith("_DISCARDED cAdtree.txt")) {
+        appeared = true;
+        await f.w(f.main, "Added/late.txt", "late");
+      }
+    },
+  });
+  const error = await replaceWorkingFiles(f.vault, f.projectFolder, {
+    mode: "discard",
+    projectId: f.projectId,
+    branchId: "branch-main",
+    targetRevisionId: p.target,
+    paths: ["Added"],
+    expectedPlanHash: p.hash,
+    workingFolders: f.folders,
+    now: () => NOW,
+  }).then(
+    () => assert.fail("the discard should be refused"),
+    (e: unknown) => e,
+  );
+  f.root.setHooks({ onBeforeWrite: undefined });
+  assert.ok(appeared, "the late file was written while the copy was kept");
+  assert.ok(error instanceof Error);
+  assert.ok(!(error instanceof ReplacePlanChangedError), "not a stale plan: the operation has started");
+  assert.equal(
+    error.message,
+    "Changes differ from what you saw: Added/late.txt. No working files were changed. Undo the unfinished Discard, then try again.",
+  );
+  const [op] = await f.ops();
+  assert.equal(op.status, "unresolved");
+  assert.equal(await f.main.readFileText(["Added", "x.txt"]), "x");
+  assert.equal(await f.main.readFileText(["Added", "late.txt"]), "late");
+  // Another Discard is refused until this one is undone, and says which one.
+  await assert.rejects(f.discard(["Added"]), /^Error: This case has an unfinished Discard\. Undo the unfinished Discard before starting another\.$/);
+  const recovered = await recoverApplication(f.vault, f.projectId, "branch-main", op.operationId, {
+    workingFolders: f.folders,
+  });
+  assert.deepEqual(recovered.manualPaths, []);
+  assert.equal((await f.ops())[0].status, "recovered");
+  assert.equal(await f.main.readFileText(["Added", "late.txt"]), "late");
+});
+
 test("a selected file edited between staging and its write stops the discard; recovery undoes the rest and keeps the edit", async () => {
   const f = await setup();
   await edit(f);

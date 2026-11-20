@@ -181,7 +181,7 @@ test("5-to-20 apply retains unrelated destination paths, empty directories and s
   assert.equal(await inventory(f.source), sourceBefore);
   assert.ok(current.directories.includes("Empty retained"));
   assert.equal((await f.op()).status, "applied");
-  await assert.rejects(f.apply(), /unfinished application/);
+  await assert.rejects(f.apply(), /unfinished Copy: its files were written but not saved/);
   await f.main.writeFileText(
     part.split("/"),
     "CAD-like adjusted Part-X after reference checks",

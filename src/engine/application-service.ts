@@ -31,6 +31,7 @@ import {
   sealApplication,
   type ApplicationOperation,
   type ApplicationRecord,
+  type OperationMode,
   type ApplicationReview,
 } from "./application-records";
 import {
@@ -168,13 +169,34 @@ async function connections(
     );
   return working;
 }
+/** What the user calls an operation of this mode. */
+function operationName(mode: OperationMode | undefined) {
+  switch (mode ?? "merge") {
+    case "revert":
+      return "Bring back";
+    case "discard":
+      return "Discard";
+    case "restore-file":
+      return "Get this version";
+    default:
+      return "Copy";
+  }
+}
 function noUnfinished(state: VaultState, branchId: string) {
-  if (
-    branchApplications(state, branchId).some((op) => !isFinishedOperation(op))
-  )
+  const op = branchApplications(state, branchId).find(
+    (candidate) => !isFinishedOperation(candidate),
+  );
+  if (!op) return;
+  if (!op.record)
     throw new Error(
-      "This destination has an unfinished application (an earlier Bring back or Copy). Undo it if it was interrupted, or choose Save now or Don't save it, before another Bring back or Copy.",
+      "This case has an unfinished operation whose record can't be read. See the notice at the top before starting another Bring back, Copy, Discard or Get this version.",
     );
+  const name = operationName(op.record.plan.mode);
+  throw new Error(
+    op.status === "applied"
+      ? `This case has an unfinished ${name}: its files were written but not saved. Choose Save now or Don't save it before starting another.`
+      : `This case has an unfinished ${name}. Undo the unfinished ${name} before starting another.`,
+  );
 }
 async function cleanDestination(
   working: FileSystemDirectoryAdapter,
@@ -1039,7 +1061,7 @@ export async function replaceWorkingFiles(
       kind: "kept",
       ...(kept.keptAs ? { keptAs: kept.keptAs } : {}),
     });
-    await assertReplaceRemovalsReady(working, op.record!.plan);
+    await assertReplaceRemovalsReady(working, op.record!.plan, plan.mode);
     await writeOperation(vault, working, op, request);
     throwIfCancelled(request.signal);
     await appendApplicationEvent(vault, op, { kind: "applied" });
@@ -1323,11 +1345,15 @@ export function discardedNoteText(input: {
  * Before a replace writes anything (no record yet) and again before its first
  * working-folder write: each folder it removes must hold nothing but what the
  * plan removes (its files, clutter included, and its removed subfolders).
- * Something that appeared since the scan stops here (`ReplacePlanChangedError`).
+ * Something that appeared since the scan stops here: before the operation
+ * started, with `ReplacePlanChangedError` (nothing was written, review again);
+ * once it has started (`startedMode`), with a plain error, because its record
+ * and kept copy exist and the unfinished operation must be undone first.
  */
 async function assertReplaceRemovalsReady(
   working: FileSystemDirectoryAdapter,
   plan: Pick<ReplacePlan, "actions" | "folderActions">,
+  startedMode?: ReplaceMode,
 ) {
   const removed = new Set(
     plan.folderActions
@@ -1356,7 +1382,12 @@ async function assertReplaceRemovalsReady(
         appeared.push(child);
     }
   }
-  if (appeared.length) throw new ReplacePlanChangedError(appeared);
+  if (!appeared.length) return;
+  if (!startedMode) throw new ReplacePlanChangedError(appeared);
+  const name = operationName(startedMode);
+  throw new Error(
+    `Changes differ from what you saw: ${appeared.join(", ")}. No working files were changed. Undo the unfinished ${name}, then try again.`,
+  );
 }
 export async function recoverApplication(
   vault: FileSystemDirectoryAdapter,

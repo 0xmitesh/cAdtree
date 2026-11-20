@@ -421,7 +421,7 @@ test("Don't save it: the files stay, the case is no longer blocked and a later B
   await f.main.writeFileText(["A.txt"], "a2");
   await assert.rejects(
     h.rendered.result.current.handleApplyAndSave(revertReview(h.state(), f.r1.revisionId)),
-    /unfinished application.*Don't save it/,
+    /unfinished Bring back.*Don't save it/,
   );
   // The status offers Don't save it inside Details, with a confirm.
   let dontSave = "";
