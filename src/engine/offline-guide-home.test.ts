@@ -139,7 +139,7 @@ test('home Readme: header, every section, the checksum commands and the format r
   assert.match(flat, /Main cannot be hidden\. If you are working on that case, cAdtree switches you to Main/);
   assert.match(flat, /choose Changes on the left/);
   assert.match(flat, /one branch's revisions can skip numbers/);
-  assert.match(flat, /tick the confirmation checkbox \(it confirms that your CAD documents are closed and the destination is right\)/);
+  assert.match(flat, /saves the result as a new revision by itself/);
   assert.match(flat, /Main revisions before the case started/);
 });
 
@@ -147,12 +147,11 @@ test('home Readme: tutorials use the real button names and describe no feature t
   const text = buildHomeReadme({ homeName: 'Cadtree' });
   const flat = text.replace(/\s+/g, ' '); // prose is wrapped, so look for labels without line breaks
   for (const title of ['Save a revision', 'Create a design case', 'Bring an older revision back onto a branch (Bring back)',
-    'Merge a design case (Apply)', 'Export a copy', 'Hide a design case']) {
+    'Copy files from a design case', 'Export a copy', 'Hide a design case']) {
     assert.ok(text.split('\r\n').includes(title), `tutorial "${title}"`);
   }
   for (const label of ['Save revision', 'Create design case from this revision', 'Create design case', 'Bring back onto',
-    'Prepare bring-back', 'Bring back confirmed changes', 'Review changes to apply', 'Prepare application', 'Apply confirmed changes',
-    'Keep destination', 'Use source state', 'Leave unresolved', 'Export a copy', 'Choose folder…', 'Include references', 'Hide case',
+    'Save my changes first', 'Copy files from', 'Copy files', 'Keep mine', 'Take theirs', 'Save now', 'Why', 'Export a copy', 'Choose folder…', 'Include references', 'Hide case',
     'Show hidden cases', 'Unhide', 'Revision summary', 'Case name', 'Engineering reason', 'Add a description', 'What you noticed']) {
     assert.ok(flat.includes(label), `mentions "${label}"`);
   }
