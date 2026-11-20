@@ -976,7 +976,7 @@ export interface ReplaceWorkingFilesRequest extends ApplicationOptions {
   mode: ReplaceMode;
   projectId: string;
   branchId: string;
-  /** Discard: the branch's latest saved revision. */
+  /** Discard: the branch's latest saved revision. Get this version: the revision to take the file from. */
   targetRevisionId: string;
   /** The selected files and folders, as given to `buildReplacePlan`. */
   paths: readonly string[];
@@ -992,7 +992,8 @@ export interface ReplaceWorkingFilesResult {
   keptInsideOnly: string[];
 }
 /**
- * Discard (and later Get this version): makes the selected working paths match a
+ * Discard and Get this version ("restore-file": one file from an older
+ * revision): makes the selected working paths match a
  * saved revision without saving, keeping a copy of what it replaces. Under the
  * project lock: a fresh full-hash scan, the plan rebuilt and compared with the
  * confirmed hash ("Changes differ from what you saw; review again"), then the
@@ -1009,8 +1010,6 @@ export async function replaceWorkingFiles(
   projectFolder: FileSystemDirectoryAdapter,
   request: ReplaceWorkingFilesRequest,
 ): Promise<ReplaceWorkingFilesResult> {
-  if (request.mode !== "discard")
-    throw new Error("Only Discard is available. Nothing was changed.");
   return withProjectWriterLock(request.projectId, async (lock) => {
     assertHoldsProjectWriterLock(lock, request.projectId);
     throwIfCancelled(request.signal);
@@ -1080,6 +1079,7 @@ export async function replaceWorkingFiles(
         reason: plan.reason,
         actions: structuredClone(plan.actions),
         folderActions: structuredClone(plan.folderActions),
+        ...(plan.componentId ? { componentId: plan.componentId } : {}),
       },
     });
     await stageOperation(vault, working, op, request);
@@ -1229,6 +1229,7 @@ async function keepDiscardedCopy(
       ? `${formatRevisionNumber(target.manifest.displayNumber)} (${target.manifest.revisionId})`
       : record.plan.sourceRevisionId,
     operation: ["vault", ...applicationPath(op.destinationBranchId, op.operationId)].join("/"),
+    restore: record.plan.mode === "restore-file",
     entries: entries.sort((a, b) => a.path.localeCompare(b.path)),
   });
   const notePath = [noteName];
@@ -1298,12 +1299,16 @@ export function discardedNoteText(input: {
   workingFolder: string;
   revision: string;
   operation: string;
+  /** Get this version: the file was replaced by an older version, not discarded. */
+  restore?: boolean;
   entries: DiscardedEntry[];
 }): string {
   const lines: string[] = [
-    "cAdtree: discarded changes",
+    input.restore ? "cAdtree: file replaced by Get this version" : "cAdtree: discarded changes",
     "",
-    "This folder keeps copies of unsaved changes that were discarded in cAdtree.",
+    input.restore
+      ? "This folder keeps a copy of the working file that Get this version replaced in cAdtree."
+      : "This folder keeps copies of unsaved changes that were discarded in cAdtree.",
     "cAdtree never deletes it. Delete it yourself when you no longer need it.",
     "The copies were made just before the working files were replaced. If that step was",
     "interrupted and then undone in cAdtree, the files are back in the working folder as well",
@@ -1313,13 +1318,13 @@ export function discardedNoteText(input: {
     `Project: ${input.projectName}`,
     `Case: ${input.caseName}`,
     `Working folder: working/${input.workingFolder}`,
-    `Went back to: ${input.revision}`,
+    `${input.restore ? "Got this version from" : "Went back to"}: ${input.revision}`,
     `cAdtree record: ${input.operation}`,
     "",
-    "WHAT WAS DISCARDED",
+    input.restore ? "WHAT WAS REPLACED" : "WHAT WAS DISCARDED",
   ];
   const what: Record<DiscardedEntry["kind"], string> = {
-    edit: "Unsaved edit",
+    edit: input.restore ? "Replaced file" : "Unsaved edit",
     "new file": "Unsaved new file",
     "deleted file": "Unsaved deletion",
     "new folder": "Unsaved new folder",

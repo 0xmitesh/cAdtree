@@ -37,6 +37,8 @@ export interface ApplicationRecord {
   plan: {
     /** Absent only in older records, which read as "merge". */
     mode?: OperationMode;
+    /** Get this version only: the restored file's component in the target revision (when tracked). */
+    componentId?: string;
   } & Pick<
     ApplyPreviewPlan,
     | "projectId"
@@ -221,6 +223,14 @@ function validateRecord(
     (plan.mode === "discard" &&
       plan.sourceRevisionId !== plan.destinationRevisionId) ||
     (isReplaceMode(plan.mode) && record.sourceBranchId !== branchId) ||
+    (plan.componentId !== undefined &&
+      (plan.mode !== "restore-file" ||
+        typeof plan.componentId !== "string" ||
+        !/^component-[0-9a-f-]{36}$/.test(plan.componentId))) ||
+    (plan.mode === "restore-file" &&
+      (plan.actions.length !== 1 ||
+        !["add", "replace"].includes(plan.actions[0]?.operation) ||
+        plan.folderActions.some((action) => action.operation !== "create"))) ||
     typeof plan.reason !== "string" ||
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||
