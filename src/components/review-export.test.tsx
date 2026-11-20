@@ -38,7 +38,7 @@ async function fixture() {
   return { home, parent, project, branch, working, saved };
 }
 
-test('actual App exports the inspected older branch snapshot without switching Main or modifying project history/working files', async () => {
+test('actual App exports the inspected older case snapshot without switching Main or modifying project history/working files', async () => {
   const f = await fixture();
   Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(f.parent) });
   const ui = render(<App />);
@@ -64,7 +64,7 @@ test('actual App exports the inspected older branch snapshot without switching M
   const output = await f.parent.getDirectory(['Actuator - Alternative - V2']);
   assert.equal(await output.readFileText(['Parts', 'Part1.SLDPRT']), 'saved alternative');
   assert.equal(await output.hasFile(['WorkingOnly.SLDPRT']), false);
-  assert.match(await output.readFileText(['_CADTREE_REVIEW.txt']), /Branch: "Alternative".*\nVersion: V2/);
+  assert.match(await output.readFileText(['_CADTREE_REVIEW.txt']), /Case: "Alternative".*\nVersion: V2/);
   assert.equal(currentBranchId(ui), 'branch-main');
   assert.equal(await fingerprint(f.home), before);
   assert.equal((await openExistingVault(f.project.vaultDir)).revisions.length, 2);
@@ -88,7 +88,7 @@ test('selected-file dialog previews preserved paths, makes filename labelling ex
   assert.ok(ui.getByText(/partial copy/));
   assert.equal(ui.queryByRole('checkbox', { name: 'Export WorkingOnly.SLDPRT' }), null);
   fireEvent.click(ui.getByRole('checkbox', { name: 'Export Parts/Part1.SLDPRT' }));
-  const label = ui.getByRole('checkbox', { name: 'Add branch and version to filenames' }) as HTMLInputElement;
+  const label = ui.getByRole('checkbox', { name: 'Add case and version to filenames' }) as HTMLInputElement;
   assert.equal(label.checked, false);
   assert.ok(ui.getByText(/Renamed files may require reference repair/));
   fireEvent.click(label);

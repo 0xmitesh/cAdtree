@@ -497,7 +497,7 @@ test("partial lifecycle writes are unavailable; lost acknowledgements reconcile 
     }
   }
 });
-test("adoption and workspace migration retain lifecycle metadata, branch publication hashes and archived folder isolation", async () => {
+test("adoption and workspace migration retain lifecycle metadata, case publication hashes and archived folder isolation", async () => {
   const f = await fixture();
   await f.change("archived");
   const workspace = new InMemoryFileSystemAdapter("Workspace");

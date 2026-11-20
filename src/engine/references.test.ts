@@ -167,7 +167,7 @@ test('new versions, editable details and removal preserve historical snapshots; 
   await assert.rejects(f.save(), /No changes/);
 });
 
-test('explicit component associations follow permanent identity through confirmed rename and branch origin', async () => {
+test('explicit component associations follow permanent identity through confirmed rename and case origin', async () => {
   const f = await fixture(); await f.working.writeFileText(['old.SLDPRT'], 'geometry');
   let reviewed = await f.scan();
   const first = await f.save({ referenceReview: createReferenceReview(reviewed.state, reviewed.scan, [{ referenceId: f.ref.referenceId, versionId: f.version.versionId, locator: '00:12:30–00:13:10', explanation: 'Meeting decision', component: { kind: 'pending', path: 'old.SLDPRT' } }]) });

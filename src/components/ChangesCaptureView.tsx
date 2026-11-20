@@ -353,7 +353,7 @@ export function ChangesCaptureView({
       ) : null}
       {damaged ? (
         <Notice type="error">
-          Saving is blocked because the branch history needs attention. Open
+          Saving is blocked because the case history needs attention. Open
           Settings → Troubleshooting.
         </Notice>
       ) : null}

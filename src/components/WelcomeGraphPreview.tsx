@@ -51,7 +51,7 @@ export function WelcomeGraphPreview() {
     <div
       className="history-canvas welcome-graph-preview"
       role="img"
-      aria-label="Design history preview: Main develops through saved milestones while a separate design case branches from A better fit."
+      aria-label="Design history preview: Main develops through saved milestones while a separate design case starts from A better fit."
     >
       <div className="canvas-bar welcome-preview-heading">
         <span>

@@ -52,7 +52,7 @@ export function assertCaseWritable(state: VaultState, branchId: string) {
 export function caseLabel(state: VaultState, branchId: string) {
   const name =
     state.branches.find((branch) => branch.branchId === branchId)?.name ??
-    "Unknown branch";
+    "Unknown case";
   const status = caseLifecycle(state, branchId).status;
   return `${name}${status === "archived" ? " · Hidden" : status === "unavailable" ? " · Lifecycle unavailable" : ""}`;
 }
@@ -124,7 +124,7 @@ export async function readCaseLifecycles(
         );
         if (branches.length !== 1 || branches[0].isMain)
           throw new Error(
-            "Main cannot have case lifecycle records; branch identity must be unique.",
+            "Main cannot have case lifecycle records; case identity must be unique.",
           );
         const branch = branches[0];
         let current = legacy;

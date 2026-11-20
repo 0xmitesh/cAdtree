@@ -188,7 +188,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
   const manifest = revision.manifest;
   if (manifest.projectId !== state.project.projectId || computeManifestPayloadChecksum(manifest) !== manifest.manifestPayloadSha256) throw new Error('The saved version manifest is invalid.');
   const branch = state.branches.find(b => b.branchId === manifest.branchId);
-  if (!branch) throw new Error('The selected version’s recorded branch is unavailable; its review label cannot be established.');
+  if (!branch) throw new Error('The selected version’s recorded case is unavailable; its review label cannot be established.');
   if (!['complete', 'selected'].includes(request.kind) || (request.kind === 'complete' && request.labelFilenames)) throw new Error('Filename labels are available only for selected-file copies.');
   if (request.kind === 'selected' && (!request.selectedPaths.length || new Set(request.selectedPaths).size !== request.selectedPaths.length)) throw new Error('Select at least one file, with each path selected once.');
   const selected = request.kind === 'complete' ? manifest.files : request.selectedPaths.map(path => {
@@ -241,7 +241,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     'cAdtree exported copy',
     request.kind === 'selected' ? 'PARTIAL — selected files only. CAD dependencies are not discovered or included automatically.' : 'COMPLETE — all files and directories recorded in this saved snapshot. External CAD dependencies are not discovered automatically.',
     `Project: ${quote(state.project.name)} (${state.project.projectId})`,
-    `Branch: ${quote(branch.name)} (${branch.branchId})`,
+    `Case: ${quote(branch.name)} (${branch.branchId})`,
     `Version: ${revisionLabel} (${manifest.revisionId})`,
     `Saved date: ${manifest.captureCompletedAt}`,
     `Version summary: ${quote(manifest.summary)}`,

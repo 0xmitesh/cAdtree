@@ -99,7 +99,7 @@ test("Copy files with unsaved changes offers Save my changes first instead", () 
   fireEvent.click(ui.getByRole("button", { name: "Save my changes first" }));
   assert.equal(saveFirst, 1);
 });
-test("the status is branch scoped: not saved offers Save now only, with no Abandon or Refresh", () => {
+test("the status is case scoped: not saved offers Save now only, with no Abandon or Refresh", () => {
   const f = fixture();
   f.state.applicationOperations = [f.operation];
   const saved: string[] = [];

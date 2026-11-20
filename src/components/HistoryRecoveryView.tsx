@@ -337,7 +337,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
               on{" "}
               {vaultState.branches.find(
                 (b) => b.branchId === origin.manifest.branchId,
-              )?.name ?? "Unknown branch"}
+              )?.name ?? "Unknown case"}
             </button>
           ) : (
             <span>Starting version is unavailable. Saving is blocked.</span>
@@ -802,7 +802,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           sourceBranchName={
             vaultState.branches.find(
               (b) => b.branchId === source.manifest.branchId,
-            )?.name ?? "Unknown branch"
+            )?.name ?? "Unknown case"
           }
           branchNames={vaultState.branches.map((b) => b.name)}
           busy={props.isCreatingBranch ?? false}

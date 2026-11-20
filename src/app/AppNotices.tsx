@@ -127,13 +127,13 @@ export function AppNotices({
           {missingConnections.length ? (
             <Notice>
               {managedProject
-                ? "Reconnect the workspace to resolve these recorded branch locations: "
+                ? "Reconnect the workspace to resolve these recorded case locations: "
                 : "Connect the working folders for "}
               {missingConnections.join(", ")} before saving or creating
-              branches.{" "}
+              cases.{" "}
               {managedProject
                 ? "Missing or moved folders will stay disconnected until their recorded location is restored."
-                : "Select each branch, then Connect folder."}
+                : "Select each case, then Connect folder."}
               <button
                 className="text-button"
                 disabled={busy}

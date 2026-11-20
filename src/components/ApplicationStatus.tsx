@@ -378,7 +378,7 @@ export function AppliedFromDetails({
               </p>
               {reverted ? null : (
                 <p className="small">
-                  Selected file changes do not imply that the source branch was
+                  Selected file changes do not imply that the source case was
                   merged.
                 </p>
               )}

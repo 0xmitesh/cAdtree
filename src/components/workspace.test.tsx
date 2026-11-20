@@ -201,7 +201,7 @@ test("diagram labels and arrowheads follow parent identity, with children above 
     ui.getByRole("heading", { name: "Review assembly for manufacture" }),
   );
 });
-test("branch highlighting changes only viewing state", () => {
+test("case highlighting changes only viewing state", () => {
   const state = scenarioState("branches");
   const before = JSON.stringify(state);
   const ui = render(

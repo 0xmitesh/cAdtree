@@ -227,7 +227,7 @@ export function prepareApplyPreview(
         matches.length !== 1 ||
         matches[0].projectId !== state.project.projectId
       )
-        throw new Error(`Branch identity "${id}" is missing or ambiguous.`);
+        throw new Error(`Case identity "${id}" is missing or ambiguous.`);
     };
     assertBranch(destinationBranchId);
     const sourceEndpoint = comparisonEndpoint(state, sourceId);
@@ -237,7 +237,7 @@ export function prepareApplyPreview(
     const baseline = getBranchBaseline(state, destinationBranchId);
     if (!baseline)
       throw new Error(
-        "The active working branch has no saved baseline. Save a version before reviewing an application preview.",
+        "The active working case has no saved baseline. Save a version before reviewing an application preview.",
       );
     const destinationEndpoint = comparisonEndpoint(state, baseline.revisionId);
     if (destinationEndpoint.status !== "available")
@@ -246,7 +246,7 @@ export function prepareApplyPreview(
       );
     if (sourceId === baseline.revisionId)
       throw new Error(
-        `${sourceId} is already the latest saved version of this branch; there is nothing to bring back or apply.`,
+        `${sourceId} is already the latest saved version of this case; there is nothing to bring back or apply.`,
       );
     const graph = layoutRevisions(state, destinationBranchId);
     const sourceAncestors = ancestryOf(graph, sourceId);
@@ -260,11 +260,11 @@ export function prepareApplyPreview(
       );
     if (mode === "merge" && baseId === sourceId)
       throw new Error(
-        `${sourceId} is an earlier version in this branch's history, so applying it would change nothing. Use "Bring back" to restore files from it.`,
+        `${sourceId} is an earlier version in this case's history, so applying it would change nothing. Use "Bring back" to restore files from it.`,
       );
     if (mode === "revert" && baseId !== sourceId)
       throw new Error(
-        `${sourceId} is not an earlier version in this branch's history. Bringing back is only for earlier versions in the same history; use Apply changes instead.`,
+        `${sourceId} is not an earlier version in this case's history. Bringing back is only for earlier versions in the same history; use Apply changes instead.`,
       );
     const parents = new Map(
       graph.edges.map((edge) => [edge.child, edge.parent]),

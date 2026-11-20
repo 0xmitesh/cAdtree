@@ -27,7 +27,7 @@ export function buildReferenceBrowser(state: VaultState): ReferenceBrowser {
       if (!entry) continue;
       entry.uses.push({
         revisionId: revision.manifest.revisionId, branchId: revision.manifest.branchId,
-        branchName: state.branches.find(branch => branch.branchId === revision.manifest.branchId)?.name ?? 'Unknown branch',
+        branchName: state.branches.find(branch => branch.branchId === revision.manifest.branchId)?.name ?? 'Unknown case',
         displayNumber: revision.manifest.displayNumber, summary: revision.manifest.summary,
         partPath: link.componentPath, locator: link.locator, explanation: link.explanation,
       });

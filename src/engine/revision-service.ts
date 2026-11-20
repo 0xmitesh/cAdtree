@@ -170,11 +170,11 @@ export async function captureUnderLock(
   await validateOperationWorkingFolders(vaultState, vaultDir, workingFolders);
   if (workingFolders) {
     const connected = workingFolders[input.branchId];
-    if (!connected || !await connected.isSameEntry(workingDir)) throw new Error('The capture folder does not match the selected branch connection.');
+    if (!connected || !await connected.isSameEntry(workingDir)) throw new Error('The capture folder does not match the selected case connection.');
   }
   const branch = vaultState.branches.find((b) => b.branchId === input.branchId);
   if (!branch) {
-    throw new Error(`Branch "${input.branchId}" does not exist in vault.`);
+    throw new Error(`Case "${input.branchId}" does not exist in vault.`);
   }
 
   if (vaultState.damagedBranchHeads[branch.branchId]) {
@@ -183,7 +183,7 @@ export async function captureUnderLock(
 
   if (vaultState.competingHeads[branch.branchId]?.length) {
     throw new Error(
-      `Branch "${branch.name}" has competing heads (${vaultState.competingHeads[
+      `Case "${branch.name}" has competing heads (${vaultState.competingHeads[
         branch.branchId
       ].join(', ')}). Resolve repository inconsistency before capturing new versions.`
     );
@@ -191,7 +191,7 @@ export async function captureUnderLock(
 
   const parentRevisionId =
     vaultState.branchHeads[branch.branchId] ?? branch.startingRevisionId ?? null;
-  if (pendingApplication && pendingApplication.record!.plan.destinationRevisionId !== parentRevisionId) throw new Error('The pending application baseline no longer matches this branch. Inspect its provenance before saving.');
+  if (pendingApplication && pendingApplication.record!.plan.destinationRevisionId !== parentRevisionId) throw new Error('The pending application baseline no longer matches this case. Inspect its provenance before saving.');
   let baselineManifest: RevisionManifest | null = null;
 
   if (parentRevisionId) {
@@ -200,7 +200,7 @@ export async function captureUnderLock(
     );
     if (!parentRev) {
       throw new Error(
-        `Baseline version "${parentRevisionId}" referenced by branch "${branch.name}" is missing from committed history.`
+        `Baseline version "${parentRevisionId}" referenced by case "${branch.name}" is missing from committed history.`
       );
     }
     if (parentRev.integrityStatus === 'corrupted') {

@@ -145,7 +145,7 @@ test('data table: occurrences are capped (oldest first, with a count of the rest
   assert.ok(NAME_CAP >= 2);
 });
 
-test('data table: the same path on another branch is another place, and an unknown branch is named as such', () => {
+test('data table: the same path on another case is another place, and an unknown case is named as such', () => {
   const shared = sha(1);
   const state = fakeState(
     [
@@ -156,7 +156,7 @@ test('data table: the same path on another branch is another place, and an unkno
     [{ branchId: 'branch-main', name: 'Main' }, { branchId: 'case-1', name: 'Lighter collar' }],
   );
   const entry = buildRestoreData({ generatedAt: 'x', projectName: 'P', state }).files[shared]!;
-  assert.deepEqual(entry.occurrences.map((o) => [o.revisionNumber, o.branchName]), [[1, 'Main'], [2, 'Lighter collar'], [3, 'Unknown branch']]);
+  assert.deepEqual(entry.occurrences.map((o) => [o.revisionNumber, o.branchName]), [[1, 'Main'], [2, 'Lighter collar'], [3, 'Unknown case']]);
 });
 
 test('escaping: no name or title can break out of the data block, and the data reads back exactly', () => {

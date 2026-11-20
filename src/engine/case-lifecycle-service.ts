@@ -67,7 +67,7 @@ export async function changeCaseLifecycle(
       ).length !== 1
     )
       throw new Error(
-        "Project or branch identity changed. Refresh before changing the case lifecycle.",
+        "Project or case identity changed. Refresh before changing the case lifecycle.",
       );
     const branch = matches[0];
     if (branch.isMain)

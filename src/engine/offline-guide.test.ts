@@ -132,7 +132,7 @@ test('version listing: header, identity, notes, folders, files with object paths
   assert.ok(lines.includes('Project: Packaging Gripper'));
   assert.ok(lines.includes('Version: V2'));
   assert.ok(lines.includes(`Version ID: ${f.revisionIds[1]}`));
-  assert.ok(lines.includes('Branch: Main (branch ID: branch-main)'));
+  assert.ok(lines.includes('Case: Main (case ID: branch-main)'));
   assert.ok(lines.includes(`Parent version: V1 (${f.revisionIds[0]})`));
   assert.ok(lines.includes(`Saved: ${manifest.captureCompletedAt}`));
   assert.ok(lines.includes('    Why: Grip too heavy'));
@@ -204,7 +204,7 @@ test('builders are deterministic and normalise line endings, BOMs and trailing s
   );
 });
 
-test('project map: header, latest files, branches, versions, references, integrity and recovery', async () => {
+test('project map: header, latest files, cases, versions, references, integrity and recovery', async () => {
   const f = await fixture();
   const state = f.project.vaultState;
   const leaves = Object.fromEntries(Object.entries(f.project.workingPaths).map(([id, path]) => [id, path.split('/').pop()!]));
@@ -223,8 +223,8 @@ test('project map: header, latest files, branches, versions, references, integri
   assert.ok(lines.includes('    Main (Main): working/main'));
   assert.ok(lines.includes('    Lighter collar: working/Lighter collar'));
   // Branches and cases.
-  assert.ok(lines.includes('    Branch ID: branch-main'));
-  assert.ok(lines.includes(`    Branch ID: ${f.caseId}`));
+  assert.ok(lines.includes('    Case ID: branch-main'));
+  assert.ok(lines.includes(`    Case ID: ${f.caseId}`));
   assert.ok(lines.includes('    Status: hidden'));
   assert.ok(lines.includes('    Status: active'));
   assert.ok(lines.includes(`    Started from: V1 (${f.revisionIds[0]})`));

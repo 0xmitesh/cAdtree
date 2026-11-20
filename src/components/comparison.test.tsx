@@ -111,7 +111,7 @@ test("Compare keeps checksums and component identity inside a closed Technical d
   );
   assert.ok(dialog.getByRole("article", { name: `Modified: ${path}` }));
 });
-test("file-scoped comparison expands to all files, labels endpoint notes and branch names, and explains absence in both endpoints", () => {
+test("file-scoped comparison expands to all files, labels endpoint notes and case names, and explains absence in both endpoints", () => {
   const state = scenarioState("branches");
   state.revisions[7].manifest.files = state.revisions[7].manifest.files.filter(
     (f) => f.path !== path,

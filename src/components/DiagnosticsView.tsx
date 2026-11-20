@@ -61,7 +61,7 @@ export function DiagnosticsView({
         <strong>Working folder</strong>
         <p className="file-path">{workingFolderName ?? "Not connected"}</p>
         <p>
-          Open this branch’s folder in your CAD application before editing or
+          Open this case’s folder in your CAD application before editing or
           saving.
         </p>
       </div>
@@ -182,7 +182,7 @@ export function DiagnosticsView({
             {state.references?.reason ? <Notice type="error">{state.references.reason} Reference retrieval and new captures require valid reference evidence. CAD verification and recovery use their own required evidence.</Notice> : null}
             {Object.entries(state.damagedBranchHeads).map(([id, reason]) => (
               <Notice type="error" key={id}>
-                <strong>Damaged branch baseline</strong>
+                <strong>Damaged case baseline</strong>
                 <p>{reason}</p>
               </Notice>
             ))}
@@ -262,7 +262,7 @@ export function DiagnosticsView({
                 <dt>Project SHA-256</dt>
                 <dd>{state.project.payloadSha256}</dd>
               </dl>
-              <h3>Branch records</h3>
+              <h3>Case records</h3>
               {state.branches.map((b) => (
                 <dl className="technical-data" key={b.branchId}>
                   <dt>{b.name}</dt>

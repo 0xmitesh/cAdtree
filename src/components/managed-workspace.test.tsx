@@ -205,7 +205,7 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
   assert.equal(await snap(source), before);
 });
 
-test("UI surfaces missing managed leaves before branch actions and preserves read-only history", async () => {
+test("UI surfaces missing managed leaves before case actions and preserves read-only history", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
@@ -257,7 +257,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   );
 });
 
-test("managed action preflight notices a folder lost after opening, before it displays a branch form", async () => {
+test("managed action preflight notices a folder lost after opening, before it displays a case form", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");

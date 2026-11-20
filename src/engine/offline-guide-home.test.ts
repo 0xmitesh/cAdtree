@@ -138,7 +138,7 @@ test('home Readme: header, every section, the checksum commands and the format r
   assert.match(flat, /older design cases may instead be stored as <branchId>\.json with no ready marker/);
   assert.match(flat, /Main cannot be hidden\. If you are working on that case, cAdtree switches you to Main/);
   assert.match(flat, /choose Changes on the left/);
-  assert.match(flat, /one branch's versions can skip numbers/);
+  assert.match(flat, /one case's versions can skip numbers/);
   assert.match(flat, /saves the result as a new version by itself/);
   assert.match(flat, /Main versions before the case started/);
 });
@@ -146,7 +146,7 @@ test('home Readme: header, every section, the checksum commands and the format r
 test('home Readme: tutorials use the real button names and describe no feature that does not exist', () => {
   const text = buildHomeReadme({ homeName: 'Cadtree' });
   const flat = text.replace(/\s+/g, ' '); // prose is wrapped, so look for labels without line breaks
-  for (const title of ['Save a version', 'Create a design case', 'Bring an older version back onto a branch (Bring back)',
+  for (const title of ['Save a version', 'Create a design case', 'Bring an older version back onto a case (Bring back)',
     'Copy files from a design case', 'Export a copy', 'Hide a design case']) {
     assert.ok(text.split('\r\n').includes(title), `tutorial "${title}"`);
   }

@@ -98,7 +98,7 @@ async function createFromUI(
   return branch;
 }
 
-test("reopening an established branch with a damaged marker keeps its selector, graph, history, and diagnostics inspectable", async () => {
+test("reopening an established case with a damaged marker keeps its selector, graph, history, and diagnostics inspectable", async () => {
   for (const mode of ["missing", "malformed"]) {
     const ctx = await setup();
     const branch = await createFromUI(ctx, "Case A");
@@ -145,7 +145,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     fireEvent.click(ui.getByRole("button", { name: "Settings" }));
     assert.match(
       ui.container.querySelector(".settings-page")!.textContent!,
-      /Established branch "Case A" has a damaged ready marker/,
+      /Established case "Case A" has a damaged ready marker/,
     );
     assert.equal(
       (await openExistingVault(ctx.vault)).branches.find(
@@ -160,7 +160,7 @@ test("reopening an established branch with a damaged marker keeps its selector, 
   }
 });
 
-test("App creates branches, preserves Main and branch notes, and keeps graph highlighting separate from working context", async () => {
+test("App creates cases, preserves Main and case notes, and keeps graph highlighting separate from working context", async () => {
   const ctx = await setup();
   await ctx.main.writeFileBytes(["Part.SLDPRT"], new Uint8Array([3, 2]));
   fireEvent.click(
@@ -290,7 +290,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.ok(ctx.ui.getByText("Metadata and file contents verified"));
 });
 
-test("App rejects branch switching during an asynchronous scan", async () => {
+test("App rejects case switching during an asynchronous scan", async () => {
   const ctx = await setup();
   const branch = await createFromUI(ctx, "Case A");
   let release!: () => void;
@@ -323,7 +323,7 @@ test("App rejects branch switching during an asynchronous scan", async () => {
   ctx.main.setHooks({ onBeforeRead: undefined });
 });
 
-test("multiple unmodified branch labels share their actual baseline node without creating versions", async () => {
+test("multiple unmodified case labels share their actual baseline node without creating versions", async () => {
   const ctx = await setup();
   cleanup();
   const folders = { "branch-main": ctx.main };
@@ -358,7 +358,7 @@ test("multiple unmodified branch labels share their actual baseline node without
   );
 });
 
-test("branch creation shows cancellable progress and reports the incomplete folder without publishing it", async () => {
+test("case creation shows cancellable progress and reports the incomplete folder without publishing it", async () => {
   const ctx = await setup();
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {

@@ -47,7 +47,7 @@ function branchIdentity(state: VaultState, id: string) {
         branchNameKey(branch.name) === branchNameKey(matches[0].name),
     )
   )
-    throw new Error("Branch identity is missing or ambiguous.");
+    throw new Error("Case identity is missing or ambiguous.");
   return matches[0];
 }
 
@@ -143,7 +143,7 @@ export function caseActivity(
 function mainIdentity(state: VaultState) {
   const matches = state.branches.filter((branch) => branch.isMain);
   if (matches.length !== 1)
-    throw new Error("Main branch identity is missing or ambiguous.");
+    throw new Error("Main case identity is missing or ambiguous.");
   return branchIdentity(state, matches[0].branchId);
 }
 function mainEndpoint(state: VaultState): ComparisonEndpoint {

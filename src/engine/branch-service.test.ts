@@ -97,7 +97,7 @@ async function establishedBranchWithDamagedMarker(
 }
 
 for (const mode of ["missing", "malformed"] as const) {
-  test(`established branch with ${mode} ready marker remains a damaged identity with inspectable history`, async () => {
+  test(`established case with ${mode} ready marker remains a damaged identity with inspectable history`, async () => {
     const { vault, created, saved } =
       await establishedBranchWithDamagedMarker(mode);
     const before = await inventory(vault);
@@ -148,7 +148,7 @@ for (const mode of ["missing", "malformed"] as const) {
     );
   });
 
-  test(`${mode} marker does not free an established branch name for reuse`, async () => {
+  test(`${mode} marker does not free an established case name for reuse`, async () => {
     const { vault, create } = await establishedBranchWithDamagedMarker(mode);
     const before = await inventory(vault);
     await assert.rejects(create(" case a "), /already exists/);
@@ -258,7 +258,7 @@ test("ready marker field/checksum damage preserves an established identity indep
   }
 });
 
-test("committed branch identity with an unvalidated record blocks writes even if folder bindings omit it", async () => {
+test("committed case identity with an unvalidated record blocks writes even if folder bindings omit it", async () => {
   for (const mode of ["missing", "malformed"] as const) {
     const { main, vault, created, first, create } =
       await establishedBranchWithDamagedMarker(mode);
@@ -275,7 +275,7 @@ test("committed branch identity with an unvalidated record blocks writes even if
     );
     assert.ok(
       reopened.corruptedRecords.some((record) =>
-        record.reason.includes("no validated branch record"),
+        record.reason.includes("no validated case record"),
       ),
     );
     assert.ok(layoutRevisions(reopened, MAIN_BRANCH_ID).nodes.length >= 2);
@@ -288,7 +288,7 @@ test("committed branch identity with an unvalidated record blocks writes even if
           notes,
           workingFolders: bindings,
         }),
-        /committed branch identities without valid records/,
+        /committed case identities without valid records/,
       );
       await assert.rejects(
         restoreRevisionToFolder({
@@ -297,7 +297,7 @@ test("committed branch identity with an unvalidated record blocks writes even if
           revisionId: first.manifest.revisionId,
           workingFolders: bindings,
         }),
-        /committed branch identities without valid records/,
+        /committed case identities without valid records/,
       );
     }
     assert.deepEqual(await inventory(vault), before);
@@ -507,7 +507,7 @@ test("creation and capture serialize on one writer lock; cancellation while queu
   );
 });
 
-test("folder identity and ancestor checks reject overlap and require every branch connection", async () => {
+test("folder identity and ancestor checks reject overlap and require every case connection", async () => {
   const { main, vault, create, workingFolders } = await setup();
   await assert.rejects(
     create("A", undefined, { destinationParent: vault }),
@@ -567,7 +567,7 @@ test("folder identity and ancestor checks reject overlap and require every branc
   main.resolveRelativePath = originalResolve;
 });
 
-test("cancelled copies, corrupt objects, permission loss, and destination conflicts never publish ready branches", async () => {
+test("cancelled copies, corrupt objects, permission loss, and destination conflicts never publish ready cases", async () => {
   for (const failure of ["cancel", "corrupt", "permission", "conflict"]) {
     const { vault, first, parent, create } = await setup();
     const controller = new AbortController();
@@ -608,7 +608,7 @@ test("cancelled copies, corrupt objects, permission loss, and destination confli
   }
 });
 
-test("failed branch record writes leave a visible incomplete attempt; retry uses a fresh folder", async () => {
+test("failed case record writes leave a visible incomplete attempt; retry uses a fresh folder", async () => {
   const { vault, parent, create } = await setup();
   vault.setHooks({
     onBeforeWrite: (path) => {
@@ -631,7 +631,7 @@ test("failed branch record writes leave a visible incomplete attempt; retry uses
   assert.equal(state.branches.length, 2);
 });
 
-test("a saved branch survives write acknowledgement errors and reopens independently of convenience metadata", async () => {
+test("a saved case survives write acknowledgement errors and reopens independently of convenience metadata", async () => {
   const { vault, create } = await setup();
   vault.setHooks({
     onAfterWrite: (path) => {
@@ -654,7 +654,7 @@ test("a saved branch survives write acknowledgement errors and reopens independe
   );
 });
 
-test("partial branch records, partial ready markers, and cancellation before the commit point allow fresh-folder retries", async () => {
+test("partial case records, partial ready markers, and cancellation before the commit point allow fresh-folder retries", async () => {
   for (const failure of ["record", "marker", "cancel-before-ready"]) {
     const { vault, parent, create } = await setup();
     const controller = new AbortController();
@@ -698,7 +698,7 @@ test("partial branch records, partial ready markers, and cancellation before the
   }
 });
 
-test("branch records keep their historical checksum format; ready marker corruption is visible and blocks an unsafe capture", async () => {
+test("case records keep their historical checksum format; ready marker corruption is visible and blocks an unsafe capture", async () => {
   const { vault, create } = await setup();
   const created = await create();
   assert.equal(

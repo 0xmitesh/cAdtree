@@ -160,7 +160,7 @@ function orderedRevisions(state: VaultState): ReconstructedRevision[] {
 }
 
 const branchName = (state: VaultState, branchId: string): string =>
-  state.branches.find((branch) => branch.branchId === branchId)?.name ?? 'Unknown branch';
+  state.branches.find((branch) => branch.branchId === branchId)?.name ?? 'Unknown case';
 
 function revisionLabel(state: VaultState, revisionId: string): string {
   const found = state.revisions.find((revision) => revision.manifest.revisionId === revisionId);
@@ -191,7 +191,7 @@ export function buildRevisionListing(input: RevisionListingInput): string {
   const manifest = revision.manifest;
   const doc = header('version listing', `Describes version saved at: ${input.generatedAt}`);
   doc.line().kv('Project', input.projectName).kv('Version', formatRevisionNumber(manifest.displayNumber)).kv('Version ID', manifest.revisionId);
-  doc.kv('Branch', `${branchName(state, manifest.branchId)} (branch ID: ${manifest.branchId})`);
+  doc.kv('Case', `${branchName(state, manifest.branchId)} (case ID: ${manifest.branchId})`);
   doc.kv('Parent version', manifest.parentRevisionId ? revisionLabel(state, manifest.parentRevisionId) : 'none');
   doc.kv('Saved', manifest.captureCompletedAt).kv('Summary', manifest.summary);
 
@@ -313,11 +313,11 @@ export function buildProjectMap(input: ProjectMapInput): string {
   doc.line('The newest files are ordinary folders. Open them in Explorer or Finder and copy what you need.');
   for (const branch of branches) doc.line(`${oneLine(branch.name)}${branch.isMain ? ' (Main)' : ''}: ${workingPath(branch.branchId)}`, 4);
 
-  doc.section('BRANCHES AND DESIGN CASES');
+  doc.section('DESIGN CASES');
   for (const branch of branches) {
     const lifecycle = caseLifecycle(state, branch.branchId);
     doc.line(`${oneLine(branch.name)}${branch.isMain ? ' (Main)' : ''}`);
-    doc.kv('Branch ID', branch.branchId, 4).kv('Working folder', workingPath(branch.branchId), 4);
+    doc.kv('Case ID', branch.branchId, 4).kv('Working folder', workingPath(branch.branchId), 4);
     doc.kv('Status', lifecycle.status === 'unavailable' ? 'unavailable (its lifecycle records could not be read)' : lifecycle.status === 'archived' ? 'hidden' : lifecycle.status, 4);
     doc.kv('Started from', branch.startingRevisionId ? revisionLabel(state, branch.startingRevisionId) : 'the start of the project', 4);
     doc.kv('Created', branch.createdAt, 4).kv('Reason', branch.reason, 4);
@@ -459,7 +459,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     ['    .cadtree-workspace.json', "the workspace's identity record (leave alone)"],
     ['    projects/', ''],
     ['      <Project>/', 'one project'],
-    ['        _MAP cAdtree.txt', "the project's Map: branches, versions, references"],
+    ['        _MAP cAdtree.txt', "the project's Map: cases, versions, references"],
     ['        _RESTORE cAdtree.html', 'restores files or a version (use Chrome or Edge)'],
     ['        working/', ''],
     ['          main/', "Main's latest files: ordinary CAD folders and files"],
@@ -474,7 +474,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   doc.line().para(
     'Folder names are the readable names chosen in cAdtree. cAdtree identifies workspaces and projects by IDs stored ' +
       'in their records, not by their folder names. Each project also has its own short guide: the Map (_MAP ' +
-      'cAdtree.txt) lists its branches, every version and its references, and repeats how to recover without cAdtree. ' +
+      'cAdtree.txt) lists its cases, every version and its references, and repeats how to recover without cAdtree. ' +
       'The restore page (_RESTORE cAdtree.html) does the recovery for you in a web browser.',
   );
 
@@ -505,8 +505,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   steps(doc, 'Rebuild a version by hand (if the restore page is not available)', [
     'On Windows, turn on View → Show → File name extensions in File Explorer first; the renamed copy must not end in .bin.',
     "Open the project's Map, _MAP cAdtree.txt. Under VERSIONS, find the version by its number, date and summary. " +
-      "Version numbers count across the whole project and all of its design cases, so one branch's versions can skip numbers. Each " +
-      'version names its branch (Main or a design case).',
+      "Version numbers count across the whole project and all of its design cases, so one case's versions can skip numbers. Each " +
+      'version names its case (Main or a design case).',
     'Open the listing named under that version: vault/revisions/<version ID>.txt. It lists every folder and ' +
       'every file of the version with its path, size, SHA-256 checksum and the object file that holds its bytes ' +
       '(vault/objects/<first two characters of the checksum>/<checksum>.bin).',
@@ -586,11 +586,11 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'cAdtree makes a new folder for the case under working/ with every file of that version. Open that folder in ' +
       'your CAD program. To work on the case, select it under the project in the Explorer.',
   ]);
-  steps(doc, 'Bring an older version back onto a branch (Bring back)', [
-    'Select the branch in the Explorer so that it is the active branch. If it has unsaved changes, save them first: ' +
+  steps(doc, 'Bring an older version back onto a case (Bring back)', [
+    'Select the case in the Explorer so that it is the active case. If it has unsaved changes, save them first: ' +
       'the dialog offers Save my changes first.',
-    "In History, select an earlier version from that branch's history (for a design case this includes the Main versions " +
-      'before the case started) and choose Bring back onto <branch>… (for example ' +
+    "In History, select an earlier version from that case's history (for a design case this includes the Main versions " +
+      'before the case started) and choose Bring back onto <case>… (for example ' +
       '"Bring back onto Main…").',
     'The dialog lists every file that will change (for example "12 files will change"). Add a Why if you like ' +
       '(optional), close the files in your CAD program, and choose Bring back.',
@@ -598,7 +598,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'V6. To undo, bring back V5." History shows the version as brought back.',
   ]);
   steps(doc, 'Copy files from a design case', [
-    'Select the branch that should receive the files (for example Main) in the Explorer, so it is the active branch.',
+    'Select the case that should receive the files (for example Main) in the Explorer, so it is the active case.',
     'In History, select a version of the design case and choose Copy files from <case>….',
     'The files the case changed are listed and ticked; untick any you do not want. For a file changed on both sides, ' +
       'choose Keep mine or Take theirs (there is no default). Add a Why if you like (optional).',
@@ -612,7 +612,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'Choose Choose folder… and pick the folder that will hold the copy. Leave Include references ticked to also copy ' +
       'the version\'s reference attachments.',
     'Choose Export a copy. cAdtree writes a verified copy of the saved files into a new folder named ' +
-      '<Project> - <Branch> - R<nn>; reference attachments go into a References folder inside it. Nothing in your ' +
+      '<Project> - <Case> - V<number>; reference attachments go into a References folder inside it. Nothing in your ' +
       'project changes.',
   ]);
   steps(doc, 'Hide a design case', [
@@ -630,7 +630,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'only reads can ignore it, but must never write to these records.',
   );
   doc.line().para(
-    'IDs of versions, design cases (every branch except Main), references and reference versions look like ' +
+    'IDs of versions, design cases (every case except Main), references and reference versions look like ' +
       'YYYYMMDD-HHMMSS-xxxxxx: the UTC time, then six random lowercase letters or digits. Never infer order from an ID: ' +
       'the order of versions comes from parentRevisionId links and the recorded times. Main is always branch-main. ' +
       'Home, workspace, registration, project and component IDs are UUIDs with a prefix (home-, workspace-, ' +
@@ -664,7 +664,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'origin: "create", "import" or "adoption"',
     'ready.json (same folder): marks the project as published',
   ]);
-  record('projects/<Project>/.cadtree/branches/<branchId>.json', 'Where one branch keeps its working files.', [
+  record('projects/<Project>/.cadtree/branches/<branchId>.json', 'Where one case keeps its working files.', [
     'branchId, projectId, workspaceId, createdAt',
     'workingPath: only its last part, the folder name under working/, is used',
   ]);
@@ -673,12 +673,12 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   record('project.json', 'The project.', ['projectId, name, createdAt']);
   record(
     'branches/branch-main.json and branches/<branchId>.branch.json',
-    'One branch: Main, or a design case. A design case counts only when <branchId>.ready.json exists too; Main has no marker.',
+    'One case: Main, or a design case. A design case counts only when <branchId>.ready.json exists too; Main has no marker.',
     [
       'branchId, projectId, name, reason, createdAt, isMain',
       'older design cases may instead be stored as <branchId>.json with no ready marker, like Main',
       'startingRevisionId: the version a design case started from (null for Main)',
-      '.ready.json: branchId, projectId and recordSha256 (the SHA-256 of the branch record)',
+      '.ready.json: branchId, projectId and recordSha256 (the SHA-256 of the case record)',
     ],
   );
   record('revisions/<revisionId>.manifest.json', 'One saved version.', [
@@ -717,7 +717,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'changes stayed in the case\'s folder)',
     'The record with the highest sequence is current. A case without records is active.',
   ]);
-  record('applications/<branchId>/<operationId>/', 'One Bring back or Copy files operation onto a branch.', [
+  record('applications/<branchId>/<operationId>/', 'One Bring back or Copy files operation onto a case.', [
     'plan.json: operationId, createdAt, sourceBranchId, review (mode "merge" (Copy files) or "revert" (Bring ' +
       'back); sourceRevisionId, destinationBranchId, reason), plan (the file actions)',
     'events/<number>.json: what happened, in order (kind, at); before/ and source/ hold numbered backups of files',

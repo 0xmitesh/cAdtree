@@ -649,7 +649,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       )
     )
       throw new Error(
-        "This branch is no longer available. Return to the workspace and try again.",
+        "This case is no longer available. Return to the workspace and try again.",
       );
     const preferred =
       requestedBranchId ??
@@ -798,7 +798,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           )
         )
           throw new Error(
-            "This branch is no longer available. Return to the workspace and try again.",
+            "This case is no longer available. Return to the workspace and try again.",
           );
         if (!context.current()) return;
         setWorkspace(current);

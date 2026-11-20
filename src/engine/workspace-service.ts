@@ -156,7 +156,7 @@ function workingLeaf(storedPath: string): string {
     stored[2] !== "working"
   )
     throw new Error(
-      "Working location must identify a branch leaf, not a shared container.",
+      "Working location must identify a case leaf, not a shared container.",
     );
   return stored[3];
 }
@@ -323,18 +323,18 @@ export async function resolveManagedProject(
           `${idSegment(branch.branchId)}.json`,
         ]),
       );
-      checkRecord(raw, "branch location");
+      checkRecord(raw, "case location");
       requireStrings(
         raw,
         ["workspaceId", "projectId", "branchId", "workingPath", "createdAt"],
-        "Branch location",
+        "Case location",
       );
       if (
         raw.workspaceId !== workspace.workspaceId ||
         raw.projectId !== record.projectId ||
         raw.branchId !== branch.branchId
       )
-        throw new Error("Branch location identity mismatch.");
+        throw new Error("Case location identity mismatch.");
       // The stored path records where the leaf was created; only its shape and leaf
       // name matter. The actual location is always under this project's working/.
       const path = `${containerPath}/working/${workingLeaf(String(raw.workingPath))}`;
@@ -344,7 +344,7 @@ export async function resolveManagedProject(
           (other) => other.toLowerCase() === path.toLowerCase(),
         )
       )
-        throw new Error("Case-insensitive branch location collision.");
+        throw new Error("Two case folders differ only in capital letters.");
       workingPaths[branch.branchId] = path;
       const dir = await resolve(root, path, `${containerPath}/working`);
       if ((await dir.queryPermission("read")) !== "granted")
@@ -369,7 +369,7 @@ export async function resolveManagedProject(
     Object.values(vaultState.competingHeads).some((heads) => heads.length)
   )
     issues.push(
-      "Vault branch/history integrity needs attention. Inspect History and Settings; managed writes are blocked.",
+      "Vault case/history integrity needs attention. Inspect History and Settings; managed writes are blocked.",
     );
   return {
     record,
@@ -826,7 +826,7 @@ async function writeBranchLocation(
 ) {
   const relative = await root.resolveRelativePath(workingDir);
   if (!relative)
-    throw new Error("The branch folder is outside the authorized workspace.");
+    throw new Error("The case folder is outside the authorized workspace.");
   const workingPath = relative.join("/");
   managedPath(workingPath, `${project.containerPath}/working`);
   const value = seal({
@@ -937,17 +937,17 @@ export async function importProject(
     const leaves = new Set<string>();
     for (const branch of state.branches) {
       const location = JSON.parse(await source.readFileText(['.cadtree', 'branches', `${idSegment(branch.branchId)}.json`]));
-      checkRecord(location, 'imported branch location');
-      requireStrings(location, ['workingPath'], 'Imported branch');
-      if (location.projectId !== record.projectId || location.workspaceId !== record.workspaceId || location.branchId !== branch.branchId) throw new Error('Imported branch location identity mismatch.');
+      checkRecord(location, 'imported case location');
+      requireStrings(location, ['workingPath'], 'Imported case');
+      if (location.projectId !== record.projectId || location.workspaceId !== record.workspaceId || location.branchId !== branch.branchId) throw new Error('Imported case location identity mismatch.');
       const leaf = workingLeaf(String(location.workingPath));
-      if (leaves.has(leaf.toLowerCase())) throw new Error('Imported branch locations collide (case-insensitive).');
+      if (leaves.has(leaf.toLowerCase())) throw new Error('Imported case folders differ only in capital letters.');
       leaves.add(leaf.toLowerCase());
       folders[branch.branchId] = await source.getDirectory(['working', leaf]);
     }
     return adoptProject(root, vault, folders, options);
   }
-  if ((await source.hasFile(['project.json']) || await source.hasDirectory(['completed'])) && await source.hasDirectory(['revisions'])) throw new Error('Select the complete project folder, including working branches; a vault alone cannot be imported as CAD files.');
+  if ((await source.hasFile(['project.json']) || await source.hasDirectory(['completed'])) && await source.hasDirectory(['revisions'])) throw new Error('Select the complete project folder, including working cases; a vault alone cannot be imported as CAD files.');
   return initializeManagedProject(root, name, options, source);
 }
 

@@ -1,6 +1,6 @@
 import { pickFile, showAllFiles, fileInput } from "./file-picker";
 import { test, expect } from "@playwright/test";
-test("actual App: file history follows parents across branches, retains deleted paths, and preserves working context", async ({
+test("actual App: file history follows parents across cases, retains deleted paths, and preserves working context", async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -130,7 +130,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   ).toContainText("R10");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page
-    .getByRole("button", { name: "Show all branches", exact: true })
+    .getByRole("button", { name: "Show all cases", exact: true })
     .click();
   await page.getByRole("button", { name: /V14:/ }).click();
   await expect(

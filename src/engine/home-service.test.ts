@@ -73,7 +73,7 @@ async function existing() {
   );
   return { root, project, first };
 }
-test("three workspaces with multiple projects rediscover from disk alone; scans and histories stay in branch leaves", async () => {
+test("three workspaces with multiple projects rediscover from disk alone; scans and histories stay in case leaves", async () => {
   const root = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(root);
   const ids = new Set<string>();
@@ -117,7 +117,7 @@ test("three workspaces with multiple projects rediscover from disk alone; scans 
     }
   }
 });
-test("workspace adoption preserves every source byte, relative layout, identity, empty directory, and uncaptured branch edit", async () => {
+test("workspace adoption preserves every source byte, relative layout, identity, empty directory, and uncaptured case edit", async () => {
   const { root: original, project, first } = await existing();
   const before = await snapshot(original);
   const home = new InMemoryFileSystemAdapter("Cadtree");

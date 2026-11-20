@@ -238,7 +238,7 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
   assert.equal(reopenedState.revisions[1].manifest.displayNumber, 2);
 });
 
-test('Regression Fix 1: Unreadable or structurally malformed committed manifests are preserved as damaged and block unsafe branch captures', async () => {
+test('Regression Fix 1: Unreadable or structurally malformed committed manifests are preserved as damaged and block unsafe case captures', async () => {
   const root = new InMemoryFileSystemAdapter('fix1-disk');
   const workingDir = await root.getDirectory(['Working'], { create: true });
   const vaultDir = (await root.getDirectory(['Vault'], {

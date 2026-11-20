@@ -58,22 +58,22 @@ export class BranchCreationError extends Error {
 }
 function checkCancelled(signal?: AbortSignal) {
   if (signal?.aborted)
-    throw new DOMException("Branch creation cancelled.", "AbortError");
+    throw new DOMException("Case creation cancelled.", "AbortError");
 }
 function validateName(state: VaultState, name: string) {
-  if (!branchNameKey(name)) throw new Error("Branch name is required.");
+  if (!branchNameKey(name)) throw new Error("Case name is required.");
   if (
     state.branches.some((b) => branchNameKey(b.name) === branchNameKey(name))
   ) {
     throw new Error(
-      `A branch named "${name.trim()}" already exists. Choose a different name.`,
+      `A case named "${name.trim()}" already exists. Choose a different name.`,
     );
   }
   if (
     state.corruptedRecords.some((r) => r.recordPath.startsWith("branches/"))
   ) {
     throw new Error(
-      "A branch record is damaged. Restore that record before adding another branch.",
+      "A case record is damaged. Restore that record before adding another case.",
     );
   }
 }
@@ -104,7 +104,7 @@ export async function createDesignBranch(
   const initial = await openExistingVault(vaultDir);
   validateName(initial, name);
   if (!reason)
-    throw new Error("Add a short engineering reason for this branch.");
+    throw new Error("Add a short engineering reason for this case.");
   onProgress?.({
     phase: "acquiring_lock",
     processedFiles: 0,
@@ -211,14 +211,14 @@ export async function createDesignBranch(
       await validateDirectoryIsolation(
         workingDir,
         vaultDir,
-        "New branch working folder",
+        "New case working folder",
         "Version vault",
       );
       for (const branch of state.branches) {
         await validateDirectoryIsolation(
           workingDir,
           workingFolders[branch.branchId]!,
-          "New branch working folder",
+          "New case working folder",
           `"${branch.name}" working folder`,
         );
       }
@@ -239,7 +239,7 @@ export async function createDesignBranch(
         totalFiles: source.files.length,
         processedBytes: 0,
         totalBytes: source.files.reduce((n, f) => n + f.size, 0),
-        message: "Checking the completed branch inventory before publication…",
+        message: "Checking the completed case inventory before publication…",
       });
       const inventory = await enumerateWorkingFolder(workingDir, {
         signal,
@@ -251,7 +251,7 @@ export async function createDesignBranch(
             totalFiles: source.files.length,
             processedBytes: bytes,
             totalBytes: source.files.reduce((n, f) => n + f.size, 0),
-            message: `Checking branch file ${path}…`,
+            message: `Checking case file ${path}…`,
           }),
       });
       const expected = source.files
@@ -270,7 +270,7 @@ export async function createDesignBranch(
           JSON.stringify([...inventory.directories].sort())
       ) {
         throw new Error(
-          "The restored working copy changed or contains unexpected files/directories. Branch was not published.",
+          "The restored working copy changed or contains unexpected files/directories. Case was not published.",
         );
       }
       await validateWorkingFolderBindings(state, vaultDir, workingFolders);
@@ -297,11 +297,11 @@ export async function createDesignBranch(
       try {
         await vaultDir.writeFileText(recordPath, text, { exclusive: true });
       } catch (error) {
-        publicationWarning = `Branch record write acknowledgement failed: ${error instanceof Error ? error.message : String(error)}`;
+        publicationWarning = `Case record write acknowledgement failed: ${error instanceof Error ? error.message : String(error)}`;
       }
       if ((await vaultDir.readFileText(recordPath)) !== text)
         throw new Error(
-          "Branch record read-back verification failed. No ready marker was published.",
+          "Case record read-back verification failed. No ready marker was published.",
         );
       const readyPath = branchReadyPath(branchId);
       const readyText = JSON.stringify({
@@ -315,7 +315,7 @@ export async function createDesignBranch(
         totalFiles: source.files.length,
         processedBytes: inventory.totalBytes,
         totalBytes: inventory.totalBytes,
-        message: "Publishing the verified design branch…",
+        message: "Publishing the verified design case…",
       });
       checkCancelled(signal);
       publicationAttempted = true;
@@ -323,11 +323,11 @@ export async function createDesignBranch(
         await vaultDir.writeFileText(readyPath, readyText, { exclusive: true });
       } catch (error) {
         // A close/acknowledgement can fail after the full record reached storage.
-        publicationWarning = `The branch record was saved, but its write acknowledgement failed: ${error instanceof Error ? error.message : String(error)}`;
+        publicationWarning = `The case record was saved, but its write acknowledgement failed: ${error instanceof Error ? error.message : String(error)}`;
       }
       if ((await vaultDir.readFileText(readyPath)) !== readyText)
         throw new Error(
-          "Branch ready marker read-back verification failed. Reopen the vault to inspect its publication status.",
+          "Case ready marker read-back verification failed. Reopen the vault to inspect its publication status.",
         );
       // The verified ready marker is the commit point; cancellation after it is success.
       const updated: VaultState = {

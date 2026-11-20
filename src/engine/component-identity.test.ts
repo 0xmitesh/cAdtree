@@ -75,7 +75,7 @@ test('ambiguous hash matches remain suggestions and unconfirmed delete/add recei
   const saved = await f.save();
   assert.ok(saved.vaultState.components!.revisions[saved.revision.manifest.revisionId].files.every(file => file.componentId !== f.componentId));
 });
-test('branch origins preserve identities without creating a version and edits remain independent', async () => {
+test('case origins preserve identities without creating a version and edits remain independent', async () => {
   const f = await fixture();
   const branch = await createDesignBranch({ vaultDir: f.vault, destinationParent: new InMemoryFileSystemAdapter('Cases'), workingFolders: f.folders, sourceRevisionId: f.first.revision.manifest.revisionId, name: 'Alternative', reason: 'Investigate' });
   assert.equal(branch.vaultState.revisions.length, 1);
@@ -103,7 +103,7 @@ test('deletion followed by same-path same-byte reappearance establishes a differ
   assert.notEqual(mapping(saved.vaultState, saved.revision.manifest.revisionId, 'caliper.SLDPRT'), f.componentId);
   assert.equal(historicalComponents(saved.vaultState).length, 2);
 });
-test('capture rejects stale bytes, baseline and branch decisions and one-to-many associations before publication', async () => {
+test('capture rejects stale bytes, baseline and case decisions and one-to-many associations before publication', async () => {
   const f = await fixture();
   await f.working.removeEntry(['caliper.SLDPRT']);
   await f.working.writeFileText(['cliper.SLDPRT'], 'initial bytes');

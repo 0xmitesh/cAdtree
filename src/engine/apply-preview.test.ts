@@ -248,7 +248,7 @@ test("source additions, deletions, add/add and modify/delete conflicts use prese
     "case-add",
   );
 });
-test("nested cases find the nearest validated shared ancestor, not the source parent, branch root or highest project version", () => {
+test("nested cases find the nearest validated shared ancestor, not the source parent, case root or highest project version", () => {
   const { state, base } = fixture();
   const c1 = revision("c1", "base", 2, "case"),
     d1 = revision("d1", "c1", 3, "case"),
@@ -358,11 +358,11 @@ test("readiness requires source actions and valid selections (a reason is option
   assert.equal(JSON.stringify(state), before);
 });
 
-test("older version of the same branch: merge says use Bring back, revert uses the baseline as base, latest version is rejected in both modes", () => {
+test("older version of the same case: merge says use Bring back, revert uses the baseline as base, latest version is rejected in both modes", () => {
   const { state } = fixture();
   const merge = prepareApplyPreview(state, "base", "branch-main");
   assert.equal(merge.status, "unavailable");
-  assert.match((merge as { reason: string }).reason, /earlier version in this branch.s history.*Bring back/);
+  assert.match((merge as { reason: string }).reason, /earlier version in this case.s history.*Bring back/);
   const r = prepareApplyPreview(state, "base", "branch-main", "revert");
   if (r.status !== "available") throw new Error(r.reason);
   assert.equal(r.context.mode, "revert");
@@ -385,7 +385,7 @@ test("older version of the same branch: merge says use Bring back, revert uses t
   }
   const caseRevert = prepareApplyPreview(state, "source", "branch-main", "revert");
   assert.equal(caseRevert.status, "unavailable");
-  assert.match((caseRevert as { reason: string }).reason, /not an earlier version in this branch.s history/);
+  assert.match((caseRevert as { reason: string }).reason, /not an earlier version in this case.s history/);
 });
 
 // ---- Folder changes: rows, kept removals and plan shape ----

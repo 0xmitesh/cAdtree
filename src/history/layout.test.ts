@@ -30,7 +30,7 @@ test("topology follows parents, never timestamps or display numbers; input is no
   state.revisions.reverse();
   assert.deepEqual(layoutRevisions(state, "branch-main"), graph);
 });
-test("branches share ancestry and keep their own lanes", () => {
+test("cases share ancestry and keep their own lanes", () => {
   const graph = layoutRevisions(scenarioState("branches"), "branch-main");
   assert.ok(graph.lanes >= 2);
   assert.deepEqual([...ancestryOf(graph, "p2")], ["p2", "p1", "r2", "r1"]);
@@ -131,7 +131,7 @@ test("a captured copy adds a secondary link without touching parents, lanes or r
   // Copies are not ancestry.
   assert.equal(ancestryOf(graph, "r6").has("p2"), false);
 });
-test("a bring back links to the earlier version of the same branch", () => {
+test("a bring back links to the earlier version of the same case", () => {
   const graph = layoutRevisions(
     withCopy(scenarioState("branches"), "r6", "r3", "revert", "captured", "branch-main"),
     "branch-main",

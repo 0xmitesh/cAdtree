@@ -77,7 +77,7 @@ interface Candidate {
 /** The embedded table: every file of every complete revision and every reference version, keyed by checksum. */
 export function buildRestoreData(input: RestorePageInput): RestoreData {
   const { state } = input;
-  const branchName = (branchId: string): string => state.branches.find((branch) => branch.branchId === branchId)?.name ?? 'Unknown branch';
+  const branchName = (branchId: string): string => state.branches.find((branch) => branch.branchId === branchId)?.name ?? 'Unknown case';
   const bySha = new Map<string, Candidate[]>();
   const add = (sha256: string, candidate: Candidate): void => {
     const list = bySha.get(sha256);

@@ -527,7 +527,7 @@ test("capture failure retains provenance; failure after completion publication r
     );
   }
 });
-test("malformed application records block writes only for the affected branch and retain evidence", async () => {
+test("malformed application records block writes only for the affected case and retain evidence", async () => {
   const f = await fixture();
   const op = await f.apply();
   await f.vault.writeFileText(
@@ -1145,7 +1145,7 @@ test("revert preview: older version gives replace/delete/add rows, all available
   );
   const merge = await f.prepareRows(f.ids.r1);
   assert.equal(merge.status, "unavailable");
-  assert.match((merge as any).reason, /earlier version in this branch.s history.*Bring back/);
+  assert.match((merge as any).reason, /earlier version in this case.s history.*Bring back/);
   for (const mode of ["merge", "revert"] as const) {
     const latest = await f.prepareRows(f.ids.r3, mode);
     assert.equal(latest.status, "unavailable");
@@ -1175,7 +1175,7 @@ test("revert is rejected for a version that is not an ancestor (case version)", 
   const caseId = saved.revision.manifest.revisionId;
   const revert = await f.prepareRows(caseId, "revert");
   assert.equal(revert.status, "unavailable");
-  assert.match((revert as any).reason, /not an earlier version in this branch.s history/);
+  assert.match((revert as any).reason, /not an earlier version in this case.s history/);
   assert.equal((await f.prepareRows(caseId, "merge")).status, "available");
 });
 

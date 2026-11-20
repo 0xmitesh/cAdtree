@@ -173,7 +173,7 @@ export function RevisionGraph({
           className="branch-legend"
           aria-label={
             fileRecords
-              ? "Filter file history by branch ancestry"
+              ? "Filter file history by case ancestry"
               : "Show a case's versions"
           }
         >
@@ -190,9 +190,9 @@ export function RevisionGraph({
               }
               title={
                 fileRecords
-                  ? `Filter to ${branch.name} ancestry; does not switch the working branch`
+                  ? `Filter to ${branch.name} ancestry; does not switch the working case`
                   : branch.current
-                    ? `Show ${branch.name} versions · current branch`
+                    ? `Show ${branch.name} versions · current case`
                     : `Show ${branch.name} versions`
               }
               onClick={() => toggleBranch(branch.id)}
@@ -210,15 +210,15 @@ export function RevisionGraph({
       </div>
       {fileRecords ? (
         <p className="file-history-help muted small">
-            Recorded file and confirmed name changes are shown. Branch buttons filter ancestry;
-          they do not switch the working branch. Origin markers provide context.
+            Recorded file and confirmed name changes are shown. Case buttons filter ancestry;
+          they do not switch the working case. Origin markers provide context.
         </p>
       ) : null}
       {fileRecords && !graph.nodes.length ? (
         <div className="file-history-empty" role="status">
           No recorded history for this file within{" "}
-          {highlightedBranch?.name ?? "the chosen branch filter"}. Try another
-          branch or show all branches.
+          {highlightedBranch?.name ?? "the chosen case filter"}. Try another
+          case or show all cases.
         </div>
       ) : null}
       <div
@@ -345,7 +345,7 @@ export function RevisionGraph({
                       ref={(element) => register(node.id, element)}
                       className="graph-hit"
                       aria-pressed={selected}
-                      aria-label={`${formatRevisionNumber(node.revision.manifest.displayNumber)}: ${node.revision.manifest.summary}${fileRecords ? `, ${fileRecords.get(node.id)?.status}` : ""}${node.latest ? (fileRecords ? ", current branch file state" : ", latest on current branch") : ""}${node.warnings.length ? ", needs attention" : ""}${copyNotes(graph, node.id).map((note) => `, ${note}`).join("")}`}
+                      aria-label={`${formatRevisionNumber(node.revision.manifest.displayNumber)}: ${node.revision.manifest.summary}${fileRecords ? `, ${fileRecords.get(node.id)?.status}` : ""}${node.latest ? (fileRecords ? ", current case file state" : ", latest on current case") : ""}${node.warnings.length ? ", needs attention" : ""}${copyNotes(graph, node.id).map((note) => `, ${note}`).join("")}`}
                       title={copyNotes(graph, node.id).join(" · ") || undefined}
                       onClick={() => onSelect(node.id)}
                       onKeyDown={(event) => keyboard(event, index)}
@@ -417,8 +417,8 @@ export function RevisionGraph({
                             onClick={() => toggleBranch(branch.id)}
                             title={
                               fileRecords
-                                ? `Filter to ${branch.name} ancestry; does not switch the working branch`
-                                : `Show ${branch.name} versions${branch.current ? " · active working branch" : ""}`
+                                ? `Filter to ${branch.name} ancestry; does not switch the working case`
+                                : `Show ${branch.name} versions${branch.current ? " · active working case" : ""}`
                             }
                           >
                             <GitBranch size={11} />
@@ -504,7 +504,7 @@ export function RevisionGraph({
               className="text-button"
               onClick={() => onHighlightBranch(null)}
             >
-              {fileRecords ? "Show all branches" : "Clear highlight"}
+              {fileRecords ? "Show all cases" : "Clear highlight"}
             </button>
           ) : (
             "Select a version to inspect · ↑ ↓ to navigate"

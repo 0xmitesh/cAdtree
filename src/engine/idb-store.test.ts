@@ -16,7 +16,7 @@ import {
   bindWorkspaceWindowsPathToRoot,
 } from "./idb-store";
 
-test("remembering and selecting a branch retains every other binding; clearing IDB removes convenience data only", async () => {
+test("remembering and selecting a case retains every other binding; clearing IDB removes convenience data only", async () => {
   const handle = (name: string) =>
     ({ name, kind: "directory" }) as FileSystemDirectoryHandle;
   const project = {
@@ -128,7 +128,7 @@ test("Windows location preferences are separate per workspace identity and disap
   assert.equal(await getRememberedWorkspace(), null);
 });
 
-test("managed convenience storage remembers one root and preferences, with no authoritative project or branch catalogue", async () => {
+test("managed convenience storage remembers one root and preferences, with no authoritative project or case catalogue", async () => {
   const rootHandle = {
     name: "Workbench",
     kind: "directory",

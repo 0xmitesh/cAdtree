@@ -126,14 +126,14 @@ export function useCaptureActions({
     } else state = await openExistingVault(vault);
     if (!folder)
       throw new Error(
-        "Connect the selected branch’s working folder before scanning.",
+        "Connect the selected case’s working folder before scanning.",
       );
     if (!context.current()) return;
     applyVaultState(state);
     await validateWorkingFolderBindings(state, vault, folders, false);
     if ((await folder.queryPermission("read")) !== "granted")
       throw new Error(
-        "Reconnect the selected branch’s working folder to restore read permission.",
+        "Reconnect the selected case’s working folder to restore read permission.",
       );
     const baseline = getBranchBaseline(state, branchId);
     const result = await scanBranchChanges(folder, branchId, baseline, {
@@ -200,7 +200,7 @@ export function useCaptureActions({
           message: `${renamed ? `${renamed} ` : ""}${
             result.hasChanges
               ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
-              : "This working folder matches its branch’s saved version."
+              : "This working folder matches its case’s saved version."
           }`,
         });
     });
@@ -220,7 +220,7 @@ export function useCaptureActions({
   ) => {
     if (!workingDir || !vaultDir || branchId !== activeBranchId)
       throw new Error(
-        "The active branch connection changed. Scan again before saving.",
+        "The active case connection changed. Scan again before saving.",
       );
     await perform(
       "capture",

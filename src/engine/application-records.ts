@@ -565,7 +565,7 @@ export async function readApplicationOperations(
             "*",
             branch.name,
             `applications/${branch.name}`,
-            "Unrecognized application branch entry. Manual inspection required.",
+            "Unrecognized application case entry. Manual inspection required.",
           ),
         );
         continue;

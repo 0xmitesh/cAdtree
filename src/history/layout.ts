@@ -229,16 +229,16 @@ export function layoutRevisions(
       : candidateHead;
   if (candidateHead && !latestId)
     warnings.push(
-      "Latest version cannot be established while the current branch history needs attention.",
+      "Latest version cannot be established while the current case history needs attention.",
     );
   if (latestId && !records.has(latestId))
-    warnings.push("The current branch head is missing from readable history.");
+    warnings.push("The current case head is missing from readable history.");
   for (const [bid, heads] of Object.entries(state.competingHeads)) {
     if (heads.length)
       warnings.push(
-        `${allBranches.find((b) => b.branchId === bid)?.name ?? "Unknown branch"} has ${heads.length} competing heads. Saving is blocked until resolved.`,
+        `${allBranches.find((b) => b.branchId === bid)?.name ?? "Unknown case"} has ${heads.length} competing heads. Saving is blocked until resolved.`,
       );
-    for (const id of heads) warn(id, "Competing branch head");
+    for (const id of heads) warn(id, "Competing case head");
   }
   const nodes = ordered.reverse().map((id, row) => {
     const revision = records.get(id)!;

@@ -224,7 +224,7 @@ export async function rememberBranchConnection(
     const store = tx.objectStore(STORE_BINDINGS);
     const request = store.get(project.projectId);
     tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember this branch connection.')); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember this case connection.')); };
     request.onsuccess = () => {
       const previous = request.result as RememberedProjectBinding | undefined;
       const updated = { ...previous, ...project, activeBranchId: branchId, lastOpenedAt: new Date().toISOString(),

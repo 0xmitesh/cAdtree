@@ -181,7 +181,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   assert.equal(ui.queryByRole("dialog"), null);
 });
 
-test("workspace switching isolates scans, branches and project/branch drafts without additional pickers", async () => {
+test("workspace switching isolates scans, cases and project/branch drafts without additional pickers", async () => {
   const root = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(root);
   const a = await createHomeWorkspace(root, "cam 2");
@@ -404,7 +404,7 @@ test("home groups retained migration attempts and opens the managed workspace wh
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 1);
 });
 
-test("sidebar explorer expands independently, navigates projects and branches across workspaces, and retains scoped drafts", async () => {
+test("sidebar explorer expands independently, navigates projects and cases across workspaces, and retains scoped drafts", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const cam = await createHomeWorkspace(home, "cam 2");

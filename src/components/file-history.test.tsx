@@ -113,7 +113,7 @@ test("file history header counts changes plainly and mentions unavailable versio
     /to this file · 1 version could not be compared/,
   );
 });
-test("empty branch scope is explained and project switching resets file and branch scope", () => {
+test("empty case scope is explained and project switching resets file and case scope", () => {
   const state = scenarioState("branches");
   state.revisions.forEach((r) => {
     r.manifest.files = r.manifest.files.filter((f) => f.path !== path);

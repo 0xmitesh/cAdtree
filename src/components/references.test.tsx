@@ -40,7 +40,7 @@ test('reference browsing is one search box without mutation controls or project 
   const ui = render(<ReferencesView state={f.state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async (id, version) => {
     copies.push((await retrieveReferenceAttachment(f.vault, f.state.project.projectId, id, version)).bytes);
   }} />);
-  assert.equal(ui.queryAllByRole('combobox').length, 0, 'no Branch or Part / file filters');
+  assert.equal(ui.queryAllByRole('combobox').length, 0, 'no Case or Part / file filters');
   assert.equal(ui.queryByRole('combobox', { name: 'Branch' }), null);
   assert.equal(ui.queryByRole('combobox', { name: 'Part / file' }), null);
   for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future versions']) assert.equal(ui.queryByRole('button', { name }), null);

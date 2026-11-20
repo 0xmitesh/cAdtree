@@ -64,7 +64,7 @@ test('selected exports preserve relative paths by default, are partial, and do n
   assert.equal(result.filesCount, 1);
 });
 
-test('labels use the selected version’s recorded branch and project-wide number, retaining extension and saved content', async () => {
+test('labels use the selected version’s recorded case and project-wide number, retaining extension and saved content', async () => {
   const f = await fixture();
   await f.working.writeFileText(['Assembly.SLDASM'], 'Main version two');
   await captureRevision(f.working, f.vault, { branchId: 'branch-main', summary: 'Main R2', notes, workingFolders: f.folders });
@@ -247,7 +247,7 @@ test('a reserved device-name base gets the standard counter, stays within 64 and
   assert.equal(await suggestReviewExportFolder(f.parent, base), base + ' (3)');
 });
 
-test('truncation of project and branch parts strips a trailing space or dot', () => {
+test('truncation of project and case parts strips a trailing space or dot', () => {
   const project = 'A'.repeat(27) + ' . tail', branch = 'B'.repeat(23) + ' . tail';
   assert.equal(exportFolderBaseName(project, branch, 'V1'), 'A'.repeat(27) + ' - ' + 'B'.repeat(23) + ' - V1');
 });
