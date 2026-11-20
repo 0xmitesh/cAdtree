@@ -225,7 +225,7 @@ export function ProjectViews({
           <ChangesCaptureView
             vaultState={vaultState}
             draftCache={draftCache}
-            draftKey={`${managedWorkspaceKey ?? workspace?.root.name ?? "external"}:${workspace?.identity.workspaceId ?? "external"}:${vaultState.project.projectId}:${branch.branchId}`}
+            draftKey={`${managedWorkspaceKey}:${workspace?.identity.workspaceId}:${vaultState.project.projectId}:${branch.branchId}`}
             activeBranchId={branch.branchId}
             workingFolderName={
               branch.branchId === activeBranchId
@@ -364,7 +364,6 @@ export function ProjectViews({
       </div>
       <div hidden={activeTab !== "diagnostics"}>
         <DiagnosticsView
-          managed={Boolean(managedProject)}
           vaultState={vaultState}
           isVerifyingAll={isVerifyingAll}
           onVerifyAllObjects={handleVerifyAllObjects}

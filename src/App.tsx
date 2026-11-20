@@ -745,39 +745,24 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     await perform(
       "connect",
       async (context) => {
-        let current: WorkspaceState;
-        if (homeWorkspace && home) {
-          if ((await home.root.requestPermission("readwrite")) !== "granted")
-            throw new Error("Reconnect the Cadtree home to renew access.");
-          const discovered = await openHome(home.root);
-          if (discovered.identity.homeId !== home.identity.homeId)
-            throw new Error(
-              "The Cadtree home changed. Reopen it.",
-            );
-          const chosen = discovered.workspaces.find(
-            (item) => item.key === homeWorkspace.key,
+        if (!home) throw new Error("Open a Cadtree home first.");
+        if ((await home.root.requestPermission("readwrite")) !== "granted")
+          throw new Error("Reconnect the Cadtree home to renew access.");
+        const discovered = await openHome(home.root);
+        if (discovered.identity.homeId !== home.identity.homeId)
+          throw new Error("The Cadtree home changed. Reopen it.");
+        const chosen = discovered.workspaces.find(
+          (item) => item.key === homeWorkspace.key,
+        );
+        if (
+          !chosen?.workspace ||
+          chosen.workspaceId !== homeWorkspace.workspaceId
+        )
+          throw new Error(
+            "This workspace is unavailable. Return to the home page to see its connections.",
           );
-          if (
-            !chosen?.workspace ||
-            chosen.workspaceId !== homeWorkspace.workspaceId
-          )
-            throw new Error(
-              "This workspace is unavailable. Return to the home page to see its connections.",
-            );
-          current = chosen.workspace;
-          if (context.current()) setHome(discovered);
-        } else {
-          if (!workspace) throw new Error("Choose a workspace first.");
-          if (
-            (await workspace.root.requestPermission("readwrite")) !== "granted"
-          )
-            throw new Error("Reconnect the workspace to renew access.");
-          current = await openWorkspace(workspace.root);
-          if (current.identity.workspaceId !== workspace.identity.workspaceId)
-            throw new Error(
-              "The workspace changed. Open the intended workspace again.",
-            );
-        }
+        const current = chosen.workspace;
+        if (context.current()) setHome(discovered);
         const fresh = current.projects.find(
           (project) => project.containerPath === entry.containerPath,
         );
@@ -802,7 +787,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           );
         if (!context.current()) return;
         setWorkspace(current);
-        setManagedWorkspaceKey(homeWorkspace?.key ?? null);
+        setManagedWorkspaceKey(homeWorkspace.key);
         setHomeView(false);
         await activateManaged(current, project, context, "", branchId);
       },
@@ -1226,7 +1211,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const workingFileResolver = (branchId: string, path: string) => async () => {
     if (!workspace || !managedProject)
       throw new Error(
-        "Full local file paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
+        "File path unavailable. Open the project first.",
       );
     const location = await resolveWorkingFilePath(
       workspace.root,
@@ -1242,7 +1227,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const workingFolderResolver = (branchId: string) => async () => {
     if (!workspace || !managedProject)
       throw new Error(
-        "Full local folder paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
+        "Folder path unavailable. Open the project first.",
       );
     const location = await resolveWorkingFolderPath(
       workspace.root,
@@ -1258,7 +1243,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const projectFolderResolver = (relative: string) => async () => {
     if (!workspace || !managedProject)
       throw new Error(
-        "Full local folder paths are unavailable for external projects. Bring this project into a workspace to enable path shortcuts.",
+        "Folder path unavailable. Open the project first.",
       );
     const project = await resolveManagedProject(workspace.root, managedProject.record.containerPath);
     if (project.record.workspaceId !== workspace.identity.workspaceId || !project.ready || project.issues.length)
@@ -1290,7 +1275,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     projectView,
     busy,
     onWorkspace: async (entry) => {
-      if (entry && entry.key !== managedWorkspaceKey)
+      if (entry.key !== managedWorkspaceKey)
         await openHomeEntry(entry);
       else { setHomeView(false); navigate("connect"); }
       setExplorerOpen(false);
@@ -1302,7 +1287,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         projectView &&
         project.projectId !== undefined &&
         project.projectId === managedProject?.record.projectId &&
-        (entry?.key ?? null) === managedWorkspaceKey
+        entry.key === managedWorkspaceKey
       )
         await handleSelectBranch(branch);
       else await openTreeProject(entry, project, branch);
@@ -1406,7 +1391,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               projectView={projectView}
               busy={busy}
               vaultState={vaultState}
-              managedProject={managedProject}
               managedBlockReason={managedBlockReason}
               missingConnections={missingConnections}
               navigate={navigate}

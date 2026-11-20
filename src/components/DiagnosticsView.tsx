@@ -14,7 +14,6 @@ export interface DiagnosticsViewProps {
   workingFolderName?: string | null;
   vaultFolderName?: string;
   onReattachWorkingFolder?: () => Promise<void>;
-  managed?: boolean;
   /** Names of cases whose working folder is not connected. */
   missingConnections?: string[];
   /** Resolves the active case's working folder for the full-address copy. */
@@ -28,7 +27,6 @@ export function DiagnosticsView({
   workingFolderName,
   vaultFolderName,
   onReattachWorkingFolder,
-  managed,
   missingConnections = [],
   resolveFolderPath,
 }: DiagnosticsViewProps) {
@@ -79,11 +77,7 @@ export function DiagnosticsView({
       disabled={isVerifyingAll}
       onClick={onReattachWorkingFolder}
     >
-      {managed
-        ? "Reconnect workspace"
-        : workingFolderName
-          ? "Change folder"
-          : "Connect folder"}
+      Reconnect workspace
     </button>
   );
   const vaultRow = (
@@ -124,7 +118,7 @@ export function DiagnosticsView({
             {workingFolderRow(false)}
           </>
         )}
-        {managed ? <WorkspaceLocationSetting /> : null}
+        <WorkspaceLocationSetting />
       </section>
       {hasRecordIssues ? (
         <p className="settings-attention" role="status">
@@ -308,9 +302,7 @@ export function DiagnosticsView({
             or accounts.
           </p>
           <p>
-            {managed
-              ? "The current authorized workspace can still resolve its working folders during this session. Reconnect folders and re-enter their addresses when needed."
-              : "The current vault is reread from its files. Reconnect working folders and re-enter their addresses when needed."}
+            The current authorized workspace can still resolve its working folders during this session. Reconnect folders and re-enter their addresses when needed.
           </p>
           <div className="modal-actions">
             <button
