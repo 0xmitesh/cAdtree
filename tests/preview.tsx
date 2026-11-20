@@ -152,7 +152,7 @@ function Preview() {
               vaultState={state}
               isVerifyingAll={false}
               onVerifyAllObjects={noop}
-              onSimulateClearMetadataAndReopenVault={noop}
+              onResetConnections={noop}
               workingFolderName="Linear actuator — Working"
               vaultFolderName="Actuator vault"
               onReattachWorkingFolder={noop}

@@ -10,7 +10,7 @@ export interface DiagnosticsViewProps {
   vaultState: VaultState;
   isVerifyingAll: boolean;
   onVerifyAllObjects: () => Promise<void>;
-  onSimulateClearMetadataAndReopenVault: () => Promise<void>;
+  onResetConnections: () => Promise<void>;
   workingFolderName?: string | null;
   vaultFolderName?: string;
   onReattachWorkingFolder?: () => Promise<void>;
@@ -24,7 +24,7 @@ export function DiagnosticsView({
   vaultState: state,
   isVerifyingAll,
   onVerifyAllObjects,
-  onSimulateClearMetadataAndReopenVault,
+  onResetConnections,
   workingFolderName,
   vaultFolderName,
   onReattachWorkingFolder,
@@ -323,7 +323,7 @@ export function DiagnosticsView({
               className="button primary"
               onClick={() => {
                 setClear(false);
-                run(onSimulateClearMetadataAndReopenVault);
+                run(onResetConnections);
               }}
             >
               Reset all remembered folder connections
