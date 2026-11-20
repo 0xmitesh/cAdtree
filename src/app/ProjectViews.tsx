@@ -21,6 +21,7 @@ import type { ProgressUpdate, ScanResult, VaultState } from "../engine/types";
 import type { ManagedProject, WorkspaceState } from "../engine/workspace-service";
 import type { ActiveTab, Operation } from "./types";
 import type { useApplicationActions } from "./useApplicationActions";
+import { scannedWorkingFile, type useGetVersionActions } from "./useGetVersionActions";
 import type { useBranchActions } from "./useBranchActions";
 import type { useCaptureActions } from "./useCaptureActions";
 import type { useDiagnosticsActions } from "./useDiagnosticsActions";
@@ -80,6 +81,8 @@ export type ProjectViewsProps = {
   reviewDiscard: DiscardActions["reviewDiscard"];
   handleDiscard: DiscardActions["handleDiscard"];
   discardBlock: DiscardActions["discardBlock"];
+  /** Get this version; undefined outside a managed project. */
+  getVersionActions: ReturnType<typeof useGetVersionActions> | undefined;
   handleExportForReview: ReviewActions["handleExportForReview"];
   handleRetrieveReference: ReviewActions["handleRetrieveReference"];
   handleAddReferences: ReferenceActions["handleAddReferences"];
@@ -141,6 +144,7 @@ export function ProjectViews({
   reviewDiscard,
   handleDiscard,
   discardBlock,
+  getVersionActions,
   handleExportForReview,
   handleRetrieveReference,
   handleAddReferences,
@@ -308,6 +312,23 @@ export function ProjectViews({
                 ? "Finish the earlier Bring back or Copy on this case first (see the notice at the top)."
                 : undefined),
           }}
+          getVersion={
+            getVersionActions
+              ? {
+                  ...getVersionActions,
+                  workingFile: (path) =>
+                    scannedWorkingFile(scanResult, activeBranchId, path),
+                  blockedReason:
+                    caseWriteBlock(vaultState, activeBranchId) ??
+                    managedBlockReason ??
+                    (branchApplications(vaultState, activeBranchId).some(
+                      (op) => !isFinishedOperation(op),
+                    )
+                      ? "Finish the earlier Bring back or Copy on this case first (see the notice at the top)."
+                      : undefined),
+                }
+              : undefined
+          }
           bringBackRequest={
             bringBackRequest?.projectId === vaultState.project.projectId
               ? bringBackRequest

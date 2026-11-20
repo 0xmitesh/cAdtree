@@ -37,6 +37,9 @@ import {
 import { Notice, NotesText, StatusBadge } from "./ui";
 import { ReviewExportDialog, type ExportReviewAction } from './ReviewExportDialog';
 import { RevisionReferenceContext } from './RevisionReferenceContext';
+import { GetVersionDialog } from "./GetVersionDialog";
+import type { GetVersionController } from "../app/useGetVersionActions";
+import { getBranchBaseline } from "../engine/branch-state";
 
 export interface HistoryRecoveryViewProps {
   /** The Design cases panel; it gets the "Show hidden cases" switch's value. */
@@ -45,6 +48,8 @@ export interface HistoryRecoveryViewProps {
   onExportForReview?: ExportReviewAction;
   isExporting?: boolean;
   application?: ApplicationController;
+  /** Get this version (one file into the active case's working folder); absent when it is not available. */
+  getVersion?: GetVersionController;
   /** Opens Bring back for one revision (the Undo link after a save); a new `nonce` opens it again. */
   bringBackRequest?: { revisionId: string; nonce: number };
   vaultState: VaultState;
@@ -134,6 +139,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const [branchSource, setBranchSource] = useState<string | null>(null);
   const [exportRevisionId, setExportRevisionId] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const [getVersionTarget, setGetVersionTarget] = useState<{
+    revisionId: string;
+    path: string;
+  } | null>(null);
   const bringBackNonce = props.bringBackRequest?.nonce;
   // A request made before this view mounted (e.g. before switching cases) is not replayed.
   const handledNonce = useRef(bringBackNonce);
@@ -246,6 +255,22 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
   const damaged =
     rev?.integrityStatus === "corrupted" ||
     selected?.warnings.some((w) => /Duplicate/.test(w));
+  // The case's latest saved revision; null when it has none, undefined when its history is damaged (nothing can be written then).
+  const activeHeadId = useMemo(() => {
+    if (!props.getVersion) return undefined;
+    try {
+      return getBranchBaseline(vaultState, activeBranchId)?.revisionId ?? null;
+    } catch {
+      return undefined;
+    }
+  }, [props.getVersion, vaultState, activeBranchId]);
+  /** Get this version is offered for every saved file except the one already in the working folder unchanged. */
+  const offersGetVersion = (file: FileEntry, status: string) => {
+    if (!props.getVersion || !rev || damaged || status === "Deleted" || activeHeadId === undefined) return false;
+    if (rev.manifest.revisionId !== activeHeadId) return true;
+    const current = props.getVersion.workingFile(file.path);
+    return !(current && current.sha256 === file.sha256 && current.size === file.size);
+  };
   return (
     <div className="page history-page">
       <div className="page-heading">
@@ -539,6 +564,21 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                                 Note
                               </button>
                             ) : null}
+                            {offersGetVersion(file, status) ? (
+                              <button
+                                className="text-button"
+                                disabled={Boolean(props.getVersion?.blockedReason)}
+                                title={props.getVersion?.blockedReason}
+                                onClick={() =>
+                                  setGetVersionTarget({
+                                    revisionId: rev.manifest.revisionId,
+                                    path: file.path,
+                                  })
+                                }
+                              >
+                                Get this version
+                              </button>
+                            ) : null}
                           </div>
                           {status === "Deleted" ? (
                             <div className="deleted-help">
@@ -737,6 +777,16 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           mode={previewMode}
           destinationBranchId={activeBranchId}
           onClose={() => setPreviewSourceId(null)}
+        />
+      ) : null}
+      {getVersionTarget && props.getVersion ? (
+        <GetVersionDialog
+          key={`${getVersionTarget.revisionId}:${getVersionTarget.path}`}
+          controller={props.getVersion}
+          {...getVersionTarget}
+          progress={progress}
+          onCancel={onCancelOperation}
+          onClose={() => setGetVersionTarget(null)}
         />
       ) : null}
       {comparison ? (

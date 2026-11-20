@@ -598,6 +598,11 @@ export interface ReplacePlan {
   reason: string;
   actions: PreviewAction[];
   folderActions: PreviewFolderAction[];
+  /**
+   * Get this version: the component of the file in the target revision, when
+   * component tracking has evidence for it (capture keeps this identity).
+   */
+  componentId?: string;
   blockers: string[];
   ready: boolean;
 }
@@ -629,6 +634,7 @@ export function buildReplacePlan(
   const fileActions = new Map<string, PreviewAction>();
   const creates = new Set<string>();
   const removes = new Set<string>();
+  let componentId: string | undefined;
   try {
     if (!isReplaceMode(mode)) throw new Error(`Unknown replace mode "${String(mode)}".`);
     const identityBlock = componentWriteBlock(state);
@@ -658,7 +664,12 @@ export function buildReplacePlan(
       const before = workingFiles.get(path) ?? null;
       const after = targetFiles.get(path) ?? null;
       if (sameBytes(before, after)) {
-        if (explicit) blockers.push(`${path} has no unsaved change.`);
+        if (explicit)
+          blockers.push(
+            mode === "restore-file"
+              ? `${path} already matches that version.`
+              : `${path} has no unsaved change.`,
+          );
         return;
       }
       fileActions.set(path, {
@@ -672,6 +683,36 @@ export function buildReplacePlan(
         after: copyFile(after),
       });
     };
+    if (mode === "restore-file") {
+      // Get this version puts one file back; it never removes anything.
+      if (paths.length !== 1) throw new Error("Get this version takes one file.");
+      const [path] = paths;
+      splitAndValidatePath(path);
+      if (!targetFiles.has(path))
+        throw new Error(`That revision has no file at ${path}.`);
+      componentId = restoredComponent(state, target.revisionId, baseline.revisionId, path);
+      // The same component already put back at another path (and still there,
+      // unchanged) would give two files one identity at the next save.
+      const elsewhere = componentId
+        ? (state.applicationOperations ?? []).flatMap((op) => {
+            const plan = op.record?.plan;
+            const action = plan?.actions.find((a) => a.after);
+            const current = action && workingFiles.get(action.path);
+            return op.status === "done" &&
+              op.destinationBranchId === branchId &&
+              plan?.mode === "restore-file" &&
+              plan.componentId === componentId &&
+              plan.destinationRevisionId === baseline.revisionId &&
+              action!.path !== path &&
+              current &&
+              sameBytes(current, action!.after)
+              ? [action!.path]
+              : [];
+          })
+        : [];
+      if (elsewhere.length)
+        throw new Error(`This file is already back as ${elsewhere[0]}. Save or discard that first.`);
+    }
     for (const path of [...new Set(paths)].sort()) {
       splitAndValidatePath(path);
       const isFile = workingFiles.has(path) || targetFiles.has(path);
@@ -775,9 +816,47 @@ export function buildReplacePlan(
     reason: "",
     actions,
     folderActions,
+    ...(componentId ? { componentId } : {}),
     blockers: unique,
     ready: unique.length === 0,
   };
+}
+
+/**
+ * Get this version: the component the file had in the target revision, checked
+ * against the latest saved revision of the case. Throws (a blocker) when that
+ * component now lives at another path (renamed since) or another component now
+ * uses the path: identity is never guessed or swapped. Undefined when there is
+ * no component evidence for the file in the target (tracking off, or a revision
+ * from before it was enabled): capture then treats it like any other file.
+ */
+function restoredComponent(
+  state: VaultState,
+  targetRevisionId: string,
+  baselineRevisionId: string,
+  path: string,
+): string | undefined {
+  const evidence = state.components;
+  if (evidence?.status !== "available") return undefined;
+  const componentId = evidence.revisions[targetRevisionId]?.files.find(
+    (file) => file.path === path,
+  )?.componentId;
+  if (!componentId) return undefined;
+  const current = evidence.revisions[baselineRevisionId];
+  if (!current)
+    throw new Error(
+      "Component evidence is unavailable for the latest saved revision of this case. Export that revision to get the older file.",
+    );
+  if (current.files.some((file) => file.componentId === componentId && file.path !== path))
+    throw new Error(
+      "This file was renamed since that revision. Get this version cannot follow renames yet. Export that revision, or create a design case from it, to get the older file.",
+    );
+  const occupant = current.files.find((file) => file.path === path)?.componentId;
+  if (occupant && occupant !== componentId)
+    throw new Error(
+      "A different file now uses this name. Get this version cannot swap file identities yet. Export that revision, or create a design case from it, to get the older file.",
+    );
+  return componentId;
 }
 
 /**
