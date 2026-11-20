@@ -231,7 +231,7 @@ export function useApplicationActions({
           );
           if (result.manualPaths.length)
             throw new Error(
-              `Manual recovery required: ${result.manualPaths.join(", ")}. Unexpected files remain untouched; readable copies are retained under the operation's unexpected folder. Inspect the before-state evidence, restore affected paths manually, then retry recovery.`,
+              `Manual recovery required: ${result.manualPaths.join(", ")}. Unexpected files were left untouched; readable copies were kept in the operation's unexpected folder. Look at the earlier files, put the affected files back yourself, then retry.`,
             );
           if (context.current())
             setStatusBanner({

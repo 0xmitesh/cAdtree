@@ -22,28 +22,28 @@ const props = (
   ...overrides,
 });
 
-test("Compare initializes from the actual parent, swaps endpoints, compares nonadjacent and identical revisions, and preserves History inspection", () => {
+test("Compare initializes from the actual parent, swaps endpoints, compares nonadjacent and identical versions, and preserves History inspection", () => {
   const state = historyState(4),
     before = JSON.stringify(state);
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
   assert.equal(
     (
       dialog.getByRole("combobox", {
-        name: "From revision",
+        name: "From version",
       }) as HTMLSelectElement
     ).value,
     "r3",
   );
   assert.equal(
-    (dialog.getByRole("combobox", { name: "To revision" }) as HTMLSelectElement)
+    (dialog.getByRole("combobox", { name: "To version" }) as HTMLSelectElement)
       .value,
     "r4",
   );
-  fireEvent.change(dialog.getByRole("combobox", { name: "From revision" }), {
+  fireEvent.change(dialog.getByRole("combobox", { name: "From version" }), {
     target: { value: "r1" },
   });
   assert.ok(dialog.getByRole("article", { name: `Modified: ${path}` }));
@@ -51,22 +51,22 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
   assert.equal(
     (
       dialog.getByRole("combobox", {
-        name: "From revision",
+        name: "From version",
       }) as HTMLSelectElement
     ).value,
     "r4",
   );
   assert.equal(
-    (dialog.getByRole("combobox", { name: "To revision" }) as HTMLSelectElement)
+    (dialog.getByRole("combobox", { name: "To version" }) as HTMLSelectElement)
       .value,
     "r1",
   );
-  fireEvent.change(dialog.getByRole("combobox", { name: "To revision" }), {
+  fireEvent.change(dialog.getByRole("combobox", { name: "To version" }), {
     target: { value: "r4" },
   });
   assert.ok(
     dialog.getByText(
-      "No file or directory differences between these saved snapshots.",
+      "No file or folder differences between these versions.",
     ),
   );
   assert.equal(dialog.queryAllByRole("article").length, 0);
@@ -77,7 +77,7 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
   fireEvent.click(dialog.getByRole("button", { name: "Close comparison" }));
   assert.ok(
     ui
-      .getByRole("button", { name: /Rev 004:/ })
+      .getByRole("button", { name: /V4:/ })
       .getAttribute("aria-pressed") === "true",
   );
   assert.equal(JSON.stringify(state), before);
@@ -87,7 +87,7 @@ test("Compare keeps checksums and component identity inside a closed Technical d
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
   assert.equal(dialog.queryByText("Content hash"), null);
   const summary = dialog.getByText("Technical details");
@@ -104,14 +104,14 @@ test("Compare keeps checksums and component identity inside a closed Technical d
     ),
   );
   assert.equal(
-    dialog.queryAllByText(/Component identity between endpoints/).filter(
+    dialog.queryAllByText(/File identity between the two versions/).filter(
       (element) => !disclosure.contains(element),
     ).length,
     0,
   );
   assert.ok(dialog.getByRole("article", { name: `Modified: ${path}` }));
 });
-test("file-scoped comparison expands to all files, labels endpoint notes and branch names, and explains absence in both endpoints", () => {
+test("file-scoped comparison expands to all files, labels endpoint notes and case names, and explains absence in both endpoints", () => {
   const state = scenarioState("branches");
   state.revisions[7].manifest.files = state.revisions[7].manifest.files.filter(
     (f) => f.path !== path,
@@ -134,7 +134,7 @@ test("file-scoped comparison expands to all files, labels endpoint notes and bra
   pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
   assert.ok(
     dialog
@@ -142,28 +142,28 @@ test("file-scoped comparison expands to all files, labels endpoint notes and bra
       .textContent?.includes(path),
   );
   assert.ok(dialog.getByText("Main endpoint note"));
-  assert.ok(dialog.getByText("File notes at Rev 006"));
+  assert.ok(dialog.getByText("File notes at V6"));
   assert.ok(
-    dialog.getByText(/Notes are recorded at the selected endpoints only/),
+    dialog.getByText(/Notes are shown for the two chosen versions only/),
   );
   fireEvent.click(dialog.getByRole("button", { name: "Show all files" }));
   assert.ok(dialog.getByText("Scope: All project files"));
   fireEvent.click(
     dialog.getByRole("button", { name: "Focus on selected file" }),
   );
-  fireEvent.change(dialog.getByRole("combobox", { name: "From revision" }), {
+  fireEvent.change(dialog.getByRole("combobox", { name: "From version" }), {
     target: { value: "r1" },
   });
-  fireEvent.change(dialog.getByRole("combobox", { name: "To revision" }), {
+  fireEvent.change(dialog.getByRole("combobox", { name: "To version" }), {
     target: { value: "r2" },
   });
-  assert.ok(dialog.getByText("The selected path is absent in both revisions."));
-  fireEvent.change(dialog.getByRole("combobox", { name: "To revision" }), {
+  assert.ok(dialog.getByText("The selected path is absent in both versions."));
+  fireEvent.change(dialog.getByRole("combobox", { name: "To version" }), {
     target: { value: "p2" },
   });
   assert.ok(
     dialog
-      .getByRole("combobox", { name: "To revision" })
+      .getByRole("combobox", { name: "To version" })
       .textContent?.includes("Prototype"),
   );
 });
@@ -173,29 +173,29 @@ test("initial or unavailable parent asks for a baseline; corrupt, missing and am
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
   assert.equal(
     (
       dialog.getByRole("combobox", {
-        name: "From revision",
+        name: "From version",
       }) as HTMLSelectElement
     ).value,
     "",
   );
-  assert.ok(dialog.getByText(/Choose a From revision/));
+  assert.ok(dialog.getByText(/Choose a From version/));
   assert.equal(
     dialog.queryByRole("status", { name: "Comparison counts" }),
     null,
   );
-  fireEvent.change(dialog.getByRole("combobox", { name: "From revision" }), {
+  fireEvent.change(dialog.getByRole("combobox", { name: "From version" }), {
     target: { value: "r1" },
   });
   assert.ok(dialog.getByRole("status", { name: "Comparison counts" }));
   const damaged = structuredClone(state);
   damaged.revisions[0].integrityStatus = "corrupted";
   ui.rerender(<HistoryRecoveryView {...props({ vaultState: damaged })} />);
-  assert.ok(dialog.getByText(/From revision unavailable/));
+  assert.ok(dialog.getByText(/From version unavailable/));
   assert.equal(
     dialog.queryByRole("status", { name: "Comparison counts" }),
     null,
@@ -203,22 +203,22 @@ test("initial or unavailable parent asks for a baseline; corrupt, missing and am
   const missing = structuredClone(state);
   missing.revisions = missing.revisions.slice(1);
   ui.rerender(<HistoryRecoveryView {...props({ vaultState: missing })} />);
-  assert.ok(dialog.getByText(/From revision unavailable/));
+  assert.ok(dialog.getByText(/From version unavailable/));
   const duplicate = structuredClone(state);
   duplicate.revisions.push(structuredClone(duplicate.revisions[0]));
   ui.rerender(<HistoryRecoveryView {...props({ vaultState: duplicate })} />);
-  assert.ok(dialog.getByText(/From revision unavailable/));
+  assert.ok(dialog.getByText(/From version unavailable/));
   assert.equal(
     dialog.queryByRole("status", { name: "Comparison counts" }),
     null,
   );
 });
-test("a baseline revision has no assumed From; switching projects closes and resets comparison state", () => {
+test("a baseline version has no assumed From; switching projects closes and resets comparison state", () => {
   const initial = props({ vaultState: historyState(1) });
   const ui = render(<HistoryRecoveryView {...initial} />);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   assert.equal(
-    (ui.getByRole("combobox", { name: "From revision" }) as HTMLSelectElement)
+    (ui.getByRole("combobox", { name: "From version" }) as HTMLSelectElement)
       .value,
     "",
   );
@@ -232,12 +232,12 @@ test("a baseline revision has no assumed From; switching projects closes and res
   assert.equal(ui.queryByRole("dialog"), null);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   assert.equal(
-    (ui.getByRole("combobox", { name: "From revision" }) as HTMLSelectElement)
+    (ui.getByRole("combobox", { name: "From version" }) as HTMLSelectElement)
       .value,
     "r1",
   );
   assert.equal(
-    (ui.getByRole("combobox", { name: "To revision" }) as HTMLSelectElement)
+    (ui.getByRole("combobox", { name: "To version" }) as HTMLSelectElement)
       .value,
     "r2",
   );
@@ -248,27 +248,27 @@ test("comparison distinguishes metadata-only from previously verified contents a
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
-  assert.ok(dialog.getByText(/Metadata and file contents previously verified/));
-  assert.ok(dialog.getByText(/Metadata verified · file contents not checked/));
+  assert.ok(dialog.getByText(/Records and file contents checked/));
+  assert.ok(dialog.getByText(/Records checked · file contents not checked yet/));
   fireEvent.click(dialog.getByRole("button", { name: "Close comparison" }));
   const damaged = structuredClone(state);
   damaged.revisions[1].integrityStatus = "corrupted";
   ui.rerender(<HistoryRecoveryView {...props({ vaultState: damaged })} />);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const unavailable = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
   assert.equal(
     (
       unavailable.getByRole("combobox", {
-        name: "From revision",
+        name: "From version",
       }) as HTMLSelectElement
     ).value,
     "",
   );
-  assert.ok(unavailable.getByText(/To revision unavailable/));
+  assert.ok(unavailable.getByText(/To version unavailable/));
   assert.equal(
     unavailable.queryByRole("status", { name: "Comparison counts" }),
     null,
@@ -306,13 +306,13 @@ test("comparison includes overall and individual notes in file scope, labels end
   pickFile(ui, path);
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
   const dialog = within(
-    ui.getByRole("dialog", { name: "Compare saved revisions" }),
+    ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
   const before = dialog.getByRole("region", {
-    name: "From overall notes at Rev 001",
+    name: "From overall notes at V1",
   });
   const after = dialog.getByRole("region", {
-    name: "To overall notes at Rev 002",
+    name: "To overall notes at V2",
   });
   assert.ok(before.textContent?.includes("Overall baseline intent"));
   assert.ok(before.textContent?.includes("Baseline project change"));
@@ -323,12 +323,12 @@ test("comparison includes overall and individual notes in file scope, labels end
   fireEvent.click(dialog.getByRole("button", { name: "Swap" }));
   assert.ok(
     dialog
-      .getByRole("region", { name: "From overall notes at Rev 002" })
+      .getByRole("region", { name: "From overall notes at V2" })
       .textContent?.includes("Overall target intent"),
   );
   assert.ok(
     dialog
-      .getByRole("region", { name: "To overall notes at Rev 001" })
+      .getByRole("region", { name: "To overall notes at V1" })
       .textContent?.includes("Overall baseline intent"),
   );
   const blank = structuredClone(state);
@@ -340,7 +340,7 @@ test("comparison includes overall and individual notes in file scope, labels end
   ui.rerender(<HistoryRecoveryView {...props({ vaultState: blank })} />);
   assert.ok(
     dialog
-      .getByRole("region", { name: "To overall notes at Rev 001" })
-      .textContent?.includes("No overall engineering notes at this endpoint."),
+      .getByRole("region", { name: "To overall notes at V1" })
+      .textContent?.includes("No overall notes for this version."),
   );
 });

@@ -89,7 +89,7 @@ export function useReferenceActions({
         setVaultState(latest);
         setStatusBanner({
           type: "success",
-          message: `Added ${published} reference${published === 1 ? "" : "s"} to the project. ${published === 1 ? "It is" : "They are"} included whenever you save a revision.`,
+          message: `Added ${published} reference${published === 1 ? "" : "s"} to the project. ${published === 1 ? "It is" : "They are"} included whenever you save a version.`,
         });
       },
       { rethrow: true, banner: false },
@@ -107,7 +107,7 @@ export function useReferenceActions({
         refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
         if (!context.current()) return;
         setVaultState(latest);
-        setStatusBanner({ type: "success", message: "The reference no longer applies to the whole project. Revisions you save from now on will not include it; earlier revisions keep it." });
+        setStatusBanner({ type: "success", message: "The reference no longer applies to the whole project. Versions you save from now on will not include it; earlier versions keep it." });
       },
       { rethrow: true, banner: false },
     );

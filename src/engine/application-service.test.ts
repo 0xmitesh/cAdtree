@@ -263,7 +263,7 @@ test("dirty files or empty directories and stale baselines/reviews block writes"
       /uncaptured|changed|review/i,
     );
     if (mode === "file" || mode === "directory")
-      await assert.rejects(f.apply(), /Save a revision first/);
+      await assert.rejects(f.apply(), /Save a version first/);
     assert.equal(await inventory(f.main), before);
     assert.equal(
       (await openExistingVault(f.vault)).applicationOperations!.length,
@@ -470,7 +470,7 @@ test("cancellation retains evidence, permissions can be restored, and explicit a
   const captured = await f.save(
     f.main,
     "branch-main",
-    "Independent normal revision after abandonment",
+    "Independent normal version after abandonment",
   );
   assert.ok(
     !captured.vaultState.applicationOperations!.some(
@@ -527,7 +527,7 @@ test("capture failure retains provenance; failure after completion publication r
     );
   }
 });
-test("malformed application records block writes only for the affected branch and retain evidence", async () => {
+test("malformed application records block writes only for the affected case and retain evidence", async () => {
   const f = await fixture();
   const op = await f.apply();
   await f.vault.writeFileText(
@@ -555,7 +555,7 @@ test("malformed application records block writes only for the affected branch an
       "branch-main",
       op.operationId,
     ),
-    /successful/,
+    /finished Bring back or Copy/,
   );
 });
 test("resolved conflicts use only explicit source decisions and ignore arbitrary UI result inventories", async () => {
@@ -705,7 +705,7 @@ test("an explicit Confirm can renew a read-only folder permission; denied renewa
   );
 });
 
-test("a revision that tracks .DS_Store still creates a case, applies and exports with the clutter file written and verified", async () => {
+test("a version that tracks .DS_Store still creates a case, applies and exports with the clutter file written and verified", async () => {
   const vault = new InMemoryFileSystemAdapter("Vault"),
     main = new InMemoryFileSystemAdapter("Main"),
     parent = new InMemoryFileSystemAdapter("Cases"),
@@ -1123,7 +1123,7 @@ const rowMap = (p: Awaited<ReturnType<typeof prepareApplyPreview>>) => {
   return Object.fromEntries(p.context.rows.map((r) => [r.path, r]));
 };
 
-test("revert preview: older revision gives replace/delete/add rows, all available; merge mode and the latest revision are rejected", async () => {
+test("revert preview: older version gives replace/delete/add rows, all available; merge mode and the latest version are rejected", async () => {
   const f = await revertFixture();
   const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
   assert.equal(rows["A.txt"].kind, "available");
@@ -1145,15 +1145,15 @@ test("revert preview: older revision gives replace/delete/add rows, all availabl
   );
   const merge = await f.prepareRows(f.ids.r1);
   assert.equal(merge.status, "unavailable");
-  assert.match((merge as any).reason, /earlier revision in this branch.s history.*Bring back/);
+  assert.match((merge as any).reason, /earlier version in this case.s history.*Bring back/);
   for (const mode of ["merge", "revert"] as const) {
     const latest = await f.prepareRows(f.ids.r3, mode);
     assert.equal(latest.status, "unavailable");
-    assert.match((latest as any).reason, /already the latest saved revision/);
+    assert.match((latest as any).reason, /already the latest saved version/);
   }
 });
 
-test("revert is rejected for a revision that is not an ancestor (case revision)", async () => {
+test("revert is rejected for a version that is not an ancestor (case version)", async () => {
   const f = await revertFixture();
   const parent = new InMemoryFileSystemAdapter("RCases");
   const created = await createDesignBranch({
@@ -1175,7 +1175,7 @@ test("revert is rejected for a revision that is not an ancestor (case revision)"
   const caseId = saved.revision.manifest.revisionId;
   const revert = await f.prepareRows(caseId, "revert");
   assert.equal(revert.status, "unavailable");
-  assert.match((revert as any).reason, /not an earlier revision in this branch.s history/);
+  assert.match((revert as any).reason, /not an earlier version in this case.s history/);
   assert.equal((await f.prepareRows(caseId, "merge")).status, "available");
 });
 
@@ -1230,7 +1230,7 @@ test("revert is blocked by unsaved working changes, like apply", async () => {
   await f.w("A.txt", "unsaved edit");
   await assert.rejects(
     applyReviewed(f.vault, await f.review(f.ids.r1), f.options),
-    /uncaptured/,
+    /unsaved file or folder changes/,
   );
   assert.equal(await f.main.readFileText(["A.txt"]), "unsaved edit");
 });
@@ -1240,7 +1240,7 @@ test("tampered or missing mode: review/plan disagreement is rejected; records wi
   const review = await f.review(f.ids.r1);
   await assert.rejects(
     applyReviewed(f.vault, { ...review, mode: "merge" }, f.options),
-    /earlier revision|changed|Bring back/,
+    /earlier version|changed|Bring back/,
   );
   const op = await applyReviewed(f.vault, review, f.options);
   const { checksum: _c, ...body } = op.record!;
@@ -1310,7 +1310,7 @@ test("interrupted revert recovers through the existing recovery path", async () 
   assert.equal(await inventory(f.main), before);
 });
 
-test("confirmed rename since the revision blocks both rename rows with revert wording; other rows still apply", async () => {
+test("confirmed rename since the version blocks both rename rows with revert wording; other rows still apply", async () => {
   const f = await revertFixture();
   await f.main.removeEntry(["X.txt"]);
   await f.w("Y.txt", "x1");
@@ -1324,7 +1324,7 @@ test("confirmed rename since the revision blocks both rename rows with revert wo
   void r4;
   const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
   for (const p of ["X.txt", "Y.txt"]) {
-    assert.match(rows[p].identityBlock ?? "", /renamed since that revision.*cannot undo renames/);
+    assert.match(rows[p].identityBlock ?? "", /renamed since that version.*cannot undo renames/);
   }
   assert.equal(rows["A.txt"].identityBlock, undefined);
   const reviewed = await f.review(f.ids.r1, ["A.txt", "D.txt"]);
@@ -1355,7 +1355,7 @@ test("revert row stays blocked when a different component now occupies the path;
   await f.w("D.txt", "a brand new D");
   await f.save("New D, new component");
   const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
-  assert.match(rows["D.txt"].identityBlock ?? "", /Different components occupy this path/);
+  assert.match(rows["D.txt"].identityBlock ?? "", /Different files use this path/);
   assert.equal(rows["A.txt"].identityBlock, undefined);
   assert.equal(rows["A.txt"].kind, "available");
   const reviewed = await f.review(f.ids.r1, ["A.txt"]);
@@ -1414,7 +1414,7 @@ const mkdir = (dir: FileSystemDirectoryAdapter, path: string) =>
 const writeAt = (dir: FileSystemDirectoryAdapter, path: string, text: string) =>
   dir.writeFileText(path.split("/"), text);
 
-test("Bring back recreates an empty folder that the older revision had", async () => {
+test("Bring back recreates an empty folder that the older version had", async () => {
   const f = await folderFixture({
     r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
     r2: async (m) => { await m.removeEntry(["Empty one"]); await writeAt(m, "A.txt", "a2"); },
@@ -1434,7 +1434,7 @@ test("Bring back recreates an empty folder that the older revision had", async (
   assert.equal((await f.lastOp()).status, "applied");
 });
 
-test("Bring back removes a folder the older revision lacked, after its files are deleted", async () => {
+test("Bring back removes a folder the older version lacked, after its files are deleted", async () => {
   const f = await folderFixture({
     r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
     r2: async (m) => {

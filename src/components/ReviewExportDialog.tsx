@@ -53,24 +53,24 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
   };
   return <Modal title="Export a copy" busy={busy} onClose={onClose}>
     <p><strong>{plan ? `${plan.projectName} · ${plan.branchName} · ${plan.revisionLabel}` : revision?.manifest.summary}</strong></p>
-    <p>Exports verified saved bytes. Open documents and newer working edits are not included.</p>
+    <p>Exports the saved files exactly as they were saved. Open documents and newer changes are not included.</p>
     <fieldset disabled={busy || Boolean(result)}>
       <legend>Export contents</legend>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'complete'} onChange={() => { setKind('complete'); setError(''); }} /> Complete project</span></label>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'selected'} onChange={() => { setKind('selected'); setError(''); }} /> Selected files</span></label>
       {kind === 'selected' ? <>
         <Notice>This is a partial copy. CAD dependencies are not discovered or included automatically.</Notice>
-        <div className="change-table" role="group" aria-label="Files present in the selected snapshot">
+        <div className="change-table" role="group" aria-label="Files in this version">
           {revision?.manifest.files.map(file => <label className="recovery-external-choice" key={file.path}><span className="file-path"><input type="checkbox" aria-label={`Export ${file.path}`} checked={selected.has(file.path)} onChange={() => setSelected(previous => {
             const next = new Set(previous); next.has(file.path) ? next.delete(file.path) : next.add(file.path); return next;
           })} /> {file.path}</span></label>)}
         </div>
-        <label className="recovery-external-choice"><span><input type="checkbox" checked={labelFilenames} onChange={e => setLabelFilenames(e.target.checked)} /> Add branch and revision to filenames</span></label>
+        <label className="recovery-external-choice"><span><input type="checkbox" checked={labelFilenames} onChange={e => setLabelFilenames(e.target.checked)} /> Add case and version to filenames</span></label>
         <p className="muted small">Use labelled filenames for standalone review copies. Renamed files may require reference repair when used by other documents; cAdtree does not rewrite native references.</p>
       </> : <p>Preserves every saved internal filename and relative directory, including empty directories.</p>}
       <label className="recovery-external-choice"><span><input type="checkbox" checked={includeReferences} onChange={e => { setIncludeReferences(e.target.checked); setError(''); }} /> Include references</span></label>
       <p className="muted small">{includeReferences
-        ? (plan ? (plan.references.length ? `${plan.references.length} reference attachment${plan.references.length === 1 ? '' : 's'} will be copied into a ${plan.referencesDirectory} folder.` : 'No reference attachments apply to this revision.') : '')
+        ? (plan ? (plan.references.length ? `${plan.references.length} reference attachment${plan.references.length === 1 ? '' : 's'} will be copied into a ${plan.referencesDirectory} folder.` : 'No reference attachments apply to this version.') : '')
         : 'Reference attachments will not be copied.'}</p>
       {preview.error ? <Notice type="error">{preview.error}</Notice> : null}
       {plan ? <>

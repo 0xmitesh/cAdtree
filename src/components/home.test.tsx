@@ -181,7 +181,7 @@ test("home creation uses one picker, workspace allocation uses names, and all th
   assert.equal(ui.queryByRole("dialog"), null);
 });
 
-test("workspace switching isolates scans, branches and project/branch drafts without additional pickers", async () => {
+test("workspace switching isolates scans, cases and project/branch drafts without additional pickers", async () => {
   const root = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(root);
   const a = await createHomeWorkspace(root, "cam 2");
@@ -237,7 +237,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   await idle(ui);
   nav(ui, "Changes");
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "Case A draft" } },
   );
   fireEvent.click(
@@ -256,13 +256,13 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "",
   );
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "AutoCAD draft" } },
   );
   fireEvent.click(ui.getByRole("treeitem", { name: "cam 2" }));
@@ -275,7 +275,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Case A draft",
@@ -304,7 +304,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Case A draft",
@@ -343,7 +343,7 @@ test("guided whole-workspace migration identifies managed location and never reu
   await ready(ui, "Open project");
   assert.match(
     ui.container.textContent!,
-    /Original workspace retained unchanged/,
+    /The original workspace was left unchanged/,
   );
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
@@ -392,7 +392,7 @@ test("home groups retained migration attempts and opens the managed workspace wh
   await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   assert.equal(ui.getAllByRole("article").length, 2);
-  assert.ok(ui.getByText("Location details · 2 retained locations"));
+  assert.ok(ui.getByText("Location details · 2 locations"));
   assert.ok(ui.getByText("Needs attention"));
   assert.ok(ui.getByText("Unavailable"));
   assert.ok(ui.getByText(/^\d+ projects? · Ready$/));
@@ -404,7 +404,7 @@ test("home groups retained migration attempts and opens the managed workspace wh
   assert.equal(ui.getAllByRole("button", { name: "Open workspace" }).length, 1);
 });
 
-test("sidebar explorer expands independently, navigates projects and branches across workspaces, and retains scoped drafts", async () => {
+test("sidebar explorer expands independently, navigates projects and cases across workspaces, and retains scoped drafts", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const cam = await createHomeWorkspace(home, "cam 2");
@@ -459,7 +459,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   );
   nav(ui, "Changes");
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "Main draft" } },
   );
   fireEvent.click(tree.getByRole("treeitem", { name: "cam 2" }));
@@ -468,7 +468,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Main draft",
@@ -516,7 +516,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Main draft",

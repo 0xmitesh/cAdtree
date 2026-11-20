@@ -21,9 +21,9 @@ export type GetVersionCheck = {
   branchId: string;
   revisionId: string;
   path: string;
-  /** "Rev 003" */
+  /** "V3" */
   revisionLabel: string;
-  /** "Rev 003", or "Rev 008 on <case>" when the revision belongs to another case. */
+  /** "V3", or "V8 on <case>" when the version belongs to another case. */
   fromLabel: string;
   planHash: string;
   /** Why it cannot be done now (empty when it can). */
@@ -99,7 +99,7 @@ export function useGetVersionActions({
         const revision = state.revisions.find((r) => r.manifest.revisionId === revisionId);
         const revisionLabel = revision
           ? formatRevisionNumber(revision.manifest.displayNumber)
-          : "that revision";
+          : "that version";
         return {
           projectId: state.project.projectId,
           branchId: activeBranchId,

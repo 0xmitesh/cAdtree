@@ -60,7 +60,7 @@ test("Copy files: the case's files are ticked by default, base is hidden, one Co
     <ApplyPreviewDialog state={f.state} sourceId={f.source.manifest.revisionId} destinationBranchId="branch-main" onClose={() => closed++} application={controller} />,
   );
   const dialog = ui.getByRole("dialog", { name: "Copy files from Prototype" });
-  assert.doesNotMatch(dialog.textContent!, /Base|Prepare|Engineering reason|Destination/);
+  assert.doesNotMatch(dialog.textContent!, /Base|Prepare|Destination/);
   const box = within(dialog).getByRole("checkbox", { name: "Copy New.txt" }) as HTMLInputElement;
   assert.equal(box.checked, true);
   fireEvent.click(within(dialog).getByRole("radio", { name: "Take theirs" }));
@@ -99,7 +99,7 @@ test("Copy files with unsaved changes offers Save my changes first instead", () 
   fireEvent.click(ui.getByRole("button", { name: "Save my changes first" }));
   assert.equal(saveFirst, 1);
 });
-test("the status is branch scoped: not saved offers Save now only, with no Abandon or Refresh", () => {
+test("the status is case scoped: not saved offers Save now only, with no Abandon or Refresh", () => {
   const f = fixture();
   f.state.applicationOperations = [f.operation];
   const saved: string[] = [];
@@ -153,8 +153,8 @@ test("Copied files details distinguish originally applied and final captured byt
   ];
   f.state.applicationOperations = [f.operation];
   const ui = render(<AppliedFromDetails state={f.state} revisionId="final" />);
-  assert.doesNotMatch(ui.container.textContent!, /Engineering reason/);
-  assert.match(ui.container.textContent!, /Adjusted after application before saving/);
+  assert.doesNotMatch(ui.container.textContent!, /Why/);
+  assert.match(ui.container.textContent!, /Changed again after copying, before saving/);
   assert.match(ui.container.textContent!, /Originally applied: new/);
-  assert.match(ui.container.textContent!, /Final captured: cad-adjustment/);
+  assert.match(ui.container.textContent!, /Final saved: cad-adjustment/);
 });

@@ -13,7 +13,7 @@ import {
 beforeEach(async () => { await clearAllConvenienceMetadata(); });
 afterEach(async () => { await clearAllConvenienceMetadata(); });
 
-test("the browser keeps one set of remembered homes, workspaces, addresses and branch handles", async () => {
+test("the browser keeps one set of remembered homes, workspaces, addresses and case handles", async () => {
   const a = nativeDirectory(new InMemoryFileSystemAdapter("A"));
   const b = nativeDirectory(new InMemoryFileSystemAdapter("B"));
   const project = { projectId: "project-1", projectName: "Bracket", vaultHandle: a, vaultFolderName: "Vault" };

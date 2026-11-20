@@ -41,7 +41,7 @@ async function setUp(page: Page, width: number, clean = false) {
     page.getByRole("navigation").getByRole("button", { name, exact: true }).click();
   const openCopy = async () => {
     await nav("History");
-    await page.getByRole("button", { name: /Rev 003: Redesign only Part-X/ }).press("Enter");
+    await page.getByRole("button", { name: /V3: Redesign only Part-X/ }).press("Enter");
     await page.getByRole("button", { name: "Copy files from Part-X redesign…", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Copy files from Part-X redesign" });
     await expect(dialog.getByRole("checkbox", { name: "Copy Parts/Part-X.SLDPRT" })).toBeChecked();
@@ -68,7 +68,7 @@ for (const width of [1366, 390])
     await expect(dialog.getByRole("button", { name: "Copy files", exact: true })).toHaveCount(0);
     await dialog.getByRole("button", { name: "Save my changes first", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("textbox", { name: /Revision summary/ })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /Version summary/ })).toBeVisible();
     const unchanged = await readFixture(page, fixture);
     expect(unchanged.main).toEqual(before.main);
     expect(unchanged.state.applicationOperations).toEqual([]);
@@ -84,10 +84,10 @@ for (const width of [1366, 390])
     // Writing and saving runs under one lock and can take a while on a loaded machine.
     await expect(dialog).toHaveCount(0, { timeout: 30_000 });
     // Main's previous head (the Undo target) is Rev 002: Rev 003 to 005 belong to the case.
-    await expect(page.getByText("Saved as Rev 006. To undo, bring back Rev 002.")).toBeVisible();
+    await expect(page.getByText("Saved as V6. To undo, bring back V2.")).toBeVisible();
     // Undo opens Bring back for Rev 002 in History; Cancel writes nothing.
     await page.getByRole("button", { name: "Undo", exact: true }).click();
-    const undoDialog = page.getByRole("dialog", { name: "Bring back Rev 002 onto Main" });
+    const undoDialog = page.getByRole("dialog", { name: "Bring back V2 onto Main" });
     await expect(undoDialog.getByRole("status", { name: "What will change" })).toHaveText("1 file will change");
     await undoDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(undoDialog).toHaveCount(0);
@@ -117,28 +117,28 @@ for (const width of [1366, 390])
     await openProject();
     await expect(page.getByRole("region", { name: "Bring back, Copy or Discard status" })).toHaveCount(0);
     await nav("History");
-    await page.getByRole("button", { name: /Rev 006: Copied 1 file from Part-X redesign/ }).press("Enter");
-    await expect(page.getByText(/^Copied from Rev 003 on Part-X redesign/)).toBeVisible();
+    await page.getByRole("button", { name: /V6: Copied 1 file from Part-X redesign/ }).press("Enter");
+    await expect(page.getByText(/^Copied from V3 on Part-X redesign/)).toBeVisible();
     await page.locator(".revision-troubleshooting > summary").click();
-    await expect(page.getByText("Captured state matches the application decision", { exact: true })).toBeVisible();
+    await expect(page.getByText("Saved files match what you chose", { exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "Project context" })).toHaveAttribute("data-branch-id", "branch-main");
     await page.locator(".applied-from-details").scrollIntoViewIfNeeded();
     await page.screenshot({ path: `artifacts/screenshots/application-provenance-${width}.png` });
     // Bring back Rev 002 onto Main: one dialog, an optional Why, saved automatically.
-    await page.getByRole("button", { name: /Rev 002:/ }).press("Enter");
+    await page.getByRole("button", { name: /V2:/ }).press("Enter");
     await page.getByRole("button", { name: "Bring back onto Main…", exact: true }).click();
-    const bringBack = page.getByRole("dialog", { name: "Bring back Rev 002 onto Main" });
+    const bringBack = page.getByRole("dialog", { name: "Bring back V2 onto Main" });
     await expect(bringBack.getByRole("region", { name: "Replaced with the older version" })).toContainText("Parts/Part-X.SLDPRT");
     await bringBack.getByRole("button", { name: "Bring back", exact: true }).click();
     await expect(bringBack).toHaveCount(0, { timeout: 30_000 });
-    await expect(page.getByText("Saved as Rev 007. To undo, bring back Rev 006.")).toBeVisible();
+    await expect(page.getByText("Saved as V7. To undo, bring back V6.")).toBeVisible();
     const broughtBack = await readFixture(page, fixture);
     for (const file of broughtBack.main.files)
       expect(file.sha256).toBe(baseline.find((f: { path: string }) => f.path === file.path).sha256);
     const rev7 = broughtBack.state.revisions.find(
       (r: { manifest: { displayNumber: number } }) => r.manifest.displayNumber === 7,
     )!;
-    expect(rev7.manifest.summary).toBe("Brought back Rev 002");
+    expect(rev7.manifest.summary).toBe("Brought back V2");
     expect(rev7.manifest.notes.problem).toBe("");
     expect(errors).toEqual([]);
   });

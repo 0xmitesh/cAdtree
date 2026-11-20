@@ -138,9 +138,9 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   template('vault main branch record', 'file', [V, 'branches', 'branch-main.json'], 'vault/branches/branch-main.json'),
   template('vault branch record', 'file', below(V, branchRecordPath(CASE_ID)), 'vault/branches/{caseId}.branch.json'),
   template('vault branch ready marker', 'file', below(V, branchReadyPath(CASE_ID)), 'vault/branches/{caseId}.ready.json'),
-  template('vault revision manifest', 'file', below(V, revisionManifestPath(REV)), 'vault/revisions/{rev}.manifest.json'),
-  template('vault revision completion marker', 'file', below(V, revisionCompletionPath(REV)), 'vault/completed/{recordId}.done.json'),
-  template('vault revision listing', 'file', below(V, revisionListingPath(REV)), 'vault/revisions/{rev}.txt'),
+  template('vault version manifest', 'file', below(V, revisionManifestPath(REV)), 'vault/revisions/{rev}.manifest.json'),
+  template('vault version completion marker', 'file', below(V, revisionCompletionPath(REV)), 'vault/completed/{recordId}.done.json'),
+  template('vault version listing', 'file', below(V, revisionListingPath(REV)), 'vault/revisions/{rev}.txt'),
   template('vault cache index', 'file', [V, 'cache', 'index.json'], 'vault/cache/index.json'),
   template('vault content object', 'file', below(V, getObjectPathSegments(SHA)), 'vault/objects/{sha2}/{sha}.bin'),
   template('vault staged object', 'file', below(V, getStagingObjectPathSegments('sample-session', SHA)), 'vault/staging/{b64uuid}/{b64}.tmp'),
@@ -149,7 +149,7 @@ export const INTERNAL_PATH_TEMPLATES: readonly InternalPathTemplate[] = [
   // Component identity.
   template('component boundary', 'file', [V, 'components', 'boundary.json'], 'vault/components/boundary.json'),
   template('component ready marker', 'file', [V, 'components', 'ready.json'], 'vault/components/ready.json'),
-  template('component revision record', 'file', below(V, componentRecordPath(REV)), 'vault/components/revisions/{rev}.json'),
+  template('component version record', 'file', below(V, componentRecordPath(REV)), 'vault/components/revisions/{rev}.json'),
   // Case lifecycle.
   template('case lifecycle record', 'file', below(V, lifecyclePath(CASE_ID, SEQ)), 'vault/case-lifecycle/{caseId}.{seq}.json'),
   // References.

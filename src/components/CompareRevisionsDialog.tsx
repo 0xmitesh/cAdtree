@@ -64,7 +64,7 @@ export function CompareRevisionsDialog({
         revisions.set(record.revisionId, undefined);
     return [...revisions].map(([id, revision]) => ({
       id,
-      text: revision ? label(revision) : `Unavailable revision · ${id}`,
+      text: revision ? label(revision) : `Unavailable version · ${id}`,
     }));
   }, [state]);
   const endpointControls = (
@@ -77,11 +77,11 @@ export function CompareRevisionsDialog({
       <label className="comparison-endpoint">
         <span>
           <strong>{side}</strong> ·{" "}
-          {side === "From" ? "comparison baseline" : "compared state"}
+          {side === "From" ? "starting point" : "compared state"}
         </span>
         <select
           ref={side === "From" ? fromSelect : undefined}
-          aria-label={`${side} revision`}
+          aria-label={`${side} version`}
           value={id}
           title={
             endpoint.status === "available"
@@ -93,9 +93,9 @@ export function CompareRevisionsDialog({
             setShowUnchanged(false);
           }}
         >
-          <option value="">Choose {side} revision</option>
+          <option value="">Choose {side} version</option>
           {id && !options.some((o) => o.id === id) ? (
-            <option value={id}>Unavailable revision · {id}</option>
+            <option value={id}>Unavailable version · {id}</option>
           ) : null}
           {options.map((option) => (
             <option value={option.id} key={option.id}>
@@ -105,7 +105,7 @@ export function CompareRevisionsDialog({
         </select>
         {id && endpoint.status === "unavailable" ? (
           <span className="comparison-endpoint-error" role="alert">
-            {side} revision unavailable. {endpoint.reason}
+            {side} version unavailable. {endpoint.reason}
           </span>
         ) : null}
         {endpoint.status === "available" ? (
@@ -116,8 +116,8 @@ export function CompareRevisionsDialog({
             <span className="muted small">
               {endpoint.revision.manifest.files.length} files ·{" "}
               {endpoint.revision.integrityStatus === "objects_verified"
-                ? "Metadata and file contents previously verified"
-                : "Metadata verified · file contents not checked"}
+                ? "Records and file contents checked"
+                : "Records checked · file contents not checked yet"}
             </span>
           </>
         ) : null}
@@ -131,9 +131,9 @@ export function CompareRevisionsDialog({
   const identityChanges = fromComponents && toComponents ? [
     ...fromComponents.files.flatMap(file => {
       const next = toComponents.files.find(f => f.componentId === file.componentId);
-      return next && next.path !== file.path ? [`Same component: ${file.path} → ${next.path}`] : [];
+      return next && next.path !== file.path ? [`Same file: ${file.path} → ${next.path}`] : [];
     }),
-    ...fromComponents.files.flatMap(file => toComponents.files.some(f => f.path === file.path && f.componentId !== file.componentId) ? [`Different components at ${file.path}`] : []),
+    ...fromComponents.files.flatMap(file => toComponents.files.some(f => f.path === file.path && f.componentId !== file.componentId) ? [`Different files at ${file.path}`] : []),
   ] : [];
   type Row = {
     path: string;
@@ -205,7 +205,7 @@ export function CompareRevisionsDialog({
               <p className="small">
                 {file
                   ? `${formatBytes(file.size)} · present`
-                  : "Not present in this revision"}
+                  : "Not present in this version"}
               </p>
               {notes.length ? (
                 <div className="comparison-file-notes">
@@ -219,7 +219,7 @@ export function CompareRevisionsDialog({
                 </div>
               ) : (
                 <p className="muted small">
-                  No per-file notes at this endpoint.
+                  No per-file notes for this version.
                 </p>
               )}
             </section>
@@ -236,11 +236,11 @@ export function CompareRevisionsDialog({
     (diff?.addedDirectories.length ?? 0) +
     (diff?.deletedDirectories.length ?? 0);
   return (
-    <Modal title="Compare saved revisions" onClose={onClose}>
+    <Modal title="Compare saved versions" onClose={onClose}>
       <div className="revision-comparison">
         <p className="muted">
-          From → To compares saved file bytes using manifest hashes. This does
-          not analyze geometry or CAD compatibility.
+          From → To compares the saved files by their checksums. It does not
+          look inside the files or check that they fit together.
         </p>
         <div className="comparison-selectors">
           {endpointControls("From", fromId, setFromId)}
@@ -286,8 +286,8 @@ export function CompareRevisionsDialog({
         {!fromId || !toId ? (
           <Notice>
             {!fromId
-              ? "Choose a From revision to set the comparison baseline."
-              : "Choose a To revision."}
+              ? "Choose a From version to start the comparison."
+              : "Choose a To version."}
           </Notice>
         ) : null}
         {comparison.status === "unavailable" && fromId && toId ? (
@@ -298,9 +298,9 @@ export function CompareRevisionsDialog({
         {result ? (
           <>
             <p className="small muted">
-              Notes are recorded at the selected endpoints only; they do not
-              summarize intervening revisions. This comparison does not verify
-              stored binary contents.
+              Notes are shown for the two chosen versions only, not for the
+              versions in between. This comparison does not re-check the stored
+              file contents.
             </p>
             <div
               className="comparison-counts"
@@ -321,21 +321,21 @@ export function CompareRevisionsDialog({
               )}
             </div>
             {scopePath && !changed.length && !unchanged.length ? (
-              <Notice>The selected path is absent in both revisions.</Notice>
+              <Notice>The selected path is absent in both versions.</Notice>
             ) : !changed.length ? (
               <Notice>
                 {scopePath
                   ? "No byte differences for this file."
                   : directoryCount
                     ? "No file differences. Project directory changes are listed below."
-                    : "No file or directory differences between these saved snapshots."}
+                    : "No file or folder differences between these versions."}
               </Notice>
             ) : null}
-            <section aria-label="Overall engineering notes">
+            <section aria-label="Overall notes">
               <details className="disclosure comparison-overall-notes" open>
-                <summary>Overall engineering notes</summary>
+                <summary>Overall notes</summary>
                 <p className="muted small">
-                  These notes describe the complete project revision, including
+                  These notes describe the complete project version, including
                   when comparing a single file.
                 </p>
                 <div className="comparison-file-endpoints">
@@ -357,7 +357,7 @@ export function CompareRevisionsDialog({
                         <NotesText notes={revision.manifest.notes} />
                       ) : (
                         <p className="muted small">
-                          No overall engineering notes at this endpoint.
+                          No overall notes for this version.
                         </p>
                       )}
                     </section>
@@ -390,8 +390,8 @@ export function CompareRevisionsDialog({
             <details className="disclosure comparison-technical">
               <summary>Technical details</summary>
               {identityChanges.length ? (
-                <section aria-label="Component identity between endpoints">
-                  <h4>Component identity between endpoints</h4>
+                <section aria-label="File identity between the two versions">
+                  <h4>File identity between the two versions</h4>
                   {identityChanges.map((message) => (
                     <p className="file-path" key={message}>
                       {message}
@@ -404,8 +404,8 @@ export function CompareRevisionsDialog({
               ) : null}
               {!fromComponents || !toComponents ? (
                 <p className="muted small">
-                  Component continuity is unavailable at one or both endpoints.
-                  This comparison uses saved paths and byte hashes.
+                  Renames could not be followed for one or both versions.
+                  This comparison uses saved paths and file checksums.
                 </p>
               ) : null}
               <section aria-label="File checksums">

@@ -125,7 +125,7 @@ test("get this version: unsaved edits are kept in Discarded, other unsaved chang
   assert.equal(await f.read("Keep.txt"), "keep unsaved");
 });
 
-test("get this version: a file renamed since that revision, or a different file using its name, is blocked", async () => {
+test("get this version: a file renamed since that version, or a different file using its name, is blocked", async () => {
   const f = await setup();
   // Rename A.txt to B.txt with a confirmed identity decision.
   await f.main.removeEntry(["A.txt"]);
@@ -135,7 +135,7 @@ test("get this version: a file renamed since that revision, or a different file 
   await f.save({ identityReview: createIdentityReview(s, scan, [{ from: "A.txt", to: "B.txt" }], []) });
   const renamed = await f.plan(["A.txt"], f.r1);
   assert.equal(renamed.plan.ready, false);
-  assert.match(renamed.plan.blockers.join(" "), /renamed since that revision/);
+  assert.match(renamed.plan.blockers.join(" "), /renamed since that version/);
   // A new, different file now called Keep.txt (the old one replaced).
   await f.w("Keep.txt", "another file");
   s = await f.state();
@@ -155,7 +155,7 @@ test("get this version: a file renamed since that revision, or a different file 
   assert.equal((await f.ops()).length, 0);
 });
 
-test("get this version plans: one file only, it must be in that revision, and it must differ", async () => {
+test("get this version plans: one file only, it must be in that version, and it must differ", async () => {
   const f = await setup();
   assert.match((await f.plan(["A.txt", "Keep.txt"], f.r1)).plan.blockers.join(" "), /one file/);
   assert.match((await f.plan(["Old"], f.r1)).plan.blockers.join(" "), /no file at Old/);

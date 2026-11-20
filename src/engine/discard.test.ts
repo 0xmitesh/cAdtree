@@ -115,7 +115,7 @@ async function edit(f: Awaited<ReturnType<typeof setup>>) {
 
 const ALL = ["A.txt", "New.txt", "Gone.txt", "Added", "Empty", "Old"];
 
-test("discard all: added, modified and deleted files and folders go back to the latest revision", async () => {
+test("discard all: added, modified and deleted files and folders go back to the latest version", async () => {
   const f = await setup();
   const clean = { files: await f.files(f.main), dirs: await f.dirs(f.main) };
   await edit(f);
@@ -175,7 +175,7 @@ test("discard all: added, modified and deleted files and folders go back to the 
   assert.match(note, /Case: Main/);
   assert.match(note, /Working folder: working\/main/);
   assert.match(note, /Unsaved edit: A\.txt\n    copy in this folder/);
-  assert.match(note, /Unsaved deletion: Gone\.txt\n    put back from the saved revision/);
+  assert.match(note, /Unsaved deletion: Gone\.txt\n    put back from the saved version/);
   assert.match(note, /Unsaved new folder: Empty/);
   assert.match(note, /HOW TO PUT FILES BACK/);
   assert.equal(op.events.find((e) => e.kind === "kept")?.keptAs, "Discarded/2026-11-19 14.05");

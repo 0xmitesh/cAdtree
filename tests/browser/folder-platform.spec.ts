@@ -40,8 +40,8 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   }, original);
   const nav = (name: string) => page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
   const save = async (summary: string) => {
-    await page.getByRole('textbox', { name: /Revision summary/ }).fill(summary);
-    await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+    await page.getByRole('textbox', { name: /Version summary/ }).fill(summary);
+    await page.getByRole('button', { name: 'Save version', exact: true }).click();
     await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
     await expect(page.getByRole('heading', { name: '0 changed files' })).toBeVisible();
   };
@@ -56,9 +56,9 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await expect.poll(() => page.evaluate(() => (window as any).copiedPaths.at(-1))).toBe(folder(initial.prefix + '/Parts/工程'));
   await nav('History');
   await expect(page.getByRole('button', { name: /^Copy folder path/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Create design case from this revision', exact: true }).click();
+  await page.getByRole('button', { name: 'Create design case from this version', exact: true }).click();
   await page.getByRole('textbox', { name: 'Case name' }).fill('Alternative');
-  await page.getByRole('textbox', { name: 'Engineering reason' }).fill('Explore another fit');
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Why' }).fill('Explore another fit');
   await page.getByRole('dialog').getByRole('button', { name: 'Create design case', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');

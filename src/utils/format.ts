@@ -38,7 +38,7 @@ export function getCadFileTypeLabel(filePath: string): string {
   if (lower.endsWith('.step') || lower.endsWith('.stp')) return 'STEP Exchange';
   if (lower.endsWith('.iges') || lower.endsWith('.igs')) return 'IGES Exchange';
   if (lower.endsWith('.stl')) return 'STL Mesh';
-  if (lower.endsWith('.txt') || lower.endsWith('.md')) return 'Engineering Document';
+  if (lower.endsWith('.txt') || lower.endsWith('.md')) return 'Document';
   const extMatch = filePath.match(/\.([^./]+)$/);
   return extMatch ? `.${extMatch[1].toUpperCase()} File` : 'Binary File';
 }

@@ -133,7 +133,7 @@ function assertFile(file: FileEntry | null, path: string) {
       file.size < 0 ||
       !Number.isFinite(file.lastModified))
   )
-    throw new Error(`Invalid application file evidence: ${path}`);
+    throw new Error(`Invalid application file records: ${path}`);
 }
 export function applicationPath(
   branchId: string,
@@ -436,7 +436,7 @@ function classify(operation: ApplicationOperation, state: VaultState) {
         record.plan.folderActions.some((a) => !written.has(a.path)) ||
         (replace && !kept)
       )
-        throw new Error("Incomplete application cannot be marked applied.");
+        throw new Error("An unfinished Bring back or Copy cannot be marked as done.");
       applied = true;
       // A replace operation is not saved afterwards: written is finished.
       if (replace) {
@@ -446,7 +446,7 @@ function classify(operation: ApplicationOperation, state: VaultState) {
     }
     if (event.kind === "recovery-start") {
       if (published.size)
-        throw new Error("A captured application cannot be recovered.");
+        throw new Error("A Bring back or Copy that was already saved cannot be recovered.");
       recovering = true;
     }
     if (event.kind === "recovery-attempt" && !recovering)
@@ -462,7 +462,7 @@ function classify(operation: ApplicationOperation, state: VaultState) {
         !Array.isArray(event.finalFiles) ||
         event.finalFiles.length !== record.plan.actions.length
       )
-        throw new Error("Invalid capture provenance link.");
+        throw new Error("Invalid capture record link.");
       const paths = new Set<string>();
       for (const entry of event.finalFiles) {
         if (
@@ -502,19 +502,19 @@ function classify(operation: ApplicationOperation, state: VaultState) {
                 null,
             )
           )
-            throw new Error("Final captured bytes disagree with provenance.");
+            throw new Error("Final captured bytes disagree with record.");
         published.add(event.revisionId!);
       } else if (
         state.corruptedRecords.some((r) => r.revisionId === event.revisionId)
       )
         throw new Error(
-          "Application capture completion is unavailable; do not consume provenance again.",
+          "Application capture completion is unavailable; do not use the record again.",
         );
     }
     if (event.kind === "abandoned") {
       if (!applied || recovering || published.size)
         throw new Error(
-          "Only a successful uncaptured application can be abandoned.",
+          "Only a finished Bring back or Copy that is not yet saved can be left unsaved.",
         );
       operation.status = "abandoned";
       terminal = true;
@@ -528,7 +528,7 @@ function classify(operation: ApplicationOperation, state: VaultState) {
   }
   if (published.size > 1)
     throw new Error(
-      "Application provenance was attached to more than one revision.",
+      "Application record was attached to more than one version.",
     );
   if (published.size) {
     operation.status = "captured";
@@ -565,7 +565,7 @@ export async function readApplicationOperations(
             "*",
             branch.name,
             `applications/${branch.name}`,
-            "Unrecognized application branch entry. Manual inspection required.",
+            "Unrecognized application case entry. Manual inspection required.",
           ),
         );
         continue;
@@ -648,7 +648,7 @@ export function applicationCaptureBlock(
     (op) => op.status === "applied",
   );
   return blocked.length || pending.length > 1
-    ? "An unfinished or unavailable file application blocks saving. Recover or inspect its retained evidence first."
+    ? "An unfinished or unreadable Bring back or Copy blocks saving. Recover it, or look at its kept records, first."
     : undefined;
 }
 export async function appendApplicationEvent(
@@ -667,7 +667,7 @@ export async function appendApplicationEvent(
       >
     >,
 ) {
-  if (!operation.record) throw new Error("Application evidence unavailable.");
+  if (!operation.record) throw new Error("Application records unavailable.");
   const event = sealApplication({
     schemaVersion: 1 as const,
     operationId: operation.operationId,

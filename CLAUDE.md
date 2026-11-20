@@ -43,7 +43,7 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 ```
 
 **Concepts:**
-- **Revision:** an immutable, project-wide snapshot with notes. Revisions don't nest folders: bytes live in `vault/objects`.
+- **Revision** (shown to users as a **version**, labelled `V3`): an immutable, project-wide snapshot with notes. Revisions don't nest folders: bytes live in `vault/objects`. The code, record fields and on-disk names keep `revision`; only on-screen text says version (see §7).
 - **Design case:** a branch from a saved revision, with its own working folder. Cases can be hidden and unhidden, never auto-deleted (see §7).
 - **Apply:** two modes. Merge ("Copy files from <case>") brings a design case's changes into another branch. Revert ("Bring back") makes a branch match an earlier revision of itself. Both save a revision automatically after a successful write (one Confirm, reason optional; `applyAndSave`). Discard and Get this version use the same machinery (`replaceWorkingFiles`) but replace working files without saving: the result is unsaved changes, and what they replace is kept in `Discarded/` when there are bytes to keep (deletions alone keep nothing).
 - **Component identity:** a stable ID that is separate from the filename. Renames are confirmed explicitly, and identity is never guessed from names or hashes.
@@ -232,6 +232,7 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - We are in a building phase with no active users: old on-disk formats don't need to stay readable, and compatibility code may be removed (2026-11-11; legacy reference readers removed in #61).
 - Automatic scan (2026-11-19, #106): the open project or page is re-checked quietly when the tab or window regains focus and after Apply or Bring back (`useAutoRefresh`, outside `perform`, no write, no lock); the Scan for changes, Refresh home and Refresh workspace buttons are gone.
 - Optional sign-in (2026-11-19, #105): no sign-in gate for local work; sign-in lives in an Account control in the navigation rail and is described as being for future features, without claiming they exist (§1).
+- Plain words for everyone (2026-11-20): users include artists, designers, scientists and accountants, so on-screen text avoids engineering-only and internal words. A saved state is a **version**, labelled **V3** (short, no leading zeros) in every list, notice, dialog, summary, export folder name (`<Project> - <Case> - V3`) and offline-guide text; **Revision** stays reserved for a future release mark and is not used for saves on screen. A branch is a **case** (design case) on screen; the code, record fields, on-disk folder names (`revisions/`, `branches/`) and IDs are unchanged. Other plain-word swaps: Why (not Engineering reason), notes (not engineering notes), open it in the app you use (not a named CAD program). Text that code matches on (warnings starting `Duplicate`, `Cyclic`, `Damaged`) keeps those words.
 - Settings and History details live in collapsed Troubleshooting sections (2026-11-18, #99, #100).
 - Notes UI shows one Description/Note field (`modification`) with More detail for Why (`problem`) and What you noticed (`observations`); the data model is unchanged (2026-11-18, #101).
 
@@ -250,7 +251,7 @@ These are decided. Build on them; don't redesign around them. The full decision 
 
 **History and recovery**
 - Every intent for an older version has one feature (2026-11-11, "Remove Restore copy", #62–#67):
-  - look at or share it → **Export a copy** (can include the revision's references in `References/`; folder `<Project> - <Branch> - R<nn>`, `(2)` on a clash, cAdtree's part ≤ 64 characters);
+  - look at or share it → **Export a copy** (can include the version's references in `References/`; folder `<Project> - <Case> - V3`, `(2)` on a clash, cAdtree's part ≤ 64 characters);
   - make a branch match it again → **Bring back onto <branch>…** (Apply's revert mode, only for earlier revisions in that branch's history; renamed files blocked for now; one Confirm, reason optional, saved automatically, 2026-11-19, #110, #112);
   - get one file → **Get this version** (2026-11-19, #114; `replaceWorkingFiles` mode `restore-file`, built on the Apply machinery, not a parallel restore path; the result is an unsaved change, undone with Discard);
   - keep working from it → **Create design case**.

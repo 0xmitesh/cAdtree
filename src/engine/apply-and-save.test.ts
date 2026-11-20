@@ -86,8 +86,8 @@ test("Bring back saves the result under one lock: summary, Why, parent, captured
   assert.equal(result.status, "saved");
   if (result.status !== "saved") return;
   const m = result.revision.manifest;
-  assert.equal(m.summary, "Brought back Rev 001");
-  assert.equal(result.summary, "Brought back Rev 001");
+  assert.equal(m.summary, "Brought back V1");
+  assert.equal(result.summary, "Brought back V1");
   assert.deepEqual(m.notes, { problem: "Undo the R2 trial", modification: "", observations: "" });
   assert.equal(m.parentRevisionId, f.r2.revisionId);
   assert.equal(m.branchId, "branch-main");
@@ -114,14 +114,14 @@ test("Bring back saves the result under one lock: summary, Why, parent, captured
   assert.equal(scan.hasChanges, false);
 });
 
-test("undo: bringing back the previous revision restores it and saves again", async () => {
+test("undo: bringing back the previous version restores it and saves again", async () => {
   const f = await project();
   const first = await applyAndSave(f.vault, await f.review(f.r1.revisionId, "revert"), f.options);
   assert.equal(first.status, "saved");
   const undo = await applyAndSave(f.vault, await f.review(f.r2.revisionId, "revert"), f.options);
   assert.equal(undo.status, "saved");
   if (undo.status !== "saved") return;
-  assert.equal(undo.revision.manifest.summary, "Brought back Rev 002");
+  assert.equal(undo.revision.manifest.summary, "Brought back V2");
   assert.equal(undo.revision.manifest.displayNumber, 4);
   assert.deepEqual(await files(f.main), f.r2.files.map((x) => [x.path, x.sha256]).sort());
   assert.deepEqual((await f.ops()).map((o) => o.status), ["captured", "captured"]);
@@ -182,7 +182,7 @@ test("an edit between the write and the save is not swept in: stays applied, the
   assert.equal(result.status, "not-saved");
   if (result.status !== "not-saved") return;
   assert.match(result.reason, /working files changed while saving/);
-  assert.equal(result.summary, "Brought back Rev 001");
+  assert.equal(result.summary, "Brought back V1");
   assert.equal(result.operation.status, "applied");
   const state = await openExistingVault(f.vault);
   assert.equal(state.revisions.length, 2);
@@ -280,7 +280,7 @@ test("unsaved changes in the destination are refused before any write; edits are
   const f = await project();
   const review = await f.review(f.r1.revisionId, "revert");
   await f.w(f.main, "A.txt", "unsaved edit");
-  await assert.rejects(applyAndSave(f.vault, review, f.options), /uncaptured/);
+  await assert.rejects(applyAndSave(f.vault, review, f.options), /unsaved file or folder changes/);
   assert.equal(await f.main.readFileText(["A.txt"]), "unsaved edit");
   assert.deepEqual(await f.ops(), []);
   assert.equal((await openExistingVault(f.vault)).revisions.length, 2);

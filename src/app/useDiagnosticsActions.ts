@@ -83,7 +83,7 @@ export function useDiagnosticsActions({
       for (const revision of targets) {
         if (context.signal.aborted)
           throw new DOMException(
-            "Verification cancelled. Completed checks have been retained.",
+            "Verification cancelled. Completed checks have been kept.",
             "AbortError",
           );
         context.progress({
@@ -125,8 +125,8 @@ export function useDiagnosticsActions({
         setStatusBanner({
           type: corrupt ? "error" : "success",
           message: corrupt
-            ? "One or more revisions failed content verification."
-            : `Verified file contents across ${targets.length} revisions.`,
+            ? "One or more versions failed content verification."
+            : `Verified file contents across ${targets.length} versions.`,
         });
     });
   };

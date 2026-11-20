@@ -157,7 +157,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             ),
             issue:
               vault && caseLifecycle(vault, branch.branchId).status !== "active"
-                ? "Unhide hidden cases in History → Design cases. Unavailable lifecycle records require inspection."
+                ? "Unhide hidden cases in History → Design cases. Cases whose state cannot be read need a look in Settings → Troubleshooting."
                 : undefined,
             open: () => props.onProject(homeEntry, entry, branch.branchId),
           })),
@@ -374,12 +374,12 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
               ) : node.count !== undefined ? (
                 <span
                   className="tree-count"
-                  title={`${node.count} ${node.kind === "workspace" ? "projects" : "branches"}`}
+                  title={`${node.count} ${node.kind === "workspace" ? "projects" : "cases"}`}
                 >
                   <span aria-hidden="true">{node.count}</span>
                   <span className="sr-only" id={`${descriptionId}-${index}`}>
                     {node.count}{" "}
-                    {node.kind === "workspace" ? "projects" : "branches"}
+                    {node.kind === "workspace" ? "projects" : "cases"}
                   </span>
                 </span>
               ) : null}

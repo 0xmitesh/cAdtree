@@ -275,7 +275,7 @@ export async function initializeProjectVault(
     throw new Error('Project name is required.');
   }
 
-  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Revision vault');
+  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Version vault');
 
   const existingEntries = await vaultDir.listEntries();
   if (existingEntries.length > 0) {
@@ -286,7 +286,7 @@ export async function initializeProjectVault(
       );
     }
     throw new Error(
-      `Vault directory "${vaultDir.name}" is not empty (contains ${existingEntries.length} item(s)). Select a dedicated new or empty folder for the revision vault.`
+      `Vault directory "${vaultDir.name}" is not empty (contains ${existingEntries.length} item(s)). Select a dedicated new or empty folder for the version vault.`
     );
   }
 
@@ -309,7 +309,7 @@ export async function initializeProjectVault(
     branchId: MAIN_BRANCH_ID,
     projectId,
     name: 'Main',
-    reason: 'Initial primary engineering design baseline',
+    reason: 'The main design',
     startingRevisionId: null,
     createdAt: now,
     isMain: true,
@@ -338,7 +338,7 @@ export async function initializeProjectVault(
   await vaultDir.writeFileText(['branches', `${MAIN_BRANCH_ID}.json`], branchJson);
   const readBackBranch = await vaultDir.readFileText(['branches', `${MAIN_BRANCH_ID}.json`]);
   if (hashString(readBackBranch) !== hashString(branchJson)) {
-    throw new Error('Failed to verify Main branch record after initialization.');
+    throw new Error('Failed to verify Main case record after initialization.');
   }
 
   const initialized = await openExistingVault(vaultDir);
@@ -456,7 +456,7 @@ export async function openExistingVault(
       if (entry.name.endsWith('.ready.json')) {
         const branchId = entry.name.slice(0, -'.ready.json'.length);
         if (!branchEntries.some((candidate) => candidate.kind === 'file' && candidate.name === `${branchId}.branch.json`)) {
-          corruptedRecords.push({ recordPath: `branches/${entry.name}`, reason: 'Branch ready marker has no matching branch record. Restore the missing branch record.' });
+          corruptedRecords.push({ recordPath: `branches/${entry.name}`, reason: 'Case ready marker has no matching case record. Restore the missing case record.' });
         }
         continue;
       }
@@ -470,24 +470,24 @@ export async function openExistingVault(
           const branchId = entry.name.slice(0, -'.branch.json'.length);
           try {
             const marker = JSON.parse(await branchDir.readFileText([`${branchId}.ready.json`]));
-            if (marker.projectId !== parsedProject.projectId || marker.branchId !== branchId || !/^[a-f0-9]{64}$/.test(marker.recordSha256)) throw new Error('Invalid branch completion marker.');
+            if (marker.projectId !== parsedProject.projectId || marker.branchId !== branchId || !/^[a-f0-9]{64}$/.test(marker.recordSha256)) throw new Error('Invalid case completion marker.');
             expectedRecordHash = marker.recordSha256;
           } catch (error) {
-            readyMarkerError = `Branch ready marker is missing, unreadable, or malformed: ${error instanceof Error ? error.message : String(error)}`;
+            readyMarkerError = `Case ready marker is missing, unreadable, or malformed: ${error instanceof Error ? error.message : String(error)}`;
             if (!establishedBranchIds.has(branchId)) {
-              incompleteAttempts.push({ id: branchId, kind: 'uncompleted_branch', path: recordPath, detail: 'Branch publication has no valid ready marker and no committed revision. Its working copy may be incomplete; it is excluded from ready branches. Retry into a fresh folder.' });
+              incompleteAttempts.push({ id: branchId, kind: 'uncompleted_branch', path: recordPath, detail: 'Case publication has no valid ready marker and no committed version. Its working copy may be incomplete; it is excluded from ready cases. Retry into a fresh folder.' });
               continue;
             }
           }
         }
         const text = await branchDir.readFileText([entry.name]);
         if (expectedRecordHash && hashString(text) !== expectedRecordHash) {
-          readyMarkerError = 'Branch ready marker checksum does not match the branch record.';
+          readyMarkerError = 'Case ready marker checksum does not match the case record.';
           if (!establishedBranchIds.has(entry.name.slice(0, -'.branch.json'.length))) throw new Error(readyMarkerError);
         }
         const branch = JSON.parse(text) as BranchRecord;
         if (!branch || typeof branch !== 'object') {
-          corruptedRecords.push({ recordPath, reason: 'Branch record is not a JSON object.' });
+          corruptedRecords.push({ recordPath, reason: 'Case record is not a JSON object.' });
           continue;
         }
         if (branch.schemaVersion !== CADTREE_SCHEMA_VERSION) {
@@ -506,7 +506,7 @@ export async function openExistingVault(
         ) {
           corruptedRecords.push({
             recordPath,
-            reason: 'Branch record is missing required structural fields.',
+            reason: 'Case record is missing required structural fields.',
           });
           continue;
         }
@@ -517,13 +517,13 @@ export async function openExistingVault(
         ) {
           corruptedRecords.push({
             recordPath,
-            reason: 'Branch record checksum or projectId mismatch.',
+            reason: 'Case record checksum or projectId mismatch.',
           });
           continue;
         }
         branches.push(branch);
         if (readyMarkerError) {
-          const reason = `Established branch "${branch.name}" has a damaged ready marker. ${readyMarkerError} Its identity and working-folder connection remain required; saving on this branch is blocked.`;
+          const reason = `Established case "${branch.name}" has a damaged ready marker. ${readyMarkerError} Its identity and working-folder connection remain required; saving on this case is blocked.`;
           damagedBranchPublications[branch.branchId] = reason;
           corruptedRecords.push({ recordPath: `branches/${branch.branchId}.ready.json`, reason });
         }
@@ -531,14 +531,14 @@ export async function openExistingVault(
         if (err instanceof UnsupportedSchemaVersionError) throw err;
         corruptedRecords.push({
           recordPath,
-          reason: `Malformed branch record: ${err instanceof Error ? err.message : String(err)}`,
+          reason: `Malformed case record: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
     }
   }
 
   if (branches.length === 0) {
-    throw new Error('Vault integrity failure: no valid branch records found in branches/.');
+    throw new Error('Vault integrity failure: no valid case records found in branches/.');
   }
 
   branches.sort((a, b) =>
@@ -547,7 +547,7 @@ export async function openExistingVault(
 
   for (const branchId of establishedBranchIds) {
     if (!branches.some((branch) => branch.branchId === branchId)) {
-      corruptedRecords.push({ recordPath: `branches/${branchId}`, reason: `Committed branch identity "${branchId}" has no validated branch record. Folder isolation cannot be established; write operations are blocked until the record is restored.` });
+      corruptedRecords.push({ recordPath: `branches/${branchId}`, reason: `Committed case identity "${branchId}" has no validated case record. Folder isolation cannot be established; write operations are blocked until the record is restored.` });
     }
   }
 
@@ -732,7 +732,7 @@ export async function openExistingVault(
   // Check for orphan completion records whose manifest file is completely missing
   for (const [revId, comp] of completionMap.entries()) {
     if (!seenManifestRevisionIds.has(revId)) {
-      const errReason = `Committed revision ${revId} has a completion record (${comp.rawPath}) but its manifest file is missing.`;
+      const errReason = `Committed version ${revId} has a completion record (${comp.rawPath}) but its manifest file is missing.`;
       corruptedRecords.push({
         recordPath: comp.rawPath,
         revisionId: revId,
@@ -776,8 +776,8 @@ export async function openExistingVault(
         .map((r) => `${formatRevisionNumber(r.manifest.displayNumber)} (${r.manifest.revisionId})`)
         .join(', ');
       damagedBranchHeads[branch.branchId] =
-        `Branch "${branch.name}" contains damaged committed revision(s): ${damagedLabels}. ` +
-        `The intended branch head cannot be safely established; new captures are blocked to prevent history loss or duplicate numbering.`;
+        `Case "${branch.name}" contains damaged committed version(s): ${damagedLabels}. ` +
+        `The intended case head cannot be safely established; new captures are blocked to prevent history loss or duplicate numbering.`;
       // Point branchHeads to the highest displayNumber revision on the branch so UI never silently falls back to an older head
       branchHeads[branch.branchId] =
         branchRevs[branchRevs.length - 1]?.manifest.revisionId ?? null;
@@ -814,7 +814,7 @@ export async function openExistingVault(
       branchBaselineEndpoints[branch.branchId] = leaves[0];
     if (missingParentRev) {
       damagedBranchHeads[branch.branchId] =
-        `Revision ${formatRevisionNumber(missingParentRev.manifest.displayNumber)} references missing parent revision "${missingParentRev.manifest.parentRevisionId}".`;
+        `Version ${formatRevisionNumber(missingParentRev.manifest.displayNumber)} references missing parent version "${missingParentRev.manifest.parentRevisionId}".`;
       branchHeads[branch.branchId] =
         branchRevs[branchRevs.length - 1]?.manifest.revisionId ?? null;
       continue;
@@ -850,7 +850,7 @@ export async function openExistingVault(
   };
   for (const branch of branches) {
     if (branches.some((other) => other !== branch && (other.branchId === branch.branchId || branchNameKey(other.name) === branchNameKey(branch.name)))) {
-      damagedBranchHeads[branch.branchId] = `Branch "${branch.name}" has a duplicate identity or name. Operations are blocked.`;
+      damagedBranchHeads[branch.branchId] = `Case "${branch.name}" has a duplicate identity or name. Operations are blocked.`;
       delete branchBaselineEndpoints[branch.branchId];
     }
     try { getBranchBaseline(state, branch.branchId); }
@@ -907,7 +907,7 @@ export function computeRevisionDiff(
   if (!parentRev) {
     return {
       status: 'unavailable',
-      unavailableReason: `Comparison unavailable: recorded parent revision (${parentId}) was not found in vault.`,
+      unavailableReason: `Comparison unavailable: recorded parent version (${parentId}) was not found in vault.`,
       parentRevisionId: parentId,
       parentDisplayNumber: null,
       added: [],
@@ -976,7 +976,7 @@ export async function verifyRevisionObjects(
 }
 
 export function formatRevisionNumber(displayNumber: number): string {
-  return `Rev ${String(displayNumber).padStart(3, '0')}`;
+  return `V${displayNumber}`;
 }
 
 export function sanitizeFileSpecificNotes(

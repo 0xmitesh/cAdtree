@@ -23,11 +23,11 @@ test('History owns the existing case activity/Compare panel without changing ins
   await waitFor(()=>assert.equal(appBusy(ui),false));
   const nav=within(ui.getByRole('navigation',{name:'Primary navigation'}));
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
-  const summary=ui.getByRole('textbox',{name:/Revision summary/});
+  const summary=ui.getByRole('textbox',{name:/Version summary/});
   fireEvent.change(summary,{target:{value:'Keep this engineering draft'}});
   fireEvent.click(nav.getByRole('button',{name:'History'}));
   pickFile(ui, 'Bracket.SLDPRT');
-  fireEvent.click(ui.getByRole('button',{name:/Rev 003: Reviewed baseline/}));
+  fireEvent.click(ui.getByRole('button',{name:/V3: Reviewed baseline/}));
   const details=ui.container.querySelector('.revision-detail')!;
   const inspection=details.textContent;
   const before=inventorySignature(await readVerifiedInventory(s.home));
@@ -41,10 +41,10 @@ test('History owns the existing case activity/Compare panel without changing ins
   assert.equal(cases.queryByLabelText('Saved activity and divergence for Lightweight bracket'),null);
   const compare=cases.getByRole('button',{name:'Compare Lightweight bracket with Main'});
   compare.focus();fireEvent.click(compare);
-  const comparison=within(ui.getByRole('dialog',{name:'Compare saved revisions'}));
-  assert.equal((comparison.getByRole('combobox',{name:'From revision'}) as HTMLSelectElement).value,s.source.manifest.revisionId);
-  assert.equal((comparison.getByRole('combobox',{name:'To revision'}) as HTMLSelectElement).value,s.destination.manifest.revisionId);
-  assert.match(ui.getByRole('dialog',{name:'Compare saved revisions'}).textContent!,/All project files/);
+  const comparison=within(ui.getByRole('dialog',{name:'Compare saved versions'}));
+  assert.equal((comparison.getByRole('combobox',{name:'From version'}) as HTMLSelectElement).value,s.source.manifest.revisionId);
+  assert.equal((comparison.getByRole('combobox',{name:'To version'}) as HTMLSelectElement).value,s.destination.manifest.revisionId);
+  assert.match(ui.getByRole('dialog',{name:'Compare saved versions'}).textContent!,/All project files/);
   fireEvent.click(comparison.getByRole('button',{name:'Close comparison'}));
   assert.equal(document.activeElement,compare);
   assert.deepEqual(calls,{list:0,read:0,write:0});
@@ -72,7 +72,7 @@ test('History Hide case/Unhide: Main protection, unsaved-changes warning, badge,
   const saved=(await state()).vaultState.revisions.map(r=>r.manifest.revisionId);
   const caseRevisions=(await state()).vaultState.revisions.filter(r=>r.manifest.branchId===s.caseId).map(r=>r.manifest.displayNumber);
   assert.ok(caseRevisions.length);
-  const revisionButton=(n:number)=>ui.queryByRole('button',{name:new RegExp(`^Rev ${String(n).padStart(3,'0')}:`)});
+  const revisionButton=(n:number)=>ui.queryByRole('button',{name:new RegExp(`^V${n}:`)});
   assert.ok(revisionButton(caseRevisions[0]));
   const mainBefore=inventorySignature(await readVerifiedInventory(s.main));
   await s.caseFolder.writeFileText(['Bracket.SLDPRT'],'An unsaved case edit');

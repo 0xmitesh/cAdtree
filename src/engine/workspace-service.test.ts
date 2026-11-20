@@ -128,12 +128,12 @@ test("a missing projects folder fails as a plain error, not a retained destinati
   await root.removeEntry(["projects"], { recursive: true });
   await assert.rejects(createProject(root, "Anything"), (error: Error) => {
     assert.ok(!(error instanceof WorkspaceOperationError));
-    assert.doesNotMatch(error.message, /Destination retained/);
+    assert.doesNotMatch(error.message, /Destination kept/);
     return true;
   });
 });
 
-test("two projects import and reopen from one root with exact independent leaves and no artificial revisions", async () => {
+test("two projects import and reopen from one root with exact independent leaves and no artificial versions", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   const [sourceA, sourceB] = await Promise.all([
     cadSource("Source A"),
@@ -169,7 +169,7 @@ test("two projects import and reopen from one root with exact independent leaves
   }
 });
 
-test("managed Main and three cases diverge with automatic branch destinations and branch-only inventories", async () => {
+test("managed Main and three cases diverge with automatic case destinations and branch-only inventories", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   let project = await importProject(root, await cadSource(), "Actuator");
@@ -462,7 +462,7 @@ test("adoption preserves exact vault records and uncaptured working edits while 
   );
 });
 
-test("malformed mappings, unknown schemas, permission loss, and overlapping branch bindings block managed writes early", async () => {
+test("malformed mappings, unknown schemas, permission loss, and overlapping case bindings block managed writes early", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   let project = await importProject(root, await cadSource(), "Actuator");
@@ -576,7 +576,7 @@ test("project ready acknowledgement errors and convenience-independent discovery
   );
 });
 
-test("interruption at project publication and branch mapping leaves no ready alternative and retry never reuses a destination", async () => {
+test("interruption at project publication and case mapping leaves no ready alternative and retry never reuses a destination", async () => {
   for (const failure of ["import-ready", "branch-mapping"]) {
     const root = new InMemoryFileSystemAdapter("Workspace");
     await createWorkspace(root);
@@ -719,7 +719,7 @@ test("adoption refuses missing source bindings, cancellation, source changes, an
   }
 });
 
-test("concurrent managed branch creation resolves the latest portable bindings under the project lock", async () => {
+test("concurrent managed case creation resolves the latest portable bindings under the project lock", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   await createWorkspace(root);
   const project = await importProject(root, await cadSource(), "Actuator");
@@ -968,7 +968,7 @@ test("tampering is still rejected under location-independent project identity", 
   await write(mainPath, mainOriginal, `projects/anything/working/${caseLeaf.toUpperCase()}`);
   await write(casePath, caseOriginal, `projects/other/working/${caseLeaf.toLowerCase()}`);
   const collided = await resolveManagedProject(root, containerPath);
-  assert.ok(collided.issues.some((issue) => /collision|Case-insensitive/i.test(issue)));
+  assert.ok(collided.issues.some((issue) => /capital letters/.test(issue)));
   // A leaf whose folder is missing is reported and never created.
   await write(mainPath, mainOriginal, "projects/anything/working/Missing leaf");
   await write(casePath, caseOriginal, withCase.workingPaths[caseId]);
@@ -1017,7 +1017,7 @@ test("a renamed project with a new case imports into another workspace as a read
   assert.equal(reopened[0].status, "ready");
 });
 
-test("import rejects a source whose branch locations share a leaf case-insensitively and writes nothing", async () => {
+test("import rejects a source whose case locations share a leaf case-insensitively and writes nothing", async () => {
   const { root, first, renamed, target } = await renamedProjectWithCase();
   const withCase = await createManagedBranch(root, renamed, {
     sourceRevisionId: first.revision.manifest.revisionId, name: "Case A", reason: "Alt",
@@ -1030,7 +1030,7 @@ test("import rejects a source whose branch locations share a leaf case-insensiti
   await target.writeFileText(casePath, JSON.stringify(mapping));
   const other = new InMemoryFileSystemAdapter("Other workspace");
   await createWorkspace(other);
-  await assert.rejects(importProject(other, target, "ignored"), /collide/);
+  await assert.rejects(importProject(other, target, "ignored"), /capital letters/);
   const projects = (await openWorkspace(other)).projects;
   assert.equal(projects.filter((entry) => entry.status === "ready").length, 0);
   assert.equal(projects.length, 0);

@@ -67,13 +67,13 @@ export async function changeCaseLifecycle(
       ).length !== 1
     )
       throw new Error(
-        "Project or branch identity changed. Refresh before changing the case lifecycle.",
+        "The project or case changed. Refresh before hiding or unhiding a case.",
       );
     const branch = matches[0];
     if (branch.isMain)
       throw new Error("Main cannot be hidden.");
     if (!["active", "archived"].includes(request.status))
-      throw new Error("Unknown case lifecycle action.");
+      throw new Error("Unknown hide or unhide action.");
     if (
       request.status === "archived" &&
       request.branchId === request.activeBranchId
@@ -84,16 +84,16 @@ export async function changeCaseLifecycle(
     const current = caseLifecycle(state, request.branchId);
     if (current.status === "unavailable")
       throw new Error(
-        `Lifecycle evidence is unavailable. ${current.error} Inspect the retained records; it was not assumed Active.`,
+        `Lifecycle records are unavailable. ${current.error} Inspect the kept records; it was not assumed Active.`,
       );
     if (current.status === request.status) return { state, alreadySet: true };
     if (current.version !== request.expectedVersion)
       throw new Error(
-        "The case lifecycle changed since review. Refresh and review the current status before trying again.",
+        "This case was hidden or unhidden since you looked. Refresh and check its current state before trying again.",
       );
     if ((await vault.queryPermission("readwrite")) !== "granted")
       throw new Error(
-        "Reconnect the vault with write permission before changing lifecycle metadata.",
+        "Reconnect the vault with write permission before hiding or unhiding a case.",
       );
     let unsavedAtHide: number | undefined;
     if (request.status === "archived") {
@@ -113,7 +113,7 @@ export async function changeCaseLifecycle(
       const baseline = getBranchBaseline(state, request.branchId);
       if (!baseline)
         throw new Error(
-          "A trustworthy saved baseline is required before hiding this case.",
+          "This case needs a readable saved version before it can be hidden.",
         );
       const folders = options.resolveWorkingFolders
         ? await options.resolveWorkingFolders(state)
@@ -179,7 +179,7 @@ export async function changeCaseLifecycle(
         caseLifecycle(refreshed, request.branchId).version !== current.version
       )
         throw new Error(
-          "The case baseline or lifecycle changed during review. Refresh and review again.",
+          "This case changed while you were reviewing it. Refresh and review again.",
         );
       if (options.resolveWorkingFolders) {
         const checked = await options.resolveWorkingFolders(refreshed);
@@ -218,7 +218,7 @@ export async function changeCaseLifecycle(
         throw new Error("Record bytes differ from the intended change.");
     } catch (error) {
       throw new Error(
-        `Lifecycle publication was not confirmed. Reload and inspect the retained lifecycle evidence before retrying. ${warning ?? ""} ${error instanceof Error ? error.message : String(error)}`,
+        `Lifecycle publication was not confirmed. Reload and inspect the kept lifecycle records before retrying. ${warning ?? ""} ${error instanceof Error ? error.message : String(error)}`,
       );
     }
     const updated = await openExistingVault(vault);

@@ -64,7 +64,7 @@ async function scanAndDraft(ui: ReturnType<typeof render>, summary: string) {
   nav(ui, "Changes");
   await waitForScan(ui);
   await idle(ui);
-  fireEvent.change(ui.getByRole("textbox", { name: /Revision summary/ }), { target: { value: summary } });
+  fireEvent.change(ui.getByRole("textbox", { name: /Version summary/ }), { target: { value: summary } });
 }
 
 test("Returning after the open project's folder is renamed: notice, still open, new location in use, case kept", async () => {
@@ -105,7 +105,7 @@ test("Saving after a rename writes nothing to the old path, shows the notice, an
   await sample.main.writeFileText(["Pending.txt"], "work in progress");
   await scanAndDraft(ui, "Saved after rename");
   await renameFolder(root, OLD, NEW);
-  fireEvent.click(ui.getByRole("button", { name: "Save revision" }));
+  fireEvent.click(ui.getByRole("button", { name: "Save version" }));
   await idle(ui);
   assert.ok(ui.getAllByText(new RegExp(RENAMED.replace(/[()']/g, "\\$&"))).length >= 1);
   assert.equal(await exists(root, OLD), false, "nothing was recreated at the old path");
@@ -113,8 +113,8 @@ test("Saving after a rename writes nothing to the old path, shows the notice, an
   // Retry: the draft is kept, rescan, then save at the new location.
   await waitForScan(ui);
   await idle(ui);
-  assert.equal((ui.getByRole("textbox", { name: /Revision summary/ }) as HTMLInputElement).value, "Saved after rename");
-  fireEvent.click(ui.getByRole("button", { name: "Save revision" }));
+  assert.equal((ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement).value, "Saved after rename");
+  fireEvent.click(ui.getByRole("button", { name: "Save version" }));
   await idle(ui);
   assert.equal(await revisionCount(root, NEW), before + 1);
   assert.equal(await exists(root, OLD), false);
@@ -127,7 +127,7 @@ test("A copy made while the project is open: saving is refused with the duplicat
   await sample.main.writeFileText(["Pending.txt"], "work in progress");
   await scanAndDraft(ui, "Should not be saved");
   await copyFolder(root, OLD, NEW);
-  fireEvent.click(ui.getByRole("button", { name: "Save revision" }));
+  fireEvent.click(ui.getByRole("button", { name: "Save version" }));
   await idle(ui);
   assert.ok(ui.getAllByText(/every copy stays read-only/).length >= 1);
   const projects = (await openWorkspace(root)).projects.filter((p) => p.name === "Bracket Assembly");
@@ -225,7 +225,7 @@ test("A read-only state clears: after the copy is removed, Refresh lifts it and 
   assert.equal(ui.container.textContent!.includes("Managed project is read-only"), false);
   await sample.main.writeFileText(["Pending.txt"], "work in progress");
   await scanAndDraft(ui, "Saved after the copy was removed");
-  fireEvent.click(ui.getByRole("button", { name: "Save revision" }));
+  fireEvent.click(ui.getByRole("button", { name: "Save version" }));
   await idle(ui);
   assert.equal(await revisionCount(root, OLD), before + 1);
 });

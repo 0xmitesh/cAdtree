@@ -96,12 +96,12 @@ export function comparisonEndpoint(
   if (!id || matches.length === 0)
     return {
       status: "unavailable",
-      reason: "The saved revision is missing or unavailable.",
+      reason: "The saved version is missing or unavailable.",
     };
   if (matches.length !== 1)
     return {
       status: "unavailable",
-      reason: "The revision identity is ambiguous (multiple records).",
+      reason: "More than one record matches this version.",
     };
   const revision = matches[0];
   if (
@@ -111,7 +111,7 @@ export function comparisonEndpoint(
   )
     return {
       status: "unavailable",
-      reason: "The saved revision has damaged or conflicting record evidence.",
+      reason: "The saved version has damaged or conflicting records.",
     };
   const { manifest, completion } = revision;
   if (
@@ -127,7 +127,7 @@ export function comparisonEndpoint(
     return {
       status: "unavailable",
       reason:
-        "The saved revision's verified project or completion identity is inconsistent.",
+        "The saved version's project or completion record does not match.",
     };
   return { status: "available", revision };
 }

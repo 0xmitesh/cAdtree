@@ -6,7 +6,7 @@ const main = "#087f80",
   alternative = "#7060b8";
 const milestones = [
   {
-    code: "R001",
+    code: "V1",
     x: 56,
     y: 54,
     branch: "Main",
@@ -15,7 +15,7 @@ const milestones = [
     color: main,
   },
   {
-    code: "R002",
+    code: "V2",
     x: 56,
     y: 154,
     branch: "Main",
@@ -24,7 +24,7 @@ const milestones = [
     color: main,
   },
   {
-    code: "R003",
+    code: "V3",
     x: 132,
     y: 252,
     branch: "Design case",
@@ -33,7 +33,7 @@ const milestones = [
     color: alternative,
   },
   {
-    code: "R004",
+    code: "V4",
     x: 56,
     y: 354,
     branch: "Main",
@@ -51,7 +51,7 @@ export function WelcomeGraphPreview() {
     <div
       className="history-canvas welcome-graph-preview"
       role="img"
-      aria-label="Design history preview: Main develops through saved milestones while a separate design case branches from A better fit."
+      aria-label="Design history preview: Main develops through saved milestones while a separate design case starts from A better fit."
     >
       <div className="canvas-bar welcome-preview-heading">
         <span>
@@ -122,7 +122,7 @@ export function WelcomeGraphPreview() {
           />
           {milestones.map((node) => (
             <g key={node.code}>
-              {node.code === "R004" ? (
+              {node.code === "V4" ? (
                 <circle
                   cx={node.x}
                   cy={node.y}
@@ -137,7 +137,7 @@ export function WelcomeGraphPreview() {
                 cx={node.x}
                 cy={node.y}
                 r="22"
-                fill={node.code === "R004" ? main : "#fcfdfb"}
+                fill={node.code === "V4" ? main : "#fcfdfb"}
                 stroke={node.color}
                 strokeWidth="2"
               />
@@ -146,7 +146,7 @@ export function WelcomeGraphPreview() {
                 y={node.y + 4}
                 textAnchor="middle"
                 className="welcome-preview-code"
-                fill={node.code === "R004" ? "white" : node.color}
+                fill={node.code === "V4" ? "white" : node.color}
               >
                 {node.code}
               </text>

@@ -109,9 +109,8 @@ export function AppNotices({
           <IntegrityNotice state={vaultState} />
           {vaultState.incompleteAttempts.length ? (
             <Notice>
-              {vaultState.incompleteAttempts.length} incomplete or
-              interrupted operation(s) retained. These are not committed
-              revisions.
+              {vaultState.incompleteAttempts.length} unfinished
+              operation(s) were kept. They are not saved versions.
               <button
                 className="text-button"
                 disabled={busy}
@@ -127,13 +126,13 @@ export function AppNotices({
           {missingConnections.length ? (
             <Notice>
               {managedProject
-                ? "Reconnect the workspace to resolve these recorded branch locations: "
+                ? "Reconnect the workspace to find these case folders: "
                 : "Connect the working folders for "}
               {missingConnections.join(", ")} before saving or creating
-              branches.{" "}
+              cases.{" "}
               {managedProject
-                ? "Missing or moved folders will stay disconnected until their recorded location is restored."
-                : "Select each branch, then Connect folder."}
+                ? "Missing or moved folders stay disconnected until they are back where cAdtree expects them."
+                : "Select each case, then Connect folder."}
               <button
                 className="text-button"
                 disabled={busy}

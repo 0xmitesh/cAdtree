@@ -44,19 +44,19 @@ export function getBranchComparisonEndpoint(
           branchNameKey(branch.name) === branchNameKey(matches[0].name),
       )
     )
-      throw new Error("Branch identity is missing or ambiguous.");
+      throw new Error("Case identity is missing or ambiguous.");
     if (
       state.competingHeads[branchId]?.length ||
       hasUnattributedSavedEvidence(state)
     )
       throw new Error(
-        "The current saved endpoint is ambiguous or has unattributed damaged record evidence.",
+        "The current saved endpoint is ambiguous or has unattributed damaged records.",
       );
     let id: string | null;
     if (state.branchBaselineEndpoints) {
       if (!Object.hasOwn(state.branchBaselineEndpoints, branchId))
         throw new Error(
-          "The current saved endpoint cannot be established from the branch records.",
+          "The current saved endpoint cannot be established from the case records.",
         );
       id = state.branchBaselineEndpoints[branchId];
     } else {
@@ -80,17 +80,17 @@ export function getBranchBaseline(
 ): RevisionManifest | null {
   const branch = state.branches.find((b) => b.branchId === branchId);
   if (!branch)
-    throw new Error("Selected branch no longer exists in this vault.");
+    throw new Error("Selected case no longer exists in this vault.");
   if (state.damagedBranchHeads[branchId])
     throw new Error(state.damagedBranchHeads[branchId]);
   if (state.competingHeads[branchId]?.length) {
     throw new Error(
-      `Branch "${branch.name}" has competing heads. Saving is blocked.`,
+      `Case "${branch.name}" has competing heads. Saving is blocked.`,
     );
   }
   if (!branch.isMain && !branch.startingRevisionId) {
     throw new Error(
-      `Branch "${branch.name}" has no starting revision. Saving is blocked.`,
+      `Case "${branch.name}" has no starting version. Saving is blocked.`,
     );
   }
   if (branch.startingRevisionId)
@@ -100,20 +100,20 @@ export function getBranchBaseline(
   const seen = new Set<string>();
   while (cursor && cursor !== branch.startingRevisionId) {
     if (seen.has(cursor))
-      throw new Error(`Branch "${branch.name}" has cyclic ancestry.`);
+      throw new Error(`Case "${branch.name}" has cyclic ancestry.`);
     seen.add(cursor);
     const revision = state.revisions.find(
       (r) => r.manifest.revisionId === cursor,
     );
     if (!revision || revision.manifest.branchId !== branchId)
       throw new Error(
-        `Branch "${branch.name}" does not connect to its recorded origin.`,
+        `Case "${branch.name}" does not connect to its recorded origin.`,
       );
     cursor = revision.manifest.parentRevisionId;
   }
   if (branch.startingRevisionId && cursor !== branch.startingRevisionId)
     throw new Error(
-      `Branch "${branch.name}" does not connect to its recorded starting revision.`,
+      `Case "${branch.name}" does not connect to its recorded starting version.`,
     );
   return id ? assertRevisionAncestry(state, id) : null;
 }
@@ -127,12 +127,12 @@ export function assertRevisionAncestry(
   let result: RevisionManifest | undefined;
   while (id) {
     if (seen.has(id))
-      throw new Error("Cyclic revision ancestry. Operation blocked.");
+      throw new Error("Cyclic version ancestry. Operation blocked.");
     seen.add(id);
     const matches = state.revisions.filter((r) => r.manifest.revisionId === id);
     if (matches.length !== 1 || matches[0].integrityStatus === "corrupted") {
       throw new Error(
-        `Starting or parent revision "${id}" is missing, ambiguous, or damaged. Operation blocked.`,
+        `Starting or parent version "${id}" is missing, ambiguous, or damaged. Operation blocked.`,
       );
     }
     const rev = matches[0];
@@ -163,7 +163,7 @@ function assertKnownCommittedBranchIdentities(state: VaultState): void {
   ].filter((branchId) => !known.has(branchId));
   if (unaccounted.length)
     throw new Error(
-      `Folder isolation cannot be established for committed branch identities without valid records: ${unaccounted.join(", ")}. Restore their branch records before writing; history remains available for read-only inspection.`,
+      `Folder isolation cannot be established for committed case identities without valid records: ${unaccounted.join(", ")}. Restore their case records before writing; history remains available for read-only inspection.`,
     );
 }
 
@@ -181,7 +181,7 @@ export async function validateOperationWorkingFolders(
     )
   ) {
     throw new Error(
-      "Folder isolation cannot be established while branch publication records are damaged. Reconnect all branch working folders before writing; read-only inspection remains available.",
+      "Folder isolation cannot be established while case publication records are damaged. Reconnect all case working folders before writing; read-only inspection remains available.",
     );
   }
 }
@@ -208,7 +208,7 @@ export async function validateWorkingFolderBindings(
     if (!dir || !readable) {
       if (requireAll)
         throw new Error(
-          `Reconnect the working folder for "${branch.name}" to verify folder isolation. Select that branch, then Connect folder.`,
+          `Reconnect the working folder for "${branch.name}" to verify folder isolation. Select that case, then Connect folder.`,
         );
       continue;
     }
@@ -216,7 +216,7 @@ export async function validateWorkingFolderBindings(
       dir,
       vault,
       `"${branch.name}" working folder`,
-      "Revision vault",
+      "Version vault",
     );
     for (const other of connected) {
       await validateDirectoryIsolation(

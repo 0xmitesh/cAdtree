@@ -32,7 +32,7 @@ const TUTORIAL_CARDS: TutorialCard[] = [
   {
     id: "first-revision",
     title: "Save your first revision",
-    description: "Capture a meaningful design state and find your CAD files again.",
+    description: "Save a meaningful design state and find your CAD files again.",
     preview: "revision",
     category: "primary",
     status: "available",
@@ -50,7 +50,7 @@ const TUTORIAL_CARDS: TutorialCard[] = [
   {
     id: "design-alternatives",
     title: "Explore design alternatives",
-    description: "Create a separate design direction from a saved revision.",
+    description: "Create a separate design direction from a saved version.",
     preview: "alternatives",
     category: "secondary",
     status: "available",

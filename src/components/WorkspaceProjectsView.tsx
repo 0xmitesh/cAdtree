@@ -129,7 +129,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
               <div className="project-row">
                 <div className="project-copy">
                   <h3>{locations[0].name}</h3>
-                  {locations.length > 1 ? <p>{locations.length} locations for the same project identity</p> : null}
+                  {locations.length > 1 ? <p>{locations.length} locations for the same project</p> : null}
                   <p className="small">
                     {locations.length === 1 && locations[0].status === "ready"
                       ? "Ready"
@@ -140,7 +140,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                       {locations.length > 1
                         ? DUPLICATE_PROJECT_REASON
                         : locations[0].status === "incomplete"
-                          ? "Incomplete copy · Retained for inspection; retry uses a fresh folder"
+                          ? "Unfinished copy · it was kept for inspection; a retry uses a fresh folder"
                           : "Connections or records need attention · Read-only inspection available"}
                     </p>
                   ) : null}
@@ -173,7 +173,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   <summary>Location details</summary>
                   {locations[0].projectId ? (
                     <p className="file-path">
-                      Project identity: {locations[0].projectId}
+                      Project ID: {locations[0].projectId}
                     </p>
                   ) : null}
                   {locations.map((entry) => (

@@ -368,7 +368,7 @@ test('design case is unchecked without an address and proceeds', async () => {
   assert.equal(created.pathBudget.status, 'unchecked');
 });
 
-test('design case checks the deepest file of the source revision', async () => {
+test('design case checks the deepest file of the source version', async () => {
   const deep = `Parts/${'x'.repeat(120)}.SLDPRT`;
   const { root, revisionId, containerPath } = await projectWithRevision(deep);
   const before = await tree(root);

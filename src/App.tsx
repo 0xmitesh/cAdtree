@@ -438,7 +438,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           next.identity.homeId !== selected.next.identity.homeId
         )
           throw new Error(
-            "The Cadtree home identity changed during setup. Select the intended home again.",
+            "The Cadtree home changed during setup. Select the intended home again.",
           );
         // Retain the published identity for retries; no user files are removed on cancellation.
         if (context.current()) setPendingHome({ ...selected, next });
@@ -463,7 +463,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         const next = await openHome(home.root);
         if (next.identity.homeId !== home.identity.homeId)
           throw new Error(
-            "Cadtree home identity changed. Open the intended home explicitly.",
+            "The Cadtree home changed. Open the intended home again.",
           );
         const chosen = next.workspaces.find((e) => e.key === entry.key);
         if (context.current()) setHome(next);
@@ -540,7 +540,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           );
           setStatusBanner({
             type: "success",
-            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "Original workspace retained unchanged; continue editing only in this managed copy." : ""} ${pathBudgetWarnSentence(result.pathBudget)}`.trim(),
+            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "The original workspace was left unchanged; keep working only in this copy." : ""} ${pathBudgetWarnSentence(result.pathBudget)}`.trim(),
           });
           await persistWorkspace(result.workspace, undefined, undefined, next);
         } catch (error) {
@@ -649,7 +649,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       )
     )
       throw new Error(
-        "This branch is no longer available. Return to the workspace and try again.",
+        "This case is no longer available. Return to the workspace and try again.",
       );
     const preferred =
       requestedBranchId ??
@@ -752,7 +752,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           const discovered = await openHome(home.root);
           if (discovered.identity.homeId !== home.identity.homeId)
             throw new Error(
-              "Cadtree home identity changed. Reopen it explicitly.",
+              "The Cadtree home changed. Reopen it.",
             );
           const chosen = discovered.workspaces.find(
             (item) => item.key === homeWorkspace.key,
@@ -775,7 +775,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           current = await openWorkspace(workspace.root);
           if (current.identity.workspaceId !== workspace.identity.workspaceId)
             throw new Error(
-              "Workspace identity changed. Open the intended workspace explicitly.",
+              "The workspace changed. Open the intended workspace again.",
             );
         }
         const fresh = current.projects.find(
@@ -798,7 +798,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           )
         )
           throw new Error(
-            "This branch is no longer available. Return to the workspace and try again.",
+            "This case is no longer available. Return to the workspace and try again.",
           );
         if (!context.current()) return;
         setWorkspace(current);
@@ -925,8 +925,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           project,
           context,
           (source
-            ? `Continue working in this copy: ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}. Original "${source.name}" was retained and is not tracked by this managed project. Open the new copy manually in SolidWorks and check its references. Capture the initial revision explicitly.`
-            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first revision.`) + (pathBudgetWarnSentence(project.pathBudget) ? ` ${pathBudgetWarnSentence(project.pathBudget)}` : ""),
+            ? `Continue working in this copy: ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}. The original "${source.name}" was left unchanged and is not tracked by this project. Open the new copy in the app you use and check its references. Save the first version yourself.`
+            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first version.`) + (pathBudgetWarnSentence(project.pathBudget) ? ` ${pathBudgetWarnSentence(project.pathBudget)}` : ""),
         );
       },
       true,

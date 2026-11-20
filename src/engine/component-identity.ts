@@ -36,7 +36,7 @@ const directory = ['components'];
 const boundaryPath = [...directory, 'boundary.json'];
 const readyPath = [...directory, 'ready.json'];
 const recordPath = (id: string) => {
-  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unsafe revision identity.');
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unsafe version identity.');
   return [...directory, 'revisions', `${id}.json`];
 };
 export const componentRecordPath = recordPath;
@@ -133,16 +133,16 @@ export async function readComponentEvidence(vault: FileSystemDirectoryAdapter, s
     const pending = state.revisions.filter(r => !legacy.has(r.manifest.revisionId));
     const componentRevisions = await vault.getDirectory([...directory, 'revisions']);
     for (const entry of await componentRevisions.listEntries()) {
-      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) throw new Error('Unexpected component revision evidence.');
+      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) throw new Error('Unexpected component version records.');
       const revisionId = entry.name.slice(0, -5);
       if (legacy.has(revisionId)) throw new Error('Component record conflicts with the legacy boundary.');
-      if (!revisions.has(revisionId)) state.incompleteAttempts.push({ id: revisionId, kind: 'uncompleted_component', path: `components/revisions/${entry.name}`, detail: 'Component mapping has no committed revision; it is not published identity history.' });
+      if (!revisions.has(revisionId)) state.incompleteAttempts.push({ id: revisionId, kind: 'uncompleted_component', path: `components/revisions/${entry.name}`, detail: 'Component mapping has no committed version; it is not published identity history.' });
     }
     const loaded: ComponentRecord[] = [];
     // Parent order is structural, never inferred from revision numbering.
     while (pending.length) {
       const index = pending.findIndex(r => !r.manifest.parentRevisionId || legacy.has(r.manifest.parentRevisionId) || result.revisions[r.manifest.parentRevisionId]);
-      if (index < 0) throw new Error('Component parent evidence is missing or cyclic.');
+      if (index < 0) throw new Error('Component parent records are missing or cyclic.');
       const revision = pending.splice(index, 1)[0];
       if (revision.integrityStatus === 'corrupted') throw new Error('Component snapshot manifest is damaged.');
       const record: ComponentRecord = JSON.parse(await vault.readFileText(recordPath(revision.manifest.revisionId)));
@@ -161,7 +161,7 @@ export async function readComponentEvidence(vault: FileSystemDirectoryAdapter, s
       const ok = !!source && source.componentId === transfer.componentId && (applied
         ? applied.record?.plan.sourceRevisionId === transfer.sourceRevisionId && applied.record.plan.actions.some(a => a.path === transfer.path && a.operation === 'add')
         : restoreProvenance(state, record, transfer, revisions.get(record.revisionId)!.manifest));
-      if (!ok) throw new Error('Component transfer lacks verified application provenance.');
+      if (!ok) throw new Error('The copied file has no verified record of where it came from.');
     }
     result.status = 'available';
   } catch (error) {
@@ -186,9 +186,9 @@ function restoreProvenance(state: VaultState, record: ComponentRecord, transfer:
 /** Initial heads are separate registration boundaries. No equivalence is guessed
  * between distinct pre-upgrade branches or earlier reused filenames. */
 export async function writeComponentBoundary(vault: FileSystemDirectoryAdapter, state: VaultState) {
-  if (state.corruptedRecords.length || Object.keys(state.damagedBranchHeads).length || Object.keys(state.competingHeads).length || state.applicationOperations?.some(op => !isFinishedOperation(op))) throw new Error('Resolve history/application evidence before enabling component tracking.');
+  if (state.corruptedRecords.length || Object.keys(state.damagedBranchHeads).length || Object.keys(state.competingHeads).length || state.applicationOperations?.some(op => !isFinishedOperation(op))) throw new Error('Resolve the history and Bring back or Copy records before turning on rename tracking.');
   if (state.components?.status === 'available') return;
-  if (await vault.hasFile(readyPath)) throw new Error('Existing component evidence is damaged or unsupported; it cannot be replaced.');
+  if (await vault.hasFile(readyPath)) throw new Error('Existing component records are damaged or unsupported; they cannot be replaced.');
   let boundary: Boundary;
   if (await vault.hasFile(boundaryPath)) {
     boundary = JSON.parse(await vault.readFileText(boundaryPath));
@@ -200,7 +200,7 @@ export async function writeComponentBoundary(vault: FileSystemDirectoryAdapter, 
       validateFiles(seed.files, revision.manifest);
     }
   } else {
-    if (await vault.hasDirectory(directory) && (await (await vault.getDirectory(directory)).listEntries()).length) throw new Error('Incomplete component evidence cannot be regenerated.');
+    if (await vault.hasDirectory(directory) && (await (await vault.getDirectory(directory)).listEntries()).length) throw new Error('Incomplete component records cannot be regenerated.');
     const heads = new Set(state.branches.map(b => getBranchBaseline(state, b.branchId)?.revisionId).filter(Boolean));
     boundary = seal({ schemaVersion: 1, projectId: state.project.projectId, createdAt: new Date().toISOString(),
       legacy: state.revisions.map(r => ({ revisionId: r.manifest.revisionId, manifestSha256: r.completion.manifestSha256 })),
@@ -264,7 +264,7 @@ export function prepareComponentRecord(state: VaultState, scan: ScanResult, revi
   const transfers: ComponentRecord['transfers'] = (application?.record?.plan.actions ?? []).filter(a => a.operation === 'add' && files.some(f => f.path === a.path)).map(a => {
     const sourceRevisionId = application!.record!.plan.sourceRevisionId;
     const component = state.components!.revisions[sourceRevisionId]?.files.find(f => f.path === a.path);
-    if (!component) throw new Error('Applied source component evidence is unavailable.');
+    if (!component) throw new Error('Applied source component records are unavailable.');
     return { path: a.path, componentId: component.componentId, sourceRevisionId, operationId: application!.operationId };
   });
   // Get this version: a file put back at a path the baseline lacks keeps the

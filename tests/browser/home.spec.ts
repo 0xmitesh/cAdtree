@@ -84,13 +84,13 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       await page.screenshot({ path: "artifacts/screenshots/import-project.png" });
       await page.getByRole("button", { name: "Choose project folder" }).click();
       await expect(
-        page.getByRole("textbox", { name: /Revision summary/ }),
+        page.getByRole("textbox", { name: /Version summary/ }),
       ).toBeEnabled();
       await page
-        .getByRole("textbox", { name: /Revision summary/ })
+        .getByRole("textbox", { name: /Version summary/ })
         .fill(`Baseline ${name}`);
       await page
-        .getByRole("button", { name: "Save revision", exact: true })
+        .getByRole("button", { name: "Save version", exact: true })
         .click();
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       const explorerAfter = await page
@@ -290,19 +290,19 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
   await waitForScan(page);
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page
-    .getByRole("textbox", { name: /Revision summary/ })
-    .fill("Offline revision");
+    .getByRole("textbox", { name: /Version summary/ })
+    .fill("Offline version");
   await page
-    .getByRole("button", { name: "Save revision", exact: true })
+    .getByRole("button", { name: "Save version", exact: true })
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "History" })
     .click();
-  await page.getByRole("button", { name: /Offline revision/ }).click();
+  await page.getByRole("button", { name: /Offline version/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Offline revision", exact: true }),
+    page.getByRole("heading", { name: "Offline version", exact: true }),
   ).toBeVisible();
   await page.context().setOffline(false);
   expect(errors).toEqual([]);

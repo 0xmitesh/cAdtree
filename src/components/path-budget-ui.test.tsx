@@ -240,10 +240,10 @@ test("a home with no saved address is asked once before creating a design case: 
   await forgetAddresses(ui);
   assert.equal(await getWorkspacePath((await openHome(sample.home)).identity.homeId), "");
   const openCaseDialog = async (name = "Prompted case") => {
-    fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this revision" })[0]!);
+    fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this version" })[0]!);
     const dialog = within(await ui.findByRole("dialog", { name: "Create design case" }));
     fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: name } });
-    fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason" }), { target: { value: "Prompt test" } });
+    fireEvent.change(dialog.getByRole("textbox", { name: "Why" }), { target: { value: "Prompt test" } });
     fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
   };
   await openCaseDialog();
@@ -325,10 +325,10 @@ test("a second prompt replaces a pending one: the first action is cancelled, one
   const { sample, ui } = await openSampleProject();
   const before = await caseCount(sample);
   await forgetAddresses(ui);
-  fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this revision" })[0]!);
+  fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this version" })[0]!);
   const dialog = within(await ui.findByRole("dialog", { name: "Create design case" }));
   fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: "Twice" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason" }), { target: { value: "Overwrite" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Why" }), { target: { value: "Overwrite" } });
   const create = dialog.getByRole("button", { name: "Create design case" });
   fireEvent.click(create);
   await ui.findByRole("dialog", { name: "Add your Cadtree home address" });

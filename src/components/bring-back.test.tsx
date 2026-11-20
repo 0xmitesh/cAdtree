@@ -43,7 +43,7 @@ const props = (
   onCancelOperation: () => {},
 });
 const revBtn = (ui: ReturnType<typeof render>, n: string) =>
-  ui.getByRole("button", { name: new RegExp(`Rev ${n}:`) });
+  ui.getByRole("button", { name: new RegExp(`^V${Number(n)}:`) });
 function controllerSpy(extra: Partial<ApplicationController> = {}) {
   const sent: ApplicationReview[] = [];
   const controller: ApplicationController = {
@@ -72,7 +72,7 @@ test("applyModeFor: latest, revert, merge, and no baseline falls back to merge",
   assert.equal(applyModeFor(state, "r3", "no-such-branch"), "merge");
 });
 
-test("History detail: latest has no button, an older Main revision offers Bring back, a case revision offers Copy files from <case>", () => {
+test("History detail: latest has no button, an older Main version offers Bring back, a case version offers Copy files from <case>", () => {
   const ui = render(<HistoryRecoveryView {...props()} />);
   fireEvent.click(revBtn(ui, "006"));
   assert.equal(ui.queryByRole("button", { name: /Bring back onto|Copy files from/ }), null);
@@ -85,7 +85,7 @@ test("History detail: latest has no button, an older Main revision offers Bring 
   assert.equal(ui.queryByRole("button", { name: "Review changes to apply" }), null);
 });
 
-test("with a case active, an earlier Main revision before the fork says Bring back onto <case>", () => {
+test("with a case active, an earlier Main version before the fork says Bring back onto <case>", () => {
   const ui = render(<HistoryRecoveryView {...props(fixture(), "prototype")} />);
   fireEvent.click(revBtn(ui, "001"));
   assert.ok(ui.getByRole("button", { name: "Bring back onto Prototype…" }));
@@ -97,15 +97,15 @@ test("Bring back: one dialog with a read-only list grouped by change, an optiona
   const ui = render(
     <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => closed++} />,
   );
-  const dialog = ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" });
+  const dialog = ui.getByRole("dialog", { name: "Bring back V3 onto Main" });
   const w = within(dialog);
   assert.equal(w.queryAllByRole("checkbox").length, 0, "the list is read-only");
   assert.match(w.getByRole("status", { name: "What will change" }).textContent!, /^3 files will change$/);
   assert.match(w.getByRole("region", { name: "Brought back" }).textContent!, /Old\.txt/);
   assert.match(w.getByRole("region", { name: "Replaced with the older version" }).textContent!, /Parts\/Housing\.SLDPRT/);
-  assert.match(w.getByRole("region", { name: "Removed (not in Rev 003)" }).textContent!, /Extra\.txt/);
+  assert.match(w.getByRole("region", { name: "Removed (not in V3)" }).textContent!, /Extra\.txt/);
   // No Base column, no Prepare, no confirm checkbox, no reason requirement.
-  assert.doesNotMatch(dialog.textContent!, /Base|Prepare|Engineering reason/);
+  assert.doesNotMatch(dialog.textContent!, /Base|Prepare/);
   const button = w.getByRole("button", { name: "Bring back" }) as HTMLButtonElement;
   assert.equal(button.disabled, false, "the reason is optional");
   fireEvent.change(w.getByRole("textbox", { name: "Why (optional)" }), { target: { value: " Housing change was wrong " } });
@@ -175,7 +175,7 @@ test("a renamed file keeps today's blocked message, is listed apart and is left 
   );
   assert.match(
     ui.getByRole("listitem", { name: "Blocked: Old.txt" }).textContent!,
-    /renamed since that revision\. Bringing back cannot undo renames yet/,
+    /renamed since that version\. Bringing back cannot undo renames yet/,
   );
   assert.equal(ui.queryByRole("region", { name: "Brought back" }), null);
   assert.match(ui.getByRole("status", { name: "What will change" }).textContent!, /^2 files will change$/);
@@ -184,18 +184,18 @@ test("a renamed file keeps today's blocked message, is listed apart and is left 
   assert.equal("Old.txt" in sent[0].choices, false);
 });
 
-test("the Undo request opens Bring back for that revision in History", () => {
+test("the Undo request opens Bring back for that version in History", () => {
   const { controller } = controllerSpy();
   const ui = render(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 1 }} />);
   assert.equal(ui.queryByRole("dialog"), null, "a request older than the view is not replayed");
   ui.rerender(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 2 }} />);
-  assert.ok(ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" }));
+  assert.ok(ui.getByRole("dialog", { name: "Bring back V3 onto Main" }));
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   assert.equal(ui.queryByRole("dialog"), null);
   ui.rerender(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 2 }} />);
   assert.equal(ui.queryByRole("dialog"), null, "the same request does not open it again");
   ui.rerender(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 3 }} />);
-  assert.ok(ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" }));
+  assert.ok(ui.getByRole("dialog", { name: "Bring back V3 onto Main" }));
 });
 
 function capturedOperation(mode: "merge" | "revert", reason = "Because") {
@@ -244,14 +244,14 @@ function capturedOperation(mode: "merge" | "revert", reason = "Because") {
 
 test("AppliedFrom is one plain line: Brought back <rev> / Copied from <rev> on <case>, with no dangling dash when there is no reason", () => {
   const revert = render(<AppliedFrom state={capturedOperation("revert")} revisionId="final" />);
-  assert.equal(revert.container.textContent, "Brought back Rev 003 — Because");
+  assert.equal(revert.container.textContent, "Brought back V3 — Because");
   assert.equal(revert.container.querySelectorAll("details").length, 0);
   cleanup();
   const merge = render(<AppliedFrom state={capturedOperation("merge")} revisionId="final" />);
-  assert.equal(merge.container.textContent, "Copied from Rev 008 on Prototype — Because");
+  assert.equal(merge.container.textContent, "Copied from V8 on Prototype — Because");
   cleanup();
   const noReason = render(<AppliedFrom state={capturedOperation("revert", "")} revisionId="final" />);
-  assert.equal(noReason.container.textContent, "Brought back Rev 003");
+  assert.equal(noReason.container.textContent, "Brought back V3");
   cleanup();
   const long = capturedOperation("merge");
   const longReason = "Reuse the reviewed housing change but keep every newer Main development";
@@ -261,7 +261,7 @@ test("AppliedFrom is one plain line: Brought back <rev> / Copied from <rev> on <
   cleanup();
   const revertDetails = render(<AppliedFromDetails state={capturedOperation("revert")} revisionId="final" />);
   assert.doesNotMatch(revertDetails.container.textContent!, /Base:/);
-  assert.match(revertDetails.container.textContent!, /Destination baseline:/);
+  assert.match(revertDetails.container.textContent!, /Version it was applied to:/);
 });
 
 // ---- The hook with a real in-memory project ----
@@ -322,7 +322,7 @@ const revertReview = (state: VaultState, sourceId: string, reason = "") => {
   return applicationReview(buildApplyPreview(prep.context, choices, reason), choices);
 };
 
-test("success: saved automatically, reloads and rescans, and says Saved as Rev 003. To undo, bring back Rev 002 (Undo opens Bring back)", async () => {
+test("success: saved automatically, reloads and rescans, and says Saved as V3. To undo, bring back V2 (Undo opens Bring back)", async () => {
   const f = await project();
   const h = hook(f, await openExistingVault(f.vault));
   let result: any;
@@ -334,7 +334,7 @@ test("success: saved automatically, reloads and rescans, and says Saved as Rev 0
   assert.equal(h.state().revisions.length, 3, "the vault was reloaded");
   assert.equal(h.refreshes(), 1, "an automatic rescan was asked for");
   const banner = h.banners.at(-1)!;
-  assert.equal(banner.message, "Saved as Rev 003. To undo, bring back Rev 002.");
+  assert.equal(banner.message, "Saved as V3. To undo, bring back V2.");
   assert.equal(banner.action?.label, "Undo");
   act(() => banner.action!.run());
   assert.equal(h.rendered.result.current.bringBackRequest?.revisionId, f.r2.revisionId);
@@ -377,14 +377,14 @@ test("not saved: the files stay, the status says why with Save now, and the pref
   );
   assert.match(
     ui.getByRole("region").textContent!,
-    /Brought back Rev 001, but it wasn't saved: .*manifest write failed.*\. Your working files are fine\./,
+    /Brought back V1, but it wasn't saved: .*manifest write failed.*\. Your working files are fine\./,
   );
   assert.equal(ui.queryByRole("button", { name: /Abandon|Refresh/ }), null);
   fireEvent.click(ui.getByRole("button", { name: "Save now" }));
   assert.equal(saveNow!.operationId, op.operationId);
   act(() => h.rendered.result.current.handleSaveNow(saveNow!));
   const prefill = h.rendered.result.current.capturePrefill!;
-  assert.equal(prefill.summary, "Brought back Rev 001");
+  assert.equal(prefill.summary, "Brought back V1");
   assert.equal(prefill.notes.problem, "Wrong turn");
   assert.equal(prefill.branchId, "branch-main");
   const scan = await scanBranchChanges(f.main, "branch-main", getBranchBaseline(state, "branch-main"));
@@ -510,15 +510,15 @@ test("Save now fills the normal save once per request: summary, and Why with the
   );
   const notes = { problem: "Wrong turn", modification: "", observations: "" };
   const ui = render(view());
-  const summary = () => ui.getByRole("textbox", { name: /Revision summary/ }) as HTMLInputElement;
+  const summary = () => ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement;
   assert.equal(summary().value, "");
-  ui.rerender(view({ summary: "Brought back Rev 001", notes, key: "op:1" }));
-  assert.equal(summary().value, "Brought back Rev 001");
+  ui.rerender(view({ summary: "Brought back V1", notes, key: "op:1" }));
+  assert.equal(summary().value, "Brought back V1");
   assert.equal((ui.getByRole("textbox", { name: "Overall: Why" }) as HTMLTextAreaElement).value, "Wrong turn");
   fireEvent.change(summary(), { target: { value: "Edited" } });
-  ui.rerender(view({ summary: "Brought back Rev 001", notes, key: "op:1" }));
+  ui.rerender(view({ summary: "Brought back V1", notes, key: "op:1" }));
   assert.equal(summary().value, "Edited", "the same request does not overwrite the user's edits");
-  ui.rerender(view({ summary: "Brought back Rev 001", notes: { ...notes, problem: "Other" }, key: "op:2" }));
+  ui.rerender(view({ summary: "Brought back V1", notes: { ...notes, problem: "Other" }, key: "op:2" }));
   assert.equal(summary().value, "Edited", "a new request fills only empty fields");
   assert.equal((ui.getByRole("textbox", { name: "Overall: Why" }) as HTMLTextAreaElement).value, "Wrong turn");
 });

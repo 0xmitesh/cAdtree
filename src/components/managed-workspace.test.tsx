@@ -135,11 +135,11 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
   assert.equal(project.record.name, source.name);
   assert.equal(await snap(source), before);
   fireEvent.change(
-    changes(ui.container).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui.container).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "Managed baseline" } },
   );
   fireEvent.click(
-    changes(ui.container).getByRole("button", { name: "Save revision" }),
+    changes(ui.container).getByRole("button", { name: "Save version" }),
   );
   await idle(ui);
   assert.equal((await openExistingVault(project.vaultDir)).revisions.length, 1);
@@ -147,7 +147,7 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
   const pickerCount = picker.calls();
   for (const name of ["Case A", "Case B", "Case C"]) {
     fireEvent.click(
-      ui.getByRole("button", { name: "Create design case from this revision" }),
+      ui.getByRole("button", { name: "Create design case from this version" }),
     );
     await waitFor(() => assert.ok(ui.queryByRole("dialog")));
     dialog = within(ui.getByRole("dialog"));
@@ -156,7 +156,7 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
       target: { value: name },
     });
     fireEvent.change(
-      dialog.getByRole("textbox", { name: "Engineering reason" }),
+      dialog.getByRole("textbox", { name: "Why" }),
       { target: { value: `Explore ${name}` } },
     );
     fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
@@ -205,7 +205,7 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
   assert.equal(await snap(source), before);
 });
 
-test("UI surfaces missing managed leaves before branch actions and preserves read-only history", async () => {
+test("UI surfaces missing managed leaves before case actions and preserves read-only history", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
@@ -238,7 +238,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   assert.equal(
     (
       ui.getByRole("button", {
-        name: "Create design case from this revision",
+        name: "Create design case from this version",
       }) as HTMLButtonElement
     ).disabled,
     true,
@@ -257,7 +257,7 @@ test("UI surfaces missing managed leaves before branch actions and preserves rea
   );
 });
 
-test("managed action preflight notices a folder lost after opening, before it displays a branch form", async () => {
+test("managed action preflight notices a folder lost after opening, before it displays a case form", async () => {
   const home = new InMemoryFileSystemAdapter("Cadtree");
   await createHome(home);
   const { workspace: { root } } = await createHomeWorkspace(home, "Workbench");
@@ -280,7 +280,7 @@ test("managed action preflight notices a folder lost after opening, before it di
   await root.removeEntry(project.workingPaths["branch-main"].split("/"), {
     recursive: true,
   });
-  fireEvent.click(ui.getByRole("button", { name: "Create design case from this revision" }));
+  fireEvent.click(ui.getByRole("button", { name: "Create design case from this version" }));
   await waitFor(() =>
     assert.match(
       ui.container.querySelector(".global-integrity")!.textContent!,

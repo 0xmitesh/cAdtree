@@ -355,7 +355,7 @@ export function ProjectViews({
           operationsBlockedReason={
             managedBlockReason ??
             (managedProject && missingConnections.length
-              ? "Reconnect workspace before creating branches."
+              ? "Reconnect workspace before creating cases."
               : undefined)
           }
           onCreateBranch={handleCreateBranch}

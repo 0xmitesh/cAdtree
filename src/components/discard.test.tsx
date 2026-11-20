@@ -305,7 +305,7 @@ test("Bring back with unsaved changes: Discard them opens Discard all for the ca
   const confirm = ui.getByRole("button", { name: "Discard" });
   await waitFor(() => assert.equal(confirm.hasAttribute("disabled"), false));
   fireEvent.click(confirm);
-  await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" })));
+  await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Bring back V3 onto Main" })));
   assert.equal(calls.discard.length, 1);
   assert.equal(saveFirst, 0);
 });

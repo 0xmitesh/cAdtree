@@ -217,12 +217,12 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     diff?.status === "unavailable"
       ? (rev?.manifest.files ?? []).map((file) => ({
           file,
-          status: "Snapshot",
+          status: "In this version",
         }))
       : [
           ...(diff?.added ?? []).map((file) => ({
             file,
-            status: diff?.status === "baseline" ? "Baseline" : "Added",
+            status: diff?.status === "baseline" ? "First version" : "Added",
           })),
           ...(diff?.modified ?? []).map((m) => ({
             file: m.current,
@@ -241,7 +241,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
             file: fileRecord.file,
             status:
               fileRecord.kind === "unavailable"
-                ? "Snapshot"
+                ? "In this version"
                 : fileRecord.status === "Inherited state"
                   ? "Unchanged"
                   : fileRecord.status,
@@ -322,9 +322,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
             : props.caseControls}
         </details>
       ) : null}
-      {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Files are listed by path and snapshot comparison remains available.</Notice> : null}
+      {vaultState.components?.reason ? <Notice type="error">{vaultState.components.reason} Files are listed by path and comparing versions still works.</Notice> : null}
       {filePath && !componentId ? <p className="muted small">Renames are not followed for this file.</p> : null}
-      {componentId ? <p className="muted small">Follows this file across renames. Revisions saved before it was tracked show as history unavailable.</p> : null}
+      {componentId ? <p className="muted small">Follows this file across renames. Versions saved before it was tracked show as history unavailable.</p> : null}
       {activeBranch && !activeBranch.isMain ? (
         <section className="branch-origin">
           <strong>{activeBranch.name}</strong>
@@ -337,10 +337,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
               on{" "}
               {vaultState.branches.find(
                 (b) => b.branchId === origin.manifest.branchId,
-              )?.name ?? "Unknown branch"}
+              )?.name ?? "Unknown case"}
             </button>
           ) : (
-            <span>Starting revision is unavailable. Saving is blocked.</span>
+            <span>Starting version is unavailable. Saving is blocked.</span>
           )}
           <p>{activeBranch.reason}</p>
         </section>
@@ -358,7 +358,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
         <div className="empty-state">
           <History size={32} />
           <h2>Your design history starts here</h2>
-          <p>Save your first revision to preserve the complete project.</p>
+          <p>Save your first version to preserve the complete project.</p>
           <button className="button primary" onClick={props.onGoToChanges}>
             Review changes
           </button>
@@ -375,7 +375,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
             fileRecords={projection?.records}
           />
           {rev && diff ? (
-            <aside className="revision-detail" aria-label="Revision details">
+            <aside className="revision-detail" aria-label="Version details">
               <div className="detail-header">
                 <div className="detail-revision-row">
                   <div className="revision-eyebrow">
@@ -407,7 +407,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     aria-label="Selected file history"
                   >
                     <strong className="file-path" title={historicalPath}>
-                      {historicalPath || 'Component absent'}
+                      {historicalPath || 'File absent'}
                     </strong>
                     {fileRecord.previousPath ? <p className="file-path">Confirmed rename: {fileRecord.previousPath} → {historicalPath}</p> : null}
                     <p>
@@ -418,7 +418,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     </p>
                     {fileRecord.kind === "context" ? (
                       <p className="muted small">
-                        Context only; this revision did not change the file.{" "}
+                        Context only; this version did not change the file.{" "}
                         {fileRecord.file
                           ? "The case inherits this saved file state."
                           : "The file is absent at this origin."}
@@ -426,8 +426,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     ) : null}
                     {fileRecord.kind === "unavailable" ? (
                       <Notice type="error">
-                        The revision or its parent evidence is missing, damaged,
-                        or ambiguous. A file change cannot be established.
+                        The version or the one before it is missing or damaged. A file change cannot be established.
                       </Notice>
                     ) : null}
                     {fileNotes.length ? (
@@ -436,7 +435,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       ))
                     ) : (
                       <p className="muted small">
-                        No per-file notes recorded in this revision.
+                        No per-file notes recorded in this version.
                       </p>
                     )}
                   </section>
@@ -451,9 +450,9 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   </time>
                 </div>
                 {damaged ? (
-                  <p className="integrity damaged">
+                  <p className="damaged">
                     <ShieldCheck size={14} />
-                    Damaged revision · export blocked
+                    Damaged version · export blocked
                   </p>
                 ) : null}
                 {selected.warnings.length ? (
@@ -479,7 +478,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 state={vaultState}
                 revisionId={rev.manifest.revisionId}
               />
-              <div className="detail-tabs" aria-label="Revision sections">
+              <div className="detail-tabs" aria-label="Version sections">
                 {(["changes", "references", "notes"] as const).map((t) => (
                   <button
                     key={t}
@@ -501,35 +500,34 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         {filePath
                           ? "Selected file"
                           : diff.status === "baseline"
-                            ? "Initial baseline"
+                            ? "First version"
                             : diff.status === "unavailable"
-                              ? "Snapshot files"
+                              ? "Files in this version"
                               : "Changed files"}
                       </h3>
                       <span className="muted">
-                        {rev.manifest.files.length} in snapshot
+                        {rev.manifest.files.length} in this version
                       </span>
                     </div>
                     {filePath ? (
                       fileRecord?.kind !== "unavailable" ? (
                         <p className="muted small">
                           {rev.manifest.parentRevisionId
-                            ? `Compared with the recorded parent · ${fileRecord?.status}`
-                            : "Initial recorded file addition."}{" "}
+                            ? `Compared with the version before it · ${fileRecord?.status}`
+                            : "This file was added in the first version."}{" "}
                           Byte changes do not necessarily indicate geometry
                           changes.
                         </p>
                       ) : null
                     ) : diff.status === "baseline" ? (
                       <p className="muted small">
-                        The first complete project state; no earlier revision to
+                        The first complete project state; no earlier version to
                         compare.
                       </p>
                     ) : diff.status === "unavailable" ? (
                       <Notice type="error">
-                        Comparison is unavailable because this revision or its
-                        recorded parent is missing or damaged. Snapshot files
-                        are listed below. See Troubleshooting below for the record
+                        Comparison is unavailable because this version or its
+                        recorded parent is missing or damaged. The files in this version are listed below. See Troubleshooting below for the record
                         information.
                       </Notice>
                     ) : (
@@ -537,7 +535,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                         Compared with{" "}
                         {diff.parentDisplayNumber
                           ? formatRevisionNumber(diff.parentDisplayNumber)
-                          : "recorded parent"}{" "}
+                          : "the version before it"}{" "}
                         · {diff.added.length} added · {diff.modified.length}{" "}
                         modified · {diff.deleted.length} deleted
                       </p>
@@ -582,7 +580,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                           </div>
                           {status === "Deleted" ? (
                             <div className="deleted-help">
-                              {componentId ? 'This component is absent from this revision; a different component may use its old path.' : 'Absent from this revision.'}{" "}
+                              {componentId ? 'This file is not in this version; a different file may use its old path.' : 'Absent from this version.'}{" "}
                               {diff.parentRevisionId &&
                               vaultState.revisions.some(
                                 (r) =>
@@ -595,10 +593,10 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                                     choose(diff.parentRevisionId!, true)
                                   }
                                 >
-                                  View in parent revision ↗
+                                  View in the version before ↗
                                 </button>
                               ) : (
-                                "Earlier revision unavailable."
+                                "Earlier version unavailable."
                               )}
                             </div>
                           ) : null}
@@ -639,7 +637,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                   <RevisionReferenceContext key={rev.manifest.revisionId} state={vaultState} revisionId={rev.manifest.revisionId} onRetrieve={props.onRetrieveReference} />
                 ) : tab === "notes" ? (
                   <>
-                    <h3>Overall engineering notes</h3>
+                    <h3>Overall notes</h3>
                     {Object.values(rev.manifest.notes).some((v) => v.trim()) ? (
                       <NotesText notes={rev.manifest.notes} />
                     ) : (
@@ -683,7 +681,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       )
                     }
                   >
-                    <GitBranch size={16} /> Create design case from this revision
+                    <GitBranch size={16} /> Create design case from this version
                   </button>
                 ) : null}
                 {props.onExportForReview ? <button className="button secondary" disabled={damaged || verifying || preparing || props.isExporting || Boolean(props.operationsBlockedReason)} onClick={() => setExportRevisionId(rev.manifest.revisionId)}>Export a copy</button> : null}
@@ -704,18 +702,18 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 ) : null}
                 <dl className="technical-data">
                   {Object.entries({
-                    Revision: rev.manifest.revisionId,
+                    Version: rev.manifest.revisionId,
                     Parent:
                       rev.manifest.parentRevisionId ??
-                      "None — initial baseline",
-                    Branch: rev.manifest.branchId,
+                      "None — first version",
+                    Case: rev.manifest.branchId,
                     Project: rev.manifest.projectId,
                     Schema: rev.manifest.schemaVersion,
-                    "Manifest SHA-256": rev.manifest.manifestPayloadSha256,
-                    "Completion SHA-256": rev.completion.manifestSha256,
+                    "Version record checksum (SHA-256)": rev.manifest.manifestPayloadSha256,
+                    "Completion checksum (SHA-256)": rev.completion.manifestSha256,
                     "Record path": `revisions/${rev.manifest.revisionId}.manifest.json`,
-                    "Capture started (UTC)": rev.manifest.captureStartedAt,
-                    "Capture completed (UTC)": rev.manifest.captureCompletedAt,
+                    "Save started (UTC)": rev.manifest.captureStartedAt,
+                    "Save finished (UTC)": rev.manifest.captureCompletedAt,
                   }).map(([k, v]) => (
                     <div key={k}>
                       <dt>{k}</dt>
@@ -731,7 +729,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                 {rev.integrityStatus === "objects_verified" ? (
                   <p className="integrity">
                     <ShieldCheck size={14} />
-                    Metadata and file contents verified
+                    Records and file contents checked
                   </p>
                 ) : null}
                 <button
@@ -802,7 +800,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           sourceBranchName={
             vaultState.branches.find(
               (b) => b.branchId === source.manifest.branchId,
-            )?.name ?? "Unknown branch"
+            )?.name ?? "Unknown case"
           }
           branchNames={vaultState.branches.map((b) => b.name)}
           busy={props.isCreatingBranch ?? false}

@@ -59,19 +59,19 @@ test("graph draws a dashed line toward the source and names it on the row", () =
   // Links run in the gutter right of both dots, so never over a parent line.
   for (const line of lines) assert.match(line.getAttribute("d")!, /^M [\d.]+ [\d.]+ Q .* V .* Q /);
   for (const p of parents) assert.equal(p.getAttribute("stroke-dasharray"), null);
-  const merged = ui.getByRole("button", { name: /^Rev 006:/ });
-  assert.match(merged.getAttribute("aria-label")!, /, copied from Rev 008$/);
-  assert.equal(merged.getAttribute("title"), "copied from Rev 008");
-  assert.match(ui.getByRole("button", { name: /^Rev 005:/ }).getAttribute("aria-label")!, /, brought back Rev 003$/);
-  assert.equal(ui.getByRole("button", { name: /^Rev 004:/ }).getAttribute("title"), null);
+  const merged = ui.getByRole("button", { name: /^V6:/ });
+  assert.match(merged.getAttribute("aria-label")!, /, copied from V8$/);
+  assert.equal(merged.getAttribute("title"), "copied from V8");
+  assert.match(ui.getByRole("button", { name: /^V5:/ }).getAttribute("aria-label")!, /, brought back V3$/);
+  assert.equal(ui.getByRole("button", { name: /^V4:/ }).getAttribute("title"), null);
 });
 
 test("graph order stays newest first with copy links present", () => {
   const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: stateWithCopies() })} />);
-  const withCopies = [...ui.container.querySelectorAll(".graph-hit")].map((r) => /Rev (\d{3})/.exec(r.getAttribute("aria-label")!)![1]);
+  const withCopies = [...ui.container.querySelectorAll(".graph-hit")].map((r) => /V(\d+)/.exec(r.getAttribute("aria-label")!)![1]);
   cleanup();
   const plain = render(<HistoryRecoveryView {...historyProps({ vaultState: scenarioState("branches") })} />);
-  const without = [...plain.container.querySelectorAll(".graph-hit")].map((r) => /Rev (\d{3})/.exec(r.getAttribute("aria-label")!)![1]);
+  const without = [...plain.container.querySelectorAll(".graph-hit")].map((r) => /V(\d+)/.exec(r.getAttribute("aria-label")!)![1]);
   assert.deepEqual(withCopies, without);
 });
 
@@ -79,9 +79,9 @@ test("List view shows the same as small text", () => {
   const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: stateWithCopies() })} />);
   fireEvent.click(ui.getByRole("button", { name: "List" }));
   const rows = [...ui.container.querySelectorAll(".revision-list-row")];
-  const text = (n: string) => rows.find((r) => r.textContent!.includes(`Rev ${n}`))!.querySelector(".copy-note")?.textContent;
-  assert.equal(text("006"), "copied from Rev 008");
-  assert.equal(text("005"), "brought back Rev 003");
+  const text = (n: string) => rows.find((r) => r.textContent!.includes(`V${Number(n)}`))!.querySelector(".copy-note")?.textContent;
+  assert.equal(text("006"), "copied from V8");
+  assert.equal(text("005"), "brought back V3");
   assert.equal(text("004"), undefined);
   assert.equal(ui.container.querySelectorAll(".graph-copy-line").length, 0);
 });
@@ -92,10 +92,10 @@ test("a copy whose source is not in the history draws nothing and does not crash
   state.branchHeads.prototype = "p1";
   const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: state })} />);
   assert.equal(ui.container.querySelectorAll('.graph-copy-line[data-copy-source="p2"]').length, 0);
-  assert.equal(ui.getByRole("button", { name: /^Rev 006:/ }).getAttribute("title"), null);
+  assert.equal(ui.getByRole("button", { name: /^V6:/ }).getAttribute("title"), null);
 });
 
-test("revision details: one plain line outside Troubleshooting, the byte and identity details inside it", () => {
+test("version details: one plain line outside Troubleshooting, the byte and identity details inside it", () => {
   const state = scenarioState("branches");
   const file = (sha: string) => ({ path: "New.txt", size: 1, sha256: sha, lastModified: 0 });
   state.applicationOperations = [
@@ -120,18 +120,18 @@ test("revision details: one plain line outside Troubleshooting, the byte and ide
     } as any,
   ];
   const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: state })} />);
-  fireEvent.click(ui.getByRole("button", { name: /^Rev 006:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /^V6:/ }));
   const troubleshooting = ui.container.querySelector<HTMLDetailsElement>(".revision-troubleshooting")!;
   const line = ui.container.querySelector(".applied-from")!;
-  assert.equal(line.textContent, "Copied from Rev 008 on Prototype — Reuse reviewed design");
+  assert.equal(line.textContent, "Copied from V8 on Prototype — Reuse reviewed design");
   assert.equal(troubleshooting.contains(line), false);
   assert.equal(troubleshooting.open, false);
-  for (const text of [/Before, applied and captured bytes/, /Application record identities/]) {
+  for (const text of [/Before, copied and saved file contents/, /Technical details/]) {
     assert.ok(troubleshooting.textContent!.match(text), String(text));
     assert.equal(line.parentElement!.textContent!.replace(troubleshooting.textContent!, "").match(text), null);
   }
   // Revisions without provenance show neither.
-  fireEvent.click(ui.getByRole("button", { name: /^Rev 004:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /^V4:/ }));
   assert.equal(ui.container.querySelector(".applied-from"), null);
   assert.equal(ui.container.querySelector(".applied-from-details"), null);
 });

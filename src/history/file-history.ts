@@ -167,7 +167,7 @@ export function fileHistory(
     if (!id) continue;
     if (!nodes.has(id)) {
       warnings.push(
-        `${branch.name}: file inheritance cannot be established; the starting revision is unavailable.`,
+        `${branch.name}: file inheritance cannot be established; the starting version is unavailable.`,
       );
       continue;
     }

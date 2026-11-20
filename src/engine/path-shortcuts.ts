@@ -20,7 +20,7 @@ export async function resolveHomeFilePath(
 ): Promise<FilePathLocation> {
   const current = await openHome(home.root);
   if (current.identity.homeId !== home.identity.homeId)
-    throw new Error("Cadtree home identity changed.");
+    throw new Error("The Cadtree home changed.");
   const registered = current.workspaces.find((e) => e.key === entry.key);
   if (
     !registered?.workspace ||
@@ -61,7 +61,7 @@ async function existingFile(
     await directory.statFile(segments);
   } catch {
     throw new Error(
-      "File path unavailable. The file is missing or cannot be read. Scan the relevant branch or reconnect the workspace; export the revision for historical bytes.",
+      "File path unavailable. The file is missing or cannot be read. Scan the relevant case or reconnect the workspace; export the version for historical bytes.",
     );
   }
   return location;
@@ -88,7 +88,7 @@ export async function resolveWorkingFilePath(
   const relativeDirectory = project.workingPaths[branchId];
   if (!directory || !relativeDirectory)
     throw new Error(
-      "File path unavailable. This branch folder is not connected. Reconnect the workspace.",
+      "File path unavailable. This case folder is not connected. Reconnect the workspace.",
     );
   return existingFile(root, directory, {
     workspaceId,
@@ -117,7 +117,7 @@ export async function resolveWorkingFolderPath(
   const relativeDirectory = project.workingPaths[branchId];
   if (!directory || !relativeDirectory)
     throw new Error(
-      "File path unavailable. This branch folder is not connected. Reconnect the workspace.",
+      "File path unavailable. This case folder is not connected. Reconnect the workspace.",
     );
   return existingFile(
     root,

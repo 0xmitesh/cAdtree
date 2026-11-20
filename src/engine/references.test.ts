@@ -167,7 +167,7 @@ test('new versions, editable details and removal preserve historical snapshots; 
   await assert.rejects(f.save(), /No changes/);
 });
 
-test('explicit component associations follow permanent identity through confirmed rename and branch origin', async () => {
+test('explicit component associations follow permanent identity through confirmed rename and case origin', async () => {
   const f = await fixture(); await f.working.writeFileText(['old.SLDPRT'], 'geometry');
   let reviewed = await f.scan();
   const first = await f.save({ referenceReview: createReferenceReview(reviewed.state, reviewed.scan, [{ referenceId: f.ref.referenceId, versionId: f.version.versionId, locator: '00:12:30–00:13:10', explanation: 'Meeting decision', component: { kind: 'pending', path: 'old.SLDPRT' } }]) });
@@ -290,7 +290,7 @@ test('applyToProject publishes the reference and its project version in one cata
   assert.ok(failed.references!.library.every(ref => ref.projectVersionId === null));
 });
 
-test('interrupted revision publication does not commit context; retry uses a fresh revision and keeps exact links', async () => {
+test('interrupted version publication does not commit context; retry uses a fresh version and keeps exact links', async () => {
   const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'geometry');
   const write = f.vault.writeFileText.bind(f.vault); let fail = true;
@@ -324,7 +324,7 @@ test('complete project copy, adoption, workspace import and disk-only relocation
   }
 });
 
-test('legacy revisions remain unannotated without rewriting manifests and missing or unsupported evidence is never regenerated', async () => {
+test('legacy versions remain unannotated without rewriting manifests and missing or unsupported evidence is never regenerated', async () => {
   const f = await fixture(); await f.working.writeFileText(['part'], 'legacy bytes'); const first = await f.save();
   if (await f.vault.hasFile(['reference-context.json'])) await f.vault.removeEntry(['reference-context.json']);
   await f.vault.removeEntry(['references'], { recursive: true });
@@ -474,7 +474,7 @@ test('reserved device names with several dots get the standard counter and never
   assert.equal(output.referencesCount, 3); assert.deepEqual(output.referencesSkipped, []);
 });
 
-test('a reference attached only to another revision stays out of this revision\'s export', async () => {
+test('a reference attached only to another version stays out of this revision\'s export', async () => {
   const f = await fixture();
   await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'one'); const first = await f.save();
@@ -494,7 +494,7 @@ test('context equality ignores display path but preserves exact version, origin,
   for (const change of [{ versionId: 'other' }, { componentId: 'other' }, { locator: 'page 5' }, { origin: 'project' as const }]) assert.notEqual(referenceContextSignature([link]), referenceContextSignature([{ ...link, ...change }]));
 });
 
-test('a missing committed context or a rechecksummed wrong revision binding is unavailable without losing CAD recovery', async () => {
+test('a missing committed context or a rechecksummed wrong version binding is unavailable without losing CAD recovery', async () => {
   for (const missing of [true, false]) {
     const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
     await f.working.writeFileText(['part'], 'geometry'); const first = await f.save(), id = first.revision.manifest.revisionId;
@@ -503,7 +503,7 @@ test('a missing committed context or a rechecksummed wrong revision binding is u
     else { const record = JSON.parse(await f.vault.readFileText(path)); record.branchId = 'wrong-branch'; record.payloadSha256 = referenceChecksum(record); await f.vault.writeFileText(path, JSON.stringify(record)); }
     const reopened = await openExistingVault(f.vault);
     assert.equal(reopened.references!.status, 'unavailable'); assert.equal(reopened.references!.contexts[id].status, 'unavailable');
-    await f.working.writeFileText(['part'], 'newer edit'); await assert.rejects(f.save(), /Reference evidence unavailable/);
+    await f.working.writeFileText(['part'], 'newer edit'); await assert.rejects(f.save(), /Reference records unavailable/);
     assert.equal((await openExistingVault(f.vault)).revisions.length, 1);
     const recovery = new InMemoryFileSystemAdapter('Recovery');
     await restoreRevisionToFolder({ vaultDir: f.vault, destinationDir: recovery, revisionId: id, workingFolders: f.folders });

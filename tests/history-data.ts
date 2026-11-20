@@ -153,7 +153,7 @@ export function scenarioState(scenario: string) {
       "Linear actuator — high precision prototype with an exceptionally long project name";
     state.competingHeads["branch-main"] = ["r5", "r6"];
     state.damagedBranchHeads["branch-main"] =
-      "One branch head contains damaged content.";
+      "One case head contains damaged content.";
     state.corruptedRecords.push({
       recordPath: "completed/unreadable.json",
       revisionId: "unreadable",

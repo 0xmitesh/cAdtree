@@ -29,7 +29,7 @@ test('one search matches reference name, file name, note and the file it applies
   assert.ok(onB.every(entry => entry.uses.length && entry.uses.every(use => use.partPath === 'B.SLDPRT')));
   // Revision details still narrow the matching associations.
   const updated = filterReferenceBrowser(model, 'Alternative updated source');
-  assert.deepEqual(updated.map(entry => entry.reference.title).sort(), ['Alpha requirement', 'Project brief'], 'the whole-project brief is also part of that revision');
+  assert.deepEqual(updated.map(entry => entry.reference.title).sort(), ['Alpha requirement', 'Project brief'], 'the whole-project brief is also part of that version');
   const alphaTwo = updated.find(entry => entry.version.versionId === f.version2.versionId)!;
   assert.equal(alphaTwo.uses.length, 1);
   assert.equal(alphaTwo.uses[0].displayNumber, 4);

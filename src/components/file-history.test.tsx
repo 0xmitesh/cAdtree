@@ -50,14 +50,14 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
       .getByRole("region", { name: "Selected file history" })
       .textContent?.includes("Bore clearance increased"),
   );
-  fireEvent.click(ui.getByRole("button", { name: /Rev 001:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V1:/ }));
   // Newest first: the next newer revision is above.
-  fireEvent.keyDown(ui.getByRole("button", { name: /Rev 001:/ }), {
+  fireEvent.keyDown(ui.getByRole("button", { name: /V1:/ }), {
     key: "ArrowUp",
   });
   assert.ok(
     ui
-      .getByRole("button", { name: /Rev 002:/ })
+      .getByRole("button", { name: /V2:/ })
       .getAttribute("aria-pressed") === "true",
   );
   fireEvent.click(ui.getByRole("button", { name: "List" }));
@@ -69,7 +69,7 @@ test("file dropdown filters both views, shows notes, preserves ancestry scope, a
     "true",
   );
 });
-test("deleted file shows its absence and links to the parent revision; export is chosen inside the export dialog", () => {
+test("deleted file shows its absence and links to the parent version; export is chosen inside the export dialog", () => {
   const state = historyState(3);
   state.revisions[1].manifest.files[1].sha256 =
     state.revisions[0].manifest.files[1].sha256;
@@ -80,7 +80,7 @@ test("deleted file shows its absence and links to the parent revision; export is
   pickFile(ui, path);
   assert.equal(ui.container.querySelectorAll('input[type="checkbox"]').length, 0);
   assert.equal(ui.queryByRole("button", { name: "Select file for export" }), null);
-  fireEvent.click(ui.getByRole("button", { name: /View in parent revision/ }));
+  fireEvent.click(ui.getByRole("button", { name: /View in the version before/ }));
   assert.ok(
     ui
       .getByRole("region", { name: "Selected file history" })
@@ -113,7 +113,7 @@ test("file history header counts changes plainly and mentions unavailable versio
     /to this file · 1 version could not be compared/,
   );
 });
-test("empty branch scope is explained and project switching resets file and branch scope", () => {
+test("empty case scope is explained and project switching resets file and case scope", () => {
   const state = scenarioState("branches");
   state.revisions.forEach((r) => {
     r.manifest.files = r.manifest.files.filter((f) => f.path !== path);
@@ -129,7 +129,7 @@ test("empty branch scope is explained and project switching resets file and bran
   pickFile(ui, path);
   assert.ok(ui.getByText(/No recorded history for this file within Prototype/));
   assert.equal(
-    ui.queryByRole("complementary", { name: "Revision details" }),
+    ui.queryByRole("complementary", { name: "Version details" }),
     null,
   );
   const next = historyState(1);
@@ -149,13 +149,13 @@ test("file filtering keeps damaged evidence visible and preserves export blockin
   state.revisions[1].integrityStatus = "corrupted";
   const ui = render(<HistoryRecoveryView {...props({ vaultState: state })} />);
   pickFile(ui, path);
-  fireEvent.click(ui.getByRole("button", { name: /Rev 002:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V2:/ }));
   assert.ok(
     ui
       .getByRole("region", { name: "Selected file history" })
       .textContent?.includes("History unavailable"),
   );
-  assert.ok(ui.getByText("Damaged revision · export blocked"));
+  assert.ok(ui.getByText("Damaged version · export blocked"));
   assert.equal(
     (
       ui.getByRole("button", {

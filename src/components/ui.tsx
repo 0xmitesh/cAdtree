@@ -161,9 +161,9 @@ export function IntegrityNotice({ state }: { state: VaultState }) {
     <Notice type="error">
       <strong>History needs attention.</strong>{" "}
       {damaged > 0 ? `${damaged} damaged record(s). ` : ""}
-      {conflicts ? "Competing branch heads. " : ""}
-      {blocked ? "The branch baseline is damaged. " : ""}Check Settings →
-      Troubleshooting. Unsafe saves and restores remain blocked.
+      {conflicts ? "A case has two latest versions. " : ""}
+      {blocked ? "A case's starting version is damaged. " : ""}Check Settings →
+      Troubleshooting. Saving stays blocked until this is fixed.
     </Notice>
   );
 }

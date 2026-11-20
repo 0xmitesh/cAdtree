@@ -422,13 +422,13 @@ async function saveRevisionOffline(user: AccountUser | null) {
     assert.ok(changesPage.getByText(/Bracket\.SLDPRT/)),
   );
   fireEvent.change(
-    changesPage.getByRole("textbox", { name: /Revision summary/ }),
+    changesPage.getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "Initial offline capture" } },
   );
 
   // Trigger capture; when signed in, request Sign out while it is running.
   const saveBtn = changesPage.getByRole("button", {
-    name: "Save revision",
+    name: "Save version",
   });
   fireEvent.click(saveBtn);
   if (user) {
@@ -459,8 +459,8 @@ async function saveRevisionOffline(user: AccountUser | null) {
   assert.equal(await working.readFileText(["Bracket.SLDPRT"]), "initial CAD geometry");
 }
 
-test("signed-in user can capture revisions offline and sign out while the save runs", () => saveRevisionOffline(DEFAULT_TEST_USER));
-test("a signed-out user can open a project and save a revision offline with no sign-in dialog", () => saveRevisionOffline(null));
+test("signed-in user can capture versions offline and sign out while the save runs", () => saveRevisionOffline(DEFAULT_TEST_USER));
+test("a signed-out user can open a project and save a version offline with no sign-in dialog", () => saveRevisionOffline(null));
 
 test("signing out and signing in as another account keeps the open home, its workspaces and the remembered home", async () => {
   const homeA = new InMemoryFileSystemAdapter("Alice Engineering Home");

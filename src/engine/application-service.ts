@@ -128,7 +128,7 @@ export function applicationReview(
 function recompute(state: VaultState, review: ApplicationReview) {
   assertCaseWritable(state,review.destinationBranchId);
   if (state.project.projectId !== review.projectId)
-    throw new Error("Project identity changed. Refresh and review again.");
+    throw new Error("The project changed. Refresh and review again.");
   const preparation = prepareApplyPreview(
     state,
     review.sourceRevisionId,
@@ -144,7 +144,7 @@ function recompute(state: VaultState, review: ApplicationReview) {
   if (!plan.ready) throw new Error(plan.blockers.join(" "));
   if (hashString(JSON.stringify(plan)) !== review.expectedPlanHash)
     throw new Error(
-      "The baseline or reviewed evidence changed. Refresh and review the plan again; no working files were changed.",
+      "The saved version or the reviewed records changed. Refresh and review again; no working files were changed.",
     );
   return { plan, context: preparation.context };
 }
@@ -238,7 +238,7 @@ async function cleanDestination(
     );
   if (scan.hasChanges)
     throw new Error(
-      "Destination has uncaptured file or directory changes. Save a revision first, then refresh and review the plan. No edits were discarded or captured automatically.",
+      "The destination has unsaved file or folder changes. Save a version first, then refresh and review again. Nothing was discarded or saved automatically.",
     );
   await assertFolderRemovalsReady(working, plan, context.destination.manifest.files);
 }
@@ -297,7 +297,7 @@ async function assertFolderRemovalsReady(
   }
   if (other.length)
     throw new Error(
-      `Destination changed: ${other.join(", ")} would remain inside a folder this application removes. Save a revision first, then refresh and review the plan. No working files were changed.`,
+      `Destination changed: ${other.join(", ")} would remain inside a folder this change removes. Save a version first, then refresh and review again. No working files were changed.`,
     );
   for (const [path, names] of clutter)
     throw new Error(
@@ -487,7 +487,7 @@ async function startOperation(
   });
   if ((await vault.readFileText(planPath)) !== text)
     throw new Error(
-      "Application plan readback failed. Reopen and inspect retained operation storage.",
+      "The plan could not be read back. Reopen the project and look at the kept operation.",
     );
   return {
     operationId,
@@ -530,7 +530,7 @@ async function stageOperation(
         );
         if (!verification.valid)
           throw new Error(
-            `Source object unavailable for ${action.path}: ${verification.reason}. Application is unfinished; recover its retained operation before retrying.`,
+            `Source object unavailable for ${action.path}: ${verification.reason}. This operation is unfinished; recover it before retrying.`,
           );
         await stageFile(
           vault,
@@ -592,13 +592,13 @@ async function writeOperation(
       } catch (error) {
         if (error instanceof FileConflictError)
           throw new Error(
-            `Destination changed at ${folder.path}; application stopped. Reopen to recover; unexpected edits will be preserved.`,
+            `Destination changed at ${folder.path}; stopped. Reopen to recover; unexpected edits will be kept.`,
           );
         throw error;
       }
       if ((await folderState(working, folder.path)) !== "directory")
         throw new Error(
-          `Applied result verification failed at ${folder.path}; recover the unfinished application.`,
+          `Applied result verification failed at ${folder.path}; recover the unfinished operation.`,
         );
       await appendApplicationEvent(vault, op, {
         kind: "written",
@@ -627,7 +627,7 @@ async function writeOperation(
         )
       )
         throw new Error(
-          `Destination changed at ${action.path}; application stopped. Reopen to recover; unexpected edits will be preserved.`,
+          `Destination changed at ${action.path}; stopped. Reopen to recover; unexpected edits will be kept.`,
         );
       throwIfCancelled(options.signal);
       if (action.after) {
@@ -650,7 +650,7 @@ async function writeOperation(
         )
       )
         throw new Error(
-          `Applied result verification failed at ${action.path}; recover the unfinished application.`,
+          `Applied result verification failed at ${action.path}; recover the unfinished operation.`,
         );
       bytes += action.after?.size ?? 0;
       await appendApplicationEvent(vault, op, {
@@ -667,16 +667,16 @@ async function writeOperation(
       const segments = splitAndValidatePath(folder.path);
       if ((await folderState(working, folder.path)) !== "directory")
         throw new Error(
-          `Destination changed at ${folder.path}; application stopped. Reopen to recover; unexpected edits will be preserved.`,
+          `Destination changed at ${folder.path}; stopped. Reopen to recover; unexpected edits will be kept.`,
         );
       if ((await (await working.getDirectory(segments)).listEntries()).length)
         throw new Error(
-          `Folder ${folder.path} is no longer empty; application stopped. Nothing inside it was deleted. Reopen to recover.`,
+          `Folder ${folder.path} is no longer empty; stopped. Nothing inside it was deleted. Reopen to recover.`,
         );
       await working.removeEntry(segments);
       if ((await folderState(working, folder.path)) !== "missing")
         throw new Error(
-          `Applied result verification failed at ${folder.path}; recover the unfinished application.`,
+          `Applied result verification failed at ${folder.path}; recover the unfinished operation.`,
         );
       await appendApplicationEvent(vault, op, {
         kind: "written",
@@ -713,7 +713,7 @@ export async function applyUnderLock(
       review.destinationBranchId,
       options,
     );
-    await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
+    await validateDirectoryIsolation(working, vault, "Working folder", "Version vault");
     await cleanDestination(working, state, review, options);
     const op = await startOperation(vault, options, {
       sourceBranchId: context.source.manifest.branchId,
@@ -742,7 +742,7 @@ export async function applyUnderLock(
     );
     if (!(await reconnected.isSameEntry(working)))
       throw new Error(
-        "Destination mapping changed during staging. Recover the retained operation before retrying.",
+        "Destination mapping changed during staging. Recover the kept operation before retrying.",
       );
     await cleanDestination(working, reloaded, review, options);
     await writeOperation(vault, working, op, options);
@@ -763,7 +763,7 @@ export async function applyUnderLock(
       })
     )
       throw new Error(
-        "Destination changed during application. Do not capture the partial result; inspect/recover this application.",
+        "The destination changed during the operation. Do not save the partial result; recover this operation.",
       );
     throwIfCancelled(options.signal);
     await appendApplicationEvent(vault, op, { kind: "applied" });
@@ -797,7 +797,7 @@ export type ApplyAndSaveResult =
       reason: string;
       error: unknown;
     };
-/** "Brought back Rev 003" or "Copied 2 files from <case>". */
+/** "Brought back V3" or "Copied 2 files from <case>". */
 export function applySaveSummary(
   state: VaultState,
   record: ApplicationRecord,
@@ -808,7 +808,7 @@ export function applySaveSummary(
     );
     return source
       ? `Brought back ${formatRevisionNumber(source.manifest.displayNumber)}`
-      : "Brought back an earlier revision";
+      : "Brought back an earlier version";
   }
   const name =
     state.branches.find((b) => b.branchId === record.sourceBranchId)?.name ??
@@ -900,7 +900,7 @@ export async function applyAndSave(
             summary,
             revision,
             vaultState: reloaded,
-            cacheWarning: `The revision was published, but its last step reported: ${error instanceof Error ? error.message : String(error)}`,
+            cacheWarning: `The version was published, but its last step reported: ${error instanceof Error ? error.message : String(error)}`,
           };
         if (current) op.status = current.status;
       } catch {
@@ -987,11 +987,11 @@ export async function replaceWorkingFiles(
     throwIfCancelled(request.signal);
     const state = await openExistingVault(vault);
     if (state.project.projectId !== request.projectId)
-      throw new Error("Project identity changed. Refresh and review again.");
+      throw new Error("The project changed. Refresh and review again.");
     assertCaseWritable(state, request.branchId);
     noUnfinished(state, request.branchId);
     const working = await connections(vault, state, request.branchId, request);
-    await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
+    await validateDirectoryIsolation(working, vault, "Working folder", "Version vault");
     const vaultPlace = await projectFolder.resolveRelativePath(vault);
     if (vaultPlace?.length !== 1 || vaultPlace[0] !== "vault")
       throw new Error(
@@ -1310,7 +1310,7 @@ export function discardedNoteText(input: {
         ? "kept inside cAdtree only (see below)"
         : entry.kind === "new folder"
           ? "not copied (path too long)"
-          : "put back from the saved revision; nothing to keep";
+          : "put back from the saved version; nothing to keep";
     lines.push(`  ${what[entry.kind]}: ${entry.path}`, `    ${where}`);
   }
   const inside = input.entries.filter((e) => e.insideOnly);
@@ -1399,13 +1399,13 @@ export async function recoverApplication(
   return withProjectWriterLock(projectId, async () => {
     const state = await openExistingVault(vault);
     if (state.project.projectId !== projectId)
-      throw new Error("Project identity changed.");
+      throw new Error("The project changed.");
     const op = branchApplications(state, branchId).find(
       (o) => o.operationId === operationId,
     );
     if (!op?.record || op.status !== "unresolved")
       throw new Error(
-        "Only a validated unfinished application can be recovered here. Unavailable evidence requires manual inspection; a Bring back or Copy that was written can be saved (Save now) or left unsaved (Don't save it).",
+        "Only an unfinished Bring back or Copy can be recovered here. If its records are unavailable, look at it yourself; a Bring back or Copy that was written can be saved (Save now) or left unsaved (Don't save it).",
       );
     const working = await connections(vault, state, branchId, options);
     await appendApplicationEvent(vault, op, { kind: "recovery-start" });
@@ -1447,7 +1447,7 @@ export async function recoverApplication(
       }
       if ((await folderState(working, folder.path)) !== "directory")
         throw new Error(
-          `Recovery verification failed for ${folder.path}. Evidence is retained.`,
+          `Recovery verification failed for ${folder.path}. Records are kept.`,
         );
     }
     // The recovery ID is allocated lazily, when the first unexpected file is staged.
@@ -1518,7 +1518,7 @@ export async function recoverApplication(
         )
       )
         throw new Error(
-          `Recovery verification failed for ${action.path}. Evidence is retained.`,
+          `Recovery verification failed for ${action.path}. Records are kept.`,
         );
     }
     await removeCreatedFolders(vault, op, working, state, touched, manualPaths, options);
@@ -1610,7 +1610,7 @@ async function removeCreatedFolders(
     await working.removeEntry(splitAndValidatePath(path));
     if ((await folderState(working, path)) !== "missing")
       throw new Error(
-        `Recovery verification failed for ${path}. Evidence is retained.`,
+        `Recovery verification failed for ${path}. Records are kept.`,
       );
   }
 }
@@ -1623,13 +1623,13 @@ export async function abandonApplication(
   return withProjectWriterLock(projectId, async () => {
     const state = await openExistingVault(vault);
     if (state.project.projectId !== projectId)
-      throw new Error("Project identity changed.");
+      throw new Error("The project changed.");
     const op = branchApplications(state, branchId).find(
       (o) => o.operationId === operationId,
     );
     if (op?.status !== "applied")
       throw new Error(
-        "Only a successful pending application can be abandoned. Recover incomplete work first.",
+        "Only a finished Bring back or Copy that is not yet saved can be left unsaved. Recover unfinished work first.",
       );
     await appendApplicationEvent(vault, op, { kind: "abandoned" });
   });

@@ -33,7 +33,7 @@ function Controls({state,scan,initial,onChange = () => {}}:{state:VaultState;sca
 test('ambiguous suggestions require an explicit target and confirmation; cancellation restores ordinary delete/add', async()=>{
   const f = await fixture(); let review:IdentityReview|undefined;
   const ui = render(<Controls {...f} onChange={value=>review=value}/>);
-  assert.ok(ui.getByText(/Ambiguous: 2 identical-content candidates/));
+  assert.ok(ui.getByText(/More than one file looks the same \(2\)/));
   assert.equal((ui.getByRole('button',{name:'Confirm rename'}) as HTMLButtonElement).disabled,true);
   assert.equal(review,undefined);
   fireEvent.change(ui.getByRole('combobox',{name:'New path for old'}),{target:{value:'second'}});
@@ -47,9 +47,9 @@ test('changed scan does not silently renew old identity decisions', async()=>{
   const f = await fixture(); let cleared=false;
   const initial = createIdentityReview(f.state,f.scan,[{from:'old',to:'first'}],[]);
   const ui = render(<Controls {...f} scan={{...f.scan,changesSignature:'different'}} initial={initial} onChange={value=>cleared=value===undefined}/>);
-  assert.ok(ui.getByRole('alert').textContent?.includes('stale'));
+  assert.ok(ui.getByRole('alert').textContent?.includes('out of date'));
   assert.equal(cleared,false);
-  fireEvent.click(ui.getByRole('button',{name:'Clear identity decisions'}));
+  fireEvent.click(ui.getByRole('button',{name:'Clear rename choices'}));
   assert.equal(cleared,true);
 });
 test('the panel renders nothing when the scan offers no rename and no decision is pending', async()=>{
@@ -71,7 +71,7 @@ test('a single identical-bytes candidate is pre-selected and confirms directly',
   const scan = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
   let review:IdentityReview|undefined;
   const ui = render(<Controls state={f.state} scan={scan} onChange={value=>review=value}/>);
-  assert.ok(ui.getByText(/Possible rename: first \(identical bytes\)/));
+  assert.ok(ui.getByText(/Possible rename: first \(identical content\)/));
   assert.equal((ui.getByRole('combobox',{name:'New path for old'}) as HTMLSelectElement).value,'first');
   fireEvent.click(ui.getByRole('button',{name:'Confirm rename'}));
   assert.deepEqual((review as IdentityReview|undefined)?.renames,[{from:'old',to:'first'}]);
@@ -81,22 +81,22 @@ test('files whose name and bytes both changed are not suggested in the panel; a 
   const scan = await scanBranchChanges(f.working,'branch-main',f.state.revisions[0].manifest);
   let captured:any;
   const ui = render(<ChangesCaptureView {...changesProps(f.state,scan,{onCapture:async(p:any)=>{captured=p;}})}/>);
-  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null,'no suggestion, so no panel');
+  assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null,'no suggestion, so no panel');
   assert.equal(ui.queryByText(/Possible rename/),null);
   fireEvent.click(ui.getByRole('button',{name:'Match to a new file — old'}));
   const dialog = within(ui.getByRole('dialog',{name:'Match to a new file'}));
   assert.equal((dialog.getByRole('button',{name:'Confirm rename'}) as HTMLButtonElement).disabled,true);
   fireEvent.change(dialog.getByRole('combobox'),{target:{value:'first'}});
   fireEvent.click(dialog.getByRole('button',{name:'Confirm rename'}));
-  const panel = within(ui.getByRole('region',{name:'Component identity'}));
+  const panel = within(ui.getByRole('region',{name:'Renamed files'}));
   assert.ok(panel.getByText('Confirmed rename: old → first'));
   assert.equal(ui.queryByRole('button',{name:'Match to a new file — old'}),null);
-  fireEvent.change(ui.getByRole('textbox',{name:/Revision summary/}),{target:{value:'Renamed and edited'}});
-  fireEvent.click(ui.getByRole('button',{name:/^Save revision$/}));
+  fireEvent.change(ui.getByRole('textbox',{name:/Version summary/}),{target:{value:'Renamed and edited'}});
+  fireEvent.click(ui.getByRole('button',{name:/^Save version$/}));
   await waitFor(()=>assert.ok(captured));
   assert.deepEqual(captured.identityReview.renames,[{from:'old',to:'first'}]);
   fireEvent.click(panel.getByRole('button',{name:'Cancel association'}));
-  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
+  assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null);
 });
 test('legacy projects show no identity controls and no enable-tracking button', async()=>{
   const f = await fixture(); await f.vault.removeEntry(['components'],{recursive:true});
@@ -105,14 +105,14 @@ test('legacy projects show no identity controls and no enable-tracking button', 
   assert.equal(ui.container.textContent,'');
   cleanup();
   const changes = render(<ChangesCaptureView {...changesProps(state,f.scan)}/>);
-  assert.equal(changes.queryByRole('region',{name:'Component identity'}),null);
+  assert.equal(changes.queryByRole('region',{name:'Renamed files'}),null);
   assert.equal(changes.queryByText(/Enable component tracking/),null);
   assert.ok(changes.getByText("Renames aren't tracked for this project."));
 });
 function changesProps(state:VaultState,scan:ScanResult,extra:object={}) {
   return {vaultState:state,activeBranchId:'branch-main',workingFolderName:'Main',vaultFolderName:'Vault',scanResult:scan,isScanStale:false,isScanning:false,isCapturing:false,progress:null,statusBanner:null,onScan:async()=>{},onCancelOperation:()=>{},onReattachWorkingFolder:async()=>{},onCapture:async()=>{},...extra};
 }
-test('Treat as new component lives in each modified or unchanged file menu and needs confirmation', async()=>{
+test('Treat as a new file lives in each modified or unchanged file menu and needs confirmation', async()=>{
   const f = await fixture();
   await f.working.removeEntry(['first']); await f.working.removeEntry(['second']); await f.working.writeFileText(['old'],'edited');
   await f.working.writeFileText(['same.txt'],'kept');
@@ -121,23 +121,23 @@ test('Treat as new component lives in each modified or unchanged file menu and n
   const state = saved.vaultState;
   const scan = await scanBranchChanges(f.working,'branch-main',saved.revision.manifest);
   const ui = render(<ChangesCaptureView {...changesProps(state,scan)}/>);
-  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null,'no panel until a decision exists');
+  assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null,'no panel until a decision exists');
   assert.equal(ui.queryByText('Replace a component identity'),null);
   fireEvent.click(ui.getByRole('button',{name:/Show 1 unchanged files/}));
-  assert.ok(ui.getByRole('button',{name:'Treat as new component — same.txt'}));
-  fireEvent.click(ui.getByRole('button',{name:'Treat as new component — old'}));
-  const dialog = within(ui.getByRole('dialog',{name:'Treat as new component'}));
+  assert.ok(ui.getByRole('button',{name:'Treat as a new file — same.txt'}));
+  fireEvent.click(ui.getByRole('button',{name:'Treat as a new file — old'}));
+  const dialog = within(ui.getByRole('dialog',{name:'Treat as a new file'}));
   fireEvent.click(dialog.getByRole('button',{name:'Cancel'}));
   assert.equal(ui.queryByRole('dialog'),null);
-  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
-  fireEvent.click(ui.getByRole('button',{name:'Treat as new component — old'}));
-  fireEvent.click(within(ui.getByRole('dialog',{name:'Treat as new component'})).getByRole('button',{name:'Confirm new component'}));
-  const panel = within(ui.getByRole('region',{name:'Component identity'}));
-  assert.ok(panel.getByText('New component at old'));
-  assert.equal(ui.queryByRole('button',{name:'Treat as new component — old'}),null);
+  assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null);
+  fireEvent.click(ui.getByRole('button',{name:'Treat as a new file — old'}));
+  fireEvent.click(within(ui.getByRole('dialog',{name:'Treat as a new file'})).getByRole('button',{name:'Confirm new file'}));
+  const panel = within(ui.getByRole('region',{name:'Renamed files'}));
+  assert.ok(panel.getByText('New file at old'));
+  assert.equal(ui.queryByRole('button',{name:'Treat as a new file — old'}),null);
   fireEvent.click(panel.getByRole('button',{name:'Cancel replacement'}));
-  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
-  assert.ok(ui.getByRole('button',{name:'Treat as new component — old'}));
+  assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null);
+  assert.ok(ui.getByRole('button',{name:'Treat as a new file — old'}));
 });
 test('only an incomplete enrollment offers a retry, inside the error notice', async()=>{
   const f = await fixture(); await f.vault.removeEntry(['components','ready.json']);
@@ -145,14 +145,14 @@ test('only an incomplete enrollment offers a retry, inside the error notice', as
   assert.equal(state.components?.enrollmentIncomplete,true);
   let calls=0;
   const ui = render(<ChangesCaptureView {...changesProps(state,f.scan,{onEnableComponentTracking:async()=>{calls++;}})}/>);
-  assert.equal(ui.queryByRole('region',{name:'Component identity'}),null);
+  assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null);
   const alert = within(ui.getByRole('alert'));
   assert.ok(alert.getByText(/Component enrollment is incomplete/));
-  fireEvent.click(alert.getByRole('button',{name:'Retry component enrollment'}));
+  fireEvent.click(alert.getByRole('button',{name:'Retry turning on rename tracking'}));
   await waitFor(()=>assert.equal(calls,1));
   cleanup();
   const without = render(<ChangesCaptureView {...changesProps(state,f.scan)}/>);
-  assert.equal(without.queryByRole('button',{name:'Retry component enrollment'}),null);
+  assert.equal(without.queryByRole('button',{name:'Retry turning on rename tracking'}),null);
 });
 
 test('Changes exposes an applied-addition rename conflict and allows saving after cancelling the association', async () => {
@@ -180,13 +180,13 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
     await captureRevision(f.working, f.vault, { ...input, branchId, workingFolders: bindings });
     captures++;
   }} />);
-  fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Capture applied component' } });
+  fireEvent.change(ui.getByRole('textbox', { name: /Version summary/ }), { target: { value: 'Capture applied component' } });
   fireEvent.click(ui.getByRole('button', { name: 'Match to a new file — old' }));
   const match = within(ui.getByRole('dialog', { name: 'Match to a new file' }));
   fireEvent.change(match.getByRole('combobox'), { target: { value: 'first' } });
   fireEvent.click(match.getByRole('button', { name: 'Confirm rename' }));
   assert.match(ui.getByRole('alert').textContent!, /Component identity conflict.*first.*confirmed rename/);
-  const save = ui.getByRole('button', { name: /^Save revision$/ }) as HTMLButtonElement;
+  const save = ui.getByRole('button', { name: /^Save version$/ }) as HTMLButtonElement;
   assert.equal(save.disabled, true);
   fireEvent.submit(save.closest('form')!);
   assert.equal(captures, 0, 'submission cannot bypass the conflict block');
@@ -205,12 +205,12 @@ test('Changes saves the single Description and per-file Note into modification, 
   const f = await fixture();
   let params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0] | undefined;
   const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { onCapture: async (p: typeof params) => { params = p; } })} />);
-  fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Notes check' } });
+  fireEvent.change(ui.getByRole('textbox', { name: /Version summary/ }), { target: { value: 'Notes check' } });
   fireEvent.click(ui.getByRole('button', { name: /Add a description/ }));
   fireEvent.change(ui.getByRole('textbox', { name: 'Overall: Description' }), { target: { value: 'Overall words' } });
   fireEvent.click(ui.getByRole('button', { name: 'Add note for first' }));
   fireEvent.change(ui.getByRole('textbox', { name: 'first: Note' }), { target: { value: 'File words' } });
-  fireEvent.click(ui.getByRole('button', { name: /^Save revision$/ }));
+  fireEvent.click(ui.getByRole('button', { name: /^Save version$/ }));
   await waitFor(() => assert.ok(params));
   assert.deepEqual(params!.notes, { problem: '', modification: 'Overall words', observations: '' });
   assert.deepEqual(params!.fileNotes, [{ path: 'first', problem: '', modification: 'File words', observations: '' }]);

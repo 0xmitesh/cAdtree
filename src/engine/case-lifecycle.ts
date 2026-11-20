@@ -42,7 +42,7 @@ export function caseWriteBlock(
   return lifecycle.status === "archived"
     ? "This case is hidden. Unhide it in History → Design cases before saving or changing its files."
     : lifecycle.status === "unavailable"
-      ? `Case lifecycle evidence is unavailable. Inspect the retained lifecycle records before writing. ${lifecycle.error ?? ""}`
+      ? `Case lifecycle records are unavailable. Inspect the kept lifecycle records before writing. ${lifecycle.error ?? ""}`
       : undefined;
 }
 export function assertCaseWritable(state: VaultState, branchId: string) {
@@ -52,7 +52,7 @@ export function assertCaseWritable(state: VaultState, branchId: string) {
 export function caseLabel(state: VaultState, branchId: string) {
   const name =
     state.branches.find((branch) => branch.branchId === branchId)?.name ??
-    "Unknown branch";
+    "Unknown case";
   const status = caseLifecycle(state, branchId).status;
   return `${name}${status === "archived" ? " · Hidden" : status === "unavailable" ? " · Lifecycle unavailable" : ""}`;
 }
@@ -98,7 +98,7 @@ export async function readCaseLifecycles(
     const entries = await dir.listEntries();
     if (!entries.length) {
       result["*"] = damaged(
-        "Lifecycle directory exists without records. Inspect the interrupted or missing lifecycle evidence before writing.",
+        "Lifecycle directory exists without records. Inspect the interrupted or missing lifecycle records before writing.",
       );
       return result;
     }
@@ -124,7 +124,7 @@ export async function readCaseLifecycles(
         );
         if (branches.length !== 1 || branches[0].isMain)
           throw new Error(
-            "Main cannot have case lifecycle records; branch identity must be unique.",
+            "Main cannot have case lifecycle records; case identity must be unique.",
           );
         const branch = branches[0];
         let current = legacy;

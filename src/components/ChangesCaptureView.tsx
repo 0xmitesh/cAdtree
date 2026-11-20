@@ -258,7 +258,7 @@ export function ChangesCaptureView({
       return;
     }
     if (!scan || !summary.trim()) {
-      setError("Add a short revision summary.");
+      setError("Add a short version summary.");
       return;
     }
     if (staleNotes.length) {
@@ -317,7 +317,7 @@ export function ChangesCaptureView({
           <strong>{workingFolderName ?? "No working folder connected"}</strong>
           {head
             ? " · Since " + formatRevisionNumber(head.manifest.displayNumber)
-            : " · First revision"}
+            : " · First version"}
         </span>
         <span data-scanned-at={scan?.scannedAt}>
           {scan
@@ -326,7 +326,7 @@ export function ChangesCaptureView({
               (checkFailed
                 ? " · Not up to date"
                 : isScanStale
-                  ? " · May have changed since scan"
+                  ? " · Not checked since your last change"
                   : " · Latest scan")
             : checkFailed || isChecking
               ? null
@@ -345,7 +345,7 @@ export function ChangesCaptureView({
       {operationBlockReason ? <Notice>{operationBlockReason}</Notice> : null}
       {!workingFolderName ? (
         <Notice>
-          Connect a working folder to scan and save revisions.{" "}
+          Connect a working folder to scan and save versions.{" "}
           <button className="text-button" onClick={onReattachWorkingFolder}>
             Connect folder
           </button>
@@ -353,7 +353,7 @@ export function ChangesCaptureView({
       ) : null}
       {damaged ? (
         <Notice type="error">
-          Saving is blocked because the branch history needs attention. Open
+          Saving is blocked because the case history needs attention. Open
           Settings → Troubleshooting.
         </Notice>
       ) : null}
@@ -386,8 +386,8 @@ export function ChangesCaptureView({
       {error ? <Notice type="error">{error}</Notice> : null}
       <ComponentIdentityControls state={vaultState} scan={scan} value={identityReview} onChange={setIdentityReview} busy={busy} />
       {!vaultState.components || vaultState.components.status === 'legacy' ? <p className="muted small" data-testid="renames-untracked">Renames aren't tracked for this project.</p> : null}
-      {identityConflict ? <Notice type="error">{identityConflict}{vaultState.components?.status === 'unavailable' && vaultState.components.enrollmentIncomplete && onEnableComponentTracking ? <> <button className="button secondary" type="button" disabled={busy} onClick={() => { setError(''); onEnableComponentTracking().catch(e => setError(e instanceof Error ? e.message : String(e))); }}>Retry component enrollment</button></> : null}</Notice> : null}
-      {scan && !scan.hasChanges && referenceChanged ? <Notice>This revision saves updated references with the current project files.</Notice> : null}
+      {identityConflict ? <Notice type="error">{identityConflict}{vaultState.components?.status === 'unavailable' && vaultState.components.enrollmentIncomplete && onEnableComponentTracking ? <> <button className="button secondary" type="button" disabled={busy} onClick={() => { setError(''); onEnableComponentTracking().catch(e => setError(e instanceof Error ? e.message : String(e))); }}>Retry turning on rename tracking</button></> : null}</Notice> : null}
+      {scan && !scan.hasChanges && referenceChanged ? <Notice>This version saves updated references with the current project files.</Notice> : null}
       {referenceConflict ? <Notice type="error">{referenceConflict} <button className="text-button" type="button" disabled={busy} onClick={() => { if (scan && effectiveReferences) setReferenceReview(createReferenceReview(vaultState, scan, effectiveReferences.explicit)); setShowAttachments(true); }}>Review current references</button></Notice> : null}
       {needsReview ? (
         <Notice type="error">
@@ -483,8 +483,8 @@ export function ChangesCaptureView({
                               : []),
                           ...((status === "Modified" || status === "Unchanged") && canTreatAsNew(vaultState, scan) && !identityReview?.replacements.includes(file.path)
                             ? [{
-                                label: "Treat as new component",
-                                ariaLabel: `Treat as new component — ${file.path}`,
+                                label: "Treat as a new file",
+                                ariaLabel: `Treat as a new file — ${file.path}`,
                                 disabled: busy || identityReviewStale(vaultState, scan, identityReview),
                                 onSelect: () => setTreatAsNewPath(file.path),
                               }]
@@ -566,7 +566,7 @@ export function ChangesCaptureView({
         {scan || hasDraft ? (
           <form className="capture-form panel" onSubmit={submit}>
             <div className="panel-heading">
-              <h2>Save revision</h2>
+              <h2>Save version</h2>
               <Save size={17} />
             </div>
             <div className="form-body">
@@ -575,7 +575,7 @@ export function ChangesCaptureView({
               </p>
               <label className="field">
                 <span>
-                  Revision summary <span className="required">*</span>
+                  Version summary <span className="required">*</span>
                 </span>
                 <input
                   required
@@ -678,7 +678,7 @@ export function ChangesCaptureView({
                 </Notice>
               ) : null}
               <p className="save-reminder">
-                Save and close CAD documents before saving a revision. We scan
+                Save and close CAD documents before saving a version. We scan
                 again to verify the reviewed changes.
               </p>
               <button
@@ -696,7 +696,7 @@ export function ChangesCaptureView({
                 }
               >
                 <Save size={16} />
-                {isCapturing ? "Saving revision…" : "Save revision"}
+                {isCapturing ? "Saving version…" : "Save version"}
               </button>
             </div>
           </form>

@@ -105,7 +105,7 @@ test("deletion and reintroduction are events and deleted paths remain selectable
   );
   assert.deepEqual(historicalFilePaths(state), [path]);
 });
-test("branch with no selected-file history is empty; unchanged origin after deletion remains explicit", () => {
+test("case with no selected-file history is empty; unchanged origin after deletion remains explicit", () => {
   const state = stateWithHashes([null, null, "a", null, null]);
   state.branches.push({
     ...state.branches[0],

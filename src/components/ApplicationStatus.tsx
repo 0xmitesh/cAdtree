@@ -326,10 +326,9 @@ export function AppliedFromDetails({
             </p>
             <p className="small">
               {reverted
-                ? "Files were brought back from the earlier revision before this normal revision was saved."
-                : "Selected file states were applied before this normal revision was saved."} CAD reference and rebuild checks remain the engineer's
-              responsibility. The revision keeps its ordinary destination
-              parent.
+                ? "Files were brought back from the earlier version before this normal version was saved."
+                : "The selected files were copied in before this version was saved."} Check in your CAD app that the files still open and rebuild
+              as you expect.
             </p>
             <ul className="application-actions">
               {record.plan.actions.map((action) => {
@@ -352,17 +351,17 @@ export function AppliedFromDetails({
                     }
                     <p>
                       {adjusted
-                        ? "Adjusted after application before saving"
-                        : "Captured state matches the application decision"}
+                        ? "Changed again after copying, before saving"
+                        : "Saved files match what you chose"}
                     </p>
                     <details className="comparison-hash">
-                      <summary>Before, applied and captured bytes</summary>
+                      <summary>Before, copied and saved file contents</summary>
                       <p className="small file-path">
                         Before: {action.before?.sha256 ?? "absent"}
                         <br />
                         Originally applied: {action.after?.sha256 ?? "absent"}
                         <br />
-                        Final captured: {final?.sha256 ?? "absent"}
+                        Final saved: {final?.sha256 ?? "absent"}
                       </p>
                     </details>
                   </li>
@@ -370,16 +369,15 @@ export function AppliedFromDetails({
               })}
             </ul>
             <details className="comparison-hash">
-              <summary>Application record identities</summary>
+              <summary>Technical details</summary>
               <p className="small file-path">
                 Operation: {op.operationId}
                 {reverted ? null : <> · Base: {record.plan.baseRevisionId}</>}{" "}
-                · Destination baseline: {record.plan.destinationRevisionId}
+                · Version it was applied to: {record.plan.destinationRevisionId}
               </p>
               {reverted ? null : (
                 <p className="small">
-                  Selected file changes do not imply that the source branch was
-                  merged.
+                  Copying selected files does not copy everything from the other case.
                 </p>
               )}
             </details>

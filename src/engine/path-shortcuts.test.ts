@@ -132,7 +132,7 @@ async function fixture() {
   };
 }
 
-test("working shortcuts use validated on-disk branch mappings, not display names or the active branch, and never write", async () => {
+test("working shortcuts use validated on-disk case mappings, not display names or the active case, and never write", async () => {
   const { root, workspaceId, project } = await fixture();
   const branchId = project.createdBranchId;
   // Use a valid, non-generated leaf name to ensure consumers do not infer slugs.

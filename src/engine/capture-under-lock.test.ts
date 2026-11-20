@@ -102,7 +102,7 @@ test('captureUnderLock refuses a lock token for another project or one already r
   assert.equal(await vaultTree(p), before);
 });
 
-test('expectedSnapshot: OS clutter listed in the snapshot counts as tracked and is saved, even if the parent revision does not track it', async () => {
+test('expectedSnapshot: OS clutter listed in the snapshot counts as tracked and is saved, even if the parent version does not track it', async () => {
   const p = await project();
   await p.main.writeFileText(part, 'one');
   await captureRevision(p.main, p.vault, input(p, 'First'));

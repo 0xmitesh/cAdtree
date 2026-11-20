@@ -299,7 +299,7 @@ test("missing files never reach clipboard success or fabricate a fallback; files
     harness(workspace(), async () => {
       if (!exists)
         throw new Error(
-          "The file is missing. Scan the branch or restore a copy.",
+          "The file is missing. Scan the case or restore a copy.",
         );
       return location;
     }),
