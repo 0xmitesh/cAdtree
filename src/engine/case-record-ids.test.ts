@@ -6,7 +6,8 @@ import { captureRevision } from './revision-service';
 import { createProject, createWorkspace, createManagedBranch, adoptProject, resolveManagedProject, type ManagedProject } from './workspace-service';
 import { createDesignBranch, branchAttemptPath, MAX_BRANCH_ID_ATTEMPTS } from './branch-service';
 import { prepareApplyPreview, buildApplyPreview, type PreviewChoice } from './apply-preview';
-import { applicationReview, prepareApplication, applyPreparedApplication, recoverApplication } from './application-service';
+import { applicationReview, recoverApplication } from './application-service';
+import { applyReviewed } from './fixtures';
 import { branchApplications } from './application-records';
 import { caseLifecycle } from './case-lifecycle';
 import { changeCaseLifecycle } from './case-lifecycle-service';
@@ -40,9 +41,8 @@ async function applyOnto(vault: FileSystemDirectoryAdapter, workingFolders: Mana
   );
   assert.ok(Object.keys(selection).length > 0);
   const review = applicationReview(buildApplyPreview(prepared.context, selection, 'Apply'), selection);
-  const plan = await prepareApplication(vault, review, { workingFolders });
   failEvent?.(true);
-  return { plan, run: () => applyPreparedApplication(vault, plan, { workingFolders }) };
+  return { review, run: () => applyReviewed(vault, review, { workingFolders }) };
 }
 
 test('a new case gets a record ID used by every record; save, interrupted apply, recovery and archive work', async () => {

@@ -1,6 +1,9 @@
 import { FileSystemDirectoryAdapter, splitAndValidatePath } from './fs-adapter';
 import { hashBytes } from './hash';
 import { enumerateWorkingFolder } from './scanner';
+import { applyUnderLock, type ApplicationOptions } from './application-service';
+import type { ApplicationReview } from './application-records';
+import { withProjectWriterLock } from './locks';
 
 /**
  * Generates deterministic binary byte sequences with arbitrary non-UTF8 binary headers
@@ -202,4 +205,18 @@ export async function verifyDirectoryMatchesFixture(
     matches: mismatches.length === 0,
     mismatches,
   };
+}
+
+/**
+ * Test helper: the apply steps of `applyAndSave` without the save, leaving an
+ * `applied` operation (or throwing exactly as `applyAndSave` would before it).
+ */
+export function applyReviewed(
+  vault: FileSystemDirectoryAdapter,
+  review: ApplicationReview,
+  options: ApplicationOptions,
+) {
+  return withProjectWriterLock(review.projectId, async (lock) =>
+    (await applyUnderLock(vault, review, options, lock)).op,
+  );
 }

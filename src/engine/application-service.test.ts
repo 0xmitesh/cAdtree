@@ -16,14 +16,13 @@ import {
 } from "./apply-preview";
 import {
   applicationReview,
-  prepareApplication,
-  applyPreparedApplication,
   recoverApplication,
   abandonApplication,
   requestApplicationWriteAccess,
   createEventFolder,
 } from "./application-service";
 import { createIdentityReview } from "./component-identity";
+import { applyReviewed } from "./fixtures";
 import { getBranchBaseline } from "./branch-state";
 import { eventIdCandidate, isEventId } from "./ids";
 import { sealApplication, applicationStagedPath, applicationPlanPath, appendApplicationEvent } from "./application-records";
@@ -144,10 +143,7 @@ async function fixture(multiple = false) {
       selection,
     );
   };
-  const prepare = async () =>
-    prepareApplication(vault, await review(), options);
-  const apply = async () =>
-    applyPreparedApplication(vault, await prepare(), options);
+  const apply = async () => applyReviewed(vault, await review(), options);
   const op = async () =>
     branchApplications(await openExistingVault(vault), "branch-main").at(-1)!;
   return {
@@ -160,7 +156,6 @@ async function fixture(multiple = false) {
     sourceSave,
     destination,
     review,
-    prepare,
     apply,
     op,
     save,
@@ -249,16 +244,10 @@ test("5-to-20 apply retains unrelated destination paths, empty directories and s
     (await openExistingVault(f.vault)).applicationOperations,
   );
 });
-test("dirty files or empty directories and stale baselines/reviews block preparation or writes", async () => {
-  for (const mode of [
-    "file",
-    "directory",
-    "baseline",
-    "plan",
-    "connection",
-  ] as const) {
+test("dirty files or empty directories and stale baselines/reviews block writes", async () => {
+  for (const mode of ["file", "directory", "baseline", "plan"] as const) {
     const f = await fixture();
-    const prepared = await f.prepare();
+    const reviewed = await f.review();
     if (mode === "file")
       await f.main.writeFileText(["Uncaptured.txt"], "keep this");
     if (mode === "directory")
@@ -267,16 +256,14 @@ test("dirty files or empty directories and stale baselines/reviews block prepara
       await f.main.writeFileText(["New.txt"], "saved change");
       await f.save(f.main, "branch-main", "New baseline");
     }
-    if (mode === "plan") prepared.review.reason = "not the confirmed reason";
-    if (mode === "connection")
-      prepared.connection = new InMemoryFileSystemAdapter("wrong folder");
+    if (mode === "plan") reviewed.reason = "not the confirmed reason";
     const before = await inventory(f.main);
     await assert.rejects(
-      applyPreparedApplication(f.vault, prepared, f.options),
+      applyReviewed(f.vault, reviewed, f.options),
       /uncaptured|changed|review/i,
     );
     if (mode === "file" || mode === "directory")
-      await assert.rejects(f.prepare(), /Save a revision first/);
+      await assert.rejects(f.apply(), /Save a revision first/);
     assert.equal(await inventory(f.main), before);
     assert.equal(
       (await openExistingVault(f.vault)).applicationOperations!.length,
@@ -298,11 +285,14 @@ test("additions, replacements and explicit deletions are applied without touchin
 test("bad source objects and staging failures leave no working writes and a recoverable unfinished record", async () => {
   for (const mode of ["object", "staging", "permission"] as const) {
     const f = await fixture();
-    const prepared = await f.prepare();
+    const reviewed = await f.review();
     const before = await inventory(f.main);
     if (mode === "object")
       await f.vault.writeFileText(
-        getObjectPathSegments(prepared.plan.actions[0].after!.sha256),
+        getObjectPathSegments(
+          f.sourceSave.revision.manifest.files.find((x) => x.path === part)!
+            .sha256,
+        ),
         "bad object",
       );
     if (mode === "staging")
@@ -313,7 +303,7 @@ test("bad source objects and staging failures leave no working writes and a reco
       });
     if (mode === "permission") f.main.setHooks({ writePermission: "denied" });
     await assert.rejects(
-      applyPreparedApplication(f.vault, prepared, f.options),
+      applyReviewed(f.vault, reviewed, f.options),
       /object|staging|permission/i,
     );
     f.vault.setHooks({ onBeforeWrite: undefined });
@@ -343,7 +333,7 @@ test("bad source objects and staging failures leave no working writes and a reco
 test("interruption before writes, between operations, and before final acknowledgement never reports partial success; retry cannot duplicate", async () => {
   for (const phase of ["before", "between", "final"] as const) {
     const f = await fixture(true);
-    const prepared = await f.prepare();
+    const reviewed = await f.review();
     const before = await inventory(f.main);
     let interrupted = false;
     f.vault.setHooks({
@@ -365,7 +355,7 @@ test("interruption before writes, between operations, and before final acknowled
       },
     });
     await assert.rejects(
-      applyPreparedApplication(f.vault, prepared, f.options),
+      applyReviewed(f.vault, reviewed, f.options),
       /injected/,
     );
     f.vault.setHooks({ onBeforeWrite: undefined });
@@ -376,7 +366,7 @@ test("interruption before writes, between operations, and before final acknowled
       /unfinished/,
     );
     await assert.rejects(
-      applyPreparedApplication(f.vault, prepared, f.options),
+      applyReviewed(f.vault, reviewed, f.options),
       /unfinished/,
     );
     const recovery = await recoverApplication(
@@ -397,7 +387,7 @@ test("interruption before writes, between operations, and before final acknowled
 });
 test("recovery preserves and copies unexpected later bytes; manual restore permits verified completion", async () => {
   const f = await fixture();
-  const prepared = await f.prepare();
+  const reviewed = await f.review();
   f.vault.setHooks({
     onBeforeWrite: (path) => {
       if (path.includes("/events/") && path.endsWith("000004.json"))
@@ -405,7 +395,7 @@ test("recovery preserves and copies unexpected later bytes; manual restore permi
     },
   });
   await assert.rejects(
-    applyPreparedApplication(f.vault, prepared, f.options),
+    applyReviewed(f.vault, reviewed, f.options),
     /lost final/,
   );
   f.vault.setHooks({ onBeforeWrite: undefined });
@@ -440,10 +430,10 @@ test("recovery preserves and copies unexpected later bytes; manual restore permi
 });
 test("cancellation retains evidence, permissions can be restored, and explicit abandonment leaves successful edits intact", async () => {
   const f = await fixture(true);
-  const prepared = await f.prepare();
+  const reviewed = await f.review();
   const abort = new AbortController();
   await assert.rejects(
-    applyPreparedApplication(f.vault, prepared, {
+    applyReviewed(f.vault, reviewed, {
       ...f.options,
       signal: abort.signal,
       onProgress: (p) => {
@@ -580,7 +570,7 @@ test("resolved conflicts use only explicit source decisions and ignore arbitrary
   const review = await f.review();
   review.choices[part] = { selected: true, decision: "unresolved" };
   await assert.rejects(
-    prepareApplication(f.vault, review, f.options),
+    applyReviewed(f.vault, review, f.options),
     /Resolve every selected conflict/,
   );
   const selection = {
@@ -590,9 +580,8 @@ test("resolved conflicts use only explicit source decisions and ignore arbitrary
     'Added.txt': { selected: true, decision: 'keep-destination' as const },
   };
   const request = await f.review(selection);
-  const prepared = await prepareApplication(f.vault, request, f.options);
-  prepared.plan.resultFiles = []; // The executor must recompute, not execute UI data.
-  await applyPreparedApplication(f.vault, prepared, f.options);
+  // The review carries only choices and a plan hash; the executor recomputes the plan.
+  await applyReviewed(f.vault, request, f.options);
   assert.equal(
     await f.main.readFileText(part.split("/")),
     "independent main Part-X",
@@ -608,7 +597,7 @@ test("lost permission or a working-write acknowledgement leaves recoverable stat
   for (const mode of ["permission", "acknowledgement"] as const) {
     const f = await fixture(true);
     const before = await inventory(f.main);
-    const prepared = await f.prepare();
+    const reviewed = await f.review();
     if (mode === "permission")
       f.main.setHooks({
         onAfterWrite: () => {
@@ -625,7 +614,7 @@ test("lost permission or a working-write acknowledgement leaves recoverable stat
         },
       });
     await assert.rejects(
-      applyPreparedApplication(f.vault, prepared, f.options),
+      applyReviewed(f.vault, reviewed, f.options),
       /Permission|acknowledgement/,
     );
     f.main.setHooks({
@@ -674,12 +663,12 @@ test("managed adoption and workspace-to-home migration preserve pending disk pro
     op.record,
   );
 });
-test("two confirmations of one prepared plan serialize to a single application", async () => {
+test("two confirmations of one reviewed plan serialize to a single application", async () => {
   const f = await fixture();
-  const prepared = await f.prepare();
+  const reviewed = await f.review();
   const results = await Promise.allSettled([
-    applyPreparedApplication(f.vault, prepared, f.options),
-    applyPreparedApplication(f.vault, prepared, f.options),
+    applyReviewed(f.vault, reviewed, f.options),
+    applyReviewed(f.vault, reviewed, f.options),
   ]);
   assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
   assert.equal(
@@ -688,12 +677,12 @@ test("two confirmations of one prepared plan serialize to a single application",
   );
   assert.equal((await f.op()).status, "applied");
 });
-test("explicit preparation can renew a read-only folder permission; denied renewal never creates an operation", async () => {
+test("an explicit Confirm can renew a read-only folder permission; denied renewal never creates an operation", async () => {
   const f = await fixture();
-  const prepared = await f.prepare();
+  const reviewed = await f.review();
   f.main.setHooks({ writePermission: "prompt" });
   await assert.rejects(
-    applyPreparedApplication(f.vault, prepared, f.options),
+    applyReviewed(f.vault, reviewed, f.options),
     /permission/i,
   );
   await assert.rejects(
@@ -848,16 +837,12 @@ test("a revision that tracks .DS_Store still creates a case, applies and exports
   // An untracked on-disk .DS_Store at a planned path is surfaced before any write.
   await main.writeFileText([".DS_Store"], "untracked finder data");
   await assert.rejects(
-    prepareApplication(vault, review, options),
+    applyReviewed(vault, review, options),
     /untracked system file \.DS_Store.*remove it or save it first/,
   );
   assert.equal(await main.readFileText([".DS_Store"]), "untracked finder data");
   await main.removeEntry([".DS_Store"]);
-  const op = await applyPreparedApplication(
-    vault,
-    await prepareApplication(vault, review, options),
-    options,
-  );
+  const op = await applyReviewed(vault, review, options);
   assert.equal(op.status, "applied");
   assert.equal(await main.readFileText([".DS_Store"]), "edited finder data");
 
@@ -984,7 +969,7 @@ test("two applies in the same second get the base ID and -2; recovery without un
   const options = { ...f.options, now: fixedNow };
   interruptAtEvent(f, "000002.json");
   await assert.rejects(
-    applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options),
+    applyReviewed(f.vault, await f.review(), options),
     /injected/,
   );
   f.vault.setHooks({ onBeforeWrite: undefined });
@@ -993,7 +978,7 @@ test("two applies in the same second get the base ID and -2; recovery without un
   const recovered = await recoverApplication(f.vault, first.record!.plan.projectId, "branch-main", first.operationId, options);
   assert.deepEqual(recovered.manualPaths, []);
   assert.deepEqual(await unexpectedDirs(f, first.relativePath), []);
-  const second = await applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options);
+  const second = await applyReviewed(f.vault, await f.review(), options);
   assert.equal(second.operationId, `${BASE_ID}-2`);
   assert.equal(second.status, "applied");
   const ids = branchApplications(await openExistingVault(f.vault), "branch-main").map((o) => o.operationId).sort();
@@ -1005,7 +990,7 @@ test("unexpected bytes are staged under unexpected/<eventId>; a second recovery 
   const options = { ...f.options, now: fixedNow };
   interruptAtEvent(f, "000004.json");
   await assert.rejects(
-    applyPreparedApplication(f.vault, await prepareApplication(f.vault, await f.review(), options), options),
+    applyReviewed(f.vault, await f.review(), options),
     /injected/,
   );
   f.vault.setHooks({ onBeforeWrite: undefined });
@@ -1199,8 +1184,8 @@ test("revert all: working folder equals R1, before/ evidence holds Main's previo
   const state = await openExistingVault(f.vault);
   const r1 = state.revisions.find((r) => r.manifest.revisionId === f.ids.r1)!;
   const expected = new Map(r1.manifest.files.map((x) => [x.path, x.sha256]));
-  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1), f.options);
-  const op = await applyPreparedApplication(f.vault, prepared, f.options);
+  const reviewed = await f.review(f.ids.r1);
+  const op = await applyReviewed(f.vault, reviewed, f.options);
   assert.equal(op.status, "applied");
   assert.equal(op.record!.plan.mode, "revert");
   const inv = await readVerifiedInventory(f.main);
@@ -1233,8 +1218,8 @@ async function vaultBeforeTexts(
 
 test("revert with only the deleted file selected brings back just that file", async () => {
   const f = await revertFixture();
-  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["D.txt"]), f.options);
-  await applyPreparedApplication(f.vault, prepared, f.options);
+  const reviewed = await f.review(f.ids.r1, ["D.txt"]);
+  await applyReviewed(f.vault, reviewed, f.options);
   assert.equal(await f.main.readFileText(["D.txt"]), "d1");
   assert.equal(await f.main.readFileText(["A.txt"]), "a3");
   assert.equal(await f.main.readFileText(["N.txt"]), "added later");
@@ -1244,7 +1229,7 @@ test("revert is blocked by unsaved working changes, like apply", async () => {
   const f = await revertFixture();
   await f.w("A.txt", "unsaved edit");
   await assert.rejects(
-    prepareApplication(f.vault, await f.review(f.ids.r1), f.options),
+    applyReviewed(f.vault, await f.review(f.ids.r1), f.options),
     /uncaptured/,
   );
   assert.equal(await f.main.readFileText(["A.txt"]), "unsaved edit");
@@ -1254,11 +1239,10 @@ test("tampered or missing mode: review/plan disagreement is rejected; records wi
   const f = await revertFixture();
   const review = await f.review(f.ids.r1);
   await assert.rejects(
-    prepareApplication(f.vault, { ...review, mode: "merge" }, f.options),
+    applyReviewed(f.vault, { ...review, mode: "merge" }, f.options),
     /earlier revision|changed|Bring back/,
   );
-  const prepared = await prepareApplication(f.vault, review, f.options);
-  const op = await applyPreparedApplication(f.vault, prepared, f.options);
+  const op = await applyReviewed(f.vault, review, f.options);
   const { checksum: _c, ...body } = op.record!;
   void _c;
   const plant = async (id: string, record: object) => {
@@ -1306,7 +1290,7 @@ test("tampered or missing mode: review/plan disagreement is rejected; records wi
 
 test("interrupted revert recovers through the existing recovery path", async () => {
   const f = await revertFixture();
-  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1), f.options);
+  const reviewed = await f.review(f.ids.r1);
   const before = await inventory(f.main);
   let interrupted = false;
   f.vault.setHooks({
@@ -1316,7 +1300,7 @@ test("interrupted revert recovers through the existing recovery path", async () 
       throw new Error("injected revert");
     },
   });
-  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected/);
+  await assert.rejects(applyReviewed(f.vault, reviewed, f.options), /injected/);
   f.vault.setHooks({ onBeforeWrite: undefined });
   const state = await openExistingVault(f.vault);
   const op = branchApplications(state, "branch-main").at(-1)!;
@@ -1343,8 +1327,8 @@ test("confirmed rename since the revision blocks both rename rows with revert wo
     assert.match(rows[p].identityBlock ?? "", /renamed since that revision.*cannot undo renames/);
   }
   assert.equal(rows["A.txt"].identityBlock, undefined);
-  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["A.txt", "D.txt"]), f.options);
-  await applyPreparedApplication(f.vault, prepared, f.options);
+  const reviewed = await f.review(f.ids.r1, ["A.txt", "D.txt"]);
+  await applyReviewed(f.vault, reviewed, f.options);
   assert.equal(await f.main.readFileText(["A.txt"]), "a1");
   assert.equal(await f.main.readFileText(["Y.txt"]), "x1");
 });
@@ -1357,8 +1341,8 @@ test("bringing back a deleted file then saving keeps its original componentId an
   const original = idIn(stateBefore, f.ids.r1, "D.txt");
   assert.ok(original);
   assert.equal(idIn(stateBefore, f.ids.r3, "D.txt"), undefined);
-  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["D.txt"]), f.options);
-  await applyPreparedApplication(f.vault, prepared, f.options);
+  const reviewed = await f.review(f.ids.r1, ["D.txt"]);
+  await applyReviewed(f.vault, reviewed, f.options);
   const saved = await f.save("Bring back D");
   const after = await openExistingVault(f.vault);
   assert.equal(after.components?.status, "available");
@@ -1374,8 +1358,8 @@ test("revert row stays blocked when a different component now occupies the path;
   assert.match(rows["D.txt"].identityBlock ?? "", /Different components occupy this path/);
   assert.equal(rows["A.txt"].identityBlock, undefined);
   assert.equal(rows["A.txt"].kind, "available");
-  const prepared = await prepareApplication(f.vault, await f.review(f.ids.r1, ["A.txt"]), f.options);
-  await applyPreparedApplication(f.vault, prepared, f.options);
+  const reviewed = await f.review(f.ids.r1, ["A.txt"]);
+  await applyReviewed(f.vault, reviewed, f.options);
   assert.equal(await f.main.readFileText(["A.txt"]), "a1");
   assert.equal(await f.main.readFileText(["D.txt"]), "a brand new D");
 });
@@ -1420,7 +1404,7 @@ async function folderFixture(
     return { review: applicationReview(plan, selection), plan };
   };
   const apply = async (only?: string[]) =>
-    applyPreparedApplication(vault, await prepareApplication(vault, (await review(only)).review, options), options);
+    applyReviewed(vault, (await review(only)).review, options);
   const lastOp = async () => branchApplications(await openExistingVault(vault), "branch-main").at(-1)!;
   return { vault, main, folders, options, ids: { r1, r2 }, rows, review, apply, lastOp, save };
 }
@@ -1536,11 +1520,7 @@ test("merge applies a design case's added empty folder, added folder with a file
   const plan = buildApplyPreview(prepared.context, selection, "Reorganise folders");
   assert.equal(plan.ready, true, plan.blockers.join("|"));
   const options = { workingFolders: folders };
-  const op = await applyPreparedApplication(
-    vault,
-    await prepareApplication(vault, applicationReview(plan, selection), options),
-    options,
-  );
+  const op = await applyReviewed(vault, applicationReview(plan, selection), options);
   assert.equal(op.status, "applied");
   assert.deepEqual(await dirs(main), ["Case empty", "CaseDir"]);
   assert.equal(await main.readFileText(["CaseDir", "c.txt"]), "case file");
@@ -1557,7 +1537,7 @@ test("removing a folder that would still hold files is blocked and nothing is re
   assert.equal(plan.ready, false);
   assert.ok(plan.blockers.includes("New: Kept: still holds files; untick it."));
   const before = await inventory(f.main);
-  await assert.rejects(prepareApplication(f.vault, review, f.options), /still holds files/);
+  await assert.rejects(applyReviewed(f.vault, review, f.options), /still holds files/);
   assert.equal(await inventory(f.main), before);
   assert.equal(branchApplications(await openExistingVault(f.vault), "branch-main").length, 0);
 });
@@ -1602,7 +1582,7 @@ test("a folder that gained a destination-side file is a kept row in a merge and 
   assert.ok(plan.blockers.includes("Shared: Kept: still holds files; untick it."));
   const before = await inventory(main);
   await assert.rejects(
-    prepareApplication(vault, applicationReview(plan, selection), { workingFolders: folders }),
+    applyReviewed(vault, applicationReview(plan, selection), { workingFolders: folders }),
     /still holds files/,
   );
   assert.equal(await inventory(main), before);
@@ -1613,18 +1593,18 @@ test("a folder holding only an untracked Thumbs.db stops the apply before any wr
     r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
     r2: async (m) => { await writeAt(m, "New/N.txt", "n"); },
   });
-  const expected = /Folder "New" holds only system files \(Thumbs\.db\)\. Delete them, or untick the folder, then prepare again\. No working files were changed\./;
-  // Present when preparing: refused up front.
+  const expected = /Folder "New" holds only system files \(Thumbs\.db\)\. Delete them, or untick the folder, then try again\. No working files were changed\./;
+  // Present when the apply starts: refused up front.
   await writeAt(f.main, "New/Thumbs.db", "clutter");
   const before = await inventory(f.main);
-  await assert.rejects(prepareApplication(f.vault, (await f.review()).review, f.options), expected);
+  await assert.rejects(applyReviewed(f.vault, (await f.review()).review, f.options), expected);
   assert.equal(await inventory(f.main), before);
-  // Appears between prepare and apply: stopped before any operation, event or write.
+  // Appears after the review: stopped before any operation, event or write.
   await f.main.removeEntry(["New", "Thumbs.db"]);
-  const prepared = await prepareApplication(f.vault, (await f.review()).review, f.options);
+  const reviewed = (await f.review()).review;
   await writeAt(f.main, "New/Thumbs.db", "clutter");
   const later = await inventory(f.main);
-  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), expected);
+  await assert.rejects(applyReviewed(f.vault, reviewed, f.options), expected);
   assert.equal(await inventory(f.main), later);
   assert.equal(await f.main.readFileText(["New", "N.txt"]), "n");
   const state = await openExistingVault(f.vault);
@@ -1644,9 +1624,9 @@ test("interrupted apply with folder changes recovers: created folders removed, r
         await mkdir(m, "Added empty");
       },
     });
-    const prepared = await prepareApplication(f.vault, (await f.review()).review, f.options);
+    const { review: reviewed, plan } = await f.review();
     assert.deepEqual(
-      prepared.plan.folderActions.map((a) => [a.path, a.operation]),
+      plan.folderActions.map((a) => [a.path, a.operation]),
       [["Added empty", "remove"], ["Empty one", "create"]],
     );
     const before = await inventory(f.main);
@@ -1659,7 +1639,7 @@ test("interrupted apply with folder changes recovers: created folders removed, r
         throw new Error("injected folder interruption");
       },
     });
-    await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected folder/);
+    await assert.rejects(applyReviewed(f.vault, reviewed, f.options), /injected folder/);
     f.vault.setHooks({ onBeforeWrite: undefined });
     const op = await f.lastOp();
     assert.equal(op.status, "unresolved");
@@ -1679,8 +1659,8 @@ test("recovering an apply that added a file under a new folder removes that fold
     r2: async (m) => { await m.removeEntry(["Dir"], { recursive: true }); },
   });
   const only = ["Dir/Sub/F.txt"];
-  const prepared = await prepareApplication(f.vault, (await f.review(only)).review, f.options);
-  assert.deepEqual(prepared.plan.folderActions, []);
+  const { review: reviewed, plan } = await f.review(only);
+  assert.deepEqual(plan.folderActions, []);
   const before = await inventory(f.main);
   let interrupted = false;
   f.vault.setHooks({
@@ -1691,7 +1671,7 @@ test("recovering an apply that added a file under a new folder removes that fold
       throw new Error("injected after file add");
     },
   });
-  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected after/);
+  await assert.rejects(applyReviewed(f.vault, reviewed, f.options), /injected after/);
   f.vault.setHooks({ onBeforeWrite: undefined });
   assert.deepEqual(await dirs(f.main), ["Dir", "Dir/Sub"]);
   const op = await f.lastOp();
@@ -1710,7 +1690,7 @@ test("recovery never deletes a non-empty folder its apply created; it is reporte
     r1: async (m) => { await writeAt(m, "A.txt", "a1"); await mkdir(m, "Empty one"); },
     r2: async (m) => { await m.removeEntry(["Empty one"]); },
   });
-  const prepared = await prepareApplication(f.vault, (await f.review()).review, f.options);
+  const reviewed = (await f.review()).review;
   let interrupted = false;
   f.vault.setHooks({
     onBeforeWrite: async (path) => {
@@ -1719,7 +1699,7 @@ test("recovery never deletes a non-empty folder its apply created; it is reporte
       throw new Error("injected");
     },
   });
-  await assert.rejects(applyPreparedApplication(f.vault, prepared, f.options), /injected/);
+  await assert.rejects(applyReviewed(f.vault, reviewed, f.options), /injected/);
   f.vault.setHooks({ onBeforeWrite: undefined });
   await writeAt(f.main, "Empty one/Later.txt", "user work");
   const op = await f.lastOp();
@@ -1776,7 +1756,7 @@ test("sealed record: altered folderActions (extra, missing, wrong operation, fil
   const { review } = await f2.review();
   const choices = Object.fromEntries(Object.entries(review.choices).filter(([p]) => p !== "Empty one"));
   await assert.rejects(
-    prepareApplication(f2.vault, { ...review, choices }, f2.options),
+    applyReviewed(f2.vault, { ...review, choices }, f2.options),
     /changed/,
   );
 });
@@ -1801,7 +1781,7 @@ test("case-only folder renames are blocked at review and nothing is written", as
     assert.ok(plan.collisions.length > 0, name);
     assert.ok(plan.blockers.some((b) => /collisions/.test(b)), name);
     const before = await inventory(f.main);
-    await assert.rejects(prepareApplication(f.vault, review, f.options), /collisions/, name);
+    await assert.rejects(applyReviewed(f.vault, review, f.options), /collisions/, name);
     assert.equal(await inventory(f.main), before, name);
     assert.equal(branchApplications(await openExistingVault(f.vault), "branch-main").length, 0, name);
   }

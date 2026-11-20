@@ -14,11 +14,8 @@ import {
 } from "./case-lifecycle-service";
 import { inventorySignature, readVerifiedInventory } from "./copy-service";
 import { prepareApplyPreview, buildApplyPreview } from "./apply-preview";
-import {
-  applicationReview,
-  prepareApplication,
-  applyPreparedApplication,
-} from "./application-service";
+import { applicationReview } from "./application-service";
+import { applyReviewed } from "./fixtures";
 import { compareSavedRevisions } from "./snapshot-comparison";
 import { layoutRevisions } from "../history/layout";
 import { fileHistory } from "../history/file-history";
@@ -263,11 +260,7 @@ test("dirty files, empty-directory changes, missing connections and unreadable e
 test("applied, unresolved and unavailable application evidence blocks archive through existing resolution rules", async () => {
   for (const mode of ["applied", "unresolved", "unavailable"]) {
     const f = await fixture();
-    const prepared = await prepareApplication(
-      f.vault,
-      await f.review(),
-      f.options,
-    );
+    const review = await f.review();
     if (mode === "unresolved")
       f.vault.setHooks({
         onBeforeWrite: (path) => {
@@ -275,7 +268,7 @@ test("applied, unresolved and unavailable application evidence blocks archive th
         },
       });
     try {
-      await applyPreparedApplication(f.vault, prepared, f.options);
+      await applyReviewed(f.vault, review, f.options);
     } catch (error) {
       assert.equal(mode, "unresolved");
     }
@@ -294,25 +287,17 @@ test("applied, unresolved and unavailable application evidence blocks archive th
     assert.deepEqual((await f.state()).caseLifecycles, {});
   }
 });
-test("archived destinations reject capture, preparation and an already-prepared application at engine boundaries", async () => {
+test("archived destinations reject capture and an already-reviewed application at engine boundaries", async () => {
   const f = await fixture();
   const request = await f.review();
-  const prepared = await prepareApplication(f.vault, request, f.options);
   await f.change("archived");
   await assert.rejects(
     f.save(f.a.branch.branchId, "Blocked capture"),
     /hidden/,
   );
-  await assert.rejects(
-    prepareApplication(f.vault, request, f.options),
-    /hidden/,
-  );
-  await assert.rejects(
-    applyPreparedApplication(f.vault, prepared, f.options),
-    /hidden/,
-  );
+  await assert.rejects(applyReviewed(f.vault, request, f.options), /hidden/);
   await f.change("active");
-  await applyPreparedApplication(f.vault, prepared, f.options);
+  await applyReviewed(f.vault, request, f.options);
   assert.equal((await f.state()).applicationOperations![0].status, "applied");
 });
 test("archived sources retain graph/file history, Compare, notes, application, new-case origins, reserved names and fresh recovery", async () => {
@@ -341,13 +326,9 @@ test("archived sources retain graph/file history, Compare, notes, application, n
     ),
   );
   const sourceBefore = await snapshot(f.a.workingDir);
-  await applyPreparedApplication(
+  await applyReviewed(
     f.vault,
-    await prepareApplication(
-      f.vault,
-      await f.review(f.revisionA.revision.manifest.revisionId, "branch-main"),
-      f.options,
-    ),
+    await f.review(f.revisionA.revision.manifest.revisionId, "branch-main"),
     f.options,
   );
   assert.equal(await snapshot(f.a.workingDir), sourceBefore);

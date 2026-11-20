@@ -21,9 +21,8 @@ import { inventorySignature, readVerifiedInventory } from "./copy-service";
 import { prepareApplyPreview, buildApplyPreview } from "./apply-preview";
 import {
   applicationReview,
-  prepareApplication,
-  applyPreparedApplication,
 } from "./application-service";
+import { applyReviewed } from './fixtures';
 
 function fixture() {
   const state = historyState(0);
@@ -324,8 +323,7 @@ test("selective application provenance never adds ancestry; only a later normal 
   );
   const review = applicationReview(plan, choices);
   const options = { workingFolders: f.workingFolders };
-  const ticket = await prepareApplication(f.vault, review, options);
-  await applyPreparedApplication(f.vault, ticket, options);
+  await applyReviewed(f.vault, review, options);
   assert.deepEqual(
     caseActivity(await openExistingVault(f.vault), branchId).divergence,
     before,

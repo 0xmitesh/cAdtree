@@ -7,8 +7,9 @@ import { captureRevision } from './revision-service';
 import { createProject, createWorkspace, createManagedBranch } from './workspace-service';
 import { prepareApplyPreview, buildApplyPreview, type PreviewChoice } from './apply-preview';
 import {
-  applicationReview, prepareApplication, applyPreparedApplication, recoverApplication, replaceWorkingFiles, scanForReplace,
+  applicationReview, recoverApplication, replaceWorkingFiles, scanForReplace,
 } from './application-service';
+import { applyReviewed } from './fixtures';
 import { buildReplacePlan, replacePlanHash } from './apply-preview';
 import { getBranchBaseline } from './branch-state';
 import { DISCARDED_MAX_COUNTER } from './discarded-paths';
@@ -199,9 +200,8 @@ test('drift: every path written by a full workflow is covered by a template and 
   );
   assert.ok(Object.keys(selection).length > 0, 'the scripted apply must change something');
   const review = applicationReview(buildApplyPreview(prepared.context, selection, 'Reuse lighter collar'), selection);
-  const plan = await prepareApplication(vault, review, options);
   failEvent4 = true;
-  await assert.rejects(applyPreparedApplication(vault, plan, options), /lost final/);
+  await assert.rejects(applyReviewed(vault, review, options), /lost final/);
   failEvent4 = false;
   await snapshot();
 

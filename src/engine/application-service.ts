@@ -87,14 +87,7 @@ export interface ApplicationOptions extends CopyOptions {
   workingFolders: WorkingFolderBindings;
   resolveWorkingFolders?: (state: VaultState) => Promise<WorkingFolderBindings>;
 }
-export interface PreparedApplication {
-  review: ApplicationReview;
-  plan: ApplyPreviewPlan;
-  destinationName: string;
-  branchName: string;
-  connection: FileSystemDirectoryAdapter;
-}
-/** Called only from an explicit Prepare/Recover user gesture. Engine execution
+/** Called only from an explicit Confirm/Recover user gesture. Engine execution
  * only checks permissions; it never silently elevates a remembered connection. */
 export async function requestApplicationWriteAccess(
   vault: FileSystemDirectoryAdapter,
@@ -102,7 +95,7 @@ export async function requestApplicationWriteAccess(
 ) {
   if (!working)
     throw new Error(
-      "Reconnect the destination working folder before preparing application.",
+      "Reconnect the destination working folder first.",
     );
   for (const folder of [working, vault]) {
     if ((await folder.queryPermission("readwrite")) === "granted") continue;
@@ -285,36 +278,8 @@ async function assertFolderRemovalsReady(
     );
   for (const [path, names] of clutter)
     throw new Error(
-      `Folder "${path}" holds only system files (${names.join(", ")}). Delete them, or untick the folder, then prepare again. No working files were changed.`,
+      `Folder "${path}" holds only system files (${names.join(", ")}). Delete them, or untick the folder, then try again. No working files were changed.`,
     );
-}
-export async function prepareApplication(
-  vault: FileSystemDirectoryAdapter,
-  review: ApplicationReview,
-  options: ApplicationOptions,
-): Promise<PreparedApplication> {
-  return withProjectWriterLock(review.projectId, async () => {
-    throwIfCancelled(options.signal);
-    const state = await openExistingVault(vault);
-    const { plan } = recompute(state, review);
-    noUnfinished(state, review.destinationBranchId);
-    const connection = await connections(
-      vault,
-      state,
-      review.destinationBranchId,
-      options,
-    );
-    await cleanDestination(connection, state, review, options);
-    return {
-      review: structuredClone(review),
-      plan,
-      destinationName: connection.name,
-      branchName: state.branches.find(
-        (b) => b.branchId === review.destinationBranchId,
-      )!.name,
-      connection,
-    };
-  });
 }
 /** Absence is established by readable directory entries, never by hasFile (which
  * deliberately hides errors in some adapters). Reject case aliases and directory paths. */
@@ -696,28 +661,17 @@ async function writeOperation(
       });
     }
 }
-export async function applyPreparedApplication(
-  vault: FileSystemDirectoryAdapter,
-  prepared: PreparedApplication,
-  options: ApplicationOptions,
-): Promise<ApplicationOperation> {
-  return withProjectWriterLock(prepared.review.projectId, async (lock) =>
-    (await applyUnderLock(vault, prepared.review, options, lock, prepared.connection)).op,
-  );
-}
 /**
- * The apply steps shared by `applyPreparedApplication` and `applyAndSave`, for a
- * caller that already holds the project writer lock (`lock`). Checks, then writes
- * (plan, staged copies, attempt/written events, folder and file changes, full
- * inventory check, `applied` last). `expectedConnection`, when given, must be the
- * destination folder the plan was prepared against.
+ * The apply steps of `applyAndSave`, for a caller that already holds the project
+ * writer lock (`lock`). Checks, then writes (plan, staged copies, attempt/written
+ * events, folder and file changes, full inventory check, `applied` last). Exported
+ * so tests can stop at the `applied` state without saving.
  */
-async function applyUnderLock(
+export async function applyUnderLock(
   vault: FileSystemDirectoryAdapter,
   review: ApplicationReview,
   options: ApplicationOptions,
   lock: ProjectWriterLock,
-  expectedConnection?: FileSystemDirectoryAdapter,
 ): Promise<{
   op: ApplicationOperation;
   plan: ApplyPreviewPlan;
@@ -736,10 +690,6 @@ async function applyUnderLock(
       review.destinationBranchId,
       options,
     );
-    if (expectedConnection && !(await working.isSameEntry(expectedConnection)))
-      throw new Error(
-        "Destination connection changed after preparation. Refresh and review again.",
-      );
     await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
     await cleanDestination(working, state, review, options);
     const op = await startOperation(vault, options, {
@@ -804,9 +754,8 @@ export interface ApplyAndSaveOptions extends ApplicationOptions {
 }
 /**
  * `applyAndSave` either saved the result, or wrote it and then could not save it.
- * Anything that fails before the `applied` event is thrown, as with
- * `applyPreparedApplication` (nothing written, or an `unresolved` operation that
- * the existing recovery undoes).
+ * Anything that fails before the `applied` event is thrown (nothing written, or
+ * an `unresolved` operation that the existing recovery undoes).
  */
 export type ApplyAndSaveResult =
   | ({
@@ -851,7 +800,7 @@ export function applySaveSummary(
 /**
  * Bring back (revert) or Copy files from a case (merge), then save the result as
  * a revision, all under ONE project writer lock (the lock cannot be taken twice:
- * see `captureUnderLock`). The apply steps are exactly `applyPreparedApplication`'s;
+ * see `captureUnderLock`). The apply steps are `applyUnderLock`'s;
  * the save is a normal capture whose fresh scan must equal the plan's result
  * (`expectedSnapshot`), so an edit made meanwhile is never swept in. Provenance is
  * linked by capture exactly as for a manual save after Apply (`captured` status,
