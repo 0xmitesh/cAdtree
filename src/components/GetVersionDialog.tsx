@@ -59,7 +59,7 @@ export function GetVersionDialog({
       {check ? (
         <>
           <p>
-            Put <strong className="file-path">{path}</strong> from {check.revisionLabel} into
+            Put <strong className="file-path">{path}</strong> from {check.fromLabel} into
             your working folder? It will show as an unsaved change.
           </p>
           {blocked ? <Notice type="error">{blocked}</Notice> : null}

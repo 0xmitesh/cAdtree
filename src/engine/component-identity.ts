@@ -178,7 +178,7 @@ export async function readComponentEvidence(vault: FileSystemDirectoryAdapter, s
 function restoreProvenance(state: VaultState, record: ComponentRecord, transfer: ComponentRecord['transfers'][number], manifest: { parentRevisionId?: string | null; files: { path: string; sha256: string; size: number }[] }) {
   const op = state.applicationOperations?.find(op => op.operationId === transfer.operationId && op.destinationBranchId === record.branchId && op.status === 'done');
   const plan = op?.record?.plan;
-  const action = plan?.actions.find(a => a.path === transfer.path && a.operation === 'add');
+  const action = plan?.actions.find(a => a.path === transfer.path);
   const saved = manifest.files.find(f => f.path === transfer.path);
   return !!plan && plan.mode === 'restore-file' && plan.componentId === transfer.componentId && plan.sourceRevisionId === transfer.sourceRevisionId &&
     plan.destinationRevisionId === (manifest.parentRevisionId ?? null) && !!action?.after && !!saved && saved.sha256 === action.after.sha256 && saved.size === action.after.size;
@@ -270,14 +270,16 @@ export function prepareComponentRecord(state: VaultState, scan: ScanResult, revi
   // Get this version: a file put back at a path the baseline lacks keeps the
   // component recorded by the finished operation, but only while that file is
   // byte-for-byte what was written (recorded evidence, never guessed). If two
-  // such operations disagree on the component, none is used (no order is
-  // inferred); the file then gets a new identity like any other added file.
-  const restored = (state.applicationOperations ?? []).map(op => restoredTransfer(state, op, scan.branchId, scan.baselineRevisionId, files)).filter(t => t !== undefined);
+  // such operations disagree on the component of a path, or put the same
+  // component back at two paths, none of them is used (no order is inferred);
+  // those files then get a new identity like any other added file.
+  // A path the baseline has keeps its identity by path (no transfer needed).
+  const restored = (state.applicationOperations ?? []).map(op => restoredTransfer(state, op, scan.branchId, scan.baselineRevisionId, files)).filter(t => t !== undefined).filter(t => !parent?.files.some(f => f.path === t.path || f.componentId === t.componentId));
   for (const transfer of restored) {
-    const same = restored.filter(t => t.path === transfer.path);
-    if (same.some(t => t.componentId !== transfer.componentId)) continue;
-    // A path the baseline has keeps its identity by path (no transfer needed).
-    if (!transfers.some(t => t.path === transfer.path) && !parent?.files.some(f => f.path === transfer.path || f.componentId === transfer.componentId)) transfers.push(transfer);
+    if (restored.some(t => (t.path === transfer.path) !== (t.componentId === transfer.componentId))) continue;
+    if (transfers.some(t => t.path === transfer.path || t.componentId === transfer.componentId)) continue;
+    if (renames.some(r => r.to === transfer.path)) throw new Error(`Component identity conflict at "${transfer.path}": this file was just put back with Get this version; save it first, then rename.`);
+    transfers.push(transfer);
   }
   const draft = { schemaVersion: 1, projectId: state.project.projectId, branchId: scan.branchId, boundarySha256: state.components.boundary!.payloadSha256,
     parentIdentitySha256: parent?.payloadSha256 ?? null, renames, replacements, transfers,
@@ -291,15 +293,16 @@ export function prepareComponentRecord(state: VaultState, scan: ScanResult, revi
 }
 /**
  * The identity transfer a finished Get this version operation supports for a
- * save on `baselineRevisionId`: the operation put one file back at a path the
- * baseline lacks ("add"), it was made on that same baseline, it recorded the
+ * save on `baselineRevisionId` (the caller drops paths the baseline has): it
+ * was made on that same baseline, it recorded the
  * file's component (equal to the target revision's evidence), and the file to
  * be saved still has exactly the bytes it wrote. Otherwise undefined.
  */
 function restoredTransfer(state: VaultState, op: NonNullable<VaultState['applicationOperations']>[number], branchId: string, baselineRevisionId: string | null, files: { path: string; sha256: string; size: number }[]) {
   const plan = op.record?.plan;
   if (op.status !== 'done' || op.destinationBranchId !== branchId || plan?.mode !== 'restore-file' || !plan.componentId || plan.destinationRevisionId !== baselineRevisionId) return undefined;
-  const action = plan.actions.find(a => a.operation === 'add');
+  // Its one file (written over an unsaved new file or into an empty place alike).
+  const action = plan.actions.find(a => a.after);
   const file = action && files.find(f => f.path === action.path);
   if (!action?.after || !file || file.sha256 !== action.after.sha256 || file.size !== action.after.size) return undefined;
   const evidence = state.components?.revisions[plan.sourceRevisionId]?.files.find(f => f.path === action.path);

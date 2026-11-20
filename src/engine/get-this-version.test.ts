@@ -230,3 +230,66 @@ test("a finished get this version blocks nothing: another one, Discard and Bring
   assert.equal(saved.status, "saved");
   assert.equal(await f.read("Gone.txt"), "gone");
 });
+
+test("put back over an unsaved new file at the same path, the file still keeps its identity when saved", async () => {
+  const f = await setup();
+  const goneId = component(await f.state(), f.r1, "Gone.txt")!;
+  await f.w("Gone.txt", "an unsaved new file");
+  const result = await f.getVersion("Gone.txt", f.r1);
+  assert.equal(result.plan.actions[0].operation, "replace");
+  const r3 = (await f.save()).revision.manifest.revisionId;
+  const state = await openExistingVault(f.vault);
+  assert.equal(state.components?.status, "available", state.components?.reason);
+  assert.equal(component(state, r3, "Gone.txt"), goneId);
+});
+
+/** Keep.txt (C) in R1 and R2; renamed to K2.txt in R3; deleted in R4. */
+async function renamedThenDeleted(f: Awaited<ReturnType<typeof setup>>) {
+  await f.main.removeEntry(["Keep.txt"]);
+  await f.w("K2.txt", "keep");
+  const s = await f.state();
+  const scan = await scanBranchChanges(f.main, MAIN, getBranchBaseline(s, MAIN));
+  const r3 = (await f.save({ identityReview: createIdentityReview(s, scan, [{ from: "Keep.txt", to: "K2.txt" }], []) })).revision.manifest.revisionId;
+  await f.main.removeEntry(["K2.txt"]);
+  await f.save();
+  return { r3, keepId: component(await f.state(), f.r1, "Keep.txt")! };
+}
+
+test("the same component can't be put back at a second path while the first is still there", async () => {
+  const f = await setup();
+  const { r3, keepId } = await renamedThenDeleted(f);
+  assert.equal(component(await f.state(), r3, "K2.txt"), keepId);
+  await f.getVersion("Keep.txt", f.r1);
+  const blocked = await f.plan(["K2.txt"], r3);
+  assert.match(blocked.plan.blockers.join(" "), /This file is already back as Keep\.txt\. Save or discard that first\./);
+  // Once Keep.txt no longer holds those bytes, K2.txt can come back.
+  await f.w("Keep.txt", "edited");
+  assert.ok((await f.plan(["K2.txt"], r3)).plan.ready);
+});
+
+test("at save, restored files sharing one component get new identities instead of failing", async () => {
+  const f = await setup();
+  const { r3, keepId } = await renamedThenDeleted(f);
+  await f.getVersion("Keep.txt", f.r1);
+  await f.w("Keep.txt", "edited");
+  await f.getVersion("K2.txt", r3);
+  await f.w("Keep.txt", "keep"); // the bytes Get this version wrote, again
+  const r5 = (await f.save()).revision.manifest.revisionId;
+  const state = await openExistingVault(f.vault);
+  assert.equal(state.components?.status, "available", state.components?.reason);
+  const ids = [component(state, r5, "Keep.txt"), component(state, r5, "K2.txt")];
+  assert.ok(ids.every((id) => id && id !== keepId));
+  assert.notEqual(ids[0], ids[1]);
+});
+
+test("renaming onto a file just put back says to save it first", async () => {
+  const f = await setup();
+  await f.getVersion("Gone.txt", f.r1);
+  await f.main.removeEntry(["Keep.txt"]);
+  const s = await f.state();
+  const scan = await scanBranchChanges(f.main, MAIN, getBranchBaseline(s, MAIN));
+  await assert.rejects(
+    f.save({ identityReview: createIdentityReview(s, scan, [{ from: "Keep.txt", to: "Gone.txt" }], []) }),
+    /just put back with Get this version; save it first, then rename/,
+  );
+});

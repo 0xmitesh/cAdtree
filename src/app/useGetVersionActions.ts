@@ -7,6 +7,7 @@ import {
 } from "../engine/application-service";
 import { buildReplacePlan, replacePlanHash } from "../engine/apply-preview";
 import { getBranchBaseline, type WorkingFolderBindings } from "../engine/branch-state";
+import { caseLabel } from "../engine/case-lifecycle";
 import { discardedFolderBase, discardedFolderPath } from "../engine/discarded-paths";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import type { ScanResult, VaultState } from "../engine/types";
@@ -22,6 +23,8 @@ export type GetVersionCheck = {
   path: string;
   /** "Rev 003" */
   revisionLabel: string;
+  /** "Rev 003", or "Rev 008 on <case>" when the revision belongs to another case. */
+  fromLabel: string;
   planHash: string;
   /** Why it cannot be done now (empty when it can). */
   blockers: string[];
@@ -94,14 +97,19 @@ export function useGetVersionActions({
         );
         const plan = buildReplacePlan(state, scan, revisionId, [path], "restore-file");
         const revision = state.revisions.find((r) => r.manifest.revisionId === revisionId);
+        const revisionLabel = revision
+          ? formatRevisionNumber(revision.manifest.displayNumber)
+          : "that revision";
         return {
           projectId: state.project.projectId,
           branchId: activeBranchId,
           revisionId,
           path,
-          revisionLabel: revision
-            ? formatRevisionNumber(revision.manifest.displayNumber)
-            : "that revision",
+          revisionLabel,
+          fromLabel:
+            revision && revision.manifest.branchId !== activeBranchId
+              ? `${revisionLabel} on ${caseLabel(state, revision.manifest.branchId)}`
+              : revisionLabel,
           planHash: replacePlanHash(plan),
           blockers: plan.blockers,
           hasUnsavedEdits:

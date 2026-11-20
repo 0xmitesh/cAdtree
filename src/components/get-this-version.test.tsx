@@ -9,7 +9,7 @@ import { historyState } from "../../tests/history-data";
 import type { GetVersionCheck, GetVersionController } from "../app/useGetVersionActions";
 import { scannedWorkingFile, useGetVersionActions } from "../app/useGetVersionActions";
 import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from "../engine/fs-adapter";
-import { createProject, createWorkspace, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
+import { createManagedBranch, createProject, createWorkspace, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
 import { captureRevision } from "../engine/revision-service";
 import { openExistingVault } from "../engine/vault-service";
 import { branchApplications } from "../engine/application-records";
@@ -32,7 +32,7 @@ function spy(overrides: Partial<GetVersionCheck> = {}, extra: Partial<GetVersion
       checks.push([revisionId, path]);
       return {
         projectId: "visual-project", branchId: "branch-main", revisionId, path,
-        revisionLabel: `Rev 00${revisionId.slice(1)}`, planHash: "h", blockers: [],
+        revisionLabel: `Rev 00${revisionId.slice(1)}`, fromLabel: `Rev 00${revisionId.slice(1)}`, planHash: "h", blockers: [],
         hasUnsavedEdits: false, keptFolder: "Discarded/2026-11-20 09.30", ...overrides,
       };
     },
@@ -62,6 +62,28 @@ test("revision details: each saved file offers Get this version; none without th
   const without = render(<HistoryRecoveryView {...props()} />);
   fireEvent.click(revBtn(without, "001"));
   assert.equal(within(files(without)).queryAllByRole("button", { name: "Get this version" }).length, 0);
+});
+
+test("not offered on deleted rows or damaged revisions", () => {
+  const state = historyState(3);
+  state.revisions[2].manifest.files = state.revisions[2].manifest.files.filter(
+    (f) => f.path !== "Drawings/Actuator.SLDDRW",
+  );
+  const ui = render(<HistoryRecoveryView {...props(spy().controller)} vaultState={state} />);
+  fireEvent.click(revBtn(ui, "003"));
+  const deleted = [...files(ui).querySelectorAll(".detail-file")].find((row) =>
+    row.textContent!.includes("Drawings/Actuator.SLDDRW"),
+  ) as HTMLElement;
+  assert.match(deleted.textContent!, /Deleted/);
+  assert.equal(within(deleted).queryAllByRole("button", { name: "Get this version" }).length, 0);
+  assert.ok(within(files(ui)).getAllByRole("button", { name: "Get this version" }).length > 0);
+  cleanup();
+  const damaged = historyState(3);
+  damaged.revisions[1].integrityStatus = "corrupted";
+  const d = render(<HistoryRecoveryView {...props(spy().controller)} vaultState={damaged} />);
+  fireEvent.click(revBtn(d, "002"));
+  assert.match(d.container.textContent!, /Damaged revision/);
+  assert.equal(within(files(d)).queryAllByRole("button", { name: "Get this version" }).length, 0);
 });
 
 test("the latest revision's file is not offered when the working file still matches it", () => {
@@ -214,6 +236,21 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
   await main.writeFileText(["A.txt"], "edited after the check");
   await assert.rejects(result.current.confirm(fresh), /Changes differ/);
   assert.equal(await main.readFileText(["A.txt"]), "edited after the check");
+  // A revision of another case says which case it is on.
+  const withCase = await createManagedBranch(root, created.record.containerPath, {
+    sourceRevisionId: r1, name: "Lighter", reason: "Try",
+  });
+  const caseDir = withCase.workingFolders[withCase.createdBranchId]!;
+  await caseDir.writeFileText(["A.txt"], "case version");
+  const caseRev = (
+    await captureRevision(caseDir, vault, {
+      branchId: withCase.createdBranchId, summary: "C", notes,
+      workingFolders: { ...folders, ...withCase.workingFolders },
+    })
+  ).revision.manifest;
+  const other = await result.current.check(caseRev.revisionId, "A.txt");
+  assert.equal(other.fromLabel, `Rev 00${caseRev.displayNumber} on Lighter`);
+  assert.equal(check.fromLabel, "Rev 001");
 });
 
 test("an interrupted Get this version is labelled Undo the unfinished Get this version", () => {

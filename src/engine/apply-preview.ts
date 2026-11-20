@@ -691,6 +691,27 @@ export function buildReplacePlan(
       if (!targetFiles.has(path))
         throw new Error(`That revision has no file at ${path}.`);
       componentId = restoredComponent(state, target.revisionId, baseline.revisionId, path);
+      // The same component already put back at another path (and still there,
+      // unchanged) would give two files one identity at the next save.
+      const elsewhere = componentId
+        ? (state.applicationOperations ?? []).flatMap((op) => {
+            const plan = op.record?.plan;
+            const action = plan?.actions.find((a) => a.after);
+            const current = action && workingFiles.get(action.path);
+            return op.status === "done" &&
+              op.destinationBranchId === branchId &&
+              plan?.mode === "restore-file" &&
+              plan.componentId === componentId &&
+              plan.destinationRevisionId === baseline.revisionId &&
+              action!.path !== path &&
+              current &&
+              sameBytes(current, action!.after)
+              ? [action!.path]
+              : [];
+          })
+        : [];
+      if (elsewhere.length)
+        throw new Error(`This file is already back as ${elsewhere[0]}. Save or discard that first.`);
     }
     for (const path of [...new Set(paths)].sort()) {
       splitAndValidatePath(path);
