@@ -188,7 +188,7 @@ function restoreProvenance(state: VaultState, record: ComponentRecord, transfer:
 export async function writeComponentBoundary(vault: FileSystemDirectoryAdapter, state: VaultState) {
   if (state.corruptedRecords.length || Object.keys(state.damagedBranchHeads).length || Object.keys(state.competingHeads).length || state.applicationOperations?.some(op => !isFinishedOperation(op))) throw new Error('Resolve the history and Bring back or Copy records before turning on rename tracking.');
   if (state.components?.status === 'available') return;
-  if (await vault.hasFile(readyPath)) throw new Error('Existing component records are damaged or unsupported; it cannot be replaced.');
+  if (await vault.hasFile(readyPath)) throw new Error('Existing component records are damaged or unsupported; they cannot be replaced.');
   let boundary: Boundary;
   if (await vault.hasFile(boundaryPath)) {
     boundary = JSON.parse(await vault.readFileText(boundaryPath));

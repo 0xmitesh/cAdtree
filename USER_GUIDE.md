@@ -62,8 +62,8 @@ Typical layout, relative to the selected workspace:
 ```text
 .cadtree-workspace.json
 projects/<project-name-unique-id>/
-  .cadtree/                  portable project and branch locations
-  vault/                     shared immutable revision history and objects
+  .cadtree/                  portable project and case locations
+  vault/                     shared immutable version history and objects
   working/main/              Main's editable CAD files
   working/<case-name-id>/    a case's independent editable CAD files
 ```
@@ -226,11 +226,11 @@ If the files were written but the save failed, a notice says, for example, **Bro
 
 #### Interrupted Bring back or Copy
 
-Cancellation, permission loss, source-object failure, working-write failure or an uncertain acknowledgement can leave an unfinished operation. cAdtree never reports a partial result as success. Reconnecting/reloading reads operation records from the vault independently of browser preferences. Another Bring back or Copy and ordinary saving are blocked until the operation is undone or its unavailable records are manually inspected. Do not retry by deleting operation folders.
+Cancellation, permission loss, source-object failure, working-write failure or an uncertain acknowledgement can leave an unfinished operation. cAdtree never reports a partial result as success. Reconnecting/reloading reads operation records from the vault independently of browser preferences. Another Bring back or Copy and ordinary saving are blocked until the operation is undone or its unavailable records are looked at manually. Do not retry by deleting operation folders.
 
 Choose **Undo the unfinished Bring back** (or **Copy**, or **Discard**), save/close CAD documents and confirm. Recovery checks every affected path. Already-restored before-states are accepted. Recognized applied bytes (or a recognized applied deletion) can be restored from verified before-state copies. Unexpected later bytes, case/directory collisions and truncated/unknown files are not blindly overwritten. Readable unexpected bytes are copied to fresh records storage while the live files remain untouched. The message identifies paths needing manual recovery. Inspect the retained before/applied hashes and before-state copy locations, restore affected paths manually if appropriate, then retry recovery to verify them. Unrelated files and all directories remain; any newly created empty directories are retained and may need a normal reviewed capture.
 
-Its **Details** show `vault/applications/<branch-id>/<operation-id>/`, affected paths, before/applied hashes and indexed before-state copies. Staged copies exist after successful staging. Unexpected copies use the same action index under `unexpected/<recovery-id>/`. A damaged plan or event sequence requires manual records inspection; there is no force-clear or automatic deletion of failed records. Restore readable valid records from an independent backup where necessary before attempting automated recovery. Records is retained even after recovery and saving.
+Its **Details** show `vault/applications/<branch-id>/<operation-id>/`, affected paths, before/applied hashes and indexed before-state copies. Staged copies exist after successful staging. Unexpected copies use the same action index under `unexpected/<recovery-id>/`. A damaged plan or event sequence needs a manual look at its records; there is no force-clear or automatic deletion of failed records. Restore readable valid records from an independent backup where necessary before attempting automated recovery. These records are kept even after recovery and saving.
 
 #### Durability and limits
 
@@ -252,7 +252,7 @@ A hidden case leaves the History graph and list and the Explorer. Its versions s
 
 A hidden case is read-only: it can't receive a new save or application. **Unhide** restores Active status with the same identity, history, baseline and folder; it does not switch cases or restore files, and the unsaved changes show again in Changes when you switch to the case. A missing connection still needs reconnection before work resumes. A child case stays independent when its parent is hidden, and hidden case names stay reserved. Hidden folders stay in all existing folder-isolation checks.
 
-Lifecycle changes write only separate, versioned/checksummed records in `vault/case-lifecycle/<branch-id>.<sequence>.json` (a hidden case's record says `"archived"`, the value earlier versions used, and records `unsavedAtHide`). Original case records and their ready-marker hashes, versions, objects, notes, origins, application records and folder mappings are unchanged. Existing projects without lifecycle metadata default to Active. Present malformed, unreadable, unsupported or contradictory lifecycle records are shown as unavailable and blocks affected working writes, rather than being assumed Active. Unassignable lifecycle-folder damage blocks working writes project-wide. Inspect or restore valid retained metadata before retrying; cAdtree provides no force-clear, automatic repair or cleanup. Adoption and workspace/home migration retain these records.
+Lifecycle changes write only separate, versioned/checksummed records in `vault/case-lifecycle/<branch-id>.<sequence>.json` (a hidden case's record says `"archived"`, the value earlier releases of cAdtree used, and records `unsavedAtHide`). Original case records and their ready-marker hashes, versions, objects, notes, origins, application records and folder mappings are unchanged. Existing projects without lifecycle metadata default to Active. Present malformed, unreadable, unsupported or contradictory lifecycle records are shown as unavailable and block affected working writes, rather than being assumed Active. Unassignable lifecycle-folder damage blocks working writes project-wide. Inspect or restore valid retained metadata before retrying; cAdtree provides no force-clear, automatic repair or cleanup. Adoption and workspace/home migration retain these records.
 
 The existing project writer lock serializes lifecycle changes with app writers. Each change is reloaded, validated, persisted exclusively and read back before success. Repeated requests for the same current outcome do not add another record; a stale request for a different outcome requires refresh. A failed acknowledgement can still be recognized through verified readback. Partial records remain explicit unavailable records. No hardware-level atomicity or protection against external CAD/sync writers is claimed. Hiding does not change OS permissions: external tools can still edit a folder, and normal checks apply when the case is unhidden. Older app builds do not enforce this lifecycle feature.
 

@@ -61,7 +61,7 @@ export function DiagnosticsView({
         <strong>Working folder</strong>
         <p className="file-path">{workingFolderName ?? "Not connected"}</p>
         <p>
-          Open this case’s folder in your CAD application before editing or
+          Open this case’s folder in the app you use before editing or
           saving.
         </p>
       </div>

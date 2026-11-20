@@ -63,7 +63,7 @@ function capUnits(text: string, limit: number): string {
   }
   return out.replace(/[ .]+$/, '');
 }
-/** Readable export folder base: `Project - Branch - R03`, at most 64 UTF-16 units. */
+/** Readable export folder base: `Project - Case - V3`, at most 64 UTF-16 units. */
 function noteLines(notes: { problem: string; modification: string; observations: string }, mainLabel: string): string[] {
   return ([[mainLabel, notes.modification], ['Why', notes.problem], ['What you noticed', notes.observations]] as const)
     .filter(([, value]) => value?.trim())

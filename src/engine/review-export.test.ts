@@ -211,11 +211,15 @@ test('export folder names keep spaces, replace illegal characters and cap the ba
   assert.equal(exportFolderBaseName('A:B/C', 'x*y', 'V1'), 'A-B-C - x-y - V1');
   assert.equal(exportFolderBaseName('', '', 'V1'), 'Project - Case - V1');
   for (const unit of ['P', '设', '😀', 'é ']) {
-    const name = exportFolderBaseName(unit.repeat(200), unit.repeat(200), 'R12');
+    const name = exportFolderBaseName(unit.repeat(200), unit.repeat(200), 'V12');
     assert.ok(name.length <= 64, `${unit} ${name.length}`);
     assert.doesNotMatch(name, /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
-    assert.ok(name.endsWith(' - R12'));
+    assert.ok(name.endsWith(' - V12'));
   }
+  // A label longer than 4 characters (a very large version number) takes its extra characters from the project part.
+  const long = exportFolderBaseName('P'.repeat(200), 'C'.repeat(200), 'V123456');
+  assert.ok(long.length <= 64, String(long.length));
+  assert.ok(long.endsWith(' - V123456'));
 });
 
 test('the standard clash counter is proposed case-insensitively and only that shape is accepted at export', async () => {

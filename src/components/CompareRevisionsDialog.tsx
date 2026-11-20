@@ -77,7 +77,7 @@ export function CompareRevisionsDialog({
       <label className="comparison-endpoint">
         <span>
           <strong>{side}</strong> ·{" "}
-          {side === "From" ? "comparison baseline" : "compared state"}
+          {side === "From" ? "starting point" : "compared state"}
         </span>
         <select
           ref={side === "From" ? fromSelect : undefined}
@@ -286,7 +286,7 @@ export function CompareRevisionsDialog({
         {!fromId || !toId ? (
           <Notice>
             {!fromId
-              ? "Choose a From version to set the comparison baseline."
+              ? "Choose a From version to start the comparison."
               : "Choose a To version."}
           </Notice>
         ) : null}
