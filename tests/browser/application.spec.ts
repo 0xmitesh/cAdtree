@@ -115,7 +115,7 @@ for (const width of [1366, 390])
     await page.getByRole("button", { name: /Return to Synthetic application preview/ }).click();
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     await openProject();
-    await expect(page.getByRole("region", { name: "Bring back or Copy status" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Bring back, Copy or Discard status" })).toHaveCount(0);
     await nav("History");
     await page.getByRole("button", { name: /Rev 006: Copied 1 file from Part-X redesign/ }).press("Enter");
     await expect(page.getByText(/^Copied from Rev 003 on Part-X redesign/)).toBeVisible();
@@ -153,13 +153,13 @@ test("actual App: an interrupted Copy survives reload and Undo the unfinished Co
   await dialog.getByRole("button", { name: "Copy files", exact: true }).click();
   await expect(dialog.getByRole("alert").filter({ hasText: "acknowledgement lost" })).toBeVisible();
   await page.keyboard.press("Escape");
-  const status = page.getByRole("region", { name: "Bring back or Copy status" });
+  const status = page.getByRole("region", { name: "Bring back, Copy or Discard status" });
   await expect(status).toContainText("A Copy was interrupted");
   await page.reload();
   await page.getByRole("button", { name: /Return to Synthetic application preview/ }).click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   if (!(await status.isVisible())) await openProject();
-  await expect(status).toContainText("Saving and another Bring back or Copy are blocked");
+  await expect(status).toContainText("Saving and another Bring back, Copy or Discard are blocked");
   await fixtureStep(page, fixture, "adjustFixtureMain");
   await status.getByRole("button", { name: "Undo the unfinished Copy", exact: true }).click();
   const recovery = page.getByRole("dialog", { name: "Undo the unfinished Copy" });

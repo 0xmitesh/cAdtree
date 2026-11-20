@@ -333,16 +333,24 @@ export function WorkspaceLocationSetting({
 }
 
 /** Copies a folder's full address (asks for the home address first when it is unknown). */
-export function CopyFolderPathButton({ resolve }: { resolve: ResolveFilePath }) {
+export function CopyFolderPathButton({
+  resolve,
+  label = "Copy path",
+  className = "button secondary",
+}: {
+  resolve: ResolveFilePath;
+  label?: string;
+  className?: string;
+}) {
   const context = useContext(Shortcuts);
   if (!context) return null;
   return (
     <button
       type="button"
-      className="button secondary"
+      className={className}
       onClick={() => context.copy({ resolve, containingFolder: true })}
     >
-      Copy path
+      {label}
     </button>
   );
 }
@@ -361,6 +369,8 @@ export interface FileMenuItem {
   label: string;
   ariaLabel?: string;
   disabled?: boolean;
+  /** Why the item is disabled (or a hint), shown as its tooltip and description. */
+  title?: string;
   onSelect: () => void;
 }
 
@@ -470,6 +480,8 @@ export function FilePathActions({
               className="text-button"
               key={item.label}
               disabled={item.disabled}
+              title={item.title}
+              aria-description={item.title}
               aria-label={item.ariaLabel ?? item.label}
               onClick={(event) => choose(event, item.onSelect)}
             >

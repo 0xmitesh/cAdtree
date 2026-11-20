@@ -17,6 +17,7 @@ import {
 } from "../engine/apply-preview";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { Modal, Notice, StatusBadge, OperationProgress } from "./ui";
+import { DiscardDialog, type DiscardController } from "./DiscardDialog";
 
 export interface ApplicationController {
   /** Writes the reviewed plan and saves it as a revision (engine `applyAndSave`). */
@@ -28,7 +29,9 @@ export interface ApplicationController {
   unsavedChanges?: number;
   /** Takes the user to Changes to save their own edits first. */
   onSaveFirst?: () => void;
-  // TODO(Phase 4, Discard): add `onDiscardFirst` ("Discard them", keeps a copy in Discarded/).
+  /** "Discard them": opens Discard all for the destination case (a copy is kept in
+   * Discarded/), then returns to this dialog. */
+  discard?: DiscardController;
 }
 
 /** What the user decided: files unticked (Copy only) and, for each file
@@ -188,6 +191,7 @@ function ApplyBody({
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
   const [error, setError] = useState("");
+  const [discarding, setDiscarding] = useState(false);
   const choices = useMemo(
     () => deriveChoices(context.rows, revert, unticked, decisions),
     [context.rows, revert, unticked, decisions],
@@ -273,7 +277,9 @@ function ApplyBody({
   const saveFirst = unsaved ? (
     <Notice>
       {destinationName} has {plural(unsaved, "unsaved change", "unsaved changes")}.
-      Save them first, so nothing is lost.
+      {application?.discard
+        ? " Save them first, or discard them (a copy is kept in the Discarded folder)."
+        : " Save them first, so nothing is lost."}
     </Notice>
   ) : null;
   const errors = (
@@ -330,6 +336,17 @@ function ApplyBody({
         <button className="button secondary" onClick={onClose} disabled={running}>
           Cancel
         </button>
+        {unsaved && application?.discard ? (
+          <button
+            className="button secondary"
+            disabled={running || Boolean(application.discard.blockedReason)}
+            title={application.discard.blockedReason}
+            aria-description={application.discard.blockedReason}
+            onClick={() => setDiscarding(true)}
+          >
+            Discard them
+          </button>
+        ) : null}
         {unsaved && application?.onSaveFirst ? (
           <button
             className="button primary"
@@ -353,6 +370,17 @@ function ApplyBody({
       </div>
     </>
   );
+
+  if (discarding && application?.discard)
+    return (
+      <DiscardDialog
+        branchId={context.destinationBranchId}
+        selection="all"
+        caseName={destinationName}
+        controller={application.discard}
+        onClose={() => setDiscarding(false)}
+      />
+    );
 
   if (revert) {
     const groups: [string, PreviewFileRow[]][] = [

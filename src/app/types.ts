@@ -3,6 +3,7 @@ import type { HomeState } from "../engine/home-service";
 import type { RememberedHome } from "../engine/idb-store";
 import type { ProgressUpdate } from "../engine/types";
 import type { ManagedProject } from "../engine/workspace-service";
+import type { ResolveFilePath } from "../utils/folder-path";
 import type { useOperation } from "./useOperation";
 
 export type ActiveTab = "connect" | "changes" | "history" | "references" | "diagnostics";
@@ -26,6 +27,8 @@ export type StatusBanner = {
   message: string;
   /** One follow-up link shown after the message (e.g. Undo after a Bring back). */
   action?: { label: string; run: () => void };
+  /** A Copy path button for a folder named in the message (e.g. the Discarded copy). */
+  copyFolder?: { label: string; resolve: ResolveFilePath };
 };
 
 export type PendingHome = {

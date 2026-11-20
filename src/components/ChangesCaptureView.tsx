@@ -17,6 +17,9 @@ import { createIdentityReview, prepareComponentRecord, type IdentityReview } fro
 import { canMatchRename, canTreatAsNew, ComponentIdentityControls, identityReviewStale, MatchRenameDialog, TreatAsNewDialog } from './ComponentIdentityControls';
 import { createReferenceReview, prepareReferenceContext, referenceSelectionChanged, type ReferenceReview, type PendingReferenceAttachment } from '../engine/references';
 import { RevisionAttachments, type DraftReferenceAttachment } from './RevisionAttachments';
+import { DiscardDialog, type DiscardController } from "./DiscardDialog";
+import type { DiscardSelection } from "../app/useDiscardActions";
+import { caseLabel } from "../engine/case-lifecycle";
 
 export interface ChangesCaptureViewProps {
   onEnableComponentTracking?: () => Promise<void>;
@@ -54,6 +57,8 @@ export interface ChangesCaptureViewProps {
   /** Save now after a Bring back or Copy that wasn't saved: fills the summary and
    * notes once per `key`. */
   prefill?: { summary: string; notes: RevisionNotes; key: string };
+  /** Discard all… and Discard per row (keeps a copy in Discarded/). Absent: no Discard controls. */
+  discard?: DiscardController;
 }
 export interface CaptureDraft {
   identityReview?: IdentityReview;
@@ -92,6 +97,7 @@ export function ChangesCaptureView({
   draftKey,
   onEnableComponentTracking,
   prefill,
+  discard,
 }: ChangesCaptureViewProps) {
   const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
   const [summary, setSummary] = useState(savedDraft?.summary ?? "");
@@ -146,6 +152,7 @@ export function ChangesCaptureView({
   const [treatAsNewPath, setTreatAsNewPath] = useState<string | null>(null);
   const [matchPath, setMatchPath] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [discardSelection, setDiscardSelection] = useState<{ selection: DiscardSelection; folder?: boolean } | null>(null);
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
     null,
   );
@@ -208,6 +215,37 @@ export function ChangesCaptureView({
     (n) =>
       !validPaths.has(n.path) &&
       (n.problem.trim() || n.modification.trim() || n.observations.trim()),
+  );
+  const discardDisabled = busy || !workingFolderName || Boolean(discard?.blockedReason);
+  const discardReason = discard?.blockedReason ?? (!workingFolderName ? "Connect the working folder first." : undefined);
+  const discardItem = (path: string, renamed = false) =>
+    discard
+      ? [{
+          label: "Discard",
+          ariaLabel: `Discard — ${path}`,
+          disabled: discardDisabled || renamed,
+          title: renamed
+            ? "To discard a renamed file, use Discard all or undo the match first."
+            : discardDisabled
+              ? discardReason
+              : undefined,
+          onSelect: () => setDiscardSelection({ selection: [path] }),
+        }]
+      : [];
+  const directoryDiscard = (path: string) => (
+    <>
+      {" "}
+      <button
+        type="button"
+        className="text-button"
+        aria-label={`Discard — ${path}/`}
+        disabled={discardDisabled}
+        title={discardDisabled ? discardReason : `Discards ${path}/ and everything inside it`}
+        onClick={() => setDiscardSelection({ selection: [path], folder: true })}
+      >
+        Discard
+      </button>
+    </>
   );
   const needsReview =
     reviewedSignature !== null && scan?.changesSignature !== reviewedSignature;
@@ -392,6 +430,17 @@ export function ChangesCaptureView({
                 ? `${changes.length} changed file${changes.length === 1 ? "" : "s"}`
                 : "Ready when you are"}
             </h2>
+            {scan?.hasChanges && discard ? (
+              <button
+                type="button"
+                className="button secondary discard-all"
+                disabled={discardDisabled}
+                title={discardDisabled ? discardReason : undefined}
+                onClick={() => setDiscardSelection({ selection: "all" })}
+              >
+                Discard all…
+              </button>
+            ) : null}
             {scan ? (
               <div className="change-counts">
                 <StatusBadge status={`Added ${scan.added.length - renames.length}`} />
@@ -427,6 +476,11 @@ export function ChangesCaptureView({
                         filePath={file.path}
                         resolve={resolveFilePath ? () => resolveFilePath(file.path) : undefined}
                         extraItems={[
+                          ...(status === "Added" || status === "Modified" || status === "Deleted"
+                            ? discardItem(file.path)
+                            : status === "Renamed"
+                              ? discardItem(file.path, true)
+                              : []),
                           ...((status === "Modified" || status === "Unchanged") && canTreatAsNew(vaultState, scan) && !identityReview?.replacements.includes(file.path)
                             ? [{
                                 label: "Treat as new component",
@@ -495,10 +549,14 @@ export function ChangesCaptureView({
                     )
                   </summary>
                   {scan.addedDirectories.map((p) => (
-                    <p key={"a" + p}>Added · {p}/</p>
+                    <p key={"a" + p}>
+                      Added · {p}/{discard ? directoryDiscard(p) : null}
+                    </p>
                   ))}
                   {scan.deletedDirectories.map((p) => (
-                    <p key={"d" + p}>Deleted · {p}/</p>
+                    <p key={"d" + p}>
+                      Deleted · {p}/{discard ? directoryDiscard(p) : null}
+                    </p>
                   ))}
                 </details>
               ) : null}
@@ -644,6 +702,16 @@ export function ChangesCaptureView({
           </form>
         ) : null}
       </div>
+      {discardSelection && discard ? (
+        <DiscardDialog
+          branchId={activeBranchId}
+          selection={discardSelection.selection}
+          folder={discardSelection.folder}
+          caseName={caseLabel(vaultState, activeBranchId)}
+          controller={discard}
+          onClose={() => setDiscardSelection(null)}
+        />
+      ) : null}
       {matchPath && scan ? (
         <MatchRenameDialog
           from={matchPath}

@@ -45,7 +45,11 @@ export function ApplicationStatus({
     ["applied", "unresolved", "unavailable"].includes(op.status),
   );
   const what = (op: ApplicationOperation) =>
-    op.record?.plan.mode === "revert" ? "Bring back" : "Copy";
+    op.record?.plan.mode === "revert"
+      ? "Bring back"
+      : op.record?.plan.mode === "discard"
+        ? "Discard"
+        : "Copy";
   const confirm = async () => {
     if (!confirmation || busy) return;
     setError("");
@@ -66,15 +70,15 @@ export function ApplicationStatus({
           <section
             className="application-status"
             key={op.operationId}
-            aria-label="Bring back or Copy status"
+            aria-label="Bring back, Copy or Discard status"
           >
             <Notice type={op.status === "applied" ? "info" : "error"}>
               <strong>
                 {op.status === "applied"
                   ? `${op.record ? applySaveSummary(state, op.record) : "Files were copied"}, but it wasn't saved${reason ? `: ${reason}` : ""}. Your working files are fine.`
                   : op.status === "unresolved"
-                    ? `A ${what(op)} was interrupted. Saving and another Bring back or Copy are blocked until it is undone.`
-                    : "The record of a Bring back or Copy can't be read. Saving and another Bring back or Copy are blocked."}
+                    ? `A ${what(op)} was interrupted. Saving and another Bring back, Copy or Discard are blocked until it is undone.`
+                    : "The record of a Bring back, Copy or Discard can't be read. Saving and another Bring back, Copy or Discard are blocked."}
               </strong>
               {op.status === "applied" ? null : (
                 <p>
