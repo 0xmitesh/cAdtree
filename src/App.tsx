@@ -1202,9 +1202,10 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         setStatusBanner(null);
         await openHomeEntry(entry);
       } else {
-        const available = entry?.workspace ?? (sameWorkspace ? workspace : null);
+        // A workspace that is no longer in the home cannot be moved to: stay on the current page (and its banner).
+        if (!entry?.workspace) return false;
         // Identity is the project ID alone. The folder may have been renamed since this entry was recorded.
-        const matches = available?.projects.filter(p => p.projectId === target.projectId) ?? [];
+        const matches = entry.workspace.projects.filter(p => p.projectId === target.projectId);
         const project = matches.length === 1 ? matches[0] : undefined;
         if (!project?.project || project.status === "duplicate") return false;
         setStatusBanner(null);

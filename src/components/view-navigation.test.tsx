@@ -11,6 +11,7 @@ import { createTestAuthController, SECOND_TEST_USER } from "../../tests/test-aut
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
 import { createProject } from "../engine/workspace-service";
+import { autoRefreshTiming } from "../app/useAutoRefresh";
 
 Object.assign(globalThis, { indexedDB });
 afterEach(async () => { cleanup(); await clearAllConvenienceMetadata(); Reflect.deleteProperty(window, "showDirectoryPicker"); });
@@ -136,4 +137,33 @@ test("Returning from a different project revalidates its location and retains th
   await waitFor(()=>assert.equal(appBusy(ui),false));
   await waitFor(()=>assert.equal((ui.getByRole('textbox',{name:/Version summary/}) as HTMLInputElement).value,'Earlier project draft'));
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)),before);
+});
+
+test("Back stays put when the workspace is no longer in the home: no project opens outside a workspace", async()=>{
+  const {sample,ui,nav}=await openSample(undefined,true);
+  fireEvent.click(nav.getByRole('button',{name:'My workspaces'}));
+  fireEvent.click(ui.getByRole('button',{name:'Open workspace'}));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  fireEvent.click(within(ui.getByRole('heading',{name:'Z alternate fixture',level:3}).closest('.workspace-project') as HTMLElement).getByRole('button',{name:'Open project'}));
+  await waitFor(()=>assert.equal(appBusy(ui),false));
+  fireEvent.click(nav.getByRole('button',{name:'My workspaces'}));
+  assert.ok(ui.getByRole('heading',{name:'My workspaces.'}));
+  // The registration vanishes; the quiet re-read of the home list no longer shows the workspace.
+  const saved=autoRefreshTiming.debounceMs;autoRefreshTiming.debounceMs=10;
+  try{
+    const records=await sample.home.getDirectory(['.cadtree-home','workspaces']);
+    for(const entry of await records.listEntries())await records.removeEntry([entry.name]);
+    await act(async()=>{window.dispatchEvent(new window.Event('focus'));await new Promise(resolve=>setTimeout(resolve,200));});
+    await waitFor(()=>assert.equal(ui.queryByRole('button',{name:'Open workspace'}),null));
+  }finally{autoRefreshTiming.debounceMs=saved;}
+  // Back through the second project and the workspace page to the earlier My workspaces page.
+  await traverse('back');assert.ok(ui.container.querySelector('.project-context-header')?.textContent?.includes('Z alternate fixture'));
+  await traverse('back');assert.ok(ui.getByRole('heading',{name:'Tutorial Workspace.'}));
+  await traverse('back');assert.ok(ui.getByRole('heading',{name:'My workspaces.'}));
+  // The entry before it is the first project, whose workspace is gone from the home: Back cannot move.
+  await traverse('back');
+  assert.ok(ui.getByRole('heading',{name:'My workspaces.'}),'the page does not change');
+  assert.equal(ui.queryByRole('treeitem',{name:/External/})===null,true,'no External root in the Explorer');
+  // The project that was open stays open: the earlier one (Bracket Assembly) was not opened outside a workspace.
+  assert.equal(ui.container.querySelector('.project-context-header')?.textContent?.includes('Bracket Assembly')??false,false);
 });
