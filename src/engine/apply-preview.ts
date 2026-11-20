@@ -1,4 +1,5 @@
-import type { FileEntry, ReconstructedRevision, VaultState } from "./types";
+import type { FileEntry, ReconstructedRevision, ScanResult, VaultState } from "./types";
+import { hashString } from "./hash";
 import { getBranchBaseline } from "./branch-state";
 import {
   compareSnapshotContents,
@@ -561,4 +562,250 @@ export function buildApplyPreview(
     blockers,
     ready: blockers.length === 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Replace plans: Discard (and, later, Get this version)
+// ---------------------------------------------------------------------------
+
+/**
+ * Operations that make selected working paths match a saved revision without
+ * saving: "discard" (target = the branch's latest revision) and, later,
+ * "restore-file" (one file from an older revision). They reuse the Apply records,
+ * staging, events and recovery, but their plan starts from the CURRENT working
+ * bytes (a full-hash scan), not from a manifest.
+ */
+export type ReplaceMode = "discard" | "restore-file";
+export const isReplaceMode = (mode: unknown): mode is ReplaceMode =>
+  mode === "discard" || mode === "restore-file";
+
+/**
+ * A replace plan in the Apply record shape: base = before = the current working
+ * file (null if it is missing), source = after = the target revision's file (null
+ * if the target does not have it), decision "use-source". `sourceRevisionId` is
+ * the target; `destinationRevisionId` and `baseRevisionId` are the branch's
+ * latest saved revision. Folder actions: "create" for a folder the target has and
+ * the working folder lacks (missing parents of written files included), "remove"
+ * for one the working folder has and the target lacks.
+ */
+export interface ReplacePlan {
+  mode: ReplaceMode;
+  projectId: string;
+  sourceRevisionId: string;
+  destinationRevisionId: string;
+  baseRevisionId: string;
+  destinationBranchId: string;
+  reason: string;
+  actions: PreviewAction[];
+  folderActions: PreviewFolderAction[];
+  blockers: string[];
+  ready: boolean;
+}
+
+const sameBytes = (a: FileEntry | null, b: FileEntry | null) =>
+  a && b ? a.sha256 === b.sha256 && a.size === b.size : a === b;
+const isBelow = (path: string, folder: string) => path.startsWith(`${folder}/`);
+const related = (a: string, b: string) =>
+  a === b || isBelow(a, b) || isBelow(b, a);
+
+/**
+ * Read-only. Builds the plan that makes each selected path (a file or a folder;
+ * a folder brings everything below it that differs) match `targetRevisionId`.
+ * `scan` must be a full-hash scan of the branch's working folder that keeps OS
+ * clutter (see `scanForReplace`), so clutter inside a folder being removed is
+ * moved to the kept copy instead of being left behind or deleted. Unselected
+ * unsaved changes are not part of the plan and never block it.
+ */
+export function buildReplacePlan(
+  state: VaultState,
+  scan: ScanResult,
+  targetRevisionId: string,
+  paths: readonly string[],
+  mode: ReplaceMode = "discard",
+): ReplacePlan {
+  const blockers: string[] = [];
+  const branchId = scan.branchId;
+  let baselineId = "";
+  const fileActions = new Map<string, PreviewAction>();
+  const creates = new Set<string>();
+  const removes = new Set<string>();
+  try {
+    if (!isReplaceMode(mode)) throw new Error(`Unknown replace mode "${String(mode)}".`);
+    const identityBlock = componentWriteBlock(state);
+    if (identityBlock) throw new Error(identityBlock);
+    const baseline = getBranchBaseline(state, branchId);
+    if (!baseline)
+      throw new Error("This case has no saved revision yet, so there is nothing to go back to.");
+    baselineId = baseline.revisionId;
+    if (scan.baselineRevisionId !== baseline.revisionId)
+      throw new Error("Changes differ from what you saw; review again.");
+    if (mode === "discard" && targetRevisionId !== baseline.revisionId)
+      throw new Error("Discard goes back to the latest saved revision of this case only.");
+    const endpoint = comparisonEndpoint(state, targetRevisionId);
+    if (endpoint.status !== "available")
+      throw new Error(`The saved revision is unavailable. ${endpoint.reason}`);
+    const target = endpoint.revision.manifest;
+    const workingFiles = new Map<string, FileEntry>(
+      [...scan.added, ...scan.modified.map((m) => m.current), ...scan.unchanged].map(
+        (file) => [file.path, file],
+      ),
+    );
+    const workingDirs = new Set(scan.directories);
+    const targetFiles = new Map(target.files.map((file) => [file.path, file]));
+    const targetDirs = new Set(target.directories);
+    const addFile = (path: string, explicit: boolean) => {
+      if (fileActions.has(path)) return;
+      const before = workingFiles.get(path) ?? null;
+      const after = targetFiles.get(path) ?? null;
+      if (sameBytes(before, after)) {
+        if (explicit) blockers.push(`${path} has no unsaved change.`);
+        return;
+      }
+      fileActions.set(path, {
+        path,
+        sourceChange: !before ? "added" : !after ? "deleted" : "modified",
+        decision: "use-source",
+        operation: after ? (before ? "replace" : "add") : "delete",
+        base: copyFile(before),
+        source: copyFile(after),
+        before: copyFile(before),
+        after: copyFile(after),
+      });
+    };
+    for (const path of [...new Set(paths)].sort()) {
+      splitAndValidatePath(path);
+      const isFile = workingFiles.has(path) || targetFiles.has(path);
+      const isDir = workingDirs.has(path) || targetDirs.has(path);
+      if (isFile && isDir) {
+        blockers.push(`File/folder clash at "${path}".`);
+        continue;
+      }
+      if (isFile) {
+        addFile(path, true);
+        continue;
+      }
+      const inWorking = workingDirs.has(path),
+        inTarget = targetDirs.has(path);
+      if (!inWorking && !inTarget) {
+        blockers.push(`Nothing to discard at ${path}.`);
+        continue;
+      }
+      // The folder itself if it differs, and everything below it that differs
+      // (folders on one side only, files that differ), OS clutter included.
+      let differs = inWorking !== inTarget;
+      if (inWorking && !inTarget) removes.add(path);
+      if (inTarget && !inWorking) creates.add(path);
+      for (const dir of new Set([...workingDirs, ...targetDirs])) {
+        if (!isBelow(dir, path)) continue;
+        if (workingDirs.has(dir) === targetDirs.has(dir)) continue;
+        (workingDirs.has(dir) ? removes : creates).add(dir);
+        differs = true;
+      }
+      for (const file of new Set([...workingFiles.keys(), ...targetFiles.keys()])) {
+        if (!isBelow(file, path)) continue;
+        if (!sameBytes(workingFiles.get(file) ?? null, targetFiles.get(file) ?? null)) differs = true;
+        addFile(file, false);
+      }
+      if (!differs) blockers.push(`${path} has no unsaved change.`);
+    }
+    // Every missing parent of a written file or created folder is created
+    // explicitly, so recovery knows exactly which folders this operation made.
+    for (const path of [
+      ...[...fileActions.values()].filter((a) => a.after).map((a) => a.path),
+      ...creates,
+    ]) {
+      const segments = path.split("/");
+      for (let i = 1; i < segments.length; i++) {
+        const parent = segments.slice(0, i).join("/");
+        if (workingFiles.has(parent))
+          blockers.push(`File/folder clash at "${parent}".`);
+        else if (removes.has(parent))
+          blockers.push(`${parent} is removed but ${path} needs it.`);
+        else if (!workingDirs.has(parent)) creates.add(parent);
+      }
+    }
+    for (const folder of creates)
+      if (workingFiles.has(folder))
+        blockers.push(`File/folder clash at "${folder}".`);
+    // A folder is removed only if nothing would remain in it.
+    for (const folder of removes) {
+      const remains =
+        [...workingFiles.keys()].some(
+          (file) => isBelow(file, folder) && fileActions.get(file)?.after !== null,
+        ) || [...workingDirs].some((dir) => isBelow(dir, folder) && !removes.has(dir));
+      if (remains) blockers.push(`${folder} still holds files that are not discarded.`);
+    }
+    // Unreadable entries block only where they touch the selection.
+    const touched = [...fileActions.keys(), ...creates, ...removes];
+    for (const error of scan.errors)
+      if (touched.some((path) => related(path, error.path)))
+        blockers.push(`Can't read ${error.path}: ${error.error}`);
+    // A written name must not clash (case only) with an entry that stays.
+    const staying = [
+      ...[...workingFiles.keys()].filter((path) => fileActions.get(path)?.after !== null),
+      ...[...workingDirs].filter((dir) => !removes.has(dir)),
+    ];
+    const byKey = new Map(staying.map((path) => [path.toLowerCase(), path]));
+    for (const path of [
+      ...[...fileActions.values()].filter((a) => a.after && !a.before).map((a) => a.path),
+      ...creates,
+    ]) {
+      const other = byKey.get(path.toLowerCase());
+      if (other && other !== path)
+        blockers.push(`Case-insensitive path collision between "${other}" and "${path}".`);
+    }
+  } catch (error) {
+    blockers.push(error instanceof Error ? error.message : String(error));
+  }
+  const actions = [...fileActions.values()].sort((a, b) => a.path.localeCompare(b.path));
+  const folderActions: PreviewFolderAction[] = [
+    ...[...creates].map((path) => ({ path, operation: "create" as const, sourceChange: "added" as const })),
+    ...[...removes].map((path) => ({ path, operation: "remove" as const, sourceChange: "deleted" as const })),
+  ].sort((a, b) => a.path.localeCompare(b.path));
+  if (!blockers.length && !actions.length && !folderActions.length)
+    blockers.push("Nothing selected to discard.");
+  const unique = [...new Set(blockers)];
+  return {
+    mode,
+    projectId: state.project.projectId,
+    sourceRevisionId: targetRevisionId,
+    destinationRevisionId: baselineId,
+    baseRevisionId: baselineId,
+    destinationBranchId: branchId,
+    reason: "",
+    actions,
+    folderActions,
+    blockers: unique,
+    ready: unique.length === 0,
+  };
+}
+
+/**
+ * The hash a replace confirmation carries. A file's modification date is left
+ * out (touching a file without changing its bytes is not a different plan);
+ * paths, sizes and checksums are all in.
+ */
+export function replacePlanHash(plan: ReplacePlan): string {
+  const bytes = (file: FileEntry | null) =>
+    file ? { path: file.path, size: file.size, sha256: file.sha256 } : null;
+  return hashString(
+    JSON.stringify({
+      ...plan,
+      actions: plan.actions.map((action) => ({
+        ...action,
+        base: bytes(action.base),
+        source: bytes(action.source),
+        before: bytes(action.before),
+        after: bytes(action.after),
+      })),
+    }),
+  );
+}
+
+/** True when the plan keeps something in Discarded/ (a file with unsaved bytes or a folder it removes). */
+export function replaceKeepsCopy(plan: Pick<ReplacePlan, "actions" | "folderActions">): boolean {
+  return (
+    plan.actions.some((action) => action.before !== null) ||
+    plan.folderActions.some((action) => action.operation === "remove")
+  );
 }

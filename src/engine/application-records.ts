@@ -1,7 +1,18 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
 import { splitAndValidatePath } from "./fs-adapter";
 import { hashString } from "./hash";
-import type { ApplyMode, ApplyPreviewPlan, PreviewChoice } from "./apply-preview";
+import type {
+  ApplyMode,
+  ApplyPreviewPlan,
+  PreviewChoice,
+  ReplaceMode,
+} from "./apply-preview";
+
+/** Same as apply-preview's `isReplaceMode`; kept local so records import types only. */
+const isReplaceMode = (mode: unknown): mode is ReplaceMode =>
+  mode === "discard" || mode === "restore-file";
+/** Apply modes plus the replace modes (Discard, Get this version). */
+export type OperationMode = ApplyMode | ReplaceMode;
 import type { FileEntry, RevisionManifest, VaultState } from "./types";
 
 export interface ApplicationReview {
@@ -14,16 +25,18 @@ export interface ApplicationReview {
   choices: Record<string, PreviewChoice>;
   reason: string;
 }
+/** The review a replace operation (Discard) records: every planned path, use-source. */
+export type ReplaceReview = Omit<ApplicationReview, "mode"> & { mode: ReplaceMode };
 export interface ApplicationRecord {
   schemaVersion: 1;
   kind: "cadtree-file-application";
   operationId: string;
   createdAt: string;
   sourceBranchId: string;
-  review: ApplicationReview;
+  review: ApplicationReview | ReplaceReview;
   plan: {
     /** Absent only in older records, which read as "merge". */
-    mode?: ApplyMode;
+    mode?: OperationMode;
   } & Pick<
     ApplyPreviewPlan,
     | "projectId"
@@ -39,6 +52,8 @@ export interface ApplicationRecord {
 }
 export type ApplicationEventKind =
   | "staged"
+  /** Replace modes only: the readable copy in Discarded/ is complete (or not needed). */
+  | "kept"
   | "attempt"
   | "written"
   | "applied"
@@ -59,6 +74,8 @@ export interface ApplicationEvent {
   manifestSha256?: string;
   finalFiles?: { path: string; file: FileEntry | null }[];
   reviewedChangesSignature?: string;
+  /** `kept` only: project-relative folder of the readable copy (absent when nothing needed keeping). */
+  keptAs?: string;
   checksum: string;
 }
 export interface ApplicationOperation {
@@ -71,12 +88,23 @@ export interface ApplicationOperation {
     | "captured"
     | "recovered"
     | "abandoned"
+    /** A replace operation (Discard) that finished: nothing more to do or save. */
+    | "done"
     | "unavailable";
   record?: ApplicationRecord;
   events: ApplicationEvent[];
   capturedRevisionId?: string;
   error?: string;
 }
+/** Statuses that need nothing more: no recovery, no save, no abandon. */
+export const FINISHED_OPERATION_STATUSES: readonly ApplicationOperation["status"][] = [
+  "captured",
+  "recovered",
+  "abandoned",
+  "done",
+];
+export const isFinishedOperation = (op: Pick<ApplicationOperation, "status">) =>
+  FINISHED_OPERATION_STATUSES.includes(op.status);
 export function sealApplication<T extends object>(
   body: T,
 ): T & { checksum: string } {
@@ -181,16 +209,18 @@ function validateRecord(
     plan.destinationBranchId !== branchId ||
     review.destinationBranchId !== branchId ||
     review.sourceRevisionId !== plan.sourceRevisionId ||
-    !["merge", "revert"].includes(review.mode ?? "merge") ||
-    !["merge", "revert"].includes(plan.mode ?? "merge") ||
+    !["merge", "revert", "discard", "restore-file"].includes(review.mode ?? "merge") ||
     (review.mode ?? "merge") !== (plan.mode ?? "merge") ||
     ![
       plan.sourceRevisionId,
       plan.baseRevisionId,
       plan.destinationRevisionId,
     ].every(safeId) ||
-    ((plan.mode ?? "merge") === "revert" &&
+    (((plan.mode ?? "merge") === "revert" || isReplaceMode(plan.mode)) &&
       plan.baseRevisionId !== plan.destinationRevisionId) ||
+    (plan.mode === "discard" &&
+      plan.sourceRevisionId !== plan.destinationRevisionId) ||
+    (isReplaceMode(plan.mode) && record.sourceBranchId !== branchId) ||
     typeof plan.reason !== "string" ||
     plan.reason !== review.reason ||
     !digest(review.expectedPlanHash) ||
@@ -282,6 +312,7 @@ function validateRecord(
 }
 const kinds: ApplicationEventKind[] = [
   "staged",
+  "kept",
   "attempt",
   "written",
   "applied",
@@ -318,7 +349,9 @@ function orderedFolders(
 function classify(operation: ApplicationOperation, state: VaultState) {
   const record = operation.record!;
   const events = operation.events;
+  const replace = isReplaceMode(record.plan.mode);
   let staged = false,
+    kept = false,
     applied = false,
     recovering = false,
     terminal = false;
@@ -352,8 +385,25 @@ function classify(operation: ApplicationOperation, state: VaultState) {
       )
         throw new Error("Application event references an unknown action.");
     }
+    if (event.kind === "kept") {
+      if (!replace || !staged || kept || applied || recovering || attempts.size)
+        throw new Error("Invalid kept-copy transition.");
+      if (
+        event.keptAs !== undefined &&
+        (typeof event.keptAs !== "string" ||
+          !/^Discarded\/[^/]+$/.test(event.keptAs))
+      )
+        throw new Error("Invalid kept-copy location.");
+      kept = true;
+    }
     if (event.kind === "attempt") {
-      if (!staged || applied || recovering || attempts.has(event.path!))
+      if (
+        !staged ||
+        (replace && !kept) ||
+        applied ||
+        recovering ||
+        attempts.has(event.path!)
+      )
         throw new Error("Invalid file attempt.");
       attempts.add(event.path!);
     }
@@ -373,10 +423,16 @@ function classify(operation: ApplicationOperation, state: VaultState) {
         applied ||
         recovering ||
         changedActions(record).some((a) => !written.has(a.path)) ||
-        record.plan.folderActions.some((a) => !written.has(a.path))
+        record.plan.folderActions.some((a) => !written.has(a.path)) ||
+        (replace && !kept)
       )
         throw new Error("Incomplete application cannot be marked applied.");
       applied = true;
+      // A replace operation is not saved afterwards: written is finished.
+      if (replace) {
+        operation.status = "done";
+        terminal = true;
+      }
     }
     if (event.kind === "recovery-start") {
       if (published.size)
@@ -387,6 +443,7 @@ function classify(operation: ApplicationOperation, state: VaultState) {
       throw new Error("Recovery was not started.");
     if (event.kind === "capture") {
       if (
+        replace ||
         !applied ||
         recovering ||
         !safeId(event.revisionId) ||
@@ -596,6 +653,7 @@ export async function appendApplicationEvent(
         | "manifestSha256"
         | "finalFiles"
         | "reviewedChangesSignature"
+        | "keptAs"
       >
     >,
 ) {
