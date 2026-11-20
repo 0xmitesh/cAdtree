@@ -58,7 +58,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   await expect(page.getByRole('button', { name: /^Copy folder path/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create design case from this version', exact: true }).click();
   await page.getByRole('textbox', { name: 'Case name' }).fill('Alternative');
-  await page.getByRole('textbox', { name: 'Engineering reason' }).fill('Explore another fit');
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Why' }).fill('Explore another fit');
   await page.getByRole('dialog').getByRole('button', { name: 'Create design case', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');

@@ -341,7 +341,7 @@ async function executeVerifiedRecovery(params: {
               }) DID NOT COMPLETE.\n` +
                 `Timestamp: ${new Date().toISOString()}\n` +
                 `Reason: ${errorMsg}\n` +
-                `Do NOT open these files in SolidWorks. Delete this incomplete folder and retry into a fresh folder.\n`,
+                `Do NOT open these files in your CAD app. Delete this incomplete folder and retry into a fresh folder.\n`,
               { exclusive: true }
             );
           }

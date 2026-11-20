@@ -42,7 +42,7 @@ export function caseWriteBlock(
   return lifecycle.status === "archived"
     ? "This case is hidden. Unhide it in History → Design cases before saving or changing its files."
     : lifecycle.status === "unavailable"
-      ? `Case lifecycle evidence is unavailable. Inspect the retained lifecycle records before writing. ${lifecycle.error ?? ""}`
+      ? `Case lifecycle records are unavailable. Inspect the kept lifecycle records before writing. ${lifecycle.error ?? ""}`
       : undefined;
 }
 export function assertCaseWritable(state: VaultState, branchId: string) {
@@ -98,7 +98,7 @@ export async function readCaseLifecycles(
     const entries = await dir.listEntries();
     if (!entries.length) {
       result["*"] = damaged(
-        "Lifecycle directory exists without records. Inspect the interrupted or missing lifecycle evidence before writing.",
+        "Lifecycle directory exists without records. Inspect the interrupted or missing lifecycle records before writing.",
       );
       return result;
     }

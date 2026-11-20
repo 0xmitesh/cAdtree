@@ -128,7 +128,7 @@ test("a missing projects folder fails as a plain error, not a retained destinati
   await root.removeEntry(["projects"], { recursive: true });
   await assert.rejects(createProject(root, "Anything"), (error: Error) => {
     assert.ok(!(error instanceof WorkspaceOperationError));
-    assert.doesNotMatch(error.message, /Destination retained/);
+    assert.doesNotMatch(error.message, /Destination kept/);
     return true;
   });
 });

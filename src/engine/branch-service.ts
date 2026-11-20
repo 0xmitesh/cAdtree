@@ -104,7 +104,7 @@ export async function createDesignBranch(
   const initial = await openExistingVault(vaultDir);
   validateName(initial, name);
   if (!reason)
-    throw new Error("Add a short engineering reason for this case.");
+    throw new Error("Add a short reason for this case.");
   onProgress?.({
     phase: "acquiring_lock",
     processedFiles: 0,
@@ -118,7 +118,7 @@ export async function createDesignBranch(
     const state = await openExistingVault(vaultDir);
     if (state.project.projectId !== initial.project.projectId)
       throw new Error(
-        "Vault identity changed while waiting for the writer lock.",
+        "The vault changed while waiting for the writer lock.",
       );
     validateName(state, name); // Concurrent creation must recheck under the capture lock.
     const workingFolders = options.resolveWorkingFolders ? await options.resolveWorkingFolders(state) : initialWorkingFolders;
@@ -347,7 +347,7 @@ export async function createDesignBranch(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new BranchCreationError(
-        `${message}${workingDir ? (publicationAttempted ? ` Destination "${workingDir.name}" was retained. Its publication status is uncertain; reopen the vault before retrying.` : ` Incomplete destination: "${workingDir.name}". It was not deleted. Retry into a fresh folder.`) : ""}`,
+        `${message}${workingDir ? (publicationAttempted ? ` Destination "${workingDir.name}" was kept. Its publication status is uncertain; reopen the vault before retrying.` : ` Incomplete destination: "${workingDir.name}". It was not deleted. Retry into a fresh folder.`) : ""}`,
         workingDir?.name,
         publicationAttempted,
       );

@@ -173,7 +173,7 @@ export function RevisionGraph({
           className="branch-legend"
           aria-label={
             fileRecords
-              ? "Filter file history by case ancestry"
+              ? "Filter file history by case"
               : "Show a case's versions"
           }
         >
@@ -190,7 +190,7 @@ export function RevisionGraph({
               }
               title={
                 fileRecords
-                  ? `Filter to ${branch.name} ancestry; does not switch the working case`
+                  ? `Filter to ${branch.name}; does not switch the working case`
                   : branch.current
                     ? `Show ${branch.name} versions · current case`
                     : `Show ${branch.name} versions`
@@ -210,8 +210,8 @@ export function RevisionGraph({
       </div>
       {fileRecords ? (
         <p className="file-history-help muted small">
-            Recorded file and confirmed name changes are shown. Case buttons filter ancestry;
-          they do not switch the working case. Origin markers provide context.
+            Recorded file and confirmed name changes are shown. Case buttons filter the history;
+          they do not switch the working case. Markers show where a case started.
         </p>
       ) : null}
       {fileRecords && !graph.nodes.length ? (
@@ -417,7 +417,7 @@ export function RevisionGraph({
                             onClick={() => toggleBranch(branch.id)}
                             title={
                               fileRecords
-                                ? `Filter to ${branch.name} ancestry; does not switch the working case`
+                                ? `Filter to ${branch.name}; does not switch the working case`
                                 : `Show ${branch.name} versions${branch.current ? " · active working case" : ""}`
                             }
                           >
@@ -512,7 +512,7 @@ export function RevisionGraph({
         </span>
         {mode === "graph" ? (
           <span className="graph-direction">
-            ↓ Arrows point to parents
+            ↓ Arrows point to the version before
             {graph.copies.length ? " · Dashed lines point to where files were copied or brought back from" : ""}
           </span>
         ) : null}

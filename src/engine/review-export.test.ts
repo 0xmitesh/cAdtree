@@ -203,7 +203,7 @@ test('cancelling before verification creates nothing and legacy snapshots export
   const before = await fingerprint(f.vault);
   await f.run(plan);
   assert.equal(await fingerprint(f.vault), before);
-  assert.match(plan.summaryText, /component ID: unavailable for this snapshot/);
+  assert.match(plan.summaryText, /component ID: unavailable for this version/);
 });
 
 test('export folder names keep spaces, replace illegal characters and cap the base at 64 characters', async () => {

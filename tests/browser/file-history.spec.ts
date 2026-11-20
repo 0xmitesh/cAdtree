@@ -117,7 +117,7 @@ test("actual App: file history follows parents across cases, retains deleted pat
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
   ).toContainText("Deleted");
-  await page.getByRole("button", { name: /View in parent version/ }).click();
+  await page.getByRole("button", { name: /View in the version before/ }).click();
   await expect(
     page
       .getByRole("complementary", { name: "Version details" })

@@ -80,7 +80,7 @@ test("deleted file shows its absence and links to the parent version; export is 
   pickFile(ui, path);
   assert.equal(ui.container.querySelectorAll('input[type="checkbox"]').length, 0);
   assert.equal(ui.queryByRole("button", { name: "Select file for export" }), null);
-  fireEvent.click(ui.getByRole("button", { name: /View in parent version/ }));
+  fireEvent.click(ui.getByRole("button", { name: /View in the version before/ }));
   assert.ok(
     ui
       .getByRole("region", { name: "Selected file history" })

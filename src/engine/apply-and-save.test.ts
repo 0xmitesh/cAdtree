@@ -280,7 +280,7 @@ test("unsaved changes in the destination are refused before any write; edits are
   const f = await project();
   const review = await f.review(f.r1.revisionId, "revert");
   await f.w(f.main, "A.txt", "unsaved edit");
-  await assert.rejects(applyAndSave(f.vault, review, f.options), /uncaptured/);
+  await assert.rejects(applyAndSave(f.vault, review, f.options), /unsaved file or folder changes/);
   assert.equal(await f.main.readFileText(["A.txt"]), "unsaved edit");
   assert.deepEqual(await f.ops(), []);
   assert.equal((await openExistingVault(f.vault)).revisions.length, 2);

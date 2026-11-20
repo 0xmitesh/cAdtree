@@ -153,7 +153,7 @@ test("workspace adoption preserves every source byte, relative layout, identity,
   assert.equal(await snapshot(original), before);
   await assert.rejects(
     bringWorkspaceIntoHome(home, original),
-    /already has a retained managed registration/,
+    /already has a kept managed registration/,
   );
   assert.equal((await openHome(home)).workspaces.length, 1);
 });
@@ -262,7 +262,7 @@ test("a changed home identity cannot receive writes through a stale app connecti
     createHomeWorkspace(home, "Blocked", {
       expectedHomeId: first.identity.homeId,
     }),
-    /identity changed/,
+    /home changed/,
   );
   assert.equal(await snapshot(home), before);
 });
@@ -365,7 +365,7 @@ test("cancellation, source instability, disk failure and interrupted ready publi
           }
         },
       }),
-      /Destination retained/,
+      /Destination kept/,
     );
     home.setHooks({ onBeforeWrite: undefined });
     const read = await openHome(home);
@@ -406,7 +406,7 @@ test("ready write acknowledgement loss reopens as published without duplicating 
   assert.equal((await openHome(home)).workspaces[0].status, "ready");
   await assert.rejects(
     bringWorkspaceIntoHome(home, original),
-    /retained managed registration/,
+    /kept managed registration/,
   );
 });
 

@@ -83,7 +83,7 @@ export function useDiagnosticsActions({
       for (const revision of targets) {
         if (context.signal.aborted)
           throw new DOMException(
-            "Verification cancelled. Completed checks have been retained.",
+            "Verification cancelled. Completed checks have been kept.",
             "AbortError",
           );
         context.progress({

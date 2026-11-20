@@ -167,7 +167,7 @@ test("creating a design case and hiding it refresh the Map", async () => {
   await waitFor(() => assert.ok(ui.queryByRole("dialog")));
   const dialog = within(ui.getByRole("dialog"));
   fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: "Lighter collar" } });
-  fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason" }), { target: { value: "Save weight" } });
+  fireEvent.change(dialog.getByRole("textbox", { name: "Why" }), { target: { value: "Save weight" } });
   fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   await idle(ui);
@@ -207,7 +207,7 @@ test("bringing a workspace into the home rewrites the Maps its projects were cop
   fireEvent.click(ui.getByText("Home options"));
   fireEvent.click(ui.getByRole("button", { name: "Import existing workspace" }));
   fireEvent.click(ui.getByRole("button", { name: "Choose workspace folder" }));
-  await waitFor(() => assert.match(ui.container.textContent!, /Original workspace retained unchanged/));
+  await waitFor(() => assert.match(ui.container.textContent!, /The original workspace was left unchanged/));
   await idle(ui);
   const copy = (await openHome(home)).workspaces[0].workspace!.root as InMemoryFileSystemAdapter;
   const copied = (await openWorkspace(copy)).projects[0].containerPath.split("/");

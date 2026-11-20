@@ -108,10 +108,10 @@ export function layoutRevisions(
   for (const [id, revision] of records) {
     const pid = revision.manifest.parentRevisionId;
     if (duplicate.has(id))
-      warn(id, "Duplicate version identity; ancestry is ambiguous");
+      warn(id, "Duplicate version ID; the history above it is unclear");
     if (revision.integrityStatus === "corrupted")
-      warn(id, "Damaged version; ancestry is unverified");
-    if (pid && !records.has(pid)) warn(id, "Recorded parent is missing");
+      warn(id, "Damaged version; the history above it is unchecked");
+    if (pid && !records.has(pid)) warn(id, "The earlier version it follows is missing");
     if (
       pid &&
       records.has(pid) &&
@@ -122,7 +122,7 @@ export function layoutRevisions(
     )
       parent.set(id, pid);
     if (pid && records.get(pid)?.integrityStatus === "corrupted")
-      warn(id, "Recorded parent is damaged");
+      warn(id, "The earlier version it follows is damaged");
   }
   // Each node has at most one parent. Detect cycles iteratively, including self-parenting.
   const done = new Set<string>();
@@ -229,16 +229,16 @@ export function layoutRevisions(
       : candidateHead;
   if (candidateHead && !latestId)
     warnings.push(
-      "Latest version cannot be established while the current case history needs attention.",
+      "The latest version cannot be found while this case’s history needs attention.",
     );
   if (latestId && !records.has(latestId))
-    warnings.push("The current case head is missing from readable history.");
+    warnings.push("The latest version of this case is missing from the readable history.");
   for (const [bid, heads] of Object.entries(state.competingHeads)) {
     if (heads.length)
       warnings.push(
-        `${allBranches.find((b) => b.branchId === bid)?.name ?? "Unknown case"} has ${heads.length} competing heads. Saving is blocked until resolved.`,
+        `${allBranches.find((b) => b.branchId === bid)?.name ?? "Unknown case"} has ${heads.length} latest versions that compete. Saving is blocked until this is resolved.`,
       );
-    for (const id of heads) warn(id, "Competing case head");
+    for (const id of heads) warn(id, "Two latest versions");
   }
   const nodes = ordered.reverse().map((id, row) => {
     const revision = records.get(id)!;

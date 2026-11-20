@@ -105,7 +105,7 @@ test("Bring back: one dialog with a read-only list grouped by change, an optiona
   assert.match(w.getByRole("region", { name: "Replaced with the older version" }).textContent!, /Parts\/Housing\.SLDPRT/);
   assert.match(w.getByRole("region", { name: "Removed (not in V3)" }).textContent!, /Extra\.txt/);
   // No Base column, no Prepare, no confirm checkbox, no reason requirement.
-  assert.doesNotMatch(dialog.textContent!, /Base|Prepare|Engineering reason/);
+  assert.doesNotMatch(dialog.textContent!, /Base|Prepare/);
   const button = w.getByRole("button", { name: "Bring back" }) as HTMLButtonElement;
   assert.equal(button.disabled, false, "the reason is optional");
   fireEvent.change(w.getByRole("textbox", { name: "Why (optional)" }), { target: { value: " Housing change was wrong " } });
@@ -261,7 +261,7 @@ test("AppliedFrom is one plain line: Brought back <rev> / Copied from <rev> on <
   cleanup();
   const revertDetails = render(<AppliedFromDetails state={capturedOperation("revert")} revisionId="final" />);
   assert.doesNotMatch(revertDetails.container.textContent!, /Base:/);
-  assert.match(revertDetails.container.textContent!, /Destination baseline:/);
+  assert.match(revertDetails.container.textContent!, /Version it was applied to:/);
 });
 
 // ---- The hook with a real in-memory project ----

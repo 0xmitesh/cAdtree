@@ -555,7 +555,7 @@ test("malformed application records block writes only for the affected case and 
       "branch-main",
       op.operationId,
     ),
-    /successful/,
+    /finished Bring back or Copy/,
   );
 });
 test("resolved conflicts use only explicit source decisions and ignore arbitrary UI result inventories", async () => {
@@ -1230,7 +1230,7 @@ test("revert is blocked by unsaved working changes, like apply", async () => {
   await f.w("A.txt", "unsaved edit");
   await assert.rejects(
     applyReviewed(f.vault, await f.review(f.ids.r1), f.options),
-    /uncaptured/,
+    /unsaved file or folder changes/,
   );
   assert.equal(await f.main.readFileText(["A.txt"]), "unsaved edit");
 });
@@ -1355,7 +1355,7 @@ test("revert row stays blocked when a different component now occupies the path;
   await f.w("D.txt", "a brand new D");
   await f.save("New D, new component");
   const rows = rowMap(await f.prepareRows(f.ids.r1, "revert"));
-  assert.match(rows["D.txt"].identityBlock ?? "", /Different components occupy this path/);
+  assert.match(rows["D.txt"].identityBlock ?? "", /Different files use this path/);
   assert.equal(rows["A.txt"].identityBlock, undefined);
   assert.equal(rows["A.txt"].kind, "available");
   const reviewed = await f.review(f.ids.r1, ["A.txt"]);

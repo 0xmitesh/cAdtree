@@ -160,8 +160,8 @@ for (const damage of ['record', 'marker', 'enrollment'] as const) test(`damaged 
     await (await completed.getDirectory([marker.name])).writeFileText(['unexpected'], 'damage');
   }
   const failed = await openExistingVault(f.vault); assert.equal(failed.references!.status, 'unavailable');
-  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Reference evidence unavailable/);
-  await f.working.writeFileText(['part'], 'CAD'); await assert.rejects(f.save(), /Reference evidence unavailable/);
+  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Reference records unavailable/);
+  await f.working.writeFileText(['part'], 'CAD'); await assert.rejects(f.save(), /Reference records unavailable/);
   assert.equal((await openExistingVault(f.vault)).revisions.length, 0);
 });
 
@@ -173,7 +173,7 @@ test('a stray file in references/completed fails loading with the strict publica
   const damaged = await openExistingVault(f.vault);
   assert.equal(damaged.references!.status, 'unavailable');
   assert.match(damaged.references!.reason!, /Unexpected reference catalog publication\./);
-  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Reference evidence unavailable/);
+  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Reference records unavailable/);
 });
 
 test('first reference enrollment interrupted after file creation preserves an existing legacy version and can capture before retry', async () => {
@@ -230,8 +230,8 @@ test('an empty references parent cannot replace enrollment required by a committ
   assert.equal(reopened.references!.status, 'unavailable');
   assert.equal(reopened.references!.enrollmentIncomplete, undefined);
   assert.equal(reopened.references!.contexts[saved.revision.manifest.revisionId].status, 'unavailable');
-  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Committed reference enrollment evidence is missing/);
-  await f.working.writeFileText(['part'], 'new CAD'); await assert.rejects(f.save(), /Committed reference enrollment evidence is missing/);
+  await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Committed reference enrollment records are missing/);
+  await f.working.writeFileText(['part'], 'new CAD'); await assert.rejects(f.save(), /Committed reference enrollment records are missing/);
   assert.equal((await openExistingVault(f.vault)).revisions.length, 1);
   assert.deepEqual(await (await f.disk.getDirectory(['references'])).listEntries(), []);
 });

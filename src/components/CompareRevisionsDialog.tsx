@@ -116,8 +116,8 @@ export function CompareRevisionsDialog({
             <span className="muted small">
               {endpoint.revision.manifest.files.length} files ·{" "}
               {endpoint.revision.integrityStatus === "objects_verified"
-                ? "Metadata and file contents previously verified"
-                : "Metadata verified · file contents not checked"}
+                ? "Records and file contents checked"
+                : "Records checked · file contents not checked yet"}
             </span>
           </>
         ) : null}
@@ -131,9 +131,9 @@ export function CompareRevisionsDialog({
   const identityChanges = fromComponents && toComponents ? [
     ...fromComponents.files.flatMap(file => {
       const next = toComponents.files.find(f => f.componentId === file.componentId);
-      return next && next.path !== file.path ? [`Same component: ${file.path} → ${next.path}`] : [];
+      return next && next.path !== file.path ? [`Same file: ${file.path} → ${next.path}`] : [];
     }),
-    ...fromComponents.files.flatMap(file => toComponents.files.some(f => f.path === file.path && f.componentId !== file.componentId) ? [`Different components at ${file.path}`] : []),
+    ...fromComponents.files.flatMap(file => toComponents.files.some(f => f.path === file.path && f.componentId !== file.componentId) ? [`Different files at ${file.path}`] : []),
   ] : [];
   type Row = {
     path: string;
@@ -219,7 +219,7 @@ export function CompareRevisionsDialog({
                 </div>
               ) : (
                 <p className="muted small">
-                  No per-file notes at this endpoint.
+                  No per-file notes for this version.
                 </p>
               )}
             </section>
@@ -239,8 +239,8 @@ export function CompareRevisionsDialog({
     <Modal title="Compare saved versions" onClose={onClose}>
       <div className="revision-comparison">
         <p className="muted">
-          From → To compares saved file bytes using manifest hashes. This does
-          not analyze geometry or CAD compatibility.
+          From → To compares the saved files by their checksums. It does not
+          look inside the files or check that they fit together.
         </p>
         <div className="comparison-selectors">
           {endpointControls("From", fromId, setFromId)}
@@ -298,9 +298,9 @@ export function CompareRevisionsDialog({
         {result ? (
           <>
             <p className="small muted">
-              Notes are recorded at the selected endpoints only; they do not
-              summarize intervening versions. This comparison does not verify
-              stored binary contents.
+              Notes are shown for the two chosen versions only, not for the
+              versions in between. This comparison does not re-check the stored
+              file contents.
             </p>
             <div
               className="comparison-counts"
@@ -328,12 +328,12 @@ export function CompareRevisionsDialog({
                   ? "No byte differences for this file."
                   : directoryCount
                     ? "No file differences. Project directory changes are listed below."
-                    : "No file or directory differences between these saved snapshots."}
+                    : "No file or folder differences between these versions."}
               </Notice>
             ) : null}
-            <section aria-label="Overall engineering notes">
+            <section aria-label="Overall notes">
               <details className="disclosure comparison-overall-notes" open>
-                <summary>Overall engineering notes</summary>
+                <summary>Overall notes</summary>
                 <p className="muted small">
                   These notes describe the complete project version, including
                   when comparing a single file.
@@ -357,7 +357,7 @@ export function CompareRevisionsDialog({
                         <NotesText notes={revision.manifest.notes} />
                       ) : (
                         <p className="muted small">
-                          No overall engineering notes at this endpoint.
+                          No overall notes for this version.
                         </p>
                       )}
                     </section>
@@ -390,8 +390,8 @@ export function CompareRevisionsDialog({
             <details className="disclosure comparison-technical">
               <summary>Technical details</summary>
               {identityChanges.length ? (
-                <section aria-label="Component identity between endpoints">
-                  <h4>Component identity between endpoints</h4>
+                <section aria-label="File identity between the two versions">
+                  <h4>File identity between the two versions</h4>
                   {identityChanges.map((message) => (
                     <p className="file-path" key={message}>
                       {message}
@@ -404,8 +404,8 @@ export function CompareRevisionsDialog({
               ) : null}
               {!fromComponents || !toComponents ? (
                 <p className="muted small">
-                  Component continuity is unavailable at one or both endpoints.
-                  This comparison uses saved paths and byte hashes.
+                  Renames could not be followed for one or both versions.
+                  This comparison uses saved paths and file checksums.
                 </p>
               ) : null}
               <section aria-label="File checksums">

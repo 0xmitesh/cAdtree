@@ -503,7 +503,7 @@ test('a missing committed context or a rechecksummed wrong version binding is un
     else { const record = JSON.parse(await f.vault.readFileText(path)); record.branchId = 'wrong-branch'; record.payloadSha256 = referenceChecksum(record); await f.vault.writeFileText(path, JSON.stringify(record)); }
     const reopened = await openExistingVault(f.vault);
     assert.equal(reopened.references!.status, 'unavailable'); assert.equal(reopened.references!.contexts[id].status, 'unavailable');
-    await f.working.writeFileText(['part'], 'newer edit'); await assert.rejects(f.save(), /Reference evidence unavailable/);
+    await f.working.writeFileText(['part'], 'newer edit'); await assert.rejects(f.save(), /Reference records unavailable/);
     assert.equal((await openExistingVault(f.vault)).revisions.length, 1);
     const recovery = new InMemoryFileSystemAdapter('Recovery');
     await restoreRevisionToFolder({ vaultDir: f.vault, destinationDir: recovery, revisionId: id, workingFolders: f.folders });

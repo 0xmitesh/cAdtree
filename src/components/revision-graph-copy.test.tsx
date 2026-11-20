@@ -126,7 +126,7 @@ test("version details: one plain line outside Troubleshooting, the byte and iden
   assert.equal(line.textContent, "Copied from V8 on Prototype — Reuse reviewed design");
   assert.equal(troubleshooting.contains(line), false);
   assert.equal(troubleshooting.open, false);
-  for (const text of [/Before, applied and captured bytes/, /Application record identities/]) {
+  for (const text of [/Before, copied and saved file contents/, /Technical details/]) {
     assert.ok(troubleshooting.textContent!.match(text), String(text));
     assert.equal(line.parentElement!.textContent!.replace(troubleshooting.textContent!, "").match(text), null);
   }

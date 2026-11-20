@@ -168,7 +168,7 @@ export function HomeWorkspacesView(props: {
                         {entry.status !== "ready" && !entry.workspace ? (
                           <p className="small">
                             {entry.status === "incomplete"
-                              ? "Incomplete · Destination retained"
+                              ? "Not finished · the folder was kept"
                               : "Unavailable"}
                           </p>
                         ) : null}
@@ -197,7 +197,7 @@ export function HomeWorkspacesView(props: {
                         <summary>
                           Location details
                           {entries.length > 1
-                            ? ` · ${entries.length} retained locations`
+                            ? ` · ${entries.length} locations`
                             : ""}
                         </summary>
                         {entries.map((e) => (
@@ -236,7 +236,7 @@ export function HomeWorkspacesView(props: {
         >
           <p>
             Create a verified managed copy inside {props.home?.root.name},
-            including working edits not yet captured in history. The original
+            including changes you have not saved as a version yet. The original
             workspace and its files remain untouched.
           </p>
           <p>

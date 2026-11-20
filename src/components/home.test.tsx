@@ -343,7 +343,7 @@ test("guided whole-workspace migration identifies managed location and never reu
   await ready(ui, "Open project");
   assert.match(
     ui.container.textContent!,
-    /Original workspace retained unchanged/,
+    /The original workspace was left unchanged/,
   );
   fireEvent.click(ui.getByRole("button", { name: "Open project" }));
   await idle(ui);
@@ -392,7 +392,7 @@ test("home groups retained migration attempts and opens the managed workspace wh
   await completeHomeAddress(ui);
   await ready(ui, "Open workspace");
   assert.equal(ui.getAllByRole("article").length, 2);
-  assert.ok(ui.getByText("Location details · 2 retained locations"));
+  assert.ok(ui.getByText("Location details · 2 locations"));
   assert.ok(ui.getByText("Needs attention"));
   assert.ok(ui.getByText("Unavailable"));
   assert.ok(ui.getByText(/^\d+ projects? · Ready$/));

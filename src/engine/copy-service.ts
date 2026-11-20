@@ -19,7 +19,7 @@ export interface CopyOptions {
 export function throwIfCancelled(signal?: AbortSignal) {
   if (signal?.aborted)
     throw new DOMException(
-      "Operation cancelled. Incomplete copies were retained.",
+      "Operation cancelled. Incomplete copies were kept.",
       "AbortError",
     );
 }

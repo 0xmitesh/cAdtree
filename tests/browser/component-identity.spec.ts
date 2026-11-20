@@ -32,7 +32,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await page.getByRole('button', { name: 'Open workspace', exact: true }).click();
   await page.getByRole('button', { name: 'Open project', exact: true }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'Changes', exact: true }).click();
-  const identity = page.getByRole('region', { name: 'Component identity' });
+  const identity = page.getByRole('region', { name: 'Renamed files' });
   // Only identical-bytes pairs are suggested; an edited-and-renamed file is matched from its deleted row menu.
   const matchManually = async () => {
     await page.getByLabel(/^File actions — parts\/caliper\.SLDPRT/).click();
@@ -41,7 +41,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
     await page.getByRole('dialog', { name: 'Match to a new file' }).getByRole('button', { name: 'Confirm rename', exact: true }).click();
   };
   if (width === 390) {
-    await expect(page.getByRole('region', { name: 'Component identity' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Renamed files' })).toHaveCount(0);
     await matchManually();
   } else {
     await expect(identity.getByText(/Possible rename:/)).toBeVisible();
@@ -68,10 +68,10 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await page.getByRole('navigation').getByRole('button', { name: 'Changes', exact: true }).click();
   await page.getByRole('button', { name: /Show 1 unchanged files/ }).click();
   await page.getByLabel(/^File actions — parts\/cliper\.SLDPRT/).click();
-  await page.getByRole('button', { name: /^Treat as new component/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Treat as new component' });
+  await page.getByRole('button', { name: /^Treat as a new file/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Treat as a new file' });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: 'Confirm new component' }).click();
+  await dialog.getByRole('button', { name: 'Confirm new file' }).click();
   await page.getByRole('textbox', { name: /Version summary/ }).fill('Unrelated replacement');
   await page.getByRole('button', { name: 'Save version', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');

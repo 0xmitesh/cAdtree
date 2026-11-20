@@ -30,7 +30,7 @@ test("actual App: the Copy files dialog lists only the case's changes, needs a c
   await expect(dialog.getByRole("checkbox")).toHaveCount(1);
   await expect(dialog.getByRole("checkbox", { name: `Copy ${part}` })).toBeChecked();
   await expect(dialog.getByText(/MainOnly/)).toHaveCount(0);
-  await expect(dialog).not.toContainText(/Base|Destination|Prepare|Engineering reason/);
+  await expect(dialog).not.toContainText(/Base|Destination|Prepare/);
   await expect(dialog.getByRole("textbox", { name: "Why (optional)" })).toHaveValue("");
   await page.screenshot({ path: "artifacts/screenshots/apply-preview-desktop.png", fullPage: false });
   await page.keyboard.press("Escape");

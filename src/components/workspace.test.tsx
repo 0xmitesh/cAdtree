@@ -153,7 +153,7 @@ test("normal dates follow local day boundaries while Troubleshooting preserves e
         ),
       );
       fireEvent.click(ui.getByText("Troubleshooting"));
-      assert.ok(ui.getByText("Capture completed (UTC)"));
+      assert.ok(ui.getByText("Save finished (UTC)"));
       assert.ok(ui.getByText(iso));
       cleanup();
     }
@@ -234,7 +234,7 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   const ui = render(<HistoryRecoveryView {...props} />);
   const baseline = ui.getByRole("button", { name: /V1: Initial/ });
   fireEvent.click(baseline);
-  assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
+  assert.ok(ui.getByRole("heading", { name: "First version" }));
   // Newest is on top in both views, so ArrowUp moves to the next revision.
   fireEvent.keyDown(baseline, { key: "ArrowUp" });
   assert.equal(
@@ -298,9 +298,9 @@ test("unchanged files are available; deleted files link to their earlier snapsho
   assert.ok(!listed().includes("Actuator.SLDASM"));
   fireEvent.click(ui.getByRole("button", { name: /Show .* unchanged files/ }));
   assert.ok(listed().includes("Actuator.SLDASM"));
-  fireEvent.click(ui.getByRole("button", { name: /View in parent version/ }));
+  fireEvent.click(ui.getByRole("button", { name: /View in the version before/ }));
   assert.ok(listed().includes("Parts/Output_shaft.SLDPRT"));
-  assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
+  assert.ok(ui.getByRole("heading", { name: "First version" }));
 });
 test("version details put the record information in a closed Troubleshooting disclosure instead of a tab", () => {
   const ui = render(<HistoryRecoveryView {...historyProps()} />);

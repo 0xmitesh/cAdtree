@@ -162,7 +162,7 @@ export function DiagnosticsView({
           ) : null}
           <div className="form-body">
             <p>
-              Metadata checks validate version records. File content checks
+              Record checks look at the version records. File content checks
               read the stored files and compare their checksums.
             </p>
             <p className="muted">
@@ -179,10 +179,10 @@ export function DiagnosticsView({
                 ? "Verifying file contents…"
                 : "Verify all file contents"}
             </button>
-            {state.references?.reason ? <Notice type="error">{state.references.reason} Reference retrieval and new captures require valid reference evidence. CAD verification and recovery use their own required evidence.</Notice> : null}
+            {state.references?.reason ? <Notice type="error">{state.references.reason} Opening references and saving new versions need valid reference records. Your CAD files are checked separately.</Notice> : null}
             {Object.entries(state.damagedBranchHeads).map(([id, reason]) => (
               <Notice type="error" key={id}>
-                <strong>Damaged case baseline</strong>
+                <strong>Damaged starting version</strong>
                 <p>{reason}</p>
               </Notice>
             ))}
@@ -192,14 +192,14 @@ export function DiagnosticsView({
                 <Notice type="error" key={id}>
                   <strong>
                     {state.branches.find((b) => b.branchId === id)?.name ?? id}:
-                    competing heads
+                    two latest versions
                   </strong>
                   <p>
-                    Saving is blocked. The vault contains {heads.length} competing
-                    heads.
+                    Saving is blocked. The vault has {heads.length} latest
+                    versions for this case.
                   </p>
                   <details>
-                    <summary>Version identities</summary>
+                    <summary>Version IDs</summary>
                     {heads.map((h) => (
                       <p className="file-path" key={h}>
                         {h}
@@ -238,12 +238,12 @@ export function DiagnosticsView({
             ) : null}
             <details className="disclosure">
               <summary>
-                Incomplete or interrupted attempts (
+                Unfinished attempts (
                 {state.incompleteAttempts.length})
               </summary>
               <p>
-                These attempts are not committed versions or published references and are excluded from
-                history and the reference library.
+                These attempts are not saved versions or references and are left out of
+                History and the reference library.
               </p>
               {state.incompleteAttempts.map((r) => (
                 <div key={r.path} className="record-row">
@@ -255,11 +255,11 @@ export function DiagnosticsView({
             <details className="disclosure">
               <summary>Advanced record information</summary>
               <dl className="technical-data">
-                <dt>Project identity</dt>
+                <dt>Project ID</dt>
                 <dd>{state.project.projectId}</dd>
                 <dt>Schema</dt>
                 <dd>{state.project.schemaVersion}</dd>
-                <dt>Project SHA-256</dt>
+                <dt>Project checksum (SHA-256)</dt>
                 <dd>{state.project.payloadSha256}</dd>
               </dl>
               <h3>Case records</h3>
@@ -267,7 +267,7 @@ export function DiagnosticsView({
                 <dl className="technical-data" key={b.branchId}>
                   <dt>{b.name}</dt>
                   <dd>{b.branchId}</dd>
-                  <dt>Head</dt>
+                  <dt>Latest version</dt>
                   <dd>{state.branchHeads[b.branchId] ?? "No version"}</dd>
                   <dt>Starting version</dt>
                   <dd>{b.startingRevisionId ?? "None"}</dd>

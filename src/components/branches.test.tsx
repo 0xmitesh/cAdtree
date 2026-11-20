@@ -86,7 +86,7 @@ async function createFromUI(
     target: { value: name },
   });
   fireEvent.change(
-    dialog.getByRole("textbox", { name: "Engineering reason" }),
+    dialog.getByRole("textbox", { name: "Why" }),
     { target: { value: `Explore ${name}` } },
   );
   fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
@@ -283,11 +283,11 @@ test("App creates cases, preserves Main and case notes, and keeps graph highligh
   fireEvent.click(within(ctx.ui.container.querySelector<HTMLElement>(".revision-detail")!).getByText("Troubleshooting"));
   fireEvent.click(ctx.ui.getByRole("button", { name: "Verify file contents" }));
   await waitFor(() =>
-    assert.ok(ctx.ui.getByText("Metadata and file contents verified")),
+    assert.ok(ctx.ui.getByText("Records and file contents checked")),
   );
   await selectBranch(ctx.ui, "branch-main");
   await waitFor(() => assert.equal(appBusy(ctx.ui), false));
-  assert.ok(ctx.ui.getByText("Metadata and file contents verified"));
+  assert.ok(ctx.ui.getByText("Records and file contents checked"));
 });
 
 test("App rejects case switching during an asynchronous scan", async () => {
@@ -380,7 +380,7 @@ test("case creation shows cancellable progress and reports the incomplete folder
     target: { value: "Cancelled Case" },
   });
   fireEvent.change(
-    dialog.getByRole("textbox", { name: "Engineering reason" }),
+    dialog.getByRole("textbox", { name: "Why" }),
     { target: { value: "Test interrupted copy" } },
   );
   fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));

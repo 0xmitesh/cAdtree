@@ -32,7 +32,7 @@ const TUTORIAL_CARDS: TutorialCard[] = [
   {
     id: "first-revision",
     title: "Save your first revision",
-    description: "Capture a meaningful design state and find your CAD files again.",
+    description: "Save a meaningful design state and find your CAD files again.",
     preview: "revision",
     category: "primary",
     status: "available",

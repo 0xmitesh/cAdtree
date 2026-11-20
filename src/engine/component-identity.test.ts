@@ -277,7 +277,7 @@ test('cross-branch rename and unrelated same-path replacement are blocked while 
   const dest = await f.save({identityReview:createIdentityReview(review.state,review.scan,[{from:'caliper.SLDPRT',to:'cliper.SLDPRT'}],[])});
   const prep = prepareApplyPreview(dest.vaultState,source.revision.manifest.revisionId,mainId);
   assert.equal(prep.status,'available'); if(prep.status !== 'available') return;
-  assert.match(prep.context.rows.find(r=>r.path==='caliper.SLDPRT')!.identityBlock!,/different paths/);
+  assert.match(prep.context.rows.find(r=>r.path==='caliper.SLDPRT')!.identityBlock!,/different names/);
   assert.equal(prep.context.rows.find(r=>r.path==='safe-new')!.identityBlock,undefined);
   const unsafe = buildApplyPreview(prep.context,{'caliper.SLDPRT':{selected:true,decision:'use-source'}},'Use change');
   assert.equal(unsafe.ready,false);
@@ -294,7 +294,7 @@ test('cross-branch rename and unrelated same-path replacement are blocked while 
   const source2 = await f.save({},branch.workingDir,branchId);
   const conflict = prepareApplyPreview(source2.vaultState,source2.revision.manifest.revisionId,mainId);
   assert.equal(conflict.status,'available');
-  if(conflict.status === 'available') assert.match(conflict.context.rows.find(r=>r.path==='safe-new')!.identityBlock!,/Different components/);
+  if(conflict.status === 'available') assert.match(conflict.context.rows.find(r=>r.path==='safe-new')!.identityBlock!,/Different files/);
   assert.ok(replaced.vaultState.components);
 });
 test('an applied addition cannot also be a confirmed rename target; rejection preserves evidence and corrected retry succeeds', async () => {
@@ -352,7 +352,7 @@ test('a legacy shared ancestor does not block a safely unrelated source addition
   const prepared = prepareApplyPreview(source.vaultState,source.revision.manifest.revisionId,mainId);
   assert.equal(prepared.status,'available');
   if(prepared.status !== 'available') return;
-  assert.match(prepared.context.rows.find(r=>r.path==='caliper.SLDPRT')!.identityBlock!,/legacy endpoint/);
+  assert.match(prepared.context.rows.find(r=>r.path==='caliper.SLDPRT')!.identityBlock!,/older version/);
   assert.equal(prepared.context.rows.find(r=>r.path==='safe-addition')!.identityBlock,undefined);
   assert.equal(buildApplyPreview(prepared.context,{'safe-addition':{selected:true,decision:'use-source'}},'Unrelated addition').ready,true);
 });

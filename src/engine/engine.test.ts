@@ -144,7 +144,7 @@ test('Milestone 1 end-to-end acceptance: Capture A -> Mutate to B -> Capture B -
 
   const capA = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
-    summary: 'Initial baseline capture of actuator housing assembly',
+    summary: 'First version capture of actuator housing assembly',
     notes: {
       problem: 'Need baseline before adding stiffening ribs and shaft keyway',
       modification: 'Captured initial 9 files and 8 directories including empty export folders',
@@ -679,7 +679,7 @@ test('Refinements 1, 2, 3, 5 & 6: 5-part SolidWorks scenario (1 modified, 4 unch
   const cap1 = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
     summary: 'Baseline 5 parts and 2 subdirectories',
-    notes: { problem: 'Initial baseline', modification: '', observations: '' },
+    notes: { problem: 'First version', modification: '', observations: '' },
   });
 
   assert.equal(cap1.revision.manifest.files.length, 5);

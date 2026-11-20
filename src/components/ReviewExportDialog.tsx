@@ -53,14 +53,14 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
   };
   return <Modal title="Export a copy" busy={busy} onClose={onClose}>
     <p><strong>{plan ? `${plan.projectName} · ${plan.branchName} · ${plan.revisionLabel}` : revision?.manifest.summary}</strong></p>
-    <p>Exports verified saved bytes. Open documents and newer working edits are not included.</p>
+    <p>Exports the saved files exactly as they were saved. Open documents and newer changes are not included.</p>
     <fieldset disabled={busy || Boolean(result)}>
       <legend>Export contents</legend>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'complete'} onChange={() => { setKind('complete'); setError(''); }} /> Complete project</span></label>
       <label className="recovery-external-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'selected'} onChange={() => { setKind('selected'); setError(''); }} /> Selected files</span></label>
       {kind === 'selected' ? <>
         <Notice>This is a partial copy. CAD dependencies are not discovered or included automatically.</Notice>
-        <div className="change-table" role="group" aria-label="Files present in the selected snapshot">
+        <div className="change-table" role="group" aria-label="Files in this version">
           {revision?.manifest.files.map(file => <label className="recovery-external-choice" key={file.path}><span className="file-path"><input type="checkbox" aria-label={`Export ${file.path}`} checked={selected.has(file.path)} onChange={() => setSelected(previous => {
             const next = new Set(previous); next.has(file.path) ? next.delete(file.path) : next.add(file.path); return next;
           })} /> {file.path}</span></label>)}

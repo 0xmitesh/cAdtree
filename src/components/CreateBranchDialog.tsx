@@ -70,7 +70,7 @@ export function CreateBranchDialog({
             return;
           }
           if (!reason.trim()) {
-            setError("Add a short engineering reason.");
+            setError("Add a short reason.");
             return;
           }
           try {
@@ -102,7 +102,7 @@ export function CreateBranchDialog({
             <p className="field-help">{nameHint.text}</p>
           ) : null}
           <label className="field">
-            <span>Engineering reason</span>
+            <span>Why</span>
             <textarea
               required
               value={reason}
@@ -116,7 +116,7 @@ export function CreateBranchDialog({
             automatically.
           </p>
           <p className="muted small">
-            After creation, open the new Design Case folder manually in SolidWorks.
+            After creation, open the new design case folder in the app you use.
             cAdtree does not change which CAD documents are open.
           </p>
           <div className="modal-actions">

@@ -224,7 +224,7 @@ export async function openHome(
       if (!(await records.hasFile([`${r.registrationId}.ready.json`]))) {
         entry.status = "incomplete";
         throw new Error(
-          "Workspace publication is incomplete. Destination retained; it will not be reused.",
+          "Workspace publication is incomplete. Destination kept; it will not be reused.",
         );
       }
       const ready = JSON.parse(
@@ -345,11 +345,11 @@ export async function openHome(
       e.status = "duplicate";
       e.workspace = undefined;
       e.issues.push(
-        "Duplicate workspace identity or location. Resolve the retained records explicitly; copies are never merged.",
+        "Duplicate workspace identity or location. Resolve the kept records explicitly; copies are never merged.",
       );
     }
   if ((await identity(root)).homeId !== home.homeId)
-    throw new Error("Cadtree home identity changed during discovery.");
+    throw new Error("The Cadtree home changed during discovery.");
   return { root, identity: home, workspaces };
 }
 /** Read-only map of workspace identity to the child folders whose metadata carries it. */
@@ -378,7 +378,7 @@ export async function resolveHomeWorkspace(
   directory: string,
 ) {
   if ((await identity(root)).homeId !== homeId)
-    throw new Error("Cadtree home identity changed. Reconnect it.");
+    throw new Error("The Cadtree home changed. Reconnect it.");
   segment(directory);
   const child = await root.getDirectory([directory], { create: false });
   if ((await root.resolveRelativePath(child))?.join("/") !== directory)
@@ -443,7 +443,7 @@ async function register(
   const first = await identity(root);
   if (options.expectedHomeId && first.homeId !== options.expectedHomeId)
     throw new Error(
-      "Cadtree home identity changed. Reopen the intended home before writing.",
+      "The Cadtree home changed. Reopen the intended home before writing.",
     );
   if (!name.trim()) throw new Error("Workspace name is required.");
   options.onProgress?.({
@@ -464,7 +464,7 @@ async function register(
   return withProjectWriterLock(`home:${first.homeId}`, async () => {
     const home = await openHome(root);
     if (home.identity.homeId !== first.homeId)
-      throw new Error("Home identity changed while waiting for registration.");
+      throw new Error("The home changed while waiting for registration.");
     if (home.workspaces.some((e) => e.status === "damaged" && !e.workspaceId))
       throw new Error(
         "A damaged home registration needs attention before allocating another workspace.",
@@ -478,7 +478,7 @@ async function register(
       )
     )
       throw new Error(
-        "This workspace identity already has a retained managed registration. Open or inspect that location; it was not copied again.",
+        "This workspace identity already has a kept managed registration. Open or inspect that location; it was not copied again.",
       );
     const run = async () => {
       throwIfCancelled(options.signal);

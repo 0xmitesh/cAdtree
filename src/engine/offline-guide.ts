@@ -318,7 +318,7 @@ export function buildProjectMap(input: ProjectMapInput): string {
     const lifecycle = caseLifecycle(state, branch.branchId);
     doc.line(`${oneLine(branch.name)}${branch.isMain ? ' (Main)' : ''}`);
     doc.kv('Case ID', branch.branchId, 4).kv('Working folder', workingPath(branch.branchId), 4);
-    doc.kv('Status', lifecycle.status === 'unavailable' ? 'unavailable (its lifecycle records could not be read)' : lifecycle.status === 'archived' ? 'hidden' : lifecycle.status, 4);
+    doc.kv('Status', lifecycle.status === 'unavailable' ? 'unavailable (cAdtree could not read whether it is hidden)' : lifecycle.status === 'archived' ? 'hidden' : lifecycle.status, 4);
     doc.kv('Started from', branch.startingRevisionId ? revisionLabel(state, branch.startingRevisionId) : 'the start of the project', 4);
     doc.kv('Created', branch.createdAt, 4).kv('Reason', branch.reason, 4);
   }
@@ -420,8 +420,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
 
   doc.heading('1. What cAdtree is');
   doc.para(
-    'cAdtree is a local-first tool for keeping the history of CAD work. It saves complete, recoverable snapshots of a ' +
-      'project (called versions) together with the engineering notes about what changed and why, and it lets you try ' +
+    'cAdtree is a local-first tool for keeping the history of CAD work. It saves complete, recoverable copies of a ' +
+      'project (called versions) together with the notes about what changed and why, and it lets you try ' +
       'design alternatives (called design cases) without disturbing your main design. It runs in a web browser, so ' +
       'nothing has to be installed, and your files stay on your own disk, in the folders described in this file. It ' +
       'is not tied to one CAD program because it stores your files exactly as they are: it does not open or ' +
@@ -440,7 +440,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   );
   doc.para('copy your latest files (section 4);', 4, '- ');
   doc.para('rebuild any older version, or get single files back, with the restore page or by hand (section 5);', 4, '- ');
-  doc.para('read the engineering notes and find the reference documents (section 6).', 4, '- ');
+  doc.para('read the notes and find the reference documents (section 6).', 4, '- ');
   doc.line().para(
     'Before you try anything, copy this whole home folder to a safe place, so that every step below works on a copy. ' +
       'Read section 7 first: it lists what must never be changed.',
@@ -530,8 +530,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
 
   doc.heading('6. Notes and references');
   doc.para(
-    "Engineering notes: each version's listing shows its summary, then its NOTES (Problem, Modification, " +
-      'Observations) and NOTES ON INDIVIDUAL FILES. The Map shows a one-line summary of every version.',
+    "Notes: each version's listing shows its summary, then its NOTES (Description, Why, " +
+      'What you noticed) and NOTES ON INDIVIDUAL FILES. The Map shows a one-line summary of every version.',
   );
   doc.line().para(
     "Reference documents: the Map's REFERENCES section lists every reference document with its original file name " +
@@ -582,7 +582,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   steps(doc, 'Create a design case', [
     'Choose History and select the saved version to start from.',
     'Choose Create design case from this version.',
-    'Enter a Case name and an Engineering reason, then choose Create design case.',
+    'Enter a Case name and a Why (the reason for the case), then choose Create design case.',
     'cAdtree makes a new folder for the case under working/ with every file of that version. Open that folder in ' +
       'your CAD program. To work on the case, select it under the project in the Explorer.',
   ]);
@@ -715,7 +715,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'branchId, sequence (1, 2, ...; the file name carries it as six digits: <branchId>.000001.json), status ("active", ' +
       'or "archived", which means hidden), changedAt, previousSha256, unsavedAtHide (hide records: how many unsaved ' +
       'changes stayed in the case\'s folder)',
-    'The record with the highest sequence is current. A case without records is active.',
+    'The record with the highest sequence is current. A case without records are active.',
   ]);
   record('applications/<branchId>/<operationId>/', 'One Bring back or Copy files operation onto a case.', [
     'plan.json: operationId, createdAt, sourceBranchId, review (mode "merge" (Copy files) or "revert" (Bring ' +

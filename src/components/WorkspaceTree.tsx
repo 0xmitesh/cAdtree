@@ -157,7 +157,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             ),
             issue:
               vault && caseLifecycle(vault, branch.branchId).status !== "active"
-                ? "Unhide hidden cases in History → Design cases. Unavailable lifecycle records require inspection."
+                ? "Unhide hidden cases in History → Design cases. Cases whose state cannot be read need a look in Settings → Troubleshooting."
                 : undefined,
             open: () => props.onProject(homeEntry, entry, branch.branchId),
           })),

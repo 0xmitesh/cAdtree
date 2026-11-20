@@ -152,7 +152,7 @@ export async function captureUnderLock(
 
   // Step 1: Reload validated vault and branch state under the writer lock
   let vaultState = await openExistingVault(vaultDir);
-  if (vaultState.project.projectId !== projectId) throw new Error('Vault identity changed while waiting for the writer lock.');
+  if (vaultState.project.projectId !== projectId) throw new Error('The vault changed while waiting for the writer lock.');
   assertCaseWritable(vaultState,input.branchId);
   const applicationBlock = applicationCaptureBlock(vaultState, input.branchId);
   if (applicationBlock) throw new Error(applicationBlock);
@@ -162,7 +162,7 @@ export async function captureUnderLock(
   const reconciled = input.reviewedChangesSignature && branchApplications(vaultState, input.branchId).find(op => op.status === 'captured' && op.events.some(event => event.kind === 'capture' && event.revisionId === op.capturedRevisionId && event.reviewedChangesSignature === input.reviewedChangesSignature));
   if (reconciled) {
     const revision = vaultState.revisions.find(r => r.manifest.revisionId === reconciled.capturedRevisionId)!;
-    return { revision, vaultState, cacheWarning: 'Reconciled the existing published application version; no duplicate capture was created.' };
+    return { revision, vaultState, cacheWarning: 'This change was already saved as a version; no duplicate was created.' };
   }
   const pendingApplication = branchApplications(vaultState, input.branchId).find(op => op.status === 'applied');
   getBranchBaseline(vaultState, input.branchId);
@@ -191,7 +191,7 @@ export async function captureUnderLock(
 
   const parentRevisionId =
     vaultState.branchHeads[branch.branchId] ?? branch.startingRevisionId ?? null;
-  if (pendingApplication && pendingApplication.record!.plan.destinationRevisionId !== parentRevisionId) throw new Error('The pending application baseline no longer matches this case. Inspect its provenance before saving.');
+  if (pendingApplication && pendingApplication.record!.plan.destinationRevisionId !== parentRevisionId) throw new Error('The pending Bring back or Copy no longer matches this case. Check its record before saving.');
   let baselineManifest: RevisionManifest | null = null;
 
   if (parentRevisionId) {

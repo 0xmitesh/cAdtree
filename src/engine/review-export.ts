@@ -194,7 +194,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
   const selected = request.kind === 'complete' ? manifest.files : request.selectedPaths.map(path => {
     splitAndValidatePath(path);
     const file = manifest.files.find(f => f.path === path);
-    if (!file) throw new Error(`Selected file is absent from this snapshot: ${path}`);
+    if (!file) throw new Error(`The selected file is not in this version: ${path}`);
     return file;
   });
   const revisionLabel = formatRevisionNumber(manifest.displayNumber);
@@ -239,7 +239,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
   const quote = (value: unknown) => JSON.stringify(value);
   const summaryBase = [
     'cAdtree exported copy',
-    request.kind === 'selected' ? 'PARTIAL — selected files only. CAD dependencies are not discovered or included automatically.' : 'COMPLETE — all files and directories recorded in this saved snapshot. External CAD dependencies are not discovered automatically.',
+    request.kind === 'selected' ? 'PARTIAL — selected files only. CAD dependencies are not discovered or included automatically.' : 'COMPLETE — all files and folders recorded in this saved version. External CAD dependencies are not discovered automatically.',
     `Project: ${quote(state.project.name)} (${state.project.projectId})`,
     `Case: ${quote(branch.name)} (${branch.branchId})`,
     `Version: ${revisionLabel} (${manifest.revisionId})`,
@@ -252,7 +252,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     '', 'Exported files (original -> exported; content verified against the saved hash):',
     ...files.flatMap(file => [
       `${quote(file.path)} -> ${quote(file.exportedPath)}`,
-      `  SHA-256: ${file.sha256}; bytes: ${file.size}; component ID: ${file.componentId ?? 'unavailable for this snapshot'}`,
+      `  SHA-256: ${file.sha256}; bytes: ${file.size}; component ID: ${file.componentId ?? 'unavailable for this version'}`,
       ...manifest.fileNotes?.filter(n => n.path === file.path).map(n => `  File notes: ${quote(Object.fromEntries(([['Note', n.modification], ['Why', n.problem], ['What you noticed', n.observations]] as const).filter(([, v]) => v?.trim())))}`) ?? [],
     ]),
     '', 'Recorded export directories:', ...directories.map(quote), '',
@@ -271,7 +271,7 @@ export async function suggestReviewExportFolder(parent: FileSystemDirectoryAdapt
 
 export class ReviewExportError extends Error {
   constructor(message: string, readonly incompleteFolder?: string, readonly cancelled = false) {
-    super(`${cancelled ? 'Export cancelled. ' : ''}${message} ${incompleteFolder ? `Incomplete output: "${incompleteFolder}" under the selected destination. It was retained; retry creates a fresh folder.` : 'No export folder was created.'}`);
+    super(`${cancelled ? 'Export cancelled. ' : ''}${message} ${incompleteFolder ? `Incomplete output: "${incompleteFolder}" under the selected destination. It was kept; retry creates a fresh folder.` : 'No export folder was created.'}`);
     this.name = 'ReviewExportError';
   }
 }

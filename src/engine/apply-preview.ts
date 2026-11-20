@@ -237,12 +237,12 @@ export function prepareApplyPreview(
     const baseline = getBranchBaseline(state, destinationBranchId);
     if (!baseline)
       throw new Error(
-        "The active working case has no saved baseline. Save a version before reviewing an application preview.",
+        "The active case has no saved version. Save a version before reviewing this change.",
       );
     const destinationEndpoint = comparisonEndpoint(state, baseline.revisionId);
     if (destinationEndpoint.status !== "available")
       throw new Error(
-        `Destination baseline unavailable. ${destinationEndpoint.reason}`,
+        `The destination’s saved version is unavailable. ${destinationEndpoint.reason}`,
       );
     if (sourceId === baseline.revisionId)
       throw new Error(
@@ -256,7 +256,7 @@ export function prepareApplyPreview(
     );
     if (!baseId)
       throw new Error(
-        "No trustworthy shared ancestor could be established. Parent history may be missing, damaged, ambiguous, cyclic, or disconnected. No application plan was guessed.",
+        "cAdtree could not find a common starting version. The history may be missing, damaged or unclear. No plan was guessed.",
       );
     if (mode === "merge" && baseId === sourceId)
       throw new Error(
@@ -274,12 +274,12 @@ export function prepareApplyPreview(
       const seen = new Set<string>();
       while (true) {
         if (seen.has(id))
-          throw new Error("Cyclic shared ancestry is unavailable.");
+          throw new Error("The shared history loops back on itself.");
         seen.add(id);
         const endpoint = comparisonEndpoint(state, id);
         if (endpoint.status !== "available")
           throw new Error(
-            `Shared ancestry unavailable at "${id}". ${endpoint.reason}`,
+            `The shared history is unavailable at "${id}". ${endpoint.reason}`,
           );
         assertBranch(endpoint.revision.manifest.branchId);
         if (
@@ -289,12 +289,12 @@ export function prepareApplyPreview(
               /Duplicate|Cyclic|Damaged/.test(warning),
             )
         )
-          throw new Error("Shared ancestry is ambiguous or damaged.");
+          throw new Error("The shared history is unclear or damaged.");
         if (id === baseId) return;
         const parentId = parents.get(id);
         if (!parentId)
           throw new Error(
-            "A parent relationship could not be validated. No application plan was guessed.",
+            "A link between versions could not be checked. No plan was guessed.",
           );
         id = parentId;
       }
@@ -344,13 +344,13 @@ export function prepareApplyPreview(
       const endpoints = [base, source, destination].map(r => evidence?.revisions[r.manifest.revisionId]);
       let identityBlock: string | undefined;
       if (evidence?.status === 'available') {
-        if (endpoints.some((e, index) => !e && [base, source, destination][index].manifest.files.some(f => f.path === path))) identityBlock = 'Component evidence is unavailable at a legacy endpoint. Use a saved version after its registration boundary.';
+        if (endpoints.some((e, index) => !e && [base, source, destination][index].manifest.files.some(f => f.path === path))) identityBlock = 'File records are unavailable for an older version. Use a version saved after file tracking was turned on.';
         else {
           const ids = endpoints.map(e => e?.files.find(f => f.path === path)?.componentId);
           const presentIds = ids.filter(Boolean);
-          if (new Set(presentIds).size > 1) identityBlock = 'Different components occupy this path. Applying across component identities is not supported.';
+          if (new Set(presentIds).size > 1) identityBlock = 'Different files use this path in these versions. This is not supported.';
           for (const componentId of presentIds) {
-            if (endpoints.some(e => e?.files.some(f => f.componentId === componentId && f.path !== path))) identityBlock = mode === 'revert' ? 'This file was renamed since that version. Bringing back cannot undo renames yet. Export that version, or create a design case from it, to get the older file.' : 'This component has different paths across the saved endpoints. Rename-dependent application is blocked; no destination filename is guessed.';
+            if (endpoints.some(e => e?.files.some(f => f.componentId === componentId && f.path !== path))) identityBlock = mode === 'revert' ? 'This file was renamed since that version. Bringing back cannot undo renames yet. Export that version, or create a design case from it, to get the older file.' : 'This file has different names in these versions, so it is blocked; no file name is guessed.';
           }
         }
       }
@@ -862,7 +862,7 @@ function restoredComponent(
   const current = evidence.revisions[baselineRevisionId];
   if (!current)
     throw new Error(
-      "Component evidence is unavailable for the latest saved version of this case. Export that version to get the older file.",
+      "File records are unavailable for the latest saved version of this case. Export that version to get the older file.",
     );
   if (current.files.some((file) => file.componentId === componentId && file.path !== path))
     throw new Error(

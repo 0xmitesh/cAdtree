@@ -369,7 +369,7 @@ test("home identity is rechecked after address entry before saving or completing
   await waitFor(() =>
     assert.match(
       ui.getByRole("dialog").textContent!,
-      /identity changed during setup/,
+      /changed during setup/,
     ),
   );
   assert.equal(ui.queryByRole("button", { name: "Create workspace" }), null);

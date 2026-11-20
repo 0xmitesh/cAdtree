@@ -61,7 +61,7 @@ test("competing same-branch heads have separate lanes and remain explicit", () =
     graph.nodes.find((n) => n.id === "r2")!.lane,
     graph.nodes.find((n) => n.id === "fork")!.lane,
   );
-  assert.ok(graph.warnings.some((w) => /competing/.test(w)));
+  assert.ok(graph.warnings.some((w) => /latest versions that compete|Two latest versions/.test(w)));
   assert.equal(graph.latestId, null);
   assert.equal(
     graph.nodes.some((n) => n.latest),

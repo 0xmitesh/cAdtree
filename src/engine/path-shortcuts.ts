@@ -20,7 +20,7 @@ export async function resolveHomeFilePath(
 ): Promise<FilePathLocation> {
   const current = await openHome(home.root);
   if (current.identity.homeId !== home.identity.homeId)
-    throw new Error("Cadtree home identity changed.");
+    throw new Error("The Cadtree home changed.");
   const registered = current.workspaces.find((e) => e.key === entry.key);
   if (
     !registered?.workspace ||

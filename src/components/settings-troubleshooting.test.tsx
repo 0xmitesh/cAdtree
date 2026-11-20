@@ -46,7 +46,7 @@ test("Settings with everything connected shows one status line and a closed Trou
   for (const name of ["Reconnect workspace", "Verify all file contents", "Reset all remembered folder connections in this browser"])
     assert.ok(inside.getByRole("button", { name }), name);
   assert.ok(inside.getByText("Advanced record information"));
-  assert.ok(inside.getByText(/Incomplete or interrupted attempts/));
+  assert.ok(inside.getByText(/Unfinished attempts/));
   assert.ok(inside.getByText("Case records"));
   assert.equal(ui.container.querySelectorAll("details.settings-troubleshooting").length, 1);
   // The working folder row stays visible outside Troubleshooting (its Copy path button needs the path-shortcuts provider; see path-shortcuts.test).

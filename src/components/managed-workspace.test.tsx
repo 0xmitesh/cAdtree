@@ -156,7 +156,7 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
       target: { value: name },
     });
     fireEvent.change(
-      dialog.getByRole("textbox", { name: "Engineering reason" }),
+      dialog.getByRole("textbox", { name: "Why" }),
       { target: { value: `Explore ${name}` } },
     );
     fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));

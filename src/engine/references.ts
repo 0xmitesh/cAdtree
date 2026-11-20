@@ -133,7 +133,7 @@ async function readEnrollment(vault: FileSystemDirectoryAdapter, state: VaultSta
   for (const name of prepared) if (!completed.has(name.slice(0, -5))) state.incompleteAttempts.push({ id: name.slice(0, -5), kind: 'uncompleted_reference', path: [...path, name].join('/'), detail: 'Reference enrollment was interrupted before publication; a fresh enrollment may be retried.' });
   if (pending && !prepared.length && !published.length) state.incompleteAttempts.push({ id: 'reference-enrollment', kind: 'uncompleted_reference', path: path.join('/'), detail: 'Reference enrollment stopped before its record was written; a fresh enrollment may be retried.' });
   if (await vault.hasFile(ROOT)) published.push(JSON.parse(await vault.readFileText(ROOT)));
-  if (published.length > 1) throw new Error('Competing reference enrollment evidence.');
+  if (published.length > 1) throw new Error('Competing reference enrollment records.');
   return { boundary: published[0], pending };
 }
 function versionIn(library: ProjectReference[], referenceId: string, versionId: string) {
@@ -172,14 +172,14 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     for (const key of Object.keys(result.contexts)) result.contexts[key] = { status: 'unavailable', reason: 'Reference enrollment is unavailable.' };
     const enrollment = await readEnrollment(vault, state);
     if (!enrollment.boundary) {
-      for (const revision of state.revisions.filter(r => r.completion.referenceContext !== undefined)) result.contexts[revision.manifest.revisionId] = { status: 'unavailable', reason: 'Committed reference context evidence is missing.' };
-      if (state.revisions.some(r => r.completion.referenceContext !== undefined)) throw new Error('Committed reference enrollment evidence is missing; it cannot be regenerated as legacy history.');
+      for (const revision of state.revisions.filter(r => r.completion.referenceContext !== undefined)) result.contexts[revision.manifest.revisionId] = { status: 'unavailable', reason: 'Committed reference context records are missing.' };
+      if (state.revisions.some(r => r.completion.referenceContext !== undefined)) throw new Error('Committed reference enrollment records are missing; it cannot be regenerated as legacy history.');
       const entries = await vault.listEntries();
       const dataEntry = entries.find(e => e.name === DATA[0]);
       const dataEntries = dataEntry?.kind === 'directory' ? await (await vault.getDirectory(DATA)).listEntries() : undefined;
       const emptyParent = dataEntries?.length === 0;
       const onlyPendingEnrollment = emptyParent || (enrollment.pending && Boolean(dataEntries?.every(e => e.name === 'enrollment' && e.kind === 'directory')));
-      if (entries.some(e => e.name === ROOT[0]) || (entries.some(e => e.name === DATA[0]) && !onlyPendingEnrollment)) throw new Error('Reference enrollment evidence is missing; existing storage cannot be regenerated.');
+      if (entries.some(e => e.name === ROOT[0]) || (entries.some(e => e.name === DATA[0]) && !onlyPendingEnrollment)) throw new Error('Reference enrollment records are missing; existing storage cannot be regenerated.');
       if (onlyPendingEnrollment) result.enrollmentIncomplete = true;
       if (emptyParent) state.incompleteAttempts.push({ id: 'reference-setup', kind: 'uncompleted_reference', path: DATA.join('/'), detail: 'Reference setup stopped after creating its empty parent folder; enrollment may be retried.' });
       for (const key of Object.keys(result.contexts)) result.contexts[key] = { status: 'legacy' };
@@ -214,14 +214,14 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     let current: { record: ReferenceCatalog; sha256: string } | undefined;
     while (catalogs.length) {
       const next = catalogs.filter(c => current ? c.record.parent?.catalogId === current.record.catalogId && c.record.parent.sha256 === current.sha256 : c.record.parent === null);
-      if (next.length !== 1) throw new Error('Reference library has missing, competing or cyclic catalog evidence.');
+      if (next.length !== 1) throw new Error('Reference library has missing, competing or cyclic catalog records.');
       const candidate = next[0]; validateLibrary(candidate.record.references, current?.record.references);
       catalogs.splice(catalogs.indexOf(candidate), 1); result.catalogs[candidate.record.catalogId] = candidate; current = candidate;
     }
     if (current) { result.library = current.record.references; result.catalogId = current.record.catalogId; result.catalogSha256 = current.sha256; }
     if (await vault.hasDirectory([...DATA, 'catalogs'])) for (const entry of await (await vault.getDirectory([...DATA, 'catalogs'])).listEntries()) {
       const id = entry.name.replace(/\.json$/, '');
-      if (entry.kind !== 'file' || !safeId(id)) throw new Error('Unexpected reference catalog evidence.');
+      if (entry.kind !== 'file' || !safeId(id)) throw new Error('Unexpected reference catalog records.');
       if (!result.catalogs[id]) state.incompleteAttempts.push({ id, kind: 'uncompleted_reference', path: `references/catalogs/${entry.name}`, detail: 'Reference import/edit has no verified publication marker.' });
     }
     let contextError = '';
@@ -250,23 +250,23 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     }
     if (await vault.hasDirectory([...DATA, 'contexts'])) for (const entry of await (await vault.getDirectory([...DATA, 'contexts'])).listEntries()) {
       const id = entry.name.replace(/\.json$/, '');
-      if (entry.kind !== 'file' || !/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unexpected reference context evidence.');
+      if (entry.kind !== 'file' || !/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unexpected reference context records.');
       if (!state.revisions.some(r => r.manifest.revisionId === id)) state.incompleteAttempts.push({ id, kind: 'uncompleted_reference', path: `references/contexts/${entry.name}`, detail: 'Reference context has no committed version and is not historical context.' });
     }
     for (const ref of result.library) for (const v of ref.versions) if (!await vault.hasFile(getObjectPathSegments(v.sha256))) throw new Error(`Attachment content is missing: ${v.originalFilename} (${v.versionId}).`);
     if (contextError) throw new Error(contextError);
     result.status = 'available';
   } catch (error) {
-    result.reason = `Reference evidence unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    result.reason = `Reference records unavailable: ${error instanceof Error ? error.message : String(error)}`;
     result.status = /Unsupported/.test(result.reason) ? 'unsupported' : 'unavailable';
   }
   return result;
 }
-export function referenceWriteBlock(state: VaultState): string | undefined { return state.references && !['legacy', 'available'].includes(state.references.status) ? state.references.reason ?? 'Reference evidence is unavailable.' : undefined; }
+export function referenceWriteBlock(state: VaultState): string | undefined { return state.references && !['legacy', 'available'].includes(state.references.status) ? state.references.reason ?? 'Reference records are unavailable.' : undefined; }
 export async function ensureReferenceStore(vault: FileSystemDirectoryAdapter, state: VaultState, newId: () => string = newRecordId): Promise<Boundary> {
   const block = referenceWriteBlock(state); if (block) throw new Error(block);
   if (state.references?.boundary) return state.references.boundary;
-  if (await vault.hasFile(ROOT) || (await vault.hasDirectory(DATA) && !state.references?.enrollmentIncomplete)) throw new Error('Existing reference evidence cannot be regenerated.');
+  if (await vault.hasFile(ROOT) || (await vault.hasDirectory(DATA) && !state.references?.enrollmentIncomplete)) throw new Error('Existing reference records cannot be regenerated.');
   const boundary = seal({ schemaVersion: 1, projectId: state.project.projectId, createdAt: new Date().toISOString(), legacy: state.revisions.map(r => ({ revisionId: r.manifest.revisionId, manifestSha256: r.completion.manifestSha256 })) });
   // The enrollment record file is the first exclusive write; a clash draws a new ID before anything else is written.
   let id = '', sha256 = '';
@@ -415,7 +415,7 @@ export async function verifyReferenceLibraryContent(vault: FileSystemDirectoryAd
 }
 export async function retrieveReferenceAttachment(vault: FileSystemDirectoryAdapter, projectId: string, referenceId: string, versionId: string) {
   const { openExistingVault } = await import('./vault-service'); const state = await openExistingVault(vault);
-  if (state.project.projectId !== projectId) throw new Error('Project identity changed.');
+  if (state.project.projectId !== projectId) throw new Error('The project changed.');
   const block = referenceWriteBlock(state); if (block) throw new Error(block);
   const { version } = versionIn(state.references?.library ?? [], referenceId, versionId);
   const bytes = await vault.readFileBytes(getObjectPathSegments(version.sha256));

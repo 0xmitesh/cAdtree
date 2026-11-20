@@ -66,7 +66,7 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
   });
   assert.ok(
     dialog.getByText(
-      "No file or directory differences between these saved snapshots.",
+      "No file or folder differences between these versions.",
     ),
   );
   assert.equal(dialog.queryAllByRole("article").length, 0);
@@ -104,7 +104,7 @@ test("Compare keeps checksums and component identity inside a closed Technical d
     ),
   );
   assert.equal(
-    dialog.queryAllByText(/Component identity between endpoints/).filter(
+    dialog.queryAllByText(/File identity between the two versions/).filter(
       (element) => !disclosure.contains(element),
     ).length,
     0,
@@ -144,7 +144,7 @@ test("file-scoped comparison expands to all files, labels endpoint notes and cas
   assert.ok(dialog.getByText("Main endpoint note"));
   assert.ok(dialog.getByText("File notes at V6"));
   assert.ok(
-    dialog.getByText(/Notes are recorded at the selected endpoints only/),
+    dialog.getByText(/Notes are shown for the two chosen versions only/),
   );
   fireEvent.click(dialog.getByRole("button", { name: "Show all files" }));
   assert.ok(dialog.getByText("Scope: All project files"));
@@ -250,8 +250,8 @@ test("comparison distinguishes metadata-only from previously verified contents a
   const dialog = within(
     ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
-  assert.ok(dialog.getByText(/Metadata and file contents previously verified/));
-  assert.ok(dialog.getByText(/Metadata verified · file contents not checked/));
+  assert.ok(dialog.getByText(/Records and file contents checked/));
+  assert.ok(dialog.getByText(/Records checked · file contents not checked yet/));
   fireEvent.click(dialog.getByRole("button", { name: "Close comparison" }));
   const damaged = structuredClone(state);
   damaged.revisions[1].integrityStatus = "corrupted";
@@ -341,6 +341,6 @@ test("comparison includes overall and individual notes in file scope, labels end
   assert.ok(
     dialog
       .getByRole("region", { name: "To overall notes at V1" })
-      .textContent?.includes("No overall engineering notes at this endpoint."),
+      .textContent?.includes("No overall notes for this version."),
   );
 });

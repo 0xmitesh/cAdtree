@@ -104,7 +104,7 @@ export function DesignCases({
             {isHidden
               ? "Hidden"
               : lifecycle.status === "unavailable"
-                ? "Lifecycle unavailable"
+                ? "Hidden or visible state unavailable"
                 : "Active"}
             {isCurrent ? " · Current working case" : ""}
             {unsaved ? (
@@ -115,8 +115,7 @@ export function DesignCases({
           </p>
           {lifecycle.status === "unavailable" ? (
             <p className="case-lifecycle-error">
-              {lifecycle.error} Inspect the retained lifecycle evidence; this
-              case is not assumed Active.
+              {lifecycle.error} cAdtree could not tell whether this case is hidden, so it is not treated as visible.
             </p>
           ) : null}
           {activity.baseline.status === "unavailable" ||
@@ -139,7 +138,7 @@ export function DesignCases({
             activity.main.status !== "available"
           }
           aria-label={`Compare ${branch.name} with Main`}
-          title="Compares this case's saved baseline with Main's saved baseline. Working edits are not included."
+          title="Compares this case's latest saved version with Main's latest saved version. Unsaved changes are not included."
           onClick={() => {
             if (
               activity.baseline.status === "available" &&

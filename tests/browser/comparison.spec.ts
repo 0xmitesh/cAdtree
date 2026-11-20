@@ -143,7 +143,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
   await expectCounts(0, 0, 0, 20);
   await expect(
     dialog.getByText(
-      "No file or directory differences between these saved snapshots.",
+      "No file or folder differences between these versions.",
     ),
   ).toBeVisible();
   await page.keyboard.press("Escape");

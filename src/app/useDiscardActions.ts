@@ -124,7 +124,7 @@ export function useDiscardActions({
       async (context): Promise<DiscardReview> => {
         const state = await openExistingVault(vaultDir!);
         if (state.project.projectId !== vaultState!.project.projectId)
-          throw new Error("Project identity changed. Reopen the project.");
+          throw new Error("The project changed. Reopen the project.");
         const baseline = getBranchBaseline(state, branchId);
         if (!baseline)
           throw new Error("This case has no saved version yet, so there is nothing to go back to.");

@@ -92,7 +92,7 @@ export class WorkspaceOperationError extends Error {
     readonly publicationUncertain = false,
   ) {
     super(
-      `${message} Destination retained: ${destinationPath}.${publicationUncertain ? " Reopen the workspace before retrying; publication may have completed." : " Retry uses a fresh destination."}`,
+      `${message} Destination kept: ${destinationPath}.${publicationUncertain ? " Reopen the workspace before retrying; publication may have completed." : " Retry uses a fresh destination."}`,
     );
     this.name = "WorkspaceOperationError";
   }
@@ -397,7 +397,7 @@ export async function openWorkspace(
       const project = await resolveManagedProject(root, containerPath);
       if (project.record.workspaceId !== identity.workspaceId)
         throw new Error(
-          "Workspace identity changed during discovery. Reopen the chosen workspace.",
+          "The workspace changed during discovery. Reopen the chosen workspace.",
         );
       projects.push({
         containerPath,
@@ -449,7 +449,7 @@ export async function openWorkspace(
       entry.issues.push(DUPLICATE_PROJECT_REASON);
     }
   if ((await workspaceIdentity(root)).workspaceId !== identity.workspaceId)
-    throw new Error("Workspace identity changed during discovery.");
+    throw new Error("The workspace changed during discovery.");
   return { root, identity, projects };
 }
 
@@ -502,7 +502,7 @@ export async function adoptProject(
       const discovered = await openWorkspace(root);
       if (discovered.identity.workspaceId !== workspace.workspaceId)
         throw new Error(
-          "Workspace identity changed while waiting for registration.",
+          "The workspace changed while waiting for registration.",
         );
       if (
         discovered.projects.some(
@@ -512,11 +512,11 @@ export async function adoptProject(
         )
       )
         throw new Error(
-          "This project identity already has a managed location. Choose its existing location explicitly instead of copying another history.",
+          "This project already has a managed location. Choose its existing location explicitly instead of copying another history.",
         );
       const state = await openExistingVault(sourceVault);
       if (state.project.projectId !== initial.project.projectId)
-        throw new Error("Source vault identity changed.");
+        throw new Error("The source vault changed.");
       if (
         state.corruptedRecords.length ||
         componentWriteBlock(state) ||
@@ -984,7 +984,7 @@ async function initializeManagedProject(
       const refreshed = await openWorkspace(root);
       if (refreshed.identity.workspaceId !== workspace.workspaceId)
         throw new Error(
-          "Workspace identity changed while waiting for registration.",
+          "The workspace changed while waiting for registration.",
         );
       if (
         refreshed.projects.some(

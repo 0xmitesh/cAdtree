@@ -200,7 +200,7 @@ test("legacy Active → archive → reload → reopen preserves identities, work
   );
   await assert.rejects(
     f.change("archived", f.a.branch.branchId, { expectedVersion: null }),
-    /changed since review/,
+    /hidden or unhidden since you looked/,
   );
 });
 test("Main, current working case and invalid identities cannot be archived; concurrent repeats create one outcome", async () => {
@@ -213,7 +213,7 @@ test("Main, current working case and invalid identities cannot be archived; conc
   ])
     await assert.rejects(
       f.change("archived", f.a.branch.branchId, extra),
-      /Main|Switch to another|identity/,
+      /Main|Switch to another|changed/,
     );
   assert.deepEqual((await f.state()).caseLifecycles, {});
   const result = await Promise.all([
@@ -419,11 +419,11 @@ test("damaged, unreadable, missing-sequence and unsupported lifecycle evidence n
     );
     await assert.rejects(
       f.save(f.a.branch.branchId, "Must block"),
-      /lifecycle evidence is unavailable/i,
+      /lifecycle records are unavailable/i,
     );
     await assert.rejects(
       f.change("active"),
-      /Lifecycle evidence is unavailable/,
+      /Lifecycle records are unavailable/,
     );
     f.vault.setHooks({ onBeforeRead: undefined });
   }

@@ -309,7 +309,7 @@ export async function initializeProjectVault(
     branchId: MAIN_BRANCH_ID,
     projectId,
     name: 'Main',
-    reason: 'Initial primary engineering design baseline',
+    reason: 'The main design',
     startingRevisionId: null,
     createdAt: now,
     isMain: true,

@@ -50,7 +50,7 @@ export function getBranchComparisonEndpoint(
       hasUnattributedSavedEvidence(state)
     )
       throw new Error(
-        "The current saved endpoint is ambiguous or has unattributed damaged record evidence.",
+        "The current saved endpoint is ambiguous or has unattributed damaged records.",
       );
     let id: string | null;
     if (state.branchBaselineEndpoints) {
