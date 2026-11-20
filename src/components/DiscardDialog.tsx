@@ -30,12 +30,15 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 export function DiscardDialog({
   branchId,
   selection,
+  folder = false,
   caseName,
   controller,
   onClose,
 }: {
   branchId: string;
   selection: DiscardSelection;
+  /** The single selected path is a folder: everything inside it is discarded too. */
+  folder?: boolean;
   caseName: string;
   controller: DiscardController;
   onClose: () => void;
@@ -103,7 +106,12 @@ export function DiscardDialog({
   const count = actions.length + folders.length;
   const nothing = Boolean(plan && !count);
   const ready = Boolean(plan?.ready) && !running && !loading && !controller.blockedReason;
-  const title = selection === "all" ? `Discard all changes in ${caseName}` : "Discard this change";
+  const title =
+    selection === "all"
+      ? `Discard all changes in ${caseName}`
+      : folder
+        ? "Discard this folder and everything inside it"
+        : "Discard this change";
   return (
     <Modal title={title} onClose={onClose} busy={running}>
       <div className="apply-preview discard-dialog">
@@ -112,6 +120,11 @@ export function DiscardDialog({
         ) : null}
         {error ? <Notice type="error">{error}</Notice> : null}
         {controller.blockedReason ? <Notice type="error">{controller.blockedReason}</Notice> : null}
+        {folder && selection !== "all" ? (
+          <p className="muted small">
+            Discards <span className="file-path">{selection[0]}/</span> and everything inside it.
+          </p>
+        ) : null}
         {loading ? <p role="status">Checking your files…</p> : null}
         {plan && !loading ? (
           <>
@@ -130,8 +143,8 @@ export function DiscardDialog({
             )}
             {replaceKeepsCopy(plan) ? (
               <p data-testid="discard-copy-line">
-                A copy of your edits will be kept in Discarded/{discardedFolderBase(new Date())} in
-                the project folder.
+                A copy of your edits will be kept in a folder like Discarded/
+                {discardedFolderBase(new Date())} in the project folder.
               </p>
             ) : null}
             {groups.map(([heading, paths]) =>

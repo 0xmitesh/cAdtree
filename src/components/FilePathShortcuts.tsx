@@ -369,6 +369,8 @@ export interface FileMenuItem {
   label: string;
   ariaLabel?: string;
   disabled?: boolean;
+  /** Why the item is disabled (or a hint), shown as its tooltip and description. */
+  title?: string;
   onSelect: () => void;
 }
 
@@ -478,6 +480,8 @@ export function FilePathActions({
               className="text-button"
               key={item.label}
               disabled={item.disabled}
+              title={item.title}
+              aria-description={item.title}
               aria-label={item.ariaLabel ?? item.label}
               onClick={(event) => choose(event, item.onSelect)}
             >

@@ -152,7 +152,7 @@ export function ChangesCaptureView({
   const [treatAsNewPath, setTreatAsNewPath] = useState<string | null>(null);
   const [matchPath, setMatchPath] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [discardSelection, setDiscardSelection] = useState<DiscardSelection | null>(null);
+  const [discardSelection, setDiscardSelection] = useState<{ selection: DiscardSelection; folder?: boolean } | null>(null);
   const [reviewedSignature, setReviewedSignature] = useState<string | null>(
     null,
   );
@@ -217,13 +217,19 @@ export function ChangesCaptureView({
       (n.problem.trim() || n.modification.trim() || n.observations.trim()),
   );
   const discardDisabled = busy || !workingFolderName || Boolean(discard?.blockedReason);
-  const discardItem = (path: string) =>
+  const discardReason = discard?.blockedReason ?? (!workingFolderName ? "Connect the working folder first." : undefined);
+  const discardItem = (path: string, renamed = false) =>
     discard
       ? [{
           label: "Discard",
           ariaLabel: `Discard — ${path}`,
-          disabled: discardDisabled,
-          onSelect: () => setDiscardSelection([path]),
+          disabled: discardDisabled || renamed,
+          title: renamed
+            ? "To discard a renamed file, use Discard all or undo the match first."
+            : discardDisabled
+              ? discardReason
+              : undefined,
+          onSelect: () => setDiscardSelection({ selection: [path] }),
         }]
       : [];
   const directoryDiscard = (path: string) => (
@@ -234,7 +240,8 @@ export function ChangesCaptureView({
         className="text-button"
         aria-label={`Discard — ${path}/`}
         disabled={discardDisabled}
-        onClick={() => setDiscardSelection([path])}
+        title={discardDisabled ? discardReason : `Discards ${path}/ and everything inside it`}
+        onClick={() => setDiscardSelection({ selection: [path], folder: true })}
       >
         Discard
       </button>
@@ -428,8 +435,8 @@ export function ChangesCaptureView({
                 type="button"
                 className="button secondary discard-all"
                 disabled={discardDisabled}
-                title={discard.blockedReason}
-                onClick={() => setDiscardSelection("all")}
+                title={discardDisabled ? discardReason : undefined}
+                onClick={() => setDiscardSelection({ selection: "all" })}
               >
                 Discard all…
               </button>
@@ -471,7 +478,9 @@ export function ChangesCaptureView({
                         extraItems={[
                           ...(status === "Added" || status === "Modified" || status === "Deleted"
                             ? discardItem(file.path)
-                            : []),
+                            : status === "Renamed"
+                              ? discardItem(file.path, true)
+                              : []),
                           ...((status === "Modified" || status === "Unchanged") && canTreatAsNew(vaultState, scan) && !identityReview?.replacements.includes(file.path)
                             ? [{
                                 label: "Treat as new component",
@@ -696,7 +705,8 @@ export function ChangesCaptureView({
       {discardSelection && discard ? (
         <DiscardDialog
           branchId={activeBranchId}
-          selection={discardSelection}
+          selection={discardSelection.selection}
+          folder={discardSelection.folder}
           caseName={caseLabel(vaultState, activeBranchId)}
           controller={discard}
           onClose={() => setDiscardSelection(null)}

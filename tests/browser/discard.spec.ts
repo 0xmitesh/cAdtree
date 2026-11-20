@@ -38,7 +38,7 @@ test("actual App: Discard puts an edited file back and keeps the edit in Discard
   const dialog = page.getByRole("dialog", { name: "Discard this change" });
   await expect(dialog.getByRole("status", { name: "What will change" })).toContainText("1 change will be discarded");
   await expect(dialog.getByRole("region", { name: "Put back to the saved version" })).toContainText("Parts/Part-X.SLDPRT");
-  await expect(dialog.getByTestId("discard-copy-line")).toContainText(/A copy of your edits will be kept in Discarded\/\d{4}-\d\d-\d\d \d\d\.\d\d/);
+  await expect(dialog.getByTestId("discard-copy-line")).toContainText(/A copy of your edits will be kept in a folder like Discarded\/\d{4}-\d\d-\d\d \d\d\.\d\d/);
   await dialog.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByText(/Discarded 1 change\. A copy is in Discarded\/\d{4}-\d\d-\d\d \d\d\.\d\d\./)).toBeVisible();

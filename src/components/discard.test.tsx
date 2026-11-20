@@ -101,7 +101,7 @@ test("Discard dialog: lists what happens to each file and folder and says where 
     ["Folders brought back", "Old/"],
   ])
     assert.ok(within(ui.getByRole("region", { name })).getByText(path), name);
-  assert.match(ui.getByTestId("discard-copy-line").textContent!, /^A copy of your edits will be kept in Discarded\/\d{4}-\d\d-\d\d \d\d\.\d\d in\s+the project folder\.$/);
+  assert.match(ui.getByTestId("discard-copy-line").textContent!, /^A copy of your edits will be kept in a folder like Discarded\/\d{4}-\d\d-\d\d \d\d\.\d\d in the project folder\.$/);
 });
 
 test("Discard dialog: deletions alone keep no copy, so there is no copy line", async () => {
@@ -251,6 +251,7 @@ test("Changes: Discard all… and Discard in each changed row's menu (files and 
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   fireEvent.click(ui.getByRole("button", { name: "Discard — Added/" }));
   await waitFor(() => assert.deepEqual(calls.review.at(-1), ["branch-main", ["Added"]]));
+  assert.ok(ui.getByRole("dialog", { name: "Discard this folder and everything inside it" }));
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   fireEvent.click(ui.getByRole("button", { name: "Discard all…" }));
   await waitFor(() => assert.ok(ui.getByRole("dialog", { name: "Discard all changes in Main" })));
@@ -262,6 +263,8 @@ test("Changes: a read-only (blocked) case disables Discard; without a controller
   const ui = changesView(controller);
   assert.ok(ui.getByRole("button", { name: "Discard all…" }).hasAttribute("disabled"));
   assert.ok(ui.getByRole("button", { name: "Discard — A.txt" }).hasAttribute("disabled"));
+  assert.equal(ui.getByRole("button", { name: "Discard — A.txt" }).getAttribute("title"), "This case is hidden. Unhide it first.");
+  assert.equal(ui.getByRole("button", { name: "Discard all…" }).getAttribute("title"), "This case is hidden. Unhide it first.");
   cleanup();
   const plain = changesView(undefined);
   assert.equal(plain.queryByRole("button", { name: "Discard all…" }), null);

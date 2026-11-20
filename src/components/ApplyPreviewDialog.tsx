@@ -340,6 +340,8 @@ function ApplyBody({
           <button
             className="button secondary"
             disabled={running || Boolean(application.discard.blockedReason)}
+            title={application.discard.blockedReason}
+            aria-description={application.discard.blockedReason}
             onClick={() => setDiscarding(true)}
           >
             Discard them
