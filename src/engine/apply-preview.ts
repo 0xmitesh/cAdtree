@@ -607,6 +607,23 @@ export interface ReplacePlan {
   ready: boolean;
 }
 
+/**
+ * Discard / Get this version refused because the working files no longer match
+ * the plan the user confirmed (or something appeared in a folder it removes).
+ * Nothing was changed; the caller builds a fresh plan and asks again. UI code
+ * recognises it with `instanceof`, never by its text.
+ */
+export class ReplacePlanChangedError extends Error {
+  constructor(paths: readonly string[] = []) {
+    super(
+      paths.length
+        ? `Changes differ from what you saw: ${paths.join(", ")}. Review again. Nothing was changed.`
+        : "Changes differ from what you saw; review again. Nothing was changed.",
+    );
+    this.name = "ReplacePlanChangedError";
+  }
+}
+
 const sameBytes = (a: FileEntry | null, b: FileEntry | null) =>
   a && b ? a.sha256 === b.sha256 && a.size === b.size : a === b;
 const isBelow = (path: string, folder: string) => path.startsWith(`${folder}/`);

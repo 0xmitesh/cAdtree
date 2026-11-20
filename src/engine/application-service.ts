@@ -11,6 +11,7 @@ import {
   isReplaceMode,
   replaceKeepsCopy,
   replacePlanHash,
+  ReplacePlanChangedError,
   type ApplyPreviewPlan,
   type ReplaceMode,
   type ReplacePlan,
@@ -992,11 +993,12 @@ export async function replaceWorkingFiles(
       request.mode,
     );
     if (replacePlanHash(plan) !== request.expectedPlanHash)
-      throw new Error(
-        "Changes differ from what you saw; review again. Nothing was changed.",
-      );
+      throw new ReplacePlanChangedError();
     if (!plan.ready)
       throw new Error(`${plan.blockers.join(" ")} Nothing was changed.`);
+    // Refuse before any record is written; checked again just before the first
+    // working-folder write, for anything that appears while copies are kept.
+    await assertReplaceRemovalsReady(working, plan);
     if (replaceKeepsCopy(plan)) {
       const at = request.now ? request.now() : new Date();
       if (!(await freeDiscardedName(projectFolder, at))) throw tooManyDiscards(at);
@@ -1037,7 +1039,7 @@ export async function replaceWorkingFiles(
       kind: "kept",
       ...(kept.keptAs ? { keptAs: kept.keptAs } : {}),
     });
-    await assertReplaceRemovalsReady(working, op.record!);
+    await assertReplaceRemovalsReady(working, op.record!.plan);
     await writeOperation(vault, working, op, request);
     throwIfCancelled(request.signal);
     await appendApplicationEvent(vault, op, { kind: "applied" });
@@ -1318,17 +1320,22 @@ export function discardedNoteText(input: {
   return `${lines.join("\n")}\n`;
 }
 /**
- * Before the first working-folder write of a replace: each folder it removes
- * must hold nothing but what the plan removes (its files, clutter included, and
- * its removed subfolders). Something that appeared since the scan stops here.
+ * Before a replace writes anything (no record yet) and again before its first
+ * working-folder write: each folder it removes must hold nothing but what the
+ * plan removes (its files, clutter included, and its removed subfolders).
+ * Something that appeared since the scan stops here (`ReplacePlanChangedError`).
  */
 async function assertReplaceRemovalsReady(
   working: FileSystemDirectoryAdapter,
-  record: ApplicationRecord,
+  plan: Pick<ReplacePlan, "actions" | "folderActions">,
 ) {
-  const removed = new Set(foldersToRemove(record).map((action) => action.path));
+  const removed = new Set(
+    plan.folderActions
+      .filter((action) => action.operation === "remove")
+      .map((action) => action.path),
+  );
   const deleted = new Set(
-    changedActions(record)
+    plan.actions
       .filter((action) => action.operation === "delete")
       .map((action) => action.path),
   );
@@ -1349,10 +1356,7 @@ async function assertReplaceRemovalsReady(
         appeared.push(child);
     }
   }
-  if (appeared.length)
-    throw new Error(
-      `Changes differ from what you saw: ${appeared.join(", ")}. Review again. No working files were changed.`,
-    );
+  if (appeared.length) throw new ReplacePlanChangedError(appeared);
 }
 export async function recoverApplication(
   vault: FileSystemDirectoryAdapter,

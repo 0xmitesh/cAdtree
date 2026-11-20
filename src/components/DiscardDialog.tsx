@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { replaceKeepsCopy } from "../engine/apply-preview";
+import { ReplacePlanChangedError, replaceKeepsCopy } from "../engine/apply-preview";
 import type { ReplaceWorkingFilesResult } from "../engine/application-service";
 import { discardedFolderBase } from "../engine/discarded-paths";
 import type { ProgressUpdate } from "../engine/types";
@@ -18,7 +18,6 @@ export interface DiscardController {
   blockedReason?: string;
 }
 
-const STALE = "Changes differ from what you saw";
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -81,13 +80,12 @@ export function DiscardDialog({
       await controller.discard(review);
       onClose();
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
       if (!mounted.current) return;
-      if (message.startsWith(STALE)) {
+      if (e instanceof ReplacePlanChangedError) {
         setStale(true);
         setReview(null);
         await load();
-      } else setError(message);
+      } else setError(e instanceof Error ? e.message : String(e));
     } finally {
       runningRef.current = false;
       if (mounted.current) setRunning(false);

@@ -15,6 +15,7 @@ import { openExistingVault } from "../engine/vault-service";
 import { branchApplications } from "../engine/application-records";
 import { scanBranchChanges } from "../engine/scanner";
 import { getBranchBaseline } from "../engine/branch-state";
+import { ReplacePlanChangedError } from "../engine/apply-preview";
 import type { Context, Perform, StatusBanner } from "../app/types";
 afterEach(cleanup);
 
@@ -153,6 +154,37 @@ test("confirm dialog: warns that unsaved edits are kept; blockers and a blocked 
   );
 });
 
+test("confirm dialog: a stale plan checks again and asks to review; other errors are shown as they are", async () => {
+  let attempt = 0;
+  const { controller, checks, confirmed } = spy({}, {});
+  const confirm = controller.confirm;
+  controller.confirm = async (check) => {
+    attempt++;
+    if (attempt === 1) throw new ReplacePlanChangedError();
+    if (attempt === 2) throw new Error("Changes differ from what you saw; review again. Not a typed error.");
+    await confirm(check);
+  };
+  const ui = render(<HistoryRecoveryView {...props(controller)} />);
+  fireEvent.click(revBtn(ui, "002"));
+  fireEvent.click(within(files(ui)).getByRole("button", { name: "Get this version" }));
+  const dialog = await waitFor(() => ui.getByRole("dialog", { name: "Get this version" }));
+  const button = () => within(dialog).getByRole("button", { name: "Get this version" }) as HTMLButtonElement;
+  await waitFor(() => assert.equal(button().disabled, false));
+  fireEvent.click(button());
+  await waitFor(() => assert.ok(within(dialog).getByText("Changes differ from what you saw; review again.")));
+  await waitFor(() => assert.equal(checks.length, 2, "checked again"));
+  await waitFor(() => assert.equal(button().disabled, false));
+  fireEvent.click(button());
+  await waitFor(() =>
+    assert.ok(within(dialog).getByText("Changes differ from what you saw; review again. Not a typed error.")),
+  );
+  assert.equal(checks.length, 2, "text alone does not check again");
+  assert.equal(within(dialog).queryByText("Changes differ from what you saw; review again."), null);
+  fireEvent.click(button());
+  await waitFor(() => assert.equal(confirmed.length, 1));
+  await waitFor(() => assert.equal(ui.queryByRole("dialog"), null));
+});
+
 test("scannedWorkingFile reads the active case's scan only", () => {
   const file = { path: "A.txt", sha256: "a".repeat(64), size: 1, lastModified: 0 };
   const scan = {
@@ -234,7 +266,7 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
   assert.match(again.blockers.join(" "), /already matches/);
   const fresh = await result.current.check((await openExistingVault(vault)).revisions[1].manifest.revisionId, "A.txt");
   await main.writeFileText(["A.txt"], "edited after the check");
-  await assert.rejects(result.current.confirm(fresh), /Changes differ/);
+  await assert.rejects(result.current.confirm(fresh), ReplacePlanChangedError);
   assert.equal(await main.readFileText(["A.txt"]), "edited after the check");
   // A revision of another case says which case it is on.
   const withCase = await createManagedBranch(root, created.record.containerPath, {

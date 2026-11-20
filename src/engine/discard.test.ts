@@ -11,6 +11,7 @@ import {
   buildReplacePlan,
   replaceKeepsCopy,
   replacePlanHash,
+  ReplacePlanChangedError,
 } from "./apply-preview";
 import {
   applicationReview,
@@ -245,6 +246,68 @@ test("a selected path edited after review stops the discard before anything is w
   );
   assert.deepEqual(await f.files(f.main), before);
   assert.deepEqual(await f.ops(), []);
+});
+
+test("a stale plan is refused with ReplacePlanChangedError", async () => {
+  const f = await setup();
+  await edit(f);
+  const p = await f.plan(["A.txt"]);
+  await f.w(f.main, "A.txt", "edited again after review");
+  const error = await replaceWorkingFiles(f.vault, f.projectFolder, {
+    mode: "discard",
+    projectId: f.projectId,
+    branchId: "branch-main",
+    targetRevisionId: p.target,
+    paths: ["A.txt"],
+    expectedPlanHash: p.hash,
+    workingFolders: f.folders,
+  }).then(
+    () => assert.fail("the discard should be refused"),
+    (e: unknown) => e,
+  );
+  assert.ok(error instanceof ReplacePlanChangedError);
+  assert.equal(error.message, "Changes differ from what you saw; review again. Nothing was changed.");
+});
+
+test("a file that appears in a folder being removed refuses the discard before any record or copy is written", async () => {
+  const f = await setup();
+  await f.w(f.main, "Added/x.txt", "x");
+  const p = await f.plan(["Added"]);
+  assert.ok(p.plan.ready);
+  const before = await f.files(f.vault);
+  let appeared = false;
+  // After the scan under the lock has listed Added/ (while it hashes x.txt), a
+  // new file lands in it: the plan still matches, but the folder is not ready.
+  f.root.setHooks({
+    onBeforeRead: async (full) => {
+      if (!appeared && full.endsWith("/working/main/Added/x.txt")) {
+        appeared = true;
+        await f.w(f.main, "Added/late.txt", "late");
+      }
+    },
+  });
+  const error = await replaceWorkingFiles(f.vault, f.projectFolder, {
+    mode: "discard",
+    projectId: f.projectId,
+    branchId: "branch-main",
+    targetRevisionId: p.target,
+    paths: ["Added"],
+    expectedPlanHash: p.hash,
+    workingFolders: f.folders,
+    now: () => NOW,
+  }).then(
+    () => assert.fail("the discard should be refused"),
+    (e: unknown) => e,
+  );
+  f.root.setHooks({ onBeforeRead: undefined });
+  assert.ok(appeared, "the late file was written during the scan");
+  assert.ok(error instanceof ReplacePlanChangedError, String(error));
+  assert.match(error.message, /^Changes differ from what you saw: Added\/late\.txt\. Review again\. Nothing was changed\.$/);
+  assert.deepEqual(await f.ops(), [], "no operation record");
+  assert.deepEqual(await f.files(f.vault), before, "nothing written in the vault");
+  assert.equal(await f.projectFolder.hasDirectory(["Discarded"]), false);
+  assert.equal(await f.main.readFileText(["Added", "x.txt"]), "x");
+  assert.equal(await f.main.readFileText(["Added", "late.txt"]), "late");
 });
 
 test("a selected file edited between staging and its write stops the discard; recovery undoes the rest and keeps the edit", async () => {
