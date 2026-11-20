@@ -166,4 +166,6 @@ test("Back stays put when the workspace is no longer in the home: no project ope
   assert.equal(ui.queryByRole('treeitem',{name:/External/})===null,true,'no External root in the Explorer');
   // The project that was open stays open: the earlier one (Bracket Assembly) was not opened outside a workspace.
   assert.equal(ui.container.querySelector('.project-context-header')?.textContent?.includes('Bracket Assembly')??false,false);
+  // Back once more reaches the entry before the refused one (the workspace page).
+  await traverse('back');assert.ok(ui.getByRole('heading',{name:'Tutorial Workspace.'}));
 });

@@ -225,7 +225,7 @@ export function ProjectViews({
           <ChangesCaptureView
             vaultState={vaultState}
             draftCache={draftCache}
-            draftKey={`${managedWorkspaceKey}:${workspace?.identity.workspaceId}:${vaultState.project.projectId}:${branch.branchId}`}
+            draftKey={`${managedWorkspaceKey ?? ""}:${workspace?.identity.workspaceId ?? ""}:${vaultState.project.projectId}:${branch.branchId}`}
             activeBranchId={branch.branchId}
             workingFolderName={
               branch.branchId === activeBranchId
