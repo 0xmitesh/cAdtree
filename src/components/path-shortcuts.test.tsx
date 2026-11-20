@@ -38,9 +38,9 @@ import { captureRevision } from "../engine/revision-service";
 import { MAIN_BRANCH_ID } from "../engine/types";
 import { nativeDirectory } from "../../tests/native-fs";
 import {
-  composeWindowsFilePaths,
+  composeFilePaths as composeWindowsFilePaths,
   type FilePathLocation,
-} from "../utils/windows-path";
+} from "../utils/folder-path";
 import App from "../App";
 import { createHome, createHomeWorkspace } from "../engine/home-service";
 

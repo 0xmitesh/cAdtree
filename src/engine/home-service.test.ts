@@ -31,7 +31,7 @@ import {
   resolveHomeFilePath,
   resolveWorkingFilePath,
 } from "./path-shortcuts";
-import { composeWindowsFilePaths } from "../utils/windows-path";
+import { composeFilePaths as composeWindowsFilePaths } from "../utils/folder-path";
 import { getObjectPathSegments } from "./object-store";
 const notes = { problem: "", modification: "", observations: "" };
 const snapshot = async (dir: FileSystemDirectoryAdapter) =>
