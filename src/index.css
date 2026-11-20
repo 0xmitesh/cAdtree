@@ -342,7 +342,7 @@ h3 {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.recovery-external-choice {
+.export-choice {
   display: flex;
   gap: 8px;
   align-items: center;

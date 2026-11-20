@@ -7,7 +7,6 @@ import {
 } from "../components/ui";
 import { CopyFolderPathButton } from "../components/FilePathShortcuts";
 import type { ProgressUpdate, VaultState } from "../engine/types";
-import type { ManagedProject } from "../engine/workspace-service";
 import type { ActiveTab, BannerScope, StatusBanner } from "./types";
 
 export interface AppNoticesProps {
@@ -21,7 +20,6 @@ export interface AppNoticesProps {
   projectView: boolean;
   busy: boolean;
   vaultState: VaultState | null;
-  managedProject: ManagedProject | null;
   managedBlockReason: string | undefined;
   missingConnections: string[];
   navigate: (tab: ActiveTab) => void;
@@ -41,7 +39,6 @@ export function AppNotices({
   projectView,
   busy,
   vaultState,
-  managedProject,
   managedBlockReason,
   missingConnections,
   navigate,
@@ -96,9 +93,7 @@ export function AppNotices({
                 disabled={busy}
                 onClick={onReattachWorkingFolder}
               >
-                {managedProject
-                  ? "Reconnect workspace"
-                  : "Connect folder"}
+                Reconnect workspace
               </button>
             ) : null}
           </Notice>
@@ -125,22 +120,16 @@ export function AppNotices({
           ) : null}
           {missingConnections.length ? (
             <Notice>
-              {managedProject
-                ? "Reconnect the workspace to find these case folders: "
-                : "Connect the working folders for "}
+              Reconnect the workspace to find these case folders:{" "}
               {missingConnections.join(", ")} before saving or creating
               cases.{" "}
-              {managedProject
-                ? "Missing or moved folders stay disconnected until they are back where cAdtree expects them."
-                : "Select each case, then Connect folder."}
+              Missing or moved folders stay disconnected until they are back where cAdtree expects them.
               <button
                 className="text-button"
                 disabled={busy}
                 onClick={onReattachWorkingFolder}
               >
-                {managedProject
-                  ? "Reconnect workspace"
-                  : "Connect folder"}
+                Reconnect workspace
               </button>
             </Notice>
           ) : null}

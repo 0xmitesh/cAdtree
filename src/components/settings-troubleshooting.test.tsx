@@ -26,7 +26,6 @@ function view(state: VaultState, props: Partial<DiagnosticsViewProps> = {}) {
       workingFolderName="working/main"
       vaultFolderName="vault"
       onReattachWorkingFolder={noop}
-      managed
       missingConnections={[]}
       {...props}
     />,
@@ -62,9 +61,6 @@ test("A missing working folder shows the folder rows above Troubleshooting inste
   assert.ok(ui.getByText("working/main"));
   // The rows are not repeated inside Troubleshooting.
   assert.equal(ui.getAllByRole("button", { name: "Reconnect workspace" }).length, 1);
-  const unmanaged = view(await sampleState(), { managed: false, workingFolderName: null });
-  assert.ok(unmanaged.getByRole("button", { name: "Connect folder" }));
-  assert.equal(unmanaged.queryByText("All folders are connected."), null);
 });
 
 test("Incomplete attempts and damaged records show a hint that opens Troubleshooting", async () => {

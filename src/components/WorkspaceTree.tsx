@@ -36,9 +36,9 @@ export interface WorkspaceTreeProps {
   activeBranchId: string;
   projectView: boolean;
   busy: boolean;
-  onWorkspace: (entry?: HomeWorkspaceEntry) => Promise<void> | void;
+  onWorkspace: (entry: HomeWorkspaceEntry) => Promise<void> | void;
   onProject: (
-    workspace: HomeWorkspaceEntry | undefined,
+    workspace: HomeWorkspaceEntry,
     project: WorkspaceProjectEntry,
     branchId?: string,
   ) => Promise<void>;
@@ -83,10 +83,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   const [focusedKey, setFocusedKey] = useState("home");
   const [showHidden, setShowHidden] = useState(false);
   const rows = useRef(new Map<string, HTMLDivElement>());
-  const workspaceKey = props.workspace
-    ? (props.managedWorkspaceKey ??
-      `external:${props.workspace.identity.workspaceId}`)
-    : undefined;
+  const workspaceKey =
+    props.workspace && props.managedWorkspaceKey
+      ? props.managedWorkspaceKey
+      : undefined;
   const projectKey =
     workspaceKey && props.projectId
       ? `${workspaceKey}/project:${props.projectId}`
@@ -106,7 +106,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   const projects = (
     workspace: WorkspaceState,
     key: string,
-    homeEntry?: HomeWorkspaceEntry,
+    homeEntry: HomeWorkspaceEntry,
   ): TreeNode[] =>
     workspace.projects.map((entry) => {
       const keyForProject = projectNodeKey(key, entry);
@@ -190,15 +190,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       children: workspaces,
     },
   ];
-  if (props.workspace && !props.managedWorkspaceKey)
-    roots.push({
-      key: workspaceKey!,
-      label: `${props.workspace.identity.name} · External`,
-      kind: "workspace",
-      count: props.workspace.projects.length,
-      children: projects(props.workspace, workspaceKey!),
-      open: () => props.onWorkspace(),
-    });
 
   // Follow navigation to its ancestry, while leaving manually collapsed folders alone.
   useEffect(() => {

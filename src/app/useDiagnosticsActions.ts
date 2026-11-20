@@ -10,7 +10,6 @@ import {
 import type { ScanResult, VaultState } from "../engine/types";
 import {
   formatRevisionNumber,
-  openExistingVault,
   verifyRevisionObjects,
 } from "../engine/vault-service";
 import { openWorkspace, type ManagedProject, type WorkspaceState } from "../engine/workspace-service";
@@ -143,46 +142,33 @@ export function useDiagnosticsActions({
     setConvenienceEpoch((value) => value + 1);
     setRememberedWorkspace(null);
     setRememberedHome(null);
-    if (workspace && managedProject) {
-      const current = await openWorkspace(workspace.root);
-      const found = locateProjectById(
-        current,
-        managedProject.record.projectId,
-        managedProject.record.containerPath,
-      );
-      if (found.kind === "unavailable") {
-        setWorkspace(current);
-        setProjectUnavailable(found.reason);
-        setStatusBanner({ type: "error", message: found.reason });
-        return;
-      }
-      setProjectUnavailable(null);
-      const managed = found.project;
+    // Settings only exists for an open project, so both are always set here.
+    if (!workspace || !managedProject) return;
+    const current = await openWorkspace(workspace.root);
+    const found = locateProjectById(
+      current,
+      managedProject.record.projectId,
+      managedProject.record.containerPath,
+    );
+    if (found.kind === "unavailable") {
       setWorkspace(current);
-      setManagedProject(managed);
-      setVaultState(managed.vaultState);
-      setWorkingFolders(managed.workingFolders);
-      setWorkingDir(managed.workingFolders[activeBranchId] ?? null);
-      setScanResult(null);
-      setActiveTab("history");
-      setStatusBanner({
-        type: "info",
-        message:
-          "Reset remembered folder connections and addresses across all workspaces in this browser. The current workspace was reread; reconnect folders and re-enter their addresses when needed.",
-      });
+      setProjectUnavailable(found.reason);
+      setStatusBanner({ type: "error", message: found.reason });
       return;
     }
-    setWorkingFolders({});
-    setWorkingDir(null);
+    setProjectUnavailable(null);
+    const managed = found.project;
+    setWorkspace(current);
+    setManagedProject(managed);
+    setVaultState(managed.vaultState);
+    setWorkingFolders(managed.workingFolders);
+    setWorkingDir(managed.workingFolders[activeBranchId] ?? null);
     setScanResult(null);
-    if (vaultDir) {
-      setVaultState(await openExistingVault(vaultDir));
-      setActiveTab("history");
-    }
+    setActiveTab("history");
     setStatusBanner({
       type: "info",
       message:
-        "Reset remembered folder connections and addresses across all workspaces in this browser. Saved history was reread from the vault. Reconnect working folders and re-enter their addresses when needed.",
+        "Reset remembered folder connections and addresses across all workspaces in this browser. The current workspace was reread; reconnect folders and re-enter their addresses when needed.",
     });
   };
   const handleResetConnections = async () => {

@@ -7,7 +7,7 @@ import App from "../App";
 import { compareApplyRecoverSample } from "../../tests/compare-apply-recover-sample";
 import { appBusy, currentBranchId, openHomeWorkspace, selectBranch, waitForScan, holdOperation } from "../../tests/app-controls";
 import { WorkspaceTree } from "./WorkspaceTree";
-import { openWorkspace } from "../engine/workspace-service";
+import { openHome } from "../engine/home-service";
 import type { VaultState } from "../engine/types";
 import { clearAllConvenienceMetadata } from "../engine/idb-store";
 import { inventorySignature, readVerifiedInventory } from "../engine/copy-service";
@@ -86,7 +86,9 @@ test("The Explorer switches the case from History, Changes and Settings, the hea
 
 test("An Explorer case row with unavailable lifecycle evidence is disabled and cannot be picked", async () => {
   const sample = await compareApplyRecoverSample();
-  const workspace = await openWorkspace(sample.workspace.root);
+  const home = await openHome(sample.home);
+  const homeEntry = home.workspaces[0];
+  const workspace = homeEntry.workspace!;
   const entry = workspace.projects[0];
   const vault = {
     ...entry.project!.vaultState,
@@ -95,9 +97,9 @@ test("An Explorer case row with unavailable lifecycle evidence is disabled and c
   const picked: Array<string | undefined> = [];
   const ui = render(
     <WorkspaceTree
-      home={null}
+      home={home}
       workspace={workspace}
-      managedWorkspaceKey={null}
+      managedWorkspaceKey={homeEntry.key}
       projectId={entry.projectId}
       activeVault={vault}
       activeBranchId="branch-main"
