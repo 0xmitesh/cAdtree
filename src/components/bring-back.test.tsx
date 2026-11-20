@@ -1,29 +1,25 @@
 import "../../tests/dom";
 import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import {
-  ApplyPreviewDialog,
-  reconcileChoices,
-  type ApplicationController,
-} from "./ApplyPreviewDialog";
-import { AppliedFrom, AppliedFromDetails } from "./ApplicationStatus";
-import {
-  HistoryRecoveryView,
-  type HistoryRecoveryViewProps,
-} from "./HistoryRecoveryView";
-import { revision, scenarioState } from "../../tests/history-data";
-import {
-  applyModeFor,
-  buildApplyPreview,
-  prepareApplyPreview,
-} from "../engine/apply-preview";
+import { act, cleanup, fireEvent, render, renderHook, waitFor, within } from "@testing-library/react";
+import { ApplyPreviewDialog, type ApplicationController } from "./ApplyPreviewDialog";
+import { AppliedFrom, AppliedFromDetails, ApplicationStatus } from "./ApplicationStatus";
+import { HistoryRecoveryView, type HistoryRecoveryViewProps } from "./HistoryRecoveryView";
+import { scenarioState } from "../../tests/history-data";
+import { applyModeFor, buildApplyPreview, prepareApplyPreview } from "../engine/apply-preview";
 import { applicationReview } from "../engine/application-service";
-import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import {
-  sealApplication,
-  type ApplicationOperation,
-} from "../engine/application-records";
+  InMemoryFileSystemAdapter,
+  type FileSystemDirectoryAdapter,
+} from "../engine/fs-adapter";
+import { branchApplications, sealApplication, type ApplicationOperation, type ApplicationReview } from "../engine/application-records";
+import { initializeProjectVault, openExistingVault } from "../engine/vault-service";
+import { captureRevision } from "../engine/revision-service";
+import { scanBranchChanges } from "../engine/scanner";
+import { getBranchBaseline } from "../engine/branch-state";
+import { useApplicationActions } from "../app/useApplicationActions";
+import type { Context, Perform, StatusBanner } from "../app/types";
+import type { VaultState } from "../engine/types";
 afterEach(cleanup);
 
 // Main r1..r6, prototype forks from r2 (p1, p2). r6 (Main's latest) gets an
@@ -48,6 +44,19 @@ const props = (
 });
 const revBtn = (ui: ReturnType<typeof render>, n: string) =>
   ui.getByRole("button", { name: new RegExp(`Rev ${n}:`) });
+function controllerSpy(extra: Partial<ApplicationController> = {}) {
+  const sent: ApplicationReview[] = [];
+  const controller: ApplicationController = {
+    progress: null,
+    cancel: () => {},
+    applyAndSave: async (review) => {
+      sent.push(review);
+      return undefined;
+    },
+    ...extra,
+  };
+  return { sent, controller };
+}
 
 test("applyModeFor: latest, revert, merge, and no baseline falls back to merge", () => {
   const state = fixture();
@@ -63,16 +72,17 @@ test("applyModeFor: latest, revert, merge, and no baseline falls back to merge",
   assert.equal(applyModeFor(state, "r3", "no-such-branch"), "merge");
 });
 
-test("History detail: latest has no apply button, older Main revision offers Bring back, case revision keeps merge wording", () => {
+test("History detail: latest has no button, an older Main revision offers Bring back, a case revision offers Copy files from <case>", () => {
   const ui = render(<HistoryRecoveryView {...props()} />);
   fireEvent.click(revBtn(ui, "006"));
-  assert.equal(ui.queryByRole("button", { name: /Bring back onto|Review changes to apply/ }), null);
+  assert.equal(ui.queryByRole("button", { name: /Bring back onto|Copy files from/ }), null);
   fireEvent.click(revBtn(ui, "003"));
   assert.ok(ui.getByRole("button", { name: "Bring back onto Main…" }));
-  assert.equal(ui.queryByRole("button", { name: "Review changes to apply" }), null);
+  assert.equal(ui.queryByRole("button", { name: /Copy files from/ }), null);
   fireEvent.click(revBtn(ui, "008"));
-  assert.ok(ui.getByRole("button", { name: "Review changes to apply" }));
+  assert.ok(ui.getByRole("button", { name: "Copy files from Prototype…" }));
   assert.equal(ui.queryByRole("button", { name: /Bring back onto/ }), null);
+  assert.equal(ui.queryByRole("button", { name: "Review changes to apply" }), null);
 });
 
 test("with a case active, an earlier Main revision before the fork says Bring back onto <case>", () => {
@@ -81,78 +91,72 @@ test("with a case active, an earlier Main revision before the fork says Bring ba
   assert.ok(ui.getByRole("button", { name: "Bring back onto Prototype…" }));
 });
 
-function controllerSpy() {
-  const sent: any[] = [];
-  const controller: ApplicationController = {
-    progress: null,
-    cancel: () => {},
-    prepare: async (review) => {
-      sent.push(review);
-      const prep = prepareApplyPreview(fixture(), "r3", "branch-main", review.mode);
-      if (prep.status !== "available") throw new Error(prep.reason);
-      return {
-        review,
-        plan: buildApplyPreview(prep.context, review.choices, review.reason),
-        destinationName: "main",
-        branchName: "Main",
-        connection: new InMemoryFileSystemAdapter("main"),
-      };
-    },
-    apply: async () => {},
-  };
-  return { sent, controller };
-}
-
-test("revert dialog: title, rows pre-selected with revert labels, deselect one then prepare sends revert mode with remaining actions; reason required", async () => {
+test("Bring back: one dialog with a read-only list grouped by change, an optional Why and one button that sends every change", async () => {
   const { sent, controller } = controllerSpy();
+  let closed = 0;
   const ui = render(
-    <HistoryRecoveryView {...props()} application={controller} />,
+    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => closed++} />,
   );
-  fireEvent.click(revBtn(ui, "003"));
-  fireEvent.click(ui.getByRole("button", { name: "Bring back onto Main…" }));
-  const dialog = ui.getByRole("dialog", { name: "Make Main match Rev 003" });
+  const dialog = ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" });
   const w = within(dialog);
-  const boxes = w.getAllByRole("checkbox") as HTMLInputElement[];
-  const rows = boxes.filter((b) => /^Select /.test(b.getAttribute("aria-label") ?? ""));
-  assert.equal(rows.length, 3);
-  assert.ok(rows.every((b) => b.checked));
-  assert.ok(w.getByRole("checkbox", { name: "Select Bring back: Old.txt" }));
-  assert.ok(w.getByRole("checkbox", { name: "Select Remove (not in Rev 003): Extra.txt" }));
-  assert.ok(w.getByRole("checkbox", { name: "Select Replace with Rev 003's version: Parts/Housing.SLDPRT" }));
-  assert.match(dialog.textContent!, /Nothing is lost: Main.s latest saved revision stays in history.*Save a revision afterwards/);
-  assert.doesNotMatch(dialog.textContent!, /Start with nothing selected/);
-  fireEvent.click(w.getByRole("checkbox", { name: "Select Remove (not in Rev 003): Extra.txt" }));
-  const prepare = w.getByRole("button", { name: "Prepare bring-back" }) as HTMLButtonElement;
-  assert.equal(prepare.disabled, true, "reason is required");
-  fireEvent.change(
-    w.getByRole("textbox", { name: "Engineering reason for bringing this back" }),
-    { target: { value: "Housing change was wrong" } },
-  );
-  assert.equal(prepare.disabled, false);
-  fireEvent.click(prepare);
-  const confirm = await waitFor(() =>
-    ui.getByRole("dialog", { name: "Confirm bringing back into working files" }),
-  );
+  assert.equal(w.queryAllByRole("checkbox").length, 0, "the list is read-only");
+  assert.match(w.getByRole("status", { name: "What will change" }).textContent!, /^3 files will change$/);
+  assert.match(w.getByRole("region", { name: "Brought back" }).textContent!, /Old\.txt/);
+  assert.match(w.getByRole("region", { name: "Replaced with the older version" }).textContent!, /Parts\/Housing\.SLDPRT/);
+  assert.match(w.getByRole("region", { name: "Removed (not in Rev 003)" }).textContent!, /Extra\.txt/);
+  // No Base column, no Prepare, no confirm checkbox, no reason requirement.
+  assert.doesNotMatch(dialog.textContent!, /Base|Prepare|Engineering reason/);
+  const button = w.getByRole("button", { name: "Bring back" }) as HTMLButtonElement;
+  assert.equal(button.disabled, false, "the reason is optional");
+  fireEvent.change(w.getByRole("textbox", { name: "Why (optional)" }), { target: { value: " Housing change was wrong " } });
+  fireEvent.click(button);
+  await waitFor(() => assert.equal(closed, 1));
   assert.equal(sent.length, 1);
   assert.equal(sent[0].mode, "revert");
+  assert.equal(sent[0].reason, "Housing change was wrong");
   assert.deepEqual(
-    Object.entries(sent[0].choices)
-      .filter(([, c]: any) => c.selected)
-      .map(([p]) => p)
-      .sort(),
-    ["Old.txt", "Parts/Housing.SLDPRT"],
+    Object.entries(sent[0].choices).filter(([, c]) => c.selected).map(([p]) => p).sort(),
+    ["Extra.txt", "Old.txt", "Parts/Housing.SLDPRT"],
   );
-  assert.doesNotMatch(confirm.textContent!, /Extra\.txt/);
-  assert.match(confirm.textContent!, /1 file brought back · 1 replaced/);
-  assert.doesNotMatch(confirm.textContent!, /removed/);
-  fireEvent.click(within(confirm).getByRole("checkbox"));
-  fireEvent.click(within(confirm).getByRole("button", { name: "Bring back confirmed changes" }));
-  await waitFor(() => ui.getByRole("dialog", { name: "Bring back completed" }));
-  assert.match(ui.getByRole("dialog").textContent!, /Brought back into working files/);
 });
 
-test("a renamed-file row shows the engine's revert block message and cannot be selected", () => {
-  const state = fixture();
+test("Bring back with unsaved changes shows Save my changes first instead of the button", () => {
+  let saveFirst = 0, closed = 0;
+  const { sent, controller } = controllerSpy({ unsavedChanges: 2, onSaveFirst: () => saveFirst++ });
+  const ui = render(
+    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => closed++} />,
+  );
+  assert.match(ui.getByRole("dialog").textContent!, /Main has 2 unsaved changes\. Save them first/);
+  assert.equal(ui.queryByRole("button", { name: "Bring back" }), null);
+  fireEvent.click(ui.getByRole("button", { name: "Save my changes first" }));
+  assert.equal(saveFirst, 1);
+  assert.equal(closed, 1);
+  assert.equal(sent.length, 0);
+});
+
+test("a failure shows in the dialog, which stays open; a busy or blocked case disables the button", async () => {
+  const { controller } = controllerSpy({
+    applyAndSave: async () => {
+      throw new Error("Destination has uncaptured file or directory changes.");
+    },
+  });
+  let closed = 0;
+  const ui = render(
+    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => closed++} />,
+  );
+  fireEvent.click(ui.getByRole("button", { name: "Bring back" }));
+  await waitFor(() => assert.match(ui.getByRole("alert").textContent!, /uncaptured/));
+  assert.equal(closed, 0);
+  cleanup();
+  const blocked = controllerSpy({ blockedReason: "Finish the earlier Bring back or Copy on this case first." });
+  const ui2 = render(
+    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={blocked.controller} onClose={() => {}} />,
+  );
+  assert.equal((ui2.getByRole("button", { name: "Bring back" }) as HTMLButtonElement).disabled, true);
+  assert.match(ui2.getByRole("alert").textContent!, /Finish the earlier/);
+});
+
+const renamedBlock = (state: ReturnType<typeof fixture>) => {
   const cf = (path: string) => ({ path, componentId: "component-1" }) as any;
   state.components = {
     status: "available",
@@ -161,25 +165,46 @@ test("a renamed-file row shows the engine's revert block message and cannot be s
       r6: { files: [cf("Parts/Renamed.SLDPRT")], payloadSha256: "x", renames: [] },
     },
   } as any;
+  return state;
+};
+
+test("a renamed file keeps today's blocked message, is listed apart and is left out of the Bring back", async () => {
+  const { sent, controller } = controllerSpy();
   const ui = render(
-    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
+    <ApplyPreviewDialog state={renamedBlock(fixture())} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => {}} />,
   );
-  const box = ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement;
-  assert.equal(box.disabled, true);
-  assert.equal(box.checked, false);
   assert.match(
-    ui.getByRole("article", { name: "Source change: Old.txt" }).textContent!,
+    ui.getByRole("listitem", { name: "Blocked: Old.txt" }).textContent!,
     /renamed since that revision\. Bringing back cannot undo renames yet/,
   );
+  assert.equal(ui.queryByRole("region", { name: "Brought back" }), null);
+  assert.match(ui.getByRole("status", { name: "What will change" }).textContent!, /^2 files will change$/);
+  fireEvent.click(ui.getByRole("button", { name: "Bring back" }));
+  await waitFor(() => assert.equal(sent.length, 1));
+  assert.equal("Old.txt" in sent[0].choices, false);
 });
 
-function capturedOperation(mode: "merge" | "revert") {
+test("the Undo request opens Bring back for that revision in History", () => {
+  const { controller } = controllerSpy();
+  const ui = render(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 1 }} />);
+  assert.equal(ui.queryByRole("dialog"), null, "a request older than the view is not replayed");
+  ui.rerender(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 2 }} />);
+  assert.ok(ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" }));
+  fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
+  assert.equal(ui.queryByRole("dialog"), null);
+  ui.rerender(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 2 }} />);
+  assert.equal(ui.queryByRole("dialog"), null, "the same request does not open it again");
+  ui.rerender(<HistoryRecoveryView {...props()} application={controller} bringBackRequest={{ revisionId: "r3", nonce: 3 }} />);
+  assert.ok(ui.getByRole("dialog", { name: "Bring back Rev 003 onto Main" }));
+});
+
+function capturedOperation(mode: "merge" | "revert", reason = "Because") {
   const state = fixture();
   const source = mode === "revert" ? "r3" : "p2";
   const prep = prepareApplyPreview(state, source, "branch-main", mode);
   if (prep.status !== "available") throw new Error(prep.reason);
   const choices = { "Old.txt": { selected: true, decision: "use-source" as const } };
-  const plan = buildApplyPreview(prep.context, choices, "Because");
+  const plan = buildApplyPreview(prep.context, choices, reason);
   const op: ApplicationOperation = {
     operationId: "apply-test",
     destinationBranchId: "branch-main",
@@ -217,7 +242,7 @@ function capturedOperation(mode: "merge" | "revert") {
   return state;
 }
 
-test("AppliedFrom is one plain line: a revert says Brought back <rev>, a merge says Copied from <rev> on <case>; identities live in the details", () => {
+test("AppliedFrom is one plain line: Brought back <rev> / Copied from <rev> on <case>, with no dangling dash when there is no reason", () => {
   const revert = render(<AppliedFrom state={capturedOperation("revert")} revisionId="final" />);
   assert.equal(revert.container.textContent, "Brought back Rev 003 — Because");
   assert.equal(revert.container.querySelectorAll("details").length, 0);
@@ -225,217 +250,215 @@ test("AppliedFrom is one plain line: a revert says Brought back <rev>, a merge s
   const merge = render(<AppliedFrom state={capturedOperation("merge")} revisionId="final" />);
   assert.equal(merge.container.textContent, "Copied from Rev 008 on Prototype — Because");
   cleanup();
+  const noReason = render(<AppliedFrom state={capturedOperation("revert", "")} revisionId="final" />);
+  assert.equal(noReason.container.textContent, "Brought back Rev 003");
+  cleanup();
   const long = capturedOperation("merge");
   const longReason = "Reuse the reviewed housing change but keep every newer Main development";
   long.applicationOperations![0].record!.plan.reason = longReason;
   const longUi = render(<AppliedFrom state={long} revisionId="final" />);
   assert.equal(longUi.container.querySelector(".applied-from-reason")!.textContent, longReason);
-  assert.match(longUi.container.textContent!, /^Copied from Rev 008 on Prototype/);
   cleanup();
   const revertDetails = render(<AppliedFromDetails state={capturedOperation("revert")} revisionId="final" />);
   assert.doesNotMatch(revertDetails.container.textContent!, /Base:/);
   assert.match(revertDetails.container.textContent!, /Destination baseline:/);
-  cleanup();
-  const mergeDetails = render(<AppliedFromDetails state={capturedOperation("merge")} revisionId="final" />);
-  assert.match(mergeDetails.container.textContent!, /Base:/);
 });
 
-test("revert dialog: two endpoint cards, revert note and counts, Changes to review heading, no merge-only leftovers", () => {
-  const ui = render(
-    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
-  );
-  assert.ok(ui.getByRole("region", { name: "Latest saved · Main" }).textContent!.includes("Rev 006"));
-  assert.ok(ui.getByRole("region", { name: "Bring back · Rev 003" }).textContent!.includes("Rev 003"));
-  assert.equal(ui.queryByRole("region", { name: "Base saved revision" }), null);
-  assert.ok(ui.getByText("Compares saved byte hashes of the two revisions; it does not merge geometry or verify CAD compatibility."));
-  assert.doesNotMatch(ui.container.textContent!, /nearest shared ancestor/);
-  assert.match(
-    ui.getByRole("status", { name: "Proposed result summary" }).textContent!,
-    /1 file brought back · 1 replaced · 1 removed/,
-  );
-  assert.ok(ui.getByRole("region", { name: "Changes to review" }));
-  assert.ok(ui.getByText("Changes to review (3)"));
-  assert.match(ui.container.textContent!, /saved states\. Current uncaptured/);
-  fireEvent.click(ui.getByText("Overall engineering notes · Latest saved and Bring back"));
-  assert.ok(ui.getByRole("region", { name: "Latest saved overall notes at Rev 006" }));
-  assert.ok(ui.getByRole("region", { name: "Bring back overall notes at Rev 003" }));
-  assert.equal(ui.queryByRole("region", { name: /^(Base|Source|Destination) overall notes/ }), null);
-  const article = within(ui.getByRole("article", { name: "Source change: Old.txt" }));
-  fireEvent.click(article.getByText("Saved file states and notes"));
-  assert.ok(article.getByRole("region", { name: "Bring back file notes at Rev 003: Old.txt" }));
-  assert.ok(article.getByRole("region", { name: "Latest saved file notes at Rev 006: Old.txt" }));
-  assert.equal(article.queryByRole("region", { name: /^(Base|Source|Destination) file notes/ }), null);
-});
-
-test("merge dialog keeps three cards and singular/plural counts", () => {
-  const state = scenarioState("branches");
-  state.revisions[7].manifest.files.push({ path: "New/Part.SLDPRT", sha256: "new", size: 3, lastModified: 0 });
-  const ui = render(
-    <ApplyPreviewDialog state={state} sourceId="p2" destinationBranchId="branch-main" onClose={() => {}} />,
-  );
-  for (const side of ["Base", "Source", "Destination"])
-    assert.ok(ui.getByRole("region", { name: `${side} saved revision` }));
-  assert.ok(ui.getByRole("region", { name: "Source changes to review" }));
-  const summary = () => ui.getByRole("status", { name: "Proposed result summary" }).textContent!;
-  assert.match(summary(), /^Proposed result: \d+ files0 additions · 0 replacements · 0 deletions$/);
-  fireEvent.click(ui.getByRole("checkbox", { name: "Select source addition: New/Part.SLDPRT" }));
-  assert.match(summary(), /1 addition · 0 replacements · 0 deletions/);
-});
-
-test("revert completion names both revisions; merge completion keeps its wording", async () => {
-  const run = async (mode: "revert" | "merge", sourceId: string, checkboxName: string) => {
-    const state = fixture();
-    if (mode === "merge") state.revisions[7].manifest.files.push({ path: "New.txt", sha256: "new", size: 3, lastModified: 0 });
-    const controller: ApplicationController = {
-      progress: null,
-      cancel: () => {},
-      prepare: async (review) => {
-        const prep = prepareApplyPreview(state, sourceId, "branch-main", mode);
-        if (prep.status !== "available") throw new Error(prep.reason);
-        return { review, plan: buildApplyPreview(prep.context, review.choices, review.reason), destinationName: "main", branchName: "Main", connection: new InMemoryFileSystemAdapter("main") };
+// ---- The hook with a real in-memory project ----
+async function project() {
+  const vault = new InMemoryFileSystemAdapter("UVault"),
+    main = new InMemoryFileSystemAdapter("UMain");
+  const folders: Record<string, FileSystemDirectoryAdapter> = { "branch-main": main };
+  await main.writeFileText(["A.txt"], "a1");
+  await initializeProjectVault(main, vault, "Bring back UI");
+  const notes = { problem: "", modification: "", observations: "" };
+  const save = (summary: string, extra = {}) =>
+    captureRevision(main, vault, { branchId: "branch-main", summary, notes, workingFolders: folders, ...extra });
+  const r1 = (await save("R1")).revision.manifest;
+  await main.writeFileText(["A.txt"], "a2");
+  const r2 = (await save("R2")).revision.manifest;
+  return { vault, main, folders, save, r1, r2 };
+}
+function hook(f: Awaited<ReturnType<typeof project>>, initial: VaultState) {
+  const banners: (StatusBanner | null)[] = [];
+  let state = initial;
+  let refreshes = 0;
+  const perform = (async (_kind: string, action: (c: Context) => Promise<unknown>) =>
+    action({ version: 0, signal: new AbortController().signal, current: () => true, progress: () => {} })) as unknown as Perform;
+  const rendered = renderHook(() =>
+    useApplicationActions({
+      vaultDir: f.vault,
+      vaultState: state,
+      workingDir: f.main,
+      workingFolders: f.folders,
+      activeBranchId: "branch-main",
+      managedProject: null,
+      workspace: null,
+      perform,
+      assertProjectWritable: async () => null,
+      applyVaultState: (next) => {
+        state = next;
       },
-      apply: async () => {},
-    };
-    const ui = render(<ApplyPreviewDialog state={state} sourceId={sourceId} destinationBranchId="branch-main" mode={mode} application={controller} onClose={() => {}} />);
-    if (mode === "merge") fireEvent.click(ui.getByRole("checkbox", { name: checkboxName }));
-    const label = mode === "revert" ? "Engineering reason for bringing this back" : "Engineering reason for proposed application";
-    fireEvent.change(ui.getByRole("textbox", { name: label }), { target: { value: "why" } });
-    if (mode === "revert") assert.match(ui.container.textContent!, /Prepare bring-back to check the working folder, then review and confirm/);
-    fireEvent.click(ui.getByRole("button", { name: mode === "revert" ? "Prepare bring-back" : "Prepare application" }));
-    const confirm = await waitFor(() => ui.getByRole("dialog", { name: /^Confirm/ }));
-    fireEvent.click(within(confirm).getByRole("checkbox"));
-    fireEvent.click(within(confirm).getByRole("button", { name: /confirmed changes$/ }));
-    return { ui, confirm };
-  };
-  const rv = await run("revert", "r3", "");
-  assert.ok(within(rv.confirm).getByText("Confirmed changes"));
-  const done = await waitFor(() => rv.ui.getByRole("dialog", { name: "Bring back completed" }));
-  assert.match(done.textContent!, /Rev 003 and Main's latest saved revision both stay in history\./);
-  assert.match(done.textContent!, /keep this bring-back in the revision's history/);
-  assert.doesNotMatch(done.textContent!, /Design Case|provenance/);
-  cleanup();
-  const mg = await run("merge", "p2", "Select source addition: New.txt");
-  const doneM = await waitFor(() => mg.ui.getByRole("dialog", { name: "Application completed" }));
-  assert.match(doneM.textContent!, /The source Design Case and its saved history remain available\./);
-  assert.match(doneM.textContent!, /application provenance/);
-});
-
-test("revert counts pluralise", () => {
-  const state = fixture();
-  state.revisions[2].manifest.files.push({ path: "Old2.txt", sha256: "9".repeat(8), size: 3, lastModified: 0 });
-  const ui = render(
-    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
+      requestAutoRefresh: () => {
+        refreshes++;
+      },
+      setStatusBanner: (next) => {
+        banners.push(typeof next === "function" ? next(banners.at(-1) ?? null) : next);
+      },
+    }),
   );
-  assert.match(
-    ui.getByRole("status", { name: "Proposed result summary" }).textContent!,
-    /2 files brought back · 1 replaced · 1 removed/,
+  return { rendered, banners, state: () => state, refreshes: () => refreshes };
+}
+const revertReview = (state: VaultState, sourceId: string, reason = "") => {
+  const prep = prepareApplyPreview(state, sourceId, "branch-main", "revert");
+  if (prep.status !== "available") throw new Error(prep.reason);
+  const choices = Object.fromEntries(
+    prep.context.rows.filter((r) => r.kind === "available").map((r) => [r.path, { selected: true, decision: "use-source" as const }]),
   );
-});
-
-const renamedBlock = (state: ReturnType<typeof fixture>) => {
-  const cf = (path: string) => ({ path, componentId: "component-1" }) as any;
-  state.components = {
-    status: "available",
-    revisions: {
-      r3: { files: [cf("Old.txt")], payloadSha256: "x", renames: [] },
-      r6: { files: [cf("Parts/Renamed.SLDPRT")], payloadSha256: "x", renames: [] },
-    },
-  } as any;
-  return state;
+  return applicationReview(buildApplyPreview(prep.context, choices, reason), choices);
 };
 
-test("Refresh saved states keeps deselected rows and the typed reason when the revisions are unchanged", async () => {
-  let ui!: ReturnType<typeof render>;
-  const dialog = (state: ReturnType<typeof fixture>, controller: ApplicationController) => (
-    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => {}} />
-  );
-  const controller: ApplicationController = {
-    progress: null,
-    cancel: () => {},
-    prepare: async () => { throw new Error("not used"); },
-    apply: async () => {},
-    refresh: async () => { ui.rerender(dialog(fixture(), controller)); },
-  };
-  ui = render(dialog(fixture(), controller));
-  const extra = () => ui.getByRole("checkbox", { name: "Select Remove (not in Rev 003): Extra.txt" }) as HTMLInputElement;
-  const reason = () => ui.getByRole("textbox", { name: "Engineering reason for bringing this back" }) as HTMLTextAreaElement;
-  fireEvent.click(extra());
-  fireEvent.change(reason(), { target: { value: "Housing change was wrong" } });
-  assert.equal(extra().checked, false);
-  fireEvent.click(ui.getByRole("button", { name: "Refresh saved states" }));
-  await waitFor(() => assert.equal((ui.getByRole("button", { name: "Refresh saved states" }) as HTMLButtonElement).disabled, false));
-  assert.equal(extra().checked, false, "deselected row stays deselected");
-  assert.equal(reason().value, "Housing change was wrong");
-  assert.equal((ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement).checked, true);
+test("success: saved automatically, reloads and rescans, and says Saved as Rev 003. To undo, bring back Rev 002 (Undo opens Bring back)", async () => {
+  const f = await project();
+  const h = hook(f, await openExistingVault(f.vault));
+  let result: any;
+  await act(async () => {
+    result = await h.rendered.result.current.handleApplyAndSave(revertReview(h.state(), f.r1.revisionId));
+  });
+  assert.equal(result.status, "saved");
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal(h.state().revisions.length, 3, "the vault was reloaded");
+  assert.equal(h.refreshes(), 1, "an automatic rescan was asked for");
+  const banner = h.banners.at(-1)!;
+  assert.equal(banner.message, "Saved as Rev 003. To undo, bring back Rev 002.");
+  assert.equal(banner.action?.label, "Undo");
+  act(() => banner.action!.run());
+  assert.equal(h.rendered.result.current.bringBackRequest?.revisionId, f.r2.revisionId);
 });
 
-test("Refresh saved states drops the choice of a row that became blocked, and the plan leaves it out", async () => {
-  const sent: any[] = [];
-  let ui!: ReturnType<typeof render>;
-  const dialog = (state: ReturnType<typeof fixture>, controller: ApplicationController) => (
-    <ApplyPreviewDialog state={state} sourceId="r3" destinationBranchId="branch-main" mode="revert" application={controller} onClose={() => {}} />
-  );
-  const controller: ApplicationController = {
-    progress: null,
-    cancel: () => {},
-    prepare: async (review) => {
-      sent.push(review);
-      const state = renamedBlock(fixture());
-      const prep = prepareApplyPreview(state, "r3", "branch-main", review.mode);
-      if (prep.status !== "available") throw new Error(prep.reason);
-      return { review, plan: buildApplyPreview(prep.context, review.choices, review.reason), destinationName: "main", branchName: "Main", connection: new InMemoryFileSystemAdapter("main") };
+test("not saved: the files stay, the status says why with Save now, and the prefilled normal save links the provenance once", async () => {
+  const f = await project();
+  const h = hook(f, await openExistingVault(f.vault));
+  f.vault.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.includes("/revisions/")) throw new Error("manifest write failed");
     },
-    apply: async () => {},
-    refresh: async () => { ui.rerender(dialog(renamedBlock(fixture()), controller)); },
-  };
-  ui = render(dialog(fixture(), controller));
-  fireEvent.change(ui.getByRole("textbox", { name: "Engineering reason for bringing this back" }), { target: { value: "Because" } });
-  fireEvent.click(ui.getByRole("button", { name: "Refresh saved states" }));
-  await waitFor(() => assert.equal((ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement).disabled, true));
-  assert.equal((ui.getByRole("checkbox", { name: "Select Bring back: Old.txt" }) as HTMLInputElement).checked, false);
-  fireEvent.click(ui.getByRole("button", { name: "Prepare bring-back" }));
-  await waitFor(() => ui.getByRole("dialog", { name: "Confirm bringing back into working files" }));
-  assert.equal("Old.txt" in sent[0].choices, false);
-  assert.deepEqual(
-    Object.entries(sent[0].choices).filter(([, c]: any) => c.selected).map(([p]) => p).sort(),
-    ["Extra.txt", "Parts/Housing.SLDPRT"],
+  });
+  let result: any;
+  await act(async () => {
+    result = await h.rendered.result.current.handleApplyAndSave(revertReview(h.state(), f.r1.revisionId, "Wrong turn"));
+  });
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  assert.equal(result.status, "not-saved");
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal(h.banners.filter(Boolean).length, 0, "no success banner");
+  const state = h.state();
+  const op = branchApplications(state, "branch-main").at(-1)!;
+  assert.equal(op.status, "applied");
+  let saveNow: ApplicationOperation | null = null;
+  const ui = render(
+    <ApplicationStatus
+      state={state}
+      branchId="branch-main"
+      busy={false}
+      progress={null}
+      notSavedReasons={h.rendered.result.current.notSavedReasons}
+      onCancel={() => {}}
+      onRecover={async () => {}}
+      onSaveNow={(o) => {
+        saveNow = o;
+      }}
+    />,
   );
+  assert.match(
+    ui.getByRole("region").textContent!,
+    /Brought back Rev 001, but it wasn't saved: .*manifest write failed.*\. Your working files are fine\./,
+  );
+  assert.equal(ui.queryByRole("button", { name: /Abandon|Refresh/ }), null);
+  fireEvent.click(ui.getByRole("button", { name: "Save now" }));
+  assert.equal(saveNow!.operationId, op.operationId);
+  act(() => h.rendered.result.current.handleSaveNow(saveNow!));
+  const prefill = h.rendered.result.current.capturePrefill!;
+  assert.equal(prefill.summary, "Brought back Rev 001");
+  assert.equal(prefill.notes.problem, "Wrong turn");
+  assert.equal(prefill.branchId, "branch-main");
+  const scan = await scanBranchChanges(f.main, "branch-main", getBranchBaseline(state, "branch-main"));
+  const saved = await f.save(prefill.summary, { notes: prefill.notes, reviewedChangesSignature: scan.changesSignature });
+  const after = await openExistingVault(f.vault);
+  const linked = branchApplications(after, "branch-main").at(-1)!;
+  assert.equal(linked.status, "captured");
+  assert.equal(linked.capturedRevisionId, saved.revision.manifest.revisionId);
+  assert.equal(linked.events.filter((e) => e.kind === "capture").length, 1);
 });
 
-test("reconcileChoices: new available rows are pre-selected in revert only; vanished, blocked or re-kinded rows are dropped; unchanged returns the same object", () => {
-  const rowsOf = (state: ReturnType<typeof fixture>, source: string, mode: "revert" | "merge") => {
-    const prep = prepareApplyPreview(state, source, "branch-main", mode);
-    if (prep.status !== "available") throw new Error(prep.reason);
-    return prep.context.rows;
-  };
-  const full = rowsOf(fixture(), "r3", "revert");
-  const without = (path: string) => full.filter((row) => row.path !== path);
-  const chosen = { selected: false, decision: "use-source" as const };
-  // revert: Old.txt newly appeared and was never chosen -> pre-selected; the user's other choice is kept
-  const kept = { "Extra.txt": chosen };
-  const added = reconcileChoices(kept, without("Old.txt"), full, true);
-  assert.equal(added["Extra.txt"], chosen);
-  assert.deepEqual(added["Old.txt"], { selected: true, decision: "use-source" });
-  // merge: a newly available row is not pre-selected
-  const mergeRows = rowsOf(fixture(), "p2", "merge");
-  assert.deepEqual(reconcileChoices({}, [], mergeRows, false), {});
-  // unchanged -> same object
-  const same = { "Extra.txt": chosen, "Old.txt": chosen, "Parts/Housing.SLDPRT": chosen };
-  assert.equal(reconcileChoices(same, full, full, true), same);
-  // vanished row -> dropped
-  const gone = reconcileChoices({ "Old.txt": chosen, "Extra.txt": chosen, "Parts/Housing.SLDPRT": chosen }, full, without("Old.txt"), true);
-  assert.deepEqual(Object.keys(gone).sort(), ["Extra.txt", "Parts/Housing.SLDPRT"]);
-  // re-kinded row: Old.txt was already-matches, is now available -> old choice replaced by the pre-selection
-  const rekinded = reconcileChoices(
-    { "Old.txt": chosen },
-    full.map((row) => (row.path === "Old.txt" ? { ...row, kind: "already-matches" as const } : row)),
-    full,
-    true,
+test("an interrupted write is labelled Undo the unfinished Bring back and needs the CAD-close acknowledgement", async () => {
+  const state = capturedOperation("revert");
+  const op = state.applicationOperations![0];
+  op.status = "unresolved";
+  let recovers = 0;
+  const ui = render(
+    <ApplicationStatus state={state} branchId="branch-main" busy={false} progress={null} onCancel={() => {}} onRecover={async () => { recovers++; }} onSaveNow={() => {}} />,
   );
-  assert.notEqual(rekinded["Old.txt"], chosen);
-  assert.deepEqual(rekinded["Old.txt"], { selected: true, decision: "use-source" });
-  // blocked row -> dropped and not re-selected
-  const blocked = rowsOf(renamedBlock(fixture()), "r3", "revert");
-  const afterBlock = reconcileChoices({ "Old.txt": chosen }, full, blocked, true);
-  assert.equal("Old.txt" in afterBlock, false);
+  assert.match(ui.getByRole("region").textContent!, /A Bring back was interrupted/);
+  assert.equal(ui.queryByRole("button", { name: "Save now" }), null);
+  fireEvent.click(ui.getByRole("button", { name: "Undo the unfinished Bring back" }));
+  const dialog = ui.getByRole("dialog", { name: "Undo the unfinished Bring back" });
+  const confirm = within(dialog).getByRole("button", { name: "Undo the unfinished Bring back" }) as HTMLButtonElement;
+  assert.equal(confirm.disabled, true);
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: "I have saved and closed these files in my CAD program." }));
+  fireEvent.click(confirm);
+  await waitFor(() => assert.equal(recovers, 1));
+});
+
+test("Save now fills the normal save once per request: summary, and Why with the description shown", async () => {
+  const { ChangesCaptureView } = await import("./ChangesCaptureView");
+  const state = scenarioState("single");
+  const head = state.branchHeads["branch-main"]!;
+  const scan = {
+    scannedAt: "2026-11-19T00:00:00.000Z",
+    branchId: "branch-main",
+    baselineRevisionId: head,
+    baselineDisplayNumber: 1,
+    added: [{ path: "A.txt", sha256: "a", size: 1, lastModified: 0 }],
+    modified: [],
+    deleted: [],
+    unchanged: [],
+    directories: [],
+    addedDirectories: [],
+    deletedDirectories: [],
+    errors: [],
+    hasChanges: true,
+    canCapture: true,
+    totalBytes: 1,
+    changesSignature: "sig",
+  };
+  const view = (prefill?: { summary: string; notes: any; key: string }) => (
+    <ChangesCaptureView
+      vaultState={state}
+      activeBranchId="branch-main"
+      workingFolderName="main"
+      vaultFolderName="Vault"
+      scanResult={scan}
+      isScanStale={false}
+      isScanning={false}
+      isCapturing={false}
+      progress={null}
+      statusBanner={null}
+      onScan={async () => {}}
+      onCapture={async () => {}}
+      onCancelOperation={() => {}}
+      onReattachWorkingFolder={async () => {}}
+      prefill={prefill}
+    />
+  );
+  const notes = { problem: "Wrong turn", modification: "", observations: "" };
+  const ui = render(view());
+  const summary = () => ui.getByRole("textbox", { name: /Revision summary/ }) as HTMLInputElement;
+  assert.equal(summary().value, "");
+  ui.rerender(view({ summary: "Brought back Rev 001", notes, key: "op:1" }));
+  assert.equal(summary().value, "Brought back Rev 001");
+  assert.equal((ui.getByRole("textbox", { name: "Overall: Why" }) as HTMLTextAreaElement).value, "Wrong turn");
+  fireEvent.change(summary(), { target: { value: "Edited" } });
+  ui.rerender(view({ summary: "Brought back Rev 001", notes, key: "op:1" }));
+  assert.equal(summary().value, "Edited", "the same request does not overwrite the user's edits");
 });

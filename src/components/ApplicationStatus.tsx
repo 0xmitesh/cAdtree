@@ -6,6 +6,7 @@ import {
   type ApplicationOperation,
 } from "../engine/application-records";
 import { formatRevisionNumber } from "../engine/vault-service";
+import { applySaveSummary } from "../engine/application-service";
 import { caseLabel } from "../engine/case-lifecycle";
 import { Modal, Notice, OperationProgress } from "./ui";
 
@@ -14,38 +15,35 @@ export function ApplicationStatus({
   branchId,
   busy,
   progress,
+  notSavedReasons = {},
   onCancel,
   onRecover,
-  onAbandon,
-  onRefresh,
-  onChanges,
+  onSaveNow,
 }: {
   state: VaultState;
   branchId: string;
   busy: boolean;
   progress: ProgressUpdate | null;
+  /** Why the automatic save failed, per operation, when known in this session. */
+  notSavedReasons?: Record<string, string>;
   onCancel: () => void;
   onRecover: (id: string) => Promise<void>;
-  onAbandon: (id: string) => Promise<void>;
-  onRefresh: () => Promise<void>;
-  onChanges: () => void;
+  /** Opens the normal Save with the summary and Why prefilled. */
+  onSaveNow: (op: ApplicationOperation) => void;
 }) {
-  const [confirmation, setConfirmation] = useState<{
-    op: ApplicationOperation;
-    kind: "recover" | "abandon";
-  } | null>(null);
+  const [confirmation, setConfirmation] = useState<ApplicationOperation | null>(null);
   const [error, setError] = useState("");
   const [closed, setClosed] = useState(false);
   const pending = branchApplications(state, branchId).filter((op) =>
     ["applied", "unresolved", "unavailable"].includes(op.status),
   );
+  const what = (op: ApplicationOperation) =>
+    op.record?.plan.mode === "revert" ? "Bring back" : "Copy";
   const confirm = async () => {
     if (!confirmation || busy) return;
     setError("");
     try {
-      await (confirmation.kind === "recover"
-        ? onRecover(confirmation.op.operationId)
-        : onAbandon(confirmation.op.operationId));
+      await onRecover(confirmation.operationId);
       setConfirmation(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -53,141 +51,118 @@ export function ApplicationStatus({
   };
   return (
     <>
-      {pending.map((op) => (
-        <section
-          className="application-status"
-          key={op.operationId}
-          aria-label="Destination application status"
-        >
-          <Notice type={op.status === "applied" ? "info" : "error"}>
-            <strong>
-              {op.status === "applied"
-                ? op.record?.plan.mode === "revert"
-                  ? "Brought back into working files — revision not yet saved."
-                  : "Applied to working files — revision not yet saved."
-                : op.status === "unresolved"
-                  ? "Interrupted application — saving and another apply are blocked."
-                  : "Application evidence unavailable — saving and another apply are blocked."}
-            </strong>
-            <p>
-              {op.status === "applied"
-                ? "Check references and rebuild in CAD, then review and save a normal complete revision. Application provenance will be retained."
-                : "Recover recognized applied bytes from the retained before-state. Unexpected later edits are preserved and require manual review. Do not delete operation evidence."}
-            </p>
-            {op.error ? <p>{op.error}</p> : null}
-            <p className="file-path">Evidence: vault/{op.relativePath}</p>
-            {op.record ? (
-              <details className="disclosure">
-                <summary>
-                  Application reason, actions and recovery evidence
-                </summary>
-                <p>{op.record.plan.reason}</p>
-                <p>Operation: {op.operationId}</p>
-                <ul className="application-actions">
-                  {changedActions(op.record).map((a, index) => (
-                    <li key={a.path}>
-                      <strong className="file-path">{a.path}</strong> ·{" "}
-                      {a.operation}
-                      <p className="small file-path">
-                        Before: {a.before?.sha256 ?? "absent"} · Applied:{" "}
-                        {a.after?.sha256 ?? "absent"}
-                      </p>
-                      {a.before ? (
-                        <p className="small file-path">
-                          Before-state copy: vault/{op.relativePath}/before/
-                          {String(index).padStart(6, "0")}.bin (available after
-                          successful staging)
-                        </p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-                <p className="small">
-                  Unexpected byte copies, when readable, are kept under this
-                  operation's unexpected/&lt;recovery ID&gt;/ folder using the same
-                  action index. A partial or truncated file is never blindly
-                  overwritten. After manually restoring affected paths to their
-                  recorded before-state, retry recovery. Newly created empty
-                  folders are retained.
+      {pending.map((op) => {
+        const reason = notSavedReasons[op.operationId];
+        return (
+          <section
+            className="application-status"
+            key={op.operationId}
+            aria-label="Bring back or Copy status"
+          >
+            <Notice type={op.status === "applied" ? "info" : "error"}>
+              <strong>
+                {op.status === "applied"
+                  ? `${op.record ? applySaveSummary(state, op.record) : "Files were copied"}, but it wasn't saved${reason ? `: ${reason}` : ""}. Your working files are fine.`
+                  : op.status === "unresolved"
+                    ? `A ${what(op)} was interrupted. Saving and another Bring back or Copy are blocked until it is undone.`
+                    : "The record of a Bring back or Copy can't be read. Saving and another Bring back or Copy are blocked."}
+              </strong>
+              {op.status === "applied" ? null : (
+                <p>
+                  {op.status === "unresolved"
+                    ? "Undoing puts back the files it changed, from the copies it kept. Files edited since then are left as they are for you to check. Don't delete its record."
+                    : "Inspect the record below; it is kept on disk. Don't delete it."}
                 </p>
-              </details>
-            ) : null}
-            <div className="application-status-actions">
-              {op.status === "applied" ? (
-                <>
+              )}
+              {op.error ? <p>{op.error}</p> : null}
+              {op.status === "applied" ? null : (
+                <details className="disclosure">
+                  <summary>Details</summary>
+                  <p className="file-path">Record: vault/{op.relativePath}</p>
+                  {op.record ? (
+                    <>
+                      {op.record.plan.reason ? <p>{op.record.plan.reason}</p> : null}
+                      <p>Operation: {op.operationId}</p>
+                      <ul className="application-actions">
+                        {changedActions(op.record).map((a, index) => (
+                          <li key={a.path}>
+                            <strong className="file-path">{a.path}</strong> ·{" "}
+                            {a.operation}
+                            <p className="small file-path">
+                              Before: {a.before?.sha256 ?? "absent"} · Applied:{" "}
+                              {a.after?.sha256 ?? "absent"}
+                            </p>
+                            {a.before ? (
+                              <p className="small file-path">
+                                Copy of the earlier file: vault/{op.relativePath}/before/
+                                {String(index).padStart(6, "0")}.bin (once staged)
+                              </p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="small">
+                        Copies of unexpected files, when readable, are kept under
+                        this record's unexpected/&lt;recovery ID&gt;/ folder with
+                        the same number. A partial file is never overwritten.
+                        After putting affected files back by hand, try again.
+                        New empty folders are kept.
+                      </p>
+                    </>
+                  ) : null}
+                </details>
+              )}
+              <div className="application-status-actions">
+                {op.status === "applied" ? (
                   <button
                     className="button secondary"
                     disabled={busy}
-                    onClick={onChanges}
+                    onClick={() => onSaveNow(op)}
                   >
-                    Review and save revision
+                    Save now
                   </button>
+                ) : null}
+                {op.status === "unresolved" ? (
                   <button
-                    className="text-button"
+                    className="button secondary"
                     disabled={busy}
                     onClick={() => {
-                      setConfirmation({ op, kind: "abandon" });
+                      setConfirmation(op);
                       setError("");
                       setClosed(false);
                     }}
                   >
-                    Abandon pending provenance
+                    Undo the unfinished {what(op)}
                   </button>
-                </>
-              ) : null}
-              {op.status === "unresolved" ? (
-                <button
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setConfirmation({ op, kind: "recover" });
-                    setError("");
-                    setClosed(false);
-                  }}
-                >
-                  Recover interrupted application
-                </button>
-              ) : null}
-              <button
-                className="text-button"
-                disabled={busy}
-                onClick={() => void onRefresh()}
-              >
-                Refresh application status
-              </button>
-            </div>
-          </Notice>
-        </section>
-      ))}
+                ) : null}
+              </div>
+            </Notice>
+          </section>
+        );
+      })}
       {confirmation ? (
         <Modal
-          title={
-            confirmation.kind === "recover"
-              ? "Recover interrupted application"
-              : "Abandon pending provenance"
-          }
+          title={`Undo the unfinished ${what(confirmation)}`}
           busy={busy}
           onClose={() => setConfirmation(null)}
         >
           {error ? <Notice type="error">{error}</Notice> : null}
           <p>
-            {confirmation.kind === "recover"
-              ? "Save and close relevant CAD documents. Only affected paths still matching the recorded applied bytes can be restored automatically. Unexpected bytes remain untouched and are copied to operation evidence when readable. Retained directories and all unrelated files remain."
-              : "This records an abandoned outcome without deleting or reverting any working edits. A later normal revision will not claim this application as its provenance. The operation and recovery evidence remain on disk."}
+            Save and close these files in your CAD program first. Only files that
+            still hold what the {what(confirmation)} wrote are put back
+            automatically. Anything else is left as it is and, when readable,
+            copied into the record. Other files and folders are not touched.
           </p>
-          <p>Operation: {confirmation.op.operationId}</p>
           <OperationProgress progress={progress} onCancel={onCancel} />
-          {confirmation.kind === "recover" ? (
-            <label className="file-choice">
-              <input
-                type="checkbox"
-                checked={closed}
-                disabled={busy}
-                onChange={(e) => setClosed(e.target.checked)}
-              />
-              I have saved and closed relevant CAD documents.
-            </label>
-          ) : null}
+          <label className="file-choice">
+            <input
+              type="checkbox"
+              checked={closed}
+              disabled={busy}
+              onChange={(e) => setClosed(e.target.checked)}
+            />
+            I have saved and closed these files in my CAD program.
+          </label>
           <div className="modal-actions">
             <button
               className="button secondary"
@@ -198,12 +173,10 @@ export function ApplicationStatus({
             </button>
             <button
               className="button primary"
-              disabled={busy || (confirmation.kind === "recover" && !closed)}
+              disabled={busy || !closed}
               onClick={() => void confirm()}
             >
-              {confirmation.kind === "recover"
-                ? "Recover recognized applied files"
-                : "Abandon record, keep working edits"}
+              Undo the unfinished {what(confirmation)}
             </button>
           </div>
         </Modal>
@@ -246,7 +219,7 @@ export function AppliedFrom({
             {record.plan.mode === "revert"
               ? `Brought back ${number}`
               : `Copied from ${number} on ${caseLabel(state, record.sourceBranchId)}`}
-            {record.plan.reason.length <= REASON_INLINE_MAX ? (
+            {!record.plan.reason ? null : record.plan.reason.length <= REASON_INLINE_MAX ? (
               <> — {record.plan.reason}</>
             ) : (
               <span className="applied-from-reason muted small">

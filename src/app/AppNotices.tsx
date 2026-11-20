@@ -65,6 +65,19 @@ export function AppNotices({
             onDismiss={() => setStatusBanner(null)}
           >
             <MessageLines text={statusBanner.message} />
+            {statusBanner.action && projectView ? (
+              <>{" "}<button
+                className="text-button"
+                disabled={busy}
+                onClick={() => {
+                  const { run } = statusBanner.action!;
+                  setStatusBanner(null);
+                  run();
+                }}
+              >
+                {statusBanner.action.label}
+              </button></>
+            ) : null}
             {statusBanner.type === "error" &&
             /permission|reconnect|access|notallowed/i.test(
               statusBanner.message,

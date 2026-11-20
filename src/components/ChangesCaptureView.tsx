@@ -51,6 +51,9 @@ export interface ChangesCaptureViewProps {
   onReattachWorkingFolder: () => Promise<void>;
   operationBlockReason?: string;
   resolveFilePath?: (path: string) => Promise<FilePathLocation>;
+  /** Save now after a Bring back or Copy that wasn't saved: fills the summary and
+   * notes once per `key`. */
+  prefill?: { summary: string; notes: RevisionNotes; key: string };
 }
 export interface CaptureDraft {
   identityReview?: IdentityReview;
@@ -88,6 +91,7 @@ export function ChangesCaptureView({
   draftCache,
   draftKey,
   onEnableComponentTracking,
+  prefill,
 }: ChangesCaptureViewProps) {
   const savedDraft = draftKey ? draftCache?.get(draftKey) : undefined;
   const [summary, setSummary] = useState(savedDraft?.summary ?? "");
@@ -123,6 +127,15 @@ export function ChangesCaptureView({
         showAttachments,
       });
   }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview, referenceReview, attachments, showAttachments]);
+  const prefillKey = prefill?.key;
+  useEffect(() => {
+    if (!prefill) return;
+    setSummary(prefill.summary);
+    setNotes(prefill.notes);
+    if (Object.values(prefill.notes).some((value) => value.trim()))
+      setShowOverall(true);
+    // Only a new Save now request fills the form again.
+  }, [prefillKey]);
   const [showUnchanged, setShowUnchanged] = useState(false);
   const [treatAsNewPath, setTreatAsNewPath] = useState<string | null>(null);
   const [matchPath, setMatchPath] = useState<string | null>(null);

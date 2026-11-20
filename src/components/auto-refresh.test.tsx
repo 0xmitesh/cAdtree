@@ -140,25 +140,31 @@ test("no quiet scan starts while an operation runs or a dialog is open", async (
   assert.ok(nav);
 });
 
-test("Changes fills in by itself after Apply, even while the completion dialog is open", async () => {
+test("Copy files saves by itself; the quiet rescan then shows no changes and Undo opens Bring back", async () => {
   const { sample, ui, nav } = await openSample();
-  const changes = () => within(ui.container.querySelector<HTMLElement>("[data-scanned-at]")!.closest<HTMLElement>(".changes-page")!);
-  assert.equal(changes().queryByText("Rib.SLDPRT"), null);
   fireEvent.click(nav.getByRole("button", { name: "History" }));
   fireEvent.click(await ui.findByRole("button", { name: /Reinforced mounting rib/ }));
-  fireEvent.click(ui.getByRole("button", { name: "Review changes to apply" }));
-  const review = within(await ui.findByRole("dialog", { name: "Review changes to apply — preview" }));
-  fireEvent.change(review.getByRole("textbox", { name: "Engineering reason for proposed application" }), { target: { value: "Reuse the rib from the lightweight study" } });
-  const rib = review.getByRole("checkbox", { name: /Select source .*Rib\.SLDPRT/ });
+  fireEvent.click(ui.getByRole("button", { name: /^Copy files from .*…$/ }));
+  const copy = within(await ui.findByRole("dialog", { name: /^Copy files from / }));
+  for (const radio of copy.queryAllByRole("radio", { name: /^Take theirs/ })) fireEvent.click(radio);
+  const rib = copy.getByRole("checkbox", { name: /^Copy .*Rib\.SLDPRT$/ });
   if (!(rib as HTMLInputElement).checked) fireEvent.click(rib);
-  fireEvent.click(review.getByRole("button", { name: "Prepare application" }));
-  const confirm = within(await ui.findByRole("dialog", { name: "Confirm working-file application" }));
-  fireEvent.click(confirm.getByRole("checkbox", { name: /I have saved and closed relevant CAD documents/ }));
-  fireEvent.click(confirm.getByRole("button", { name: "Apply confirmed changes" }));
-  await ui.findByRole("dialog", { name: "Application completed" });
+  fireEvent.change(copy.getByRole("textbox", { name: "Why (optional)" }), { target: { value: "Reuse the rib from the lightweight study" } });
+  fireEvent.click(copy.getByRole("button", { name: "Copy files" }));
+  const banner = await waitFor(() => {
+    const text = document.body.textContent!;
+    assert.match(text, /Saved as Rev \d+\. To undo, bring back Rev \d+\./);
+    return text;
+  }, { timeout: 5000 });
   assert.ok(await sample.main.hasFile(["Rib.SLDPRT"]));
-  // Nothing clicked: the quiet rescan shows the applied file in Changes.
-  await waitFor(() => assert.ok(changes().getByText("Rib.SLDPRT")), { timeout: 5000 });
+  assert.equal(ui.queryByRole("dialog", { name: /^Copy files from / }), null);
+  const previous = banner.match(/bring back (Rev \d+)\./)![1];
+  fireEvent.click(ui.getByRole("button", { name: "Undo" }));
+  assert.ok(await ui.findByRole("dialog", { name: `Bring back ${previous} onto Main` }));
+  fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
+  // Nothing clicked: the quiet rescan shows the folder matches the new revision.
+  fireEvent.click(nav.getByRole("button", { name: "Changes" }));
+  await waitFor(() => assert.match(document.body.textContent!, /No changes since Rev/), { timeout: 5000 });
   assert.equal(ui.queryByRole("button", { name: "Scan for changes" }), null);
 });
 

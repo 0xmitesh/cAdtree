@@ -111,7 +111,7 @@ export async function requestApplicationWriteAccess(
         throw new Error("Permission was not granted.");
     } catch (error) {
       throw new Error(
-        `Read/write access to "${folder.name}" is required. Use Prepare application or Recover again to renew permission, or reconnect the folder. ${error instanceof Error ? error.message : String(error)}`,
+        `Read/write access to "${folder.name}" is required. Try again to renew permission, or reconnect the folder. ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

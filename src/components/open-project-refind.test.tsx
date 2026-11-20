@@ -170,21 +170,20 @@ test("Unchanged path: Refresh and a scan show no rename notice", async () => {
 const RENAMED_RE = new RegExp(RENAMED.replace(/[()']/g, "\\$&"));
 const fingerprint = async (dir: FileSystemDirectoryAdapter) => inventorySignature(await readVerifiedInventory(dir));
 
-test("Apply prepare after a rename is refused with the notice and writes nothing at the old or new path", async () => {
+test("Copy files after a rename is refused with the notice and writes nothing at the old or new path", async () => {
   const { sample, ui } = await setup();
   const root = sample.workspace.root;
   nav(ui, "History");
   fireEvent.click(ui.getByRole("button", { name: /Reinforced mounting rib/ }));
-  fireEvent.click(ui.getByRole("button", { name: "Review changes to apply" }));
-  const dialog = within(ui.getByRole("dialog", { name: "Review changes to apply — preview" }));
-  fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason for proposed application" }), { target: { value: "Reuse the rib" } });
-  fireEvent.click(dialog.getAllByRole("checkbox").find((box) => /^Select source/.test(box.getAttribute("aria-label") ?? ""))!);
+  fireEvent.click(ui.getByRole("button", { name: /^Copy files from .*…$/ }));
+  const dialog = within(ui.getByRole("dialog", { name: /^Copy files from / }));
+  fireEvent.change(dialog.getByRole("textbox", { name: "Why (optional)" }), { target: { value: "Reuse the rib" } });
+  for (const radio of dialog.queryAllByRole("radio", { name: /^Take theirs/ })) fireEvent.click(radio);
   await renameFolder(root, OLD, NEW);
   const before = await fingerprint(sample.home);
-  fireEvent.click(dialog.getByRole("button", { name: "Prepare application" }));
+  fireEvent.click(dialog.getByRole("button", { name: "Copy files" }));
   await idle(ui);
   assert.match(ui.container.textContent! + document.body.textContent!, RENAMED_RE);
-  assert.equal(ui.queryByRole("dialog", { name: "Confirm working-file application" }), null);
   assert.equal(await exists(root, OLD), false, "nothing was recreated at the old path");
   assert.equal(await fingerprint(sample.home), before, "nothing was written at the new path");
 });

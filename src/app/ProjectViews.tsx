@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ApplicationStatus } from "../components/ApplicationStatus";
 import { ChangesCaptureView, type CaptureDraft } from "../components/ChangesCaptureView";
 import { DesignCases } from "../components/DesignCases";
@@ -66,11 +67,12 @@ export type ProjectViewsProps = {
   handleScanCurrent: CaptureActions["handleScanCurrent"];
   checkFailed: boolean;
   handleCaptureRevision: CaptureActions["handleCaptureRevision"];
-  handlePrepareApplication: ApplicationActions["handlePrepareApplication"];
-  handleRefreshApplicationReview: ApplicationActions["handleRefreshApplicationReview"];
-  handleApplyApplication: ApplicationActions["handleApplyApplication"];
+  handleApplyAndSave: ApplicationActions["handleApplyAndSave"];
   handleRecoverApplication: ApplicationActions["handleRecoverApplication"];
-  handleAbandonApplication: ApplicationActions["handleAbandonApplication"];
+  handleSaveNow: ApplicationActions["handleSaveNow"];
+  notSavedReasons: ApplicationActions["notSavedReasons"];
+  bringBackRequest: ApplicationActions["bringBackRequest"];
+  capturePrefill: ApplicationActions["capturePrefill"];
   handleExportForReview: ReviewActions["handleExportForReview"];
   handleRetrieveReference: ReviewActions["handleRetrieveReference"];
   handleAddReferences: ReferenceActions["handleAddReferences"];
@@ -122,11 +124,12 @@ export function ProjectViews({
   handleScanCurrent,
   checkFailed,
   handleCaptureRevision,
-  handlePrepareApplication,
-  handleRefreshApplicationReview,
-  handleApplyApplication,
+  handleApplyAndSave,
   handleRecoverApplication,
-  handleAbandonApplication,
+  handleSaveNow,
+  notSavedReasons,
+  bringBackRequest,
+  capturePrefill,
   handleExportForReview,
   handleRetrieveReference,
   handleAddReferences,
@@ -137,6 +140,24 @@ export function ProjectViews({
   onEnableComponentTracking,
   onPrepareWrite,
 }: ProjectViewsProps) {
+  // The Undo link asks for Bring back: show History, where its dialog opens. A
+  // request made before this view mounted is not replayed.
+  const bringBackNonce = bringBackRequest?.nonce;
+  const handledBringBack = useRef(bringBackNonce);
+  useEffect(() => {
+    if (bringBackNonce === undefined || handledBringBack.current === bringBackNonce) return;
+    handledBringBack.current = bringBackNonce;
+    if (bringBackRequest?.projectId === vaultState.project.projectId) navigate("history");
+  }, [bringBackNonce]);
+  const activeScan =
+    scanResult?.branchId === activeBranchId ? scanResult : null;
+  const unsavedChanges = activeScan?.hasChanges
+    ? activeScan.added.length +
+      activeScan.modified.length +
+      activeScan.deleted.length +
+      activeScan.addedDirectories.length +
+      activeScan.deletedDirectories.length
+    : 0;
   return (
     <>
       <ProjectContextHeader
@@ -151,10 +172,12 @@ export function ProjectViews({
         busy={busy}
         progress={progress}
         onCancel={handleCancelOperation}
+        notSavedReasons={notSavedReasons}
         onRecover={handleRecoverApplication}
-        onAbandon={handleAbandonApplication}
-        onRefresh={handleScanCurrent}
-        onChanges={() => navigate("changes")}
+        onSaveNow={(op) => {
+          handleSaveNow(op);
+          navigate("changes");
+        }}
       />
       {vaultState.branches.map((branch) => (
         <div
@@ -208,6 +231,13 @@ export function ProjectViews({
             resolveFilePath={(path) =>
               workingFileResolver(branch.branchId, path)()
             }
+            prefill={
+              capturePrefill &&
+              capturePrefill.projectId === vaultState.project.projectId &&
+              capturePrefill.branchId === branch.branchId
+                ? capturePrefill
+                : undefined
+            }
           />
         </div>
       ))}
@@ -231,24 +261,25 @@ export function ProjectViews({
           )}
           onRetrieveReference={handleRetrieveReference}
           application={{
-            prepare: handlePrepareApplication,
-            apply: handleApplyApplication,
-            refresh: handleRefreshApplicationReview,
+            applyAndSave: handleApplyAndSave,
             progress,
             cancel: handleCancelOperation,
-            destinationLocation:
-              managedProject && workspace
-                ? `${workspace.root.name}/${managedProject.workingPaths[activeBranchId]}`
-                : workingDir?.name,
+            unsavedChanges,
+            onSaveFirst: () => navigate("changes"),
             blockedReason:
               caseWriteBlock(vaultState, activeBranchId) ??
               managedBlockReason ??
               (branchApplications(vaultState, activeBranchId).some(
                 (op) => !isFinishedOperation(op),
               )
-                ? "Resolve the pending application for this branch before applying again."
+                ? "Finish the earlier Bring back or Copy on this case first (see the notice at the top)."
                 : undefined),
           }}
+          bringBackRequest={
+            bringBackRequest?.projectId === vaultState.project.projectId
+              ? bringBackRequest
+              : undefined
+          }
           vaultState={vaultState}
           activeBranchId={activeBranchId}
           progress={progress}

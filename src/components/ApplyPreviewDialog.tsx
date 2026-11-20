@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  ReconstructedRevision,
-  VaultState,
-  ProgressUpdate,
-} from "../engine/types";
+import { useMemo, useRef, useState } from "react";
+import type { VaultState, ProgressUpdate } from "../engine/types";
 import {
   applicationReview,
-  type PreparedApplication,
+  type ApplyAndSaveResult,
 } from "../engine/application-service";
 import type { ApplicationReview } from "../engine/application-records";
 import { caseLabel } from "../engine/case-lifecycle";
@@ -16,96 +12,96 @@ import {
   type ApplyMode,
   FOLDER_KEPT_MESSAGE,
   type ApplyPreviewContext,
-  type ConflictDecision,
   type PreviewChoice,
   type PreviewFileRow,
 } from "../engine/apply-preview";
 import { formatRevisionNumber } from "../engine/vault-service";
-import { formatBytes } from "../utils/format";
-import { Modal, Notice, NotesText, StatusBadge, OperationProgress } from "./ui";
+import { Modal, Notice, StatusBadge, OperationProgress } from "./ui";
 
 export interface ApplicationController {
-  prepare: (review: ApplicationReview) => Promise<PreparedApplication>;
-  apply: (prepared: PreparedApplication) => Promise<void>;
+  /** Writes the reviewed plan and saves it as a revision (engine `applyAndSave`). */
+  applyAndSave: (review: ApplicationReview) => Promise<ApplyAndSaveResult | undefined>;
   progress: ProgressUpdate | null;
   cancel: () => void;
   blockedReason?: string;
-  destinationLocation?: string;
-  refresh?: () => Promise<void>;
+  /** Unsaved changes in the destination's working folder, when known from the last check. */
+  unsavedChanges?: number;
+  /** Takes the user to Changes to save their own edits first. */
+  onSaveFirst?: () => void;
+  // TODO(Phase 4, Discard): add `onDiscardFirst` ("Discard them", keeps a copy in Discarded/).
 }
 
+/** What the user decided: files unticked (Copy only) and, for each file
+ * changed on both sides, Keep mine or Take theirs. */
+export type CopyDecision = "keep-destination" | "use-source";
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
-function countsLine(
-  add: number,
-  replace: number,
-  remove: number,
-  revert: boolean,
-  foldersCreated = 0,
-  foldersRemoved = 0,
-): string {
-  const folders = [
-    foldersCreated ? plural(foldersCreated, "folder created", "folders created") : "",
-    foldersRemoved ? plural(foldersRemoved, "folder removed", "folders removed") : "",
-  ];
-  if (revert)
-    return [
-      add ? `${plural(add, "file", "files")} brought back` : "",
-      replace ? `${replace} replaced` : "",
-      remove ? `${remove} removed` : "",
-      ...folders,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-  return [
-    plural(add, "addition", "additions"),
-    plural(replace, "replacement", "replacements"),
-    plural(remove, "deletion", "deletions"),
-    ...folders,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
 const isFolder = (row: PreviewFileRow) => row.entry === "folder";
-/** Folders read with a trailing slash; files keep their path. */
-const rowLabel = (row: PreviewFileRow) =>
-  isFolder(row) ? `${row.path}/` : row.path;
-const folderChange = (row: PreviewFileRow) =>
-  row.sourceChange === "added" ? "Create folder" : "Remove folder";
 const isSelectable = (row: PreviewFileRow) =>
-  (row.kind === "available" || row.kind === "conflict") &&
-  !row.identityBlock;
+  (row.kind === "available" || row.kind === "conflict") && !row.identityBlock;
+const inside = (folder: string, path: string) => path.startsWith(`${folder}/`);
 
-/** Carries the user's choices across a refresh of the saved states. A choice
- * survives only while its row still exists, with the same kind, and can still
- * be selected. In revert mode a newly selectable row is pre-selected, as on
- * first open; so is a row whose choice was dropped while it was blocked, once
- * it becomes selectable again. Returns `previous` itself when nothing changed. */
-export function reconcileChoices(
-  previous: Record<string, PreviewChoice>,
-  previousRows: PreviewFileRow[],
+/**
+ * The engine choices for one dialog state. Bring back takes every change
+ * (all-or-nothing). Copy files takes every ticked file; a file changed on both
+ * sides carries the user's Keep mine / Take theirs, or stays unresolved (the plan
+ * is then not ready). Folder rows follow their files: an added folder is created
+ * unless all the files the case added inside it were unticked; a removed folder
+ * is removed only if every file and subfolder inside it is removed too.
+ */
+export function deriveChoices(
   rows: PreviewFileRow[],
   revert: boolean,
+  unticked: ReadonlySet<string>,
+  decisions: Readonly<Record<string, CopyDecision>>,
 ): Record<string, PreviewChoice> {
-  const before = new Map(
-    previousRows.map((row) => [row.path, `${row.entry}:${row.kind}`]),
-  );
-  const next: Record<string, PreviewChoice> = {};
-  for (const row of rows) {
-    if (!isSelectable(row)) continue;
-    const kept =
-      before.get(row.path) === `${row.entry}:${row.kind}`
-        ? previous[row.path]
-        : undefined;
-    if (kept) next[row.path] = kept;
-    else if (revert && row.kind === "available")
-      next[row.path] = { selected: true, decision: "use-source" };
+  const choices: Record<string, PreviewChoice> = {};
+  const files = rows.filter((row) => !isFolder(row) && isSelectable(row));
+  for (const row of files) {
+    if (row.kind === "conflict")
+      choices[row.path] = {
+        selected: true,
+        decision: decisions[row.path] ?? "unresolved",
+      };
+    else if (revert || !unticked.has(row.path))
+      choices[row.path] = { selected: true, decision: "use-source" };
   }
-  const keys = Object.keys(next);
-  return keys.length === Object.keys(previous).length &&
-    keys.every((key) => next[key] === previous[key])
-    ? previous
-    : next;
+  const folders = rows.filter((row) => isFolder(row) && isSelectable(row));
+  if (revert) {
+    for (const row of folders)
+      choices[row.path] = { selected: true, decision: "use-source" };
+    return choices;
+  }
+  const takes = (path: string) => choices[path]?.decision === "use-source";
+  const depth = (path: string) => path.split("/").length;
+  const added = folders.filter((row) => row.sourceChange === "added");
+  const create = new Set(
+    added
+      .filter((row) => {
+        const under = files.filter((file) => inside(row.path, file.path));
+        return !under.length || under.some((file) => takes(file.path));
+      })
+      .map((row) => row.path),
+  );
+  // A created folder needs its added parents.
+  for (const row of added)
+    if ([...create].some((path) => inside(row.path, path))) create.add(row.path);
+  const removed = folders
+    .filter((row) => row.sourceChange === "deleted")
+    .sort((a, b) => depth(b.path) - depth(a.path));
+  const remove = new Set<string>();
+  for (const row of removed) {
+    const filesGo = files
+      .filter((file) => inside(row.path, file.path))
+      .every((file) => takes(file.path));
+    const foldersGo = removed
+      .filter((other) => inside(row.path, other.path))
+      .every((other) => remove.has(other.path));
+    if (filesGo && foldersGo) remove.add(row.path);
+  }
+  for (const path of [...create, ...remove])
+    choices[path] = { selected: true, decision: "use-source" };
+  return choices;
 }
 
 export function ApplyPreviewDialog({
@@ -127,31 +123,30 @@ export function ApplyPreviewDialog({
     () => prepareApplyPreview(state, sourceId, destinationBranchId, mode),
     [state, sourceId, destinationBranchId, mode],
   );
-  if (preparation.status === "unavailable")
+  if (preparation.status === "unavailable") {
+    const source = state.revisions.find((r) => r.manifest.revisionId === sourceId);
     return (
       <Modal
         title={
           mode === "revert"
-            ? "Bring back an earlier revision — preview"
-            : "Review changes to apply — preview"
+            ? "Bring back an earlier revision"
+            : `Copy files from ${source ? caseLabel(state, source.manifest.branchId) : "a case"}`
         }
         onClose={onClose}
       >
-        <Notice type="error">Preview unavailable. {preparation.reason}</Notice>
-        <p>
-          Ordinary Compare remains available for healthy saved endpoints under
-          its existing rules. This preview has not changed any files.
-        </p>
+        <Notice type="error">This can't be done right now. {preparation.reason}</Notice>
+        <p>No files were changed.</p>
         <div className="modal-actions">
           <button className="button secondary" onClick={onClose}>
-            Close preview
+            Close
           </button>
         </div>
       </Modal>
     );
+  }
   const context = preparation.context;
   return (
-    <ApplyPreviewBody
+    <ApplyBody
       key={`${context.projectId}:${context.source.manifest.revisionId}:${context.destination.manifest.revisionId}:${context.base.manifest.revisionId}:${destinationBranchId}`}
       context={context}
       state={state}
@@ -160,7 +155,8 @@ export function ApplyPreviewDialog({
     />
   );
 }
-function ApplyPreviewBody({
+
+function ApplyBody({
   context,
   state,
   onClose,
@@ -172,810 +168,357 @@ function ApplyPreviewBody({
   application?: ApplicationController;
 }) {
   const revert = context.mode === "revert";
-  const initialChoices = (): Record<string, PreviewChoice> =>
-    revert
-      ? Object.fromEntries(
-          context.rows
-            .filter((row) => row.kind === "available" && isSelectable(row))
-            .map((row) => [
-              row.path,
-              { selected: true, decision: "use-source" as ConflictDecision },
-            ]),
-        )
-      : {};
-  const [choices, setChoices] = useState<Record<string, PreviewChoice>>(
-    initialChoices,
-  );
+  const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
+  const [decisions, setDecisions] = useState<Record<string, CopyDecision>>({});
   const [reason, setReason] = useState("");
-  const previousRows = useRef(context.rows);
-  useEffect(() => {
-    const before = previousRows.current;
-    if (before === context.rows) return;
-    previousRows.current = context.rows;
-    setChoices((previous) =>
-      reconcileChoices(previous, before, context.rows, revert),
-    );
-  }, [context.rows, revert]);
-  const [prepared, setPrepared] = useState<PreparedApplication | null>(null);
   const [running, setRunning] = useState(false);
   const runningRef = useRef(false);
-  const [applied, setApplied] = useState(false);
-  const [applicationError, setApplicationError] = useState("");
-  const [cadClosed, setCadClosed] = useState(false);
-  const destinationFocus = useRef<HTMLParagraphElement>(null);
-  const completionFocus = useRef<HTMLButtonElement>(null);
-  const reasonFocus = useRef<HTMLTextAreaElement>(null);
-  const errorFocus = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (prepared) destinationFocus.current?.focus();
-    else if (applied) completionFocus.current?.focus();
-    else if (applicationError) errorFocus.current?.focus();
-    else reasonFocus.current?.focus();
-  }, [prepared, applied, applicationError]);
+  const [error, setError] = useState("");
+  const choices = useMemo(
+    () => deriveChoices(context.rows, revert, unticked, decisions),
+    [context.rows, revert, unticked, decisions],
+  );
   const plan = useMemo(
-    () => buildApplyPreview(context, choices, reason),
+    () => buildApplyPreview(context, choices, reason.trim()),
     [context, choices, reason],
   );
-  // The engine no longer requires a reason (applyAndSave); this older dialog
-  // still does, until it is replaced by the one-Confirm dialog.
-  const reasonMissing = !reason.trim();
-  const blockers = useMemo(() => {
-    if (!reasonMissing) return plan.blockers;
-    const list = [...plan.blockers];
-    const collisions = list.findIndex((b) => b.startsWith("Resolve file/directory path collisions"));
-    list.splice(collisions < 0 ? list.length : collisions, 0, "Enter an engineering reason for the proposed application.");
-    return list;
-  }, [plan, reasonMissing]);
-  const ready = plan.ready && !reasonMissing;
-  const branchName = (revision: ReconstructedRevision) =>
-    caseLabel(state, revision.manifest.branchId);
-  const endpointCards = revert
-    ? [
-        { key: "now", title: `Latest saved · ${caseLabel(state, context.destinationBranchId)}`, revision: context.destination },
-        { key: "back", title: `Bring back · ${formatRevisionNumber(context.source.manifest.displayNumber)}`, revision: context.source },
-      ]
-    : null;
-  const endpoints = revert
-    ? [
-        { side: "Latest saved", revision: context.destination },
-        { side: "Bring back", revision: context.source },
-      ]
-    : [
-        { side: "Base", revision: context.base },
-        { side: "Source", revision: context.source },
-        { side: "Destination", revision: context.destination },
-      ];
-  const candidates = context.rows.filter(
-    (row) => row.kind === "available" || row.kind === "conflict",
-  );
-  const keptFolders = context.rows.filter(
-    (row) => row.kind === "kept-holds-files",
-  );
-  const matching = context.rows.filter((row) => row.kind === "already-matches");
-  const retained = context.rows.filter(
-    (row) => row.kind === "no-source-change",
-  );
-  const foldersCreated = plan.folderActions.filter((a) => a.operation === "create");
-  const foldersRemoved = plan.folderActions.filter((a) => a.operation === "remove");
-  const reasonLabel = revert
-    ? "Engineering reason for bringing this back"
-    : "Engineering reason for proposed application";
-  const sourceLabel = formatRevisionNumber(
-    context.source.manifest.displayNumber,
-  );
+  const sourceLabel = formatRevisionNumber(context.source.manifest.displayNumber);
   const destinationName = caseLabel(state, context.destinationBranchId);
-  const revertChange = (row: PreviewFileRow) =>
-    row.sourceChange === "deleted"
-      ? `Remove (not in ${sourceLabel})`
-      : row.sourceChange === "added"
-        ? "Bring back"
-        : `Replace with ${sourceLabel}'s version`;
-  const sourceWord = (row: PreviewFileRow) =>
-    row.sourceChange === "deleted"
-      ? "deletion"
-      : row.sourceChange === "added"
-        ? "addition"
-        : "modification";
-  const setSelection = (row: PreviewFileRow, selected: boolean) =>
-    setChoices((previous) => ({
-      ...previous,
-      [row.path]: {
-        selected,
-        decision: row.kind === "available" ? "use-source" : "unresolved",
-      },
-    }));
-  const stateAndNotes = (row: PreviewFileRow) => (
-    <details className="disclosure preview-file-evidence">
-      <summary>Saved file states and notes</summary>
-      <div className={revert ? "comparison-file-endpoints" : "comparison-file-endpoints preview-three-columns"}>
-        {endpoints.map(({ side, revision }) => {
-          const file =
-            side === "Base"
-              ? row.base
-              : side === "Source" || side === "Bring back"
-                ? row.source
-                : row.destination;
-          const notes =
-            revision.manifest.fileNotes?.filter(
-              (note) => note.path === row.path,
-            ) ?? [];
-          return (
-            <section
-              key={side}
-              aria-label={`${side} file notes at ${formatRevisionNumber(revision.manifest.displayNumber)}: ${row.path}`}
-            >
-              <h4>
-                {side} · {formatRevisionNumber(revision.manifest.displayNumber)}
-              </h4>
-              <p className="small">
-                {file
-                  ? `${formatBytes(file.size)} · present`
-                  : "Absent in this saved revision"}
-              </p>
-              {file ? (
-                <details className="comparison-hash">
-                  <summary>Content hash</summary>
-                  <code>{file.sha256}</code>
-                </details>
-              ) : null}
-              {notes.length ? (
-                notes.map((note) => <NotesText key={note.path} notes={note} file />)
-              ) : (
-                <p className="muted small">
-                  No per-file notes recorded at this revision.
-                </p>
-              )}
-            </section>
-          );
-        })}
-      </div>
-    </details>
+  const sourceCase = caseLabel(state, context.source.manifest.branchId);
+  const fileRows = context.rows.filter(
+    (row) => !isFolder(row) && (row.kind === "available" || row.kind === "conflict"),
   );
-  const operations = plan.actions.filter((action) =>
-    ["add", "replace", "delete"].includes(action.operation),
+  const folderRows = context.rows.filter(
+    (row) =>
+      isFolder(row) &&
+      (row.kind === "available" || row.kind === "conflict" || row.kind === "kept-holds-files"),
   );
-  const prepare = async () => {
-    if (!application || runningRef.current) return;
+  const conflicts = fileRows.filter((row) => row.kind === "conflict" && !row.identityBlock);
+  const undecided = conflicts.filter((row) => !decisions[row.path]).length;
+  const fileActions = plan.actions.filter((a) =>
+    ["add", "replace", "delete"].includes(a.operation),
+  );
+  const unsaved = application?.unsavedChanges ?? 0;
+  const nothingToDo = !fileActions.length && !plan.folderActions.length;
+  // Blockers the dialog does not already explain by its own controls.
+  const otherBlockers = plan.blockers.filter(
+    (b) =>
+      !b.startsWith("Select at least one") &&
+      !b.startsWith("Resolve every selected conflict") &&
+      !b.startsWith("Resolve file/directory path collisions"),
+  );
+  const ready =
+    Boolean(application) &&
+    plan.ready &&
+    !running &&
+    !unsaved &&
+    !application?.blockedReason;
+  const run = async () => {
+    if (!application || runningRef.current || !ready) return;
     runningRef.current = true;
     setRunning(true);
-    setApplicationError("");
-    setCadClosed(false);
+    setError("");
     try {
-      setPrepared(await application.prepare(applicationReview(plan, choices)));
-    } catch (error) {
-      setApplicationError(
-        error instanceof Error ? error.message : String(error),
-      );
+      await application.applyAndSave(applicationReview(plan, choices));
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       runningRef.current = false;
       setRunning(false);
     }
   };
-  const apply = async () => {
-    if (!application || !prepared || runningRef.current || !cadClosed) return;
-    runningRef.current = true;
-    setRunning(true);
-    setApplicationError("");
-    try {
-      await application.apply(prepared);
-      setApplied(true);
-      setPrepared(null);
-    } catch (error) {
-      setApplicationError(
-        error instanceof Error ? error.message : String(error),
-      );
-      setPrepared(null);
-      setCadClosed(false);
-    } finally {
-      runningRef.current = false;
-      setRunning(false);
-    }
-  };
-  if (applied)
-    return (
-      <Modal
-        title={revert ? "Bring back completed" : "Application completed"}
-        onClose={onClose}
-      >
-        <Notice type="success">
-          {revert
-            ? "Brought back into working files — revision not yet saved."
-            : "Applied to working files — revision not yet saved."}
+  const fileChange = (row: PreviewFileRow) =>
+    row.sourceChange === "added"
+      ? "added"
+      : row.sourceChange === "deleted"
+        ? "removed"
+        : "changed";
+  const planned = (path: string) =>
+    plan.folderActions.some((a) => a.path === path);
+  const folderLine = (row: PreviewFileRow) => (
+    <li key={`folder:${row.path}`} className="apply-row">
+      <span className="file-path">{row.path}/</span> <StatusBadge status="Folder" />{" "}
+      <span className="muted small">
+        {row.kind === "kept-holds-files"
+          ? FOLDER_KEPT_MESSAGE
+          : planned(row.path)
+            ? row.sourceChange === "added"
+              ? "Will be created"
+              : "Will be removed"
+            : "Not copied"}
+      </span>
+    </li>
+  );
+  const blockedNote = (row: PreviewFileRow) =>
+    revert ? row.identityBlock : "Renamed in one case; can't copy yet.";
+  const saveFirst = unsaved ? (
+    <Notice>
+      {destinationName} has {plural(unsaved, "unsaved change", "unsaved changes")}.
+      Save them first, so nothing is lost.
+    </Notice>
+  ) : null;
+  const errors = (
+    <>
+      {error ? <Notice type="error">{error}</Notice> : null}
+      {application?.blockedReason ? (
+        <Notice type="error">{application.blockedReason}</Notice>
+      ) : null}
+      {plan.collisions.length ? (
+        <Notice type="error">
+          <strong>These paths clash</strong>
+          <ul>
+            {plan.collisions.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
         </Notice>
-        <p>
-          Open the destination in CAD, check references and rebuild, and make
-          any necessary adjustments. Use the normal Changes → Save revision flow
-          to preserve the final complete snapshot and{" "}
-          {revert
-            ? "keep this bring-back in the revision's history."
-            : "application provenance."}
-        </p>
-        <p>
-          {revert
-            ? `${sourceLabel} and ${destinationName}'s latest saved revision both stay in history.`
-            : "The source Design Case and its saved history remain available."}
-        </p>
-        <div className="modal-actions">
+      ) : null}
+      {otherBlockers.length ? (
+        <Notice type="error">
+          <ul>
+            {otherBlockers.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
+        </Notice>
+      ) : null}
+    </>
+  );
+  const whyField = (
+    <label className="field preview-reason">
+      <span>Why (optional)</span>
+      <textarea
+        aria-label="Why (optional)"
+        rows={2}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder={
+          revert
+            ? "Why are you bringing this version back?"
+            : "Why are you copying these files?"
+        }
+        disabled={running}
+      />
+    </label>
+  );
+  const actions = (label: string) => (
+    <>
+      <OperationProgress
+        progress={running ? (application?.progress ?? null) : null}
+        onCancel={() => application?.cancel()}
+      />
+      <div className="modal-actions">
+        <button className="button secondary" onClick={onClose} disabled={running}>
+          Cancel
+        </button>
+        {unsaved && application?.onSaveFirst ? (
           <button
-            ref={completionFocus}
             className="button primary"
-            onClick={onClose}
+            disabled={running}
+            onClick={() => {
+              application.onSaveFirst!();
+              onClose();
+            }}
           >
-            Return to History
+            Save my changes first
           </button>
-        </div>
-      </Modal>
-    );
-  if (prepared)
+        ) : (
+          <button
+            className="button primary"
+            disabled={!ready}
+            onClick={() => void run()}
+          >
+            {running ? "Saving…" : label}
+          </button>
+        )}
+      </div>
+    </>
+  );
+
+  if (revert) {
+    const groups: [string, PreviewFileRow[]][] = [
+      ["Brought back", fileRows.filter((r) => fileChange(r) === "added")],
+      ["Replaced with the older version", fileRows.filter((r) => fileChange(r) === "changed")],
+      [`Removed (not in ${sourceLabel})`, fileRows.filter((r) => fileChange(r) === "removed")],
+    ];
+    const blocked = fileRows.filter((r) => r.identityBlock);
     return (
       <Modal
-        title={
-          revert
-            ? "Confirm bringing back into working files"
-            : "Confirm working-file application"
-        }
+        title={`Bring back ${sourceLabel} onto ${destinationName}`}
         onClose={onClose}
         busy={running}
       >
-        <Notice>
-          This will write to the active destination branch's connected working
-          folder. Save and close relevant CAD documents before proceeding. Other
-          applications and cloud sync are not locked; the multi-file operation
-          is not atomic.
-        </Notice>
-        <p ref={destinationFocus} tabIndex={-1}>
-          <strong>
-            Project: {state.project.name} · Destination: {prepared.branchName}
-          </strong>{" "}
-          · Working folder: {prepared.destinationName}
-        </p>
-        {application?.destinationLocation ? (
-          <p className="file-path">
-            Connected location: {application.destinationLocation}
-          </p>
-        ) : null}
-        <p>
-          Saved baseline:{" "}
-          {formatRevisionNumber(context.destination.manifest.displayNumber)} ·
-          Source: {formatRevisionNumber(context.source.manifest.displayNumber)}{" "}
-          on {branchName(context.source)}.
-        </p>
-        <p>
-          The destination matched its saved baseline during preparation. It will
-          be rechecked under the project writer lock before application.
-        </p>
-        <h3>{revert ? "Confirmed changes" : "Confirmed additions, replacements and deletions"}</h3>
-        {revert ? (
-          <p>
+        <div className="apply-preview">
+          {errors}
+          {saveFirst}
+          <p role="status" aria-label="What will change">
             <strong>
-              {countsLine(
-                prepared.plan.actions.filter((a) => a.operation === "add").length,
-                prepared.plan.actions.filter((a) => a.operation === "replace").length,
-                prepared.plan.actions.filter((a) => a.operation === "delete").length,
-                true,
-                prepared.plan.folderActions.filter((a) => a.operation === "create").length,
-                prepared.plan.folderActions.filter((a) => a.operation === "remove").length,
-              )}
+              {nothingToDo
+                ? `${destinationName} already matches ${sourceLabel}.`
+                : `${plural(fileActions.length, "file", "files")} will change`}
             </strong>
+            {plan.folderActions.length
+              ? ` · ${plural(plan.folderActions.length, "folder", "folders")}`
+              : ""}
           </p>
-        ) : null}
-        <ul className="application-actions">
-          {prepared.plan.actions.map((action) => (
-            <li key={action.path}>
-              <strong>
-                {action.operation === "delete"
-                  ? revert
-                    ? `Remove (not in ${sourceLabel})`
-                    : "DELETE destination file"
-                  : action.operation === "replace"
-                    ? revert
-                      ? `Replace with ${sourceLabel}'s version`
-                      : "Replace with Source"
-                    : action.operation === "add"
-                      ? revert
-                        ? `Bring back from ${sourceLabel}`
-                        : "Add Source file"
-                      : "Keep Destination"}
-              </strong>{" "}
-              · <span className="file-path">{action.path}</span>
-            </li>
-          ))}
-          {prepared.plan.folderActions.map((action) => (
-            <li key={`folder:${action.path}`}>
-              <strong>
-                {action.operation === "create" ? "Create folder" : "Remove folder"}
-              </strong>{" "}
-              · <span className="file-path">{action.path}/</span>
-            </li>
-          ))}
-        </ul>
-        <p>
-          <strong>Engineering reason:</strong> {prepared.plan.reason}
-        </p>
-        <label className="file-choice">
-          <input
-            type="checkbox"
-            checked={cadClosed}
-            disabled={running}
-            onChange={(event) => setCadClosed(event.target.checked)}
-          />
-          I have saved and closed relevant CAD documents and confirm this
-          destination.
-        </label>
-        <OperationProgress
-          progress={application?.progress ?? null}
-          onCancel={() => application?.cancel()}
-        />
-        <div className="modal-actions">
-          <button
-            className="button secondary"
-            disabled={running}
-            onClick={() => setPrepared(null)}
-          >
-            Back to review
-          </button>
-          <button
-            className="button primary"
-            disabled={running || !cadClosed}
-            onClick={() => void apply()}
-          >
-            {revert ? "Bring back confirmed changes" : "Apply confirmed changes"}
-          </button>
+          <p className="muted small">
+            {destinationName}'s files will match {sourceLabel}, and the result
+            is saved as a new revision. Nothing is lost: the current revision
+            stays in history. Close these files in your CAD program first.
+          </p>
+          {blocked.length ? (
+            <Notice>
+              Some files were renamed since {sourceLabel} and are left as they are.
+            </Notice>
+          ) : null}
+          {groups.map(([title, rows]) => {
+            const shown = rows.filter((r) => !r.identityBlock);
+            return shown.length ? (
+              <section key={title} aria-label={title}>
+                <h3>
+                  {title} ({shown.length})
+                </h3>
+                <ul className="application-actions">
+                  {shown.map((row) => (
+                    <li key={row.path} className="file-path">
+                      {row.path}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null;
+          })}
+          {folderRows.length ? (
+            <section aria-label="Folders">
+              <h3>Folders ({folderRows.length})</h3>
+              <ul className="application-actions">{folderRows.map(folderLine)}</ul>
+            </section>
+          ) : null}
+          {blocked.length ? (
+            <section aria-label="Can't bring back">
+              <h3>Can't bring back ({blocked.length})</h3>
+              <ul className="application-actions">
+                {blocked.map((row) => (
+                  <li key={row.path} aria-label={`Blocked: ${row.path}`} className="muted">
+                    <span className="file-path">{row.path}</span>
+                    <p className="small">{blockedNote(row)}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+          {whyField}
+          {actions("Bring back")}
         </div>
       </Modal>
     );
+  }
+
   return (
-    <Modal
-      title={
-        revert
-          ? `Make ${destinationName} match ${sourceLabel}`
-          : "Review changes to apply — preview"
-      }
-      onClose={onClose}
-      busy={running}
-    >
+    <Modal title={`Copy files from ${sourceCase}`} onClose={onClose} busy={running}>
       <div className="apply-preview">
-        {applicationError ? (
-          <div ref={errorFocus} tabIndex={-1}>
-            <Notice type="error">{applicationError}</Notice>
-          </div>
-        ) : null}
-        {application?.blockedReason ? (
-          <Notice type="error">{application.blockedReason}</Notice>
-        ) : null}
-        {context.rows.some(row => row.identityBlock) ? <Notice>Some saved paths have different or unavailable component identities. Affected actions are blocked. Review their identity messages; unaffected file actions remain available.</Notice> : null}
-        <Notice>
-          {application
-            ? "Saved-state review — no files change until preparation and final confirmation. Preparation rejects uncaptured destination edits."
-            : "Preview only — no files will be applied. This uses saved states."}{" "}
-          Current uncaptured working edits are not included and are not
-          authorized for replacement.
-        </Notice>
-        <div className={revert ? "preview-endpoints" : "preview-endpoints preview-three-columns"}>
-          {endpointCards ? endpointCards.map(({ key, title, revision }) => (
-            <section key={key} aria-label={title}>
-              <h3>{title}</h3>
-              <strong>
-                {formatRevisionNumber(revision.manifest.displayNumber)} ·{" "}
-                {branchName(revision)}
-              </strong>
-              <p>{revision.manifest.summary}</p>
-              <span className="muted small">
-                {revision.manifest.files.length} files ·{" "}
-                {revision.integrityStatus === "objects_verified"
-                  ? "Metadata and file contents previously verified"
-                  : "Metadata verified · contents not checked"}
-              </span>
-            </section>
-          )) : endpoints.map(({ side, revision }) => (
-            <section key={side} aria-label={`${side} saved revision`}>
-              <h3>
-                {side}
-                {side === "Destination"
-                  ? ` · working case ${state.branches.find((branch) => branch.branchId === context.destinationBranchId)?.name}`
-                  : ""}
-              </h3>
-              <strong>
-                {formatRevisionNumber(revision.manifest.displayNumber)} ·{" "}
-                {branchName(revision)}
-              </strong>
-              <p>{revision.manifest.summary}</p>
-              <span className="muted small">
-                {revision.manifest.files.length} files ·{" "}
-                {revision.integrityStatus === "objects_verified"
-                  ? "Metadata and file contents previously verified"
-                  : "Metadata verified · contents not checked"}
-              </span>
-            </section>
-          ))}
-        </div>
+        {errors}
+        {saveFirst}
         <p className="muted small">
-          {revert
-            ? "Compares saved byte hashes of the two revisions; it does not merge geometry or verify CAD compatibility."
-            : "Base is the nearest shared ancestor established from validated parent relationships. This preview compares byte hashes; it does not merge geometry or verify CAD compatibility."}
+          These are the files {sourceCase} changed ({sourceLabel}). Ticked files
+          are copied into {destinationName}, and the result is saved as a new
+          revision. Close these files in your CAD program first.
         </p>
-        <div
-          className="comparison-scope"
-          role="status"
-          aria-label="Proposed result summary"
-        >
-          <strong>Proposed result: {plan.resultFiles.length} files</strong>
-          <span>
-            {countsLine(
-              operations.filter((action) => action.operation === "add").length,
-              operations.filter((action) => action.operation === "replace").length,
-              operations.filter((action) => action.operation === "delete").length,
-              revert,
-              foldersCreated.length,
-              foldersRemoved.length,
-            )}
-          </span>
-        </div>
-        <div
-          className="preview-readiness"
-          role="status"
-          aria-label="Preview readiness"
-        >
-          <strong>
-            {ready
-              ? "Ready as a saved-state preview"
-              : "Preview not ready"}
-          </strong>
-          {blockers.length ? (
-            <ul>
-              {blockers.map((blocker) => (
-                <li key={blocker}>{blocker}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>
-              Nothing has been written.{" "}
-              {application
-                ? revert
-                  ? "Prepare bring-back to check the working folder, then review and confirm the working-file changes."
-                  : "Prepare application to check the destination, then review and confirm the working-file changes."
-                : "Working edits and actual application require a later, separate step."}
-            </p>
-          )}
-        </div>
-        {plan.collisions.length ? (
-          <Notice type="error">
-            <strong>File/directory path collisions</strong>
-            <ul>
-              {plan.collisions.map((collision) => (
-                <li key={collision}>{collision}</li>
-              ))}
-            </ul>
+        {!fileRows.length && !folderRows.length ? (
+          <Notice>
+            Nothing to copy: {destinationName} already has every change from{" "}
+            {sourceCase}.
           </Notice>
         ) : null}
-        <label className="field preview-reason">
-          <span>{reasonLabel}</span>
-          <textarea
-            ref={reasonFocus}
-            aria-label={reasonLabel}
-            aria-required="true"
-            rows={2}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder={
-              revert
-                ? "Explain why you are bringing this earlier version back."
-                : "Explain which design changes you want to reuse and why."
+        {conflicts.length ? (
+          <p role="status" aria-label="Changed in both">
+            {undecided
+              ? `${plural(undecided, "file was", "files were")} changed in both. Choose Keep mine or Take theirs for each.`
+              : "You chose a version for every file changed in both."}
+          </p>
+        ) : null}
+        <ul className="application-actions copy-files-list">
+          {fileRows.map((row) => {
+            if (row.identityBlock)
+              return (
+                <li key={row.path} aria-label={`Can't copy: ${row.path}`} className="muted">
+                  <span className="file-path">{row.path}</span>{" "}
+                  <span className="small">{blockedNote(row)}</span>
+                </li>
+              );
+            if (row.kind === "conflict") {
+              const choice = decisions[row.path];
+              const pick = (decision: CopyDecision) =>
+                setDecisions((previous) => ({ ...previous, [row.path]: decision }));
+              return (
+                <li key={row.path} className="apply-row">
+                  <fieldset aria-label={`Changed in both: ${row.path}`} disabled={running}>
+                    <legend>
+                      <span className="file-path">{row.path}</span>{" "}
+                      <StatusBadge status="Changed in both" />
+                    </legend>
+                    <label className="file-choice">
+                      <input
+                        type="radio"
+                        name={`decision:${row.path}`}
+                        checked={choice === "keep-destination"}
+                        onChange={() => pick("keep-destination")}
+                      />
+                      Keep mine
+                    </label>
+                    <label className="file-choice">
+                      <input
+                        type="radio"
+                        name={`decision:${row.path}`}
+                        checked={choice === "use-source"}
+                        onChange={() => pick("use-source")}
+                      />
+                      {row.source ? "Take theirs" : "Take theirs (removes the file)"}
+                    </label>
+                  </fieldset>
+                </li>
+              );
             }
-            disabled={running}
-          />
-        </label>
-        <details className="disclosure">
-          <summary>
-            {revert
-              ? "Overall engineering notes · Latest saved and Bring back"
-              : "Overall engineering notes · Base, Source and Destination"}
-          </summary>
-          <p className="muted small">
-            Notes describe these saved revisions only, not every intervening
-            change.
-          </p>
-          <div className={revert ? "comparison-file-endpoints" : "comparison-file-endpoints preview-three-columns"}>
-            {endpoints.map(({ side, revision }) => (
-              <section
-                key={side}
-                aria-label={`${side} overall notes at ${formatRevisionNumber(revision.manifest.displayNumber)}`}
-              >
-                <h4>
-                  {side} ·{" "}
-                  {formatRevisionNumber(revision.manifest.displayNumber)}
-                </h4>
-                {Object.values(revision.manifest.notes).some((value) =>
-                  value.trim(),
-                ) ? (
-                  <NotesText notes={revision.manifest.notes} />
-                ) : (
-                  <p className="muted small">
-                    No overall engineering notes recorded at this revision.
-                  </p>
-                )}
-              </section>
-            ))}
-          </div>
-        </details>
-        <section
-          aria-label={revert ? "Changes to review" : "Source changes to review"}
-          className="preview-candidates"
-        >
-          <h3>{revert ? "Changes to review" : "Source changes to review"} ({candidates.length})</h3>
-          <p className="muted small">
-            {revert
-              ? `All changes are selected. Nothing is lost: ${destinationName}'s latest saved revision stays in history, and the files you replace are kept with this operation. Save a revision afterwards.`
-              : "Start with nothing selected. Destination-only files and source-unchanged files are retained, not offered as deletions."}
-          </p>
-          {!candidates.length ? (
-            <Notice>
-              {keptFolders.length
-                ? "No source changes can be applied against this destination."
-                : "No source changes need application against this destination."}
-            </Notice>
-          ) : null}
-          {candidates.map((row) => {
-            const selected = choices[row.path]?.selected ?? false;
+            const ticked = !unticked.has(row.path);
             return (
-              <article
-                className="comparison-file"
-                key={row.path}
-                aria-label={`${row.kind === "conflict" ? "Conflict" : "Source change"}: ${rowLabel(row)}`}
-              >
-                <div className="comparison-file-heading">
-                  <label className="file-choice">
-                    <input
-                      type="checkbox"
-                      aria-label={
-                        isFolder(row)
-                          ? `Select ${folderChange(row)}: ${rowLabel(row)}`
-                          : revert
-                            ? `Select ${revertChange(row)}: ${row.path}`
-                            : `Select source ${sourceWord(row)}: ${row.path}`
-                      }
-                      checked={selected}
-                      disabled={running || Boolean(row.identityBlock)}
-                      onChange={(event) =>
-                        setSelection(row, event.target.checked)
-                      }
-                    />
-                    <strong className="file-path">{rowLabel(row)}</strong>
-                    {isFolder(row) ? <StatusBadge status="Folder" /> : null}
-                  </label>
-                  <StatusBadge
-                    status={
-                      isFolder(row)
-                        ? folderChange(row)
-                        : row.kind === "conflict"
-                          ? "Conflict"
-                          : revert
-                            ? revertChange(row)
-                            : `Source ${sourceWord(row)}`
+              <li key={row.path} className="apply-row">
+                <label className="file-choice">
+                  <input
+                    type="checkbox"
+                    aria-label={`Copy ${row.path}`}
+                    checked={ticked}
+                    disabled={running}
+                    onChange={(e) =>
+                      setUnticked((previous) => {
+                        const next = new Set(previous);
+                        if (e.target.checked) next.delete(row.path);
+                        else next.add(row.path);
+                        return next;
+                      })
                     }
                   />
-                </div>
-                {row.identityBlock ? <Notice type="error">{row.identityBlock}</Notice> : null}
-                {isFolder(row) ? (
-                  <p className="muted small">
-                    {row.sourceChange === "added"
-                      ? revert
-                        ? `This folder is in ${sourceLabel}. Selected to create it again in the working files.`
-                        : "Source adds this folder (empty folders included). Select to create it."
-                      : revert
-                        ? `This folder is not in ${sourceLabel}. It can be removed only if it is empty after the selected deletions; otherwise untick it. It stays in saved history.`
-                        : "Source removes this folder. Select to remove it; it can be removed only if it is empty after the selected deletions, otherwise untick it."}
-                  </p>
-                ) : null}
-                {!isFolder(row) && row.source === null ? (
-                  <p className="preview-deletion">
-                    {revert
-                      ? `This file is not in ${sourceLabel}. It would be removed from the working files; it stays in saved history.`
-                      : "Source deletes this file. Choosing source state would DELETE it from the proposed destination."}
-                  </p>
-                ) : null}
-                {isFolder(row) ? null : row.kind === "conflict" ? (
-                  <>
-                    <p className="small">
-                      Source and Destination differ from Base and from each
-                      other. Choose a decision explicitly.
-                    </p>
-                    <label className="preview-decision">
-                      <span>Conflict decision</span>
-                      <select
-                        aria-label={`Conflict decision: ${row.path}`}
-                        disabled={!selected || running}
-                        value={choices[row.path]?.decision ?? "unresolved"}
-                        onChange={(event) =>
-                          setChoices((previous) => ({
-                            ...previous,
-                            [row.path]: {
-                              selected: true,
-                              decision: event.target.value as ConflictDecision,
-                            },
-                          }))
-                        }
-                      >
-                        <option value="unresolved">Leave unresolved</option>
-                        <option value="keep-destination">
-                          Keep destination
-                          {row.destination
-                            ? " — retain saved file"
-                            : " — file stays absent"}
-                        </option>
-                        <option value="use-source">
-                          Use source state
-                          {row.source
-                            ? row.destination
-                              ? " — replace destination file"
-                              : " — add file"
-                            : " — DELETE destination file"}
-                        </option>
-                      </select>
-                    </label>
-                  </>
-                ) : (
-                  <p className="muted small">
-                    {revert
-                      ? `Selected to make this file match ${sourceLabel}.`
-                      : `Destination matches Base. Select to include this source ${sourceWord(row)}.`}
-                  </p>
-                )}
-                {isFolder(row) ? null : stateAndNotes(row)}
-              </article>
+                  <span className="file-path">{row.path}</span>
+                </label>{" "}
+                <StatusBadge
+                  status={
+                    fileChange(row) === "removed"
+                      ? `Removed in ${sourceCase}`
+                      : fileChange(row) === "added"
+                        ? "Added"
+                        : "Changed"
+                  }
+                />
+              </li>
             );
           })}
-          {keptFolders.map((row) => (
-            <article
-              className="comparison-file"
-              key={row.path}
-              aria-label={`Kept folder: ${rowLabel(row)}`}
-            >
-              <div className="comparison-file-heading">
-                <strong className="file-path">{rowLabel(row)}</strong>
-                <StatusBadge status="Folder" />
-              </div>
-              <p className="muted small">{FOLDER_KEPT_MESSAGE}</p>
-            </article>
-          ))}
-        </section>
-        <details className="disclosure">
-          <summary>
-            No application needed ({retained.length + matching.length})
-          </summary>
-          {retained.map((row) => (
-            <div key={row.path} className="preview-retained">
-              <strong className="file-path">{row.path}</strong>
-              <span>
-                Source unchanged from Base — preserve Destination
-                {row.destination ? " file" : " absence"}.
-              </span>
-              {stateAndNotes(row)}
-            </div>
-          ))}
-          {matching.map((row) => (
-            <div key={row.path} className="preview-retained">
-              <strong className="file-path">{rowLabel(row)}</strong>
-              {isFolder(row) ? <StatusBadge status="Folder" /> : null}
-              <span>Already matches Source — no application needed.</span>
-              {isFolder(row) ? null : stateAndNotes(row)}
-            </div>
-          ))}
-        </details>
-        <details className="disclosure">
-          <summary>
-            Selected actions ({plan.actions.length + plan.folderActions.length})
-          </summary>
-          {!plan.actions.length && !plan.folderActions.length ? (
-            <p>No changes selected.</p>
-          ) : (
-            <ul>
-              {plan.actions.map((action) => (
-                <li key={action.path}>
-                  <strong className="file-path">{action.path}</strong> ·{" "}
-                  {action.operation === "delete"
-                    ? "DELETE destination file"
-                    : action.operation === "unresolved"
-                      ? "Unresolved — Destination retained provisionally"
-                      : action.operation === "keep"
-                        ? "Keep Destination"
-                        : action.operation === "add"
-                          ? "Add Source file"
-                          : "Replace with Source file"}
-                </li>
-              ))}
-              {plan.folderActions.map((action) => (
-                <li key={`folder:${action.path}`}>
-                  <strong className="file-path">{action.path}/</strong>{" "}
-                  <StatusBadge status="Folder" /> ·{" "}
-                  {action.operation === "create" ? "Create folder" : "Remove folder"}
-                </li>
-              ))}
-            </ul>
-          )}
-        </details>
-        <details className="disclosure">
-          <summary>Proposed files ({plan.resultFiles.length})</summary>
-          <p className="muted small">
-            Unselected and unresolved paths retain Destination.
-          </p>
-          <ul className="preview-result-files">
-            {plan.resultFiles.map((file) => (
-              <li key={file.path}>
-                <strong className="file-path">{file.path}</strong>
-                <span>
-                  {operations.some((action) => action.path === file.path)
-                    ? "Source state selected"
-                    : "Destination retained"}
-                </span>
-                <details className="comparison-hash">
-                  <summary>Proposed content hash</summary>
-                  <code>{file.sha256}</code>
-                </details>
-              </li>
-            ))}
-            {foldersCreated.map((action) => (
-              <li key={`folder:${action.path}`}>
-                <strong className="file-path">{action.path}/</strong>
-                <StatusBadge status="Folder" />
-                <span>Folder to be created</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-        <OperationProgress
-          progress={application?.progress ?? null}
-          onCancel={() => application?.cancel()}
-        />
-        <div className="modal-actions">
-          <button
-            className="button secondary"
-            onClick={onClose}
-            disabled={running}
-          >
-            Close preview
-          </button>
-          {application?.refresh ? (
-            <button
-              className="button secondary"
-              disabled={running}
-              onClick={async () => {
-                if (runningRef.current) return;
-                runningRef.current = true;
-                setRunning(true);
-                setApplicationError("");
-                try {
-                  await application.refresh!();
-                } catch (error) {
-                  setApplicationError(
-                    error instanceof Error ? error.message : String(error),
-                  );
-                } finally {
-                  runningRef.current = false;
-                  setRunning(false);
-                }
-              }}
-            >
-              Refresh saved states
-            </button>
-          ) : null}
-          <button
-            className="button primary"
-            disabled={
-              !application ||
-              !ready ||
-              running ||
-              Boolean(application.blockedReason)
-            }
-            onClick={() => void prepare()}
-          >
-            {application
-              ? revert
-                ? "Prepare bring-back"
-                : "Prepare application"
-              : "Apply — unavailable in preview"}
-          </button>
-        </div>
+          {folderRows.map(folderLine)}
+        </ul>
+        {fileRows.length && nothingToDo && !undecided ? (
+          <p className="muted small">Nothing will be copied with these choices.</p>
+        ) : null}
+        {whyField}
+        {actions("Copy files")}
       </div>
     </Modal>
   );
