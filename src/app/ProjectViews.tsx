@@ -368,9 +368,7 @@ export function ProjectViews({
           vaultState={vaultState}
           isVerifyingAll={isVerifyingAll}
           onVerifyAllObjects={handleVerifyAllObjects}
-          onResetConnections={
-            handleResetConnections
-          }
+          onResetConnections={handleResetConnections}
           workingFolderName={
             managedProject
               ? (managedProject.workingPaths[activeBranchId] ?? null)
