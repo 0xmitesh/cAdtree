@@ -57,7 +57,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(
     page.locator('.graph-row[data-file-history-kind="context"]'),
   ).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /Rev 011:/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /V11:/ })).toHaveCount(0);
   // Ten initial Main snapshots contain exactly four file change events.
   const firstTen = await page
     .locator('.graph-row[data-file-history-kind="change"] .graph-hit')
@@ -69,7 +69,7 @@ test("actual App: file history follows parents across branches, retains deleted 
         ).length,
     );
   expect(firstTen).toBe(4);
-  await page.getByRole("button", { name: /Rev 008:/ }).click();
+  await page.getByRole("button", { name: /V8:/ }).click();
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
   ).toContainText("Modified");
@@ -84,7 +84,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(
     page.locator(`path[data-child="${fixture.ids[11]}"]`),
   ).toHaveAttribute("data-parent", fixture.ids[1]);
-  await page.getByRole("button", { name: /Rev 002:/ }).click();
+  await page.getByRole("button", { name: /V2:/ }).click();
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
   ).toContainText("Context only");
@@ -97,7 +97,7 @@ test("actual App: file history follows parents across branches, retains deleted 
     page.getByText(/No recorded history for this file within Main/),
   ).toBeVisible();
   await expect(
-    page.getByRole("complementary", { name: "Revision details" }),
+    page.getByRole("complementary", { name: "Version details" }),
   ).toHaveCount(0);
   await showAllFiles(page);
   await expect(page.locator(".revision-list-row")).toHaveCount(14);
@@ -106,21 +106,21 @@ test("actual App: file history follows parents across branches, retains deleted 
   await expect(
     page.locator('.graph-row[data-file-history-kind="change"]'),
   ).toHaveCount(2);
-  await page.getByRole("button", { name: /Rev 002:/ }).click();
+  await page.getByRole("button", { name: /V2:/ }).click();
   await expect(
     page
-      .getByRole("complementary", { name: "Revision details" })
+      .getByRole("complementary", { name: "Version details" })
       .locator('input[type="checkbox"]'),
   ).toHaveCount(0);
   await pickFile(page, "Parts/Pin.SLDPRT");
-  await page.getByRole("button", { name: /Rev 013:/ }).click();
+  await page.getByRole("button", { name: /V13:/ }).click();
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
   ).toContainText("Deleted");
-  await page.getByRole("button", { name: /View in parent revision/ }).click();
+  await page.getByRole("button", { name: /View in parent version/ }).click();
   await expect(
     page
-      .getByRole("complementary", { name: "Revision details" })
+      .getByRole("complementary", { name: "Version details" })
       .locator(".detail-files")
       .getByText("Parts/Pin.SLDPRT", { exact: true }),
   ).toBeVisible();
@@ -132,7 +132,7 @@ test("actual App: file history follows parents across branches, retains deleted 
   await page
     .getByRole("button", { name: "Show all branches", exact: true })
     .click();
-  await page.getByRole("button", { name: /Rev 014:/ }).click();
+  await page.getByRole("button", { name: /V14:/ }).click();
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
   ).toContainText("Reintroduced");
@@ -149,9 +149,9 @@ test("actual App: file history follows parents across branches, retains deleted 
     fixture.alternativeId,
   );
   await pickFile(page, "Parts/Pin.SLDPRT");
-  await page.getByRole("button", { name: /Rev 001:/ }).focus();
+  await page.getByRole("button", { name: /V1:/ }).focus();
   await page.keyboard.press("ArrowUp");
-  await expect(page.getByRole("button", { name: /Rev 002:/ })).toBeFocused();
+  await expect(page.getByRole("button", { name: /V2:/ })).toBeFocused();
   await expect(current).toHaveAttribute(
     "data-branch-id",
     fixture.alternativeId,

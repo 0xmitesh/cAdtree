@@ -75,7 +75,7 @@ test('ambiguous hash matches remain suggestions and unconfirmed delete/add recei
   const saved = await f.save();
   assert.ok(saved.vaultState.components!.revisions[saved.revision.manifest.revisionId].files.every(file => file.componentId !== f.componentId));
 });
-test('branch origins preserve identities without creating a revision and edits remain independent', async () => {
+test('branch origins preserve identities without creating a version and edits remain independent', async () => {
   const f = await fixture();
   const branch = await createDesignBranch({ vaultDir: f.vault, destinationParent: new InMemoryFileSystemAdapter('Cases'), workingFolders: f.folders, sourceRevisionId: f.first.revision.manifest.revisionId, name: 'Alternative', reason: 'Investigate' });
   assert.equal(branch.vaultState.revisions.length, 1);
@@ -85,7 +85,7 @@ test('branch origins preserve identities without creating a revision and edits r
   assert.equal(mapping(saved.vaultState, saved.revision.manifest.revisionId, 'caliper.SLDPRT'), f.componentId);
   assert.equal(await f.working.readFileText(['caliper.SLDPRT']), 'initial bytes');
 });
-test('explicit same-path replacement can publish an identity-only revision and retains old history', async () => {
+test('explicit same-path replacement can publish an identity-only version and retains old history', async () => {
   const f = await fixture();
   const { state, scan } = await f.scan();
   assert.equal(scan.hasChanges, false);

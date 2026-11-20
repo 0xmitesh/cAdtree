@@ -24,39 +24,39 @@ import { formatTimestamp } from "../utils/format";
 import { captureRevision, ReviewStaleError } from "../engine/revision-service";
 
 afterEach(cleanup);
-test("clicking a case chip selects that case's latest revision and fades nothing, in graph and list", () => {
+test("clicking a case chip selects that case's latest version and fades nothing, in graph and list", () => {
   const ui = render(
     <HistoryRecoveryView
       {...historyProps({ vaultState: scenarioState("branches") })}
     />,
   );
-  fireEvent.click(ui.getByRole("button", { name: /Rev 003:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V3:/ }));
   fireEvent.click(ui.getByRole("button", { name: "Prototype" }));
   assert.equal(
-    ui.getByRole("button", { name: /^Rev 008:/ }).getAttribute("aria-pressed"),
+    ui.getByRole("button", { name: /^V8:/ }).getAttribute("aria-pressed"),
     "true",
   );
   assert.equal(ui.container.querySelectorAll(".dimmed").length, 0);
   // Only revisions saved on the case carry the accent, not the Main history it branched from.
   const marked = () =>
     [...ui.container.querySelectorAll(".graph-row.in-case .graph-hit")].map(
-      (hit) => /Rev (\d{3})/.exec(hit.getAttribute("aria-label")!)![1],
+      (hit) => /V(\d+)/.exec(hit.getAttribute("aria-label")!)![1],
     );
-  assert.deepEqual(marked().sort(), ["007", "008"]);
+  assert.deepEqual(marked().sort(), ["7", "8"]);
   fireEvent.click(ui.getByRole("button", { name: "List" }));
-  fireEvent.click(ui.getByRole("button", { name: /^Rev 003 / }));
+  fireEvent.click(ui.getByRole("button", { name: /^V3 / }));
   fireEvent.click(ui.getByRole("button", { name: "Main" }));
   assert.equal(
     ui.container
       .querySelector(".revision-list-row.selected")!
-      .textContent!.includes("Rev 006"),
+      .textContent!.includes("V6"),
     true,
   );
   assert.equal(ui.container.querySelectorAll(".dimmed").length, 0);
   const markedRows = [...ui.container.querySelectorAll(".revision-list-row.in-case")].map(
-    (row) => /Rev (\d{3})/.exec(row.textContent!)![1],
+    (row) => /V(\d+)/.exec(row.textContent!)![1],
   );
-  assert.deepEqual(markedRows.sort(), ["001", "002", "003", "004", "005", "006"]);
+  assert.deepEqual(markedRows.sort(), ["1", "2", "3", "4", "5", "6"]);
   // Clicking the same chip again clears the emphasis.
   fireEvent.click(ui.getByRole("button", { name: "Main" }));
   assert.equal(ui.container.querySelectorAll(".in-case").length, 0);
@@ -65,7 +65,7 @@ test("clicking a case chip selects that case's latest revision and fades nothing
     "false",
   );
 });
-test("a case with no revisions of its own yet marks its starting revision when its chip is clicked", () => {
+test("a case with no versions of its own yet marks its starting version when its chip is clicked", () => {
   const state = scenarioState("branches");
   state.branches.push({
     ...state.branches[0],
@@ -78,42 +78,42 @@ test("a case with no revisions of its own yet marks its starting revision when i
   const ui = render(<HistoryRecoveryView {...historyProps({ vaultState: state })} />);
   fireEvent.click(ui.getByRole("button", { name: "Fresh" }));
   const marked = [...ui.container.querySelectorAll(".graph-row.in-case .graph-hit")].map(
-    (hit) => /Rev (\d{3})/.exec(hit.getAttribute("aria-label")!)![1],
+    (hit) => /V(\d+)/.exec(hit.getAttribute("aria-label")!)![1],
   );
-  assert.deepEqual(marked, ["003"]);
-  assert.equal(ui.getByRole("button", { name: /^Rev 003:/ }).getAttribute("aria-pressed"), "true");
+  assert.deepEqual(marked, ["3"]);
+  assert.equal(ui.getByRole("button", { name: /^V3:/ }).getAttribute("aria-pressed"), "true");
 });
-test("graph and list both list the newest revision first; there are no zoom or Latest controls", () => {
+test("graph and list both list the newest version first; there are no zoom or Latest controls", () => {
   const ui = render(
     <HistoryRecoveryView {...historyProps({ vaultState: historyState(4) })} />,
   );
   const revisionNumbers = (selector: string) =>
     [...ui.container.querySelectorAll(selector)].map(
-      (row) => /Rev (\d{3})/.exec(row.getAttribute("aria-label") ?? row.textContent!)![1],
+      (row) => /V(\d+)/.exec(row.getAttribute("aria-label") ?? row.textContent!)![1],
     );
-  assert.deepEqual(revisionNumbers(".graph-hit"), ["004", "003", "002", "001"]);
+  assert.deepEqual(revisionNumbers(".graph-hit"), ["4", "3", "2", "1"]);
   // Each edge runs from a child (higher row) down to its parent (lower row).
   const rowOf = new Map(
     [...ui.container.querySelectorAll(".graph-row")].map((row, index) => [
-      /Rev (\d{3})/.exec(row.querySelector(".graph-hit")!.getAttribute("aria-label")!)![1],
+      /V(\d+)/.exec(row.querySelector(".graph-hit")!.getAttribute("aria-label")!)![1],
       index,
     ]),
   );
   const edges = [...ui.container.querySelectorAll(".graph-lines path[data-child]")];
   assert.equal(edges.length, 3);
   for (const edge of edges) {
-    const child = "00" + edge.getAttribute("data-child")!.slice(1);
-    const parent = "00" + edge.getAttribute("data-parent")!.slice(1);
+    const child = "" + edge.getAttribute("data-child")!.slice(1);
+    const parent = "" + edge.getAttribute("data-parent")!.slice(1);
     assert.ok(rowOf.get(child)! < rowOf.get(parent)!);
   }
   fireEvent.click(ui.getByRole("button", { name: "List" }));
-  assert.deepEqual(revisionNumbers(".revision-list-row"), ["004", "003", "002", "001"]);
+  assert.deepEqual(revisionNumbers(".revision-list-row"), ["4", "3", "2", "1"]);
   fireEvent.click(ui.getByRole("button", { name: "Graph" }));
   // Keyboard follows the visual order: Home is the newest, End the oldest.
-  const newest = ui.getByRole("button", { name: /^Rev 004:/ });
+  const newest = ui.getByRole("button", { name: /^V4:/ });
   fireEvent.keyDown(newest, { key: "End" });
-  assert.equal(ui.getByRole("button", { name: /^Rev 001:/ }).getAttribute("aria-pressed"), "true");
-  fireEvent.keyDown(ui.getByRole("button", { name: /^Rev 001:/ }), { key: "Home" });
+  assert.equal(ui.getByRole("button", { name: /^V1:/ }).getAttribute("aria-pressed"), "true");
+  fireEvent.keyDown(ui.getByRole("button", { name: /^V1:/ }), { key: "Home" });
   assert.equal(newest.getAttribute("aria-pressed"), "true");
   for (const name of [
     "Zoom in",
@@ -169,8 +169,8 @@ test("diagram labels and arrowheads follow parent identity, with children above 
   const ui = render(
     <HistoryRecoveryView {...historyProps({ vaultState: state })} />,
   );
-  assert.ok(ui.getByText("R001"));
-  assert.ok(ui.getByText("R008"));
+  assert.ok(ui.getByText("V1"));
+  assert.ok(ui.getByText("V8"));
   const arrows = [
     ...ui.container.querySelectorAll<SVGPathElement>("path[data-parent]"),
   ];
@@ -193,7 +193,7 @@ test("diagram labels and arrowheads follow parent identity, with children above 
   assert.equal(main.getAttribute("aria-pressed"), "true");
   assert.equal(
     ui
-      .getByRole("button", { name: "Main head at Rev 006" })
+      .getByRole("button", { name: "Main head at V6" })
       .getAttribute("aria-pressed"),
     "true",
   );
@@ -232,14 +232,14 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   const props = historyProps();
   const before = JSON.stringify(props.vaultState);
   const ui = render(<HistoryRecoveryView {...props} />);
-  const baseline = ui.getByRole("button", { name: /Rev 001: Initial/ });
+  const baseline = ui.getByRole("button", { name: /V1: Initial/ });
   fireEvent.click(baseline);
   assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
   // Newest is on top in both views, so ArrowUp moves to the next revision.
   fireEvent.keyDown(baseline, { key: "ArrowUp" });
   assert.equal(
     ui
-      .getByRole("button", { name: /Rev 002: Refine/ })
+      .getByRole("button", { name: /V2: Refine/ })
       .getAttribute("aria-pressed"),
     "true",
   );
@@ -248,7 +248,7 @@ test("graph selection, keyboard, and list mode share one immutable inspection st
   fireEvent.click(ui.getByRole("button", { name: "Graph" }));
   assert.equal(
     ui
-      .getByRole("button", { name: /Rev 002: Refine/ })
+      .getByRole("button", { name: /V2: Refine/ })
       .getAttribute("aria-pressed"),
     "true",
   );
@@ -298,11 +298,11 @@ test("unchanged files are available; deleted files link to their earlier snapsho
   assert.ok(!listed().includes("Actuator.SLDASM"));
   fireEvent.click(ui.getByRole("button", { name: /Show .* unchanged files/ }));
   assert.ok(listed().includes("Actuator.SLDASM"));
-  fireEvent.click(ui.getByRole("button", { name: /View in parent revision/ }));
+  fireEvent.click(ui.getByRole("button", { name: /View in parent version/ }));
   assert.ok(listed().includes("Parts/Output_shaft.SLDPRT"));
   assert.ok(ui.getByRole("heading", { name: "Initial baseline" }));
 });
-test("revision details put the record information in a closed Troubleshooting disclosure instead of a tab", () => {
+test("version details put the record information in a closed Troubleshooting disclosure instead of a tab", () => {
   const ui = render(<HistoryRecoveryView {...historyProps()} />);
   assert.equal(ui.queryByRole("button", { name: "Technical details" }), null);
   assert.deepEqual(
@@ -317,16 +317,16 @@ test("revision details put the record information in a closed Troubleshooting di
   assert.ok(disclosure.contains(ui.getByRole("button", { name: "Verify file contents" })));
   assert.ok(disclosure.contains(ui.getByText(/File checksums \(\d+\)/)));
   // It sits below the panel's action bar, i.e. at the bottom of the revision details.
-  const panel = ui.getByRole("complementary", { name: "Revision details" });
+  const panel = ui.getByRole("complementary", { name: "Version details" });
   assert.equal(panel.lastElementChild, disclosure);
   assert.equal(ui.queryByText(/Current working file shortcuts/), null);
   assert.equal(ui.queryByRole("button", { name: /Copy folder path/ }), null);
 });
-test("damaged records stay visible and block export; healthy revisions show no verification badge", () => {
+test("damaged records stay visible and block export; healthy versions show no verification badge", () => {
   const props = historyProps({ onExportForReview: async () => { throw new Error("no"); } });
   props.vaultState.revisions[1].integrityStatus = "corrupted";
   const ui = render(<HistoryRecoveryView {...props} />);
-  assert.ok(ui.getByText("Damaged revision · export blocked"));
+  assert.ok(ui.getByText("Damaged version · export blocked"));
   assert.equal(
     (
       ui.getByRole("button", {
@@ -336,9 +336,9 @@ test("damaged records stay visible and block export; healthy revisions show no v
     true,
   );
   assert.equal((ui.getByText("Troubleshooting").closest("details") as HTMLDetailsElement).open, true);
-  fireEvent.click(ui.getByRole("button", { name: /Rev 001: Initial/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V1: Initial/ }));
   assert.equal(ui.queryByText(/Metadata verified/), null);
-  assert.equal(ui.queryByText(/Damaged revision/), null);
+  assert.equal(ui.queryByText(/Damaged version/), null);
   assert.equal((ui.getByText("Troubleshooting").closest("details") as HTMLDetailsElement).open, false);
 });
 const scan: ScanResult = {
@@ -429,7 +429,7 @@ test("capture uses the reviewed signature and scoped notes; drafts survive view 
     "Improve retention",
   );
   fireEvent.submit(
-    ui.getByRole("button", { name: "Save revision" }).closest("form")!,
+    ui.getByRole("button", { name: "Save version" }).closest("form")!,
   );
   await waitFor(() => assert.equal(calls.length, 1));
   assert.equal(calls[0].reviewedChangesSignature, "reviewed");
@@ -485,14 +485,14 @@ test("capture rescan integration keeps draft, blocks stale review, and publishes
     target: { value: "Initial complete project" },
   });
   fireEvent.submit(
-    ui.getByRole("button", { name: "Save revision" }).closest("form")!,
+    ui.getByRole("button", { name: "Save version" }).closest("form")!,
   );
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "confirm this file set" })),
   );
   assert.equal((await openExistingVault(vault)).revisions.length, 0);
   assert.equal(
-    (ui.getByRole("button", { name: "Save revision" }) as HTMLButtonElement)
+    (ui.getByRole("button", { name: "Save version" }) as HTMLButtonElement)
       .disabled,
     true,
   );
@@ -506,7 +506,7 @@ test("capture rescan integration keeps draft, blocks stale review, and publishes
   );
   fireEvent.click(ui.getByRole("button", { name: "confirm this file set" }));
   fireEvent.submit(
-    ui.getByRole("button", { name: "Save revision" }).closest("form")!,
+    ui.getByRole("button", { name: "Save version" }).closest("form")!,
   );
   await waitFor(() =>
     assert.equal(

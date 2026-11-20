@@ -125,8 +125,8 @@ export function useDiagnosticsActions({
         setStatusBanner({
           type: corrupt ? "error" : "success",
           message: corrupt
-            ? "One or more revisions failed content verification."
-            : `Verified file contents across ${targets.length} revisions.`,
+            ? "One or more versions failed content verification."
+            : `Verified file contents across ${targets.length} versions.`,
         });
     });
   };

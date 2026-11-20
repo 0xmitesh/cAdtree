@@ -17,7 +17,7 @@ export async function referenceBrowserFixture() {
   const alpha = state.references!.library[0];
   state = await importFile('Beta requirement', 'Beta.txt', 'Beta one');
   const beta = state.references!.library[1];
-  state = await importFile('Project brief', 'Brief.txt', 'Whole revision source');
+  state = await importFile('Project brief', 'Brief.txt', 'Whole version source');
   const brief = state.references!.library[2];
   await updateProjectReference(vault, project.project.projectId, brief.referenceId, { projectVersionId: brief.versions[0].versionId });
   for (const path of ['A.SLDPRT', 'B.SLDPRT', 'notes.txt']) await main.writeFileText([path], `Original ${path}`);

@@ -141,7 +141,7 @@ export function HomeWelcome({
           <div>
             <GitBranch size={20} aria-hidden="true" />
             <h3>Freedom to try “what if”</h3>
-            <p>Explore a separate design case from a saved revision.</p>
+            <p>Explore a separate design case from a saved version.</p>
           </div>
           <div>
             <History size={20} aria-hidden="true" />

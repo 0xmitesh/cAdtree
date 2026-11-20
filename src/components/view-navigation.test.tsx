@@ -35,13 +35,13 @@ test("Logo is an intro button; main-view Back/Forward preserves current project,
   fireEvent.click(nav.getByRole("button",{name:"Changes"}));
   await waitForScan(ui);
   await waitFor(()=>assert.equal(appBusy(ui),false));
-  const summary=ui.getByRole("textbox",{name:/Revision summary/});
+  const summary=ui.getByRole("textbox",{name:/Version summary/});
   fireEvent.change(summary,{target:{value:"Keep this pending decision"}});
   fireEvent.click(ui.getByRole("button",{name:/Add a description/}));
   const note=ui.getByRole("textbox",{name:"Overall: Why"});
   fireEvent.change(note,{target:{value:"Keep the engineering intent"}});
   fireEvent.click(nav.getByRole("button",{name:"History"}));
-  fireEvent.click(ui.getByRole("button",{name:/Rev 004: Reduced bracket thickness/}));
+  fireEvent.click(ui.getByRole("button",{name:/V4: Reduced bracket thickness/}));
   const details=ui.container.querySelector('.revision-detail');
   const text=details?.textContent;
   const signature=inventorySignature(await readVerifiedInventory(sample.home));
@@ -67,7 +67,7 @@ test("Logo is an intro button; main-view Back/Forward preserves current project,
   await traverse('back');assert.ok(ui.getByRole('heading',{name:'Welcome to cAdtree'}));
   await traverse('back');assert.ok(ui.getByRole('heading',{name:'History.'}));
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
-  assert.equal(ui.getByRole('textbox',{name:/Revision summary/}),summary);
+  assert.equal(ui.getByRole('textbox',{name:/Version summary/}),summary);
   assert.equal((summary as HTMLInputElement).value,'Keep this pending decision');
   assert.equal((note as HTMLTextAreaElement).value,'Keep the engineering intent');
   // A new visit after Back replaces the forward path, rather than replaying intro.
@@ -122,7 +122,7 @@ test("Returning from a different project revalidates its location and retains th
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
   await waitForScan(ui);
   await waitFor(()=>assert.equal(appBusy(ui),false));
-  fireEvent.change(ui.getByRole('textbox',{name:/Revision summary/}),{target:{value:'Earlier project draft'}});
+  fireEvent.change(ui.getByRole('textbox',{name:/Version summary/}),{target:{value:'Earlier project draft'}});
   fireEvent.click(nav.getByRole('button',{name:'My workspaces'}));
   fireEvent.click(ui.getByRole('button',{name:'Open workspace'}));
   await waitFor(()=>assert.equal(appBusy(ui),false));
@@ -134,6 +134,6 @@ test("Returning from a different project revalidates its location and retains th
   await traverse('back');assert.ok(ui.getByRole('heading',{name:'My workspaces.'}));
   await traverse('back');
   await waitFor(()=>assert.equal(appBusy(ui),false));
-  await waitFor(()=>assert.equal((ui.getByRole('textbox',{name:/Revision summary/}) as HTMLInputElement).value,'Earlier project draft'));
+  await waitFor(()=>assert.equal((ui.getByRole('textbox',{name:/Version summary/}) as HTMLInputElement).value,'Earlier project draft'));
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)),before);
 });

@@ -108,9 +108,9 @@ export function layoutRevisions(
   for (const [id, revision] of records) {
     const pid = revision.manifest.parentRevisionId;
     if (duplicate.has(id))
-      warn(id, "Duplicate revision identity; ancestry is ambiguous");
+      warn(id, "Duplicate version identity; ancestry is ambiguous");
     if (revision.integrityStatus === "corrupted")
-      warn(id, "Damaged revision; ancestry is unverified");
+      warn(id, "Damaged version; ancestry is unverified");
     if (pid && !records.has(pid)) warn(id, "Recorded parent is missing");
     if (
       pid &&
@@ -229,7 +229,7 @@ export function layoutRevisions(
       : candidateHead;
   if (candidateHead && !latestId)
     warnings.push(
-      "Latest revision cannot be established while the current branch history needs attention.",
+      "Latest version cannot be established while the current branch history needs attention.",
     );
   if (latestId && !records.has(latestId))
     warnings.push("The current branch head is missing from readable history.");

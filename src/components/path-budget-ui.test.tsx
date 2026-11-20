@@ -240,7 +240,7 @@ test("a home with no saved address is asked once before creating a design case: 
   await forgetAddresses(ui);
   assert.equal(await getWorkspacePath((await openHome(sample.home)).identity.homeId), "");
   const openCaseDialog = async (name = "Prompted case") => {
-    fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this revision" })[0]!);
+    fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this version" })[0]!);
     const dialog = within(await ui.findByRole("dialog", { name: "Create design case" }));
     fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: name } });
     fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason" }), { target: { value: "Prompt test" } });
@@ -325,7 +325,7 @@ test("a second prompt replaces a pending one: the first action is cancelled, one
   const { sample, ui } = await openSampleProject();
   const before = await caseCount(sample);
   await forgetAddresses(ui);
-  fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this revision" })[0]!);
+  fireEvent.click(ui.getAllByRole("button", { name: "Create design case from this version" })[0]!);
   const dialog = within(await ui.findByRole("dialog", { name: "Create design case" }));
   fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: "Twice" } });
   fireEvent.change(dialog.getByRole("textbox", { name: "Engineering reason" }), { target: { value: "Overwrite" } });

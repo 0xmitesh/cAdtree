@@ -38,7 +38,7 @@ test('an older complete snapshot exports exact saved bytes and empty directories
   const result = await f.run();
   prohibitWorkingReads = false;
   assert.equal(workingReads, 0);
-  assert.equal(result.folderName, 'Actuator - Main - R01');
+  assert.equal(result.folderName, 'Actuator - Main - V1');
   const output = await f.parent.getDirectory([result.folderName]);
   assert.deepEqual(await output.readFileBytes(['Parts', 'Part1.SLDPRT']), f.bytes);
   assert.equal(await output.readFileText(['Assembly.SLDASM']), 'native reference: Parts/Part1.SLDPRT');
@@ -64,20 +64,20 @@ test('selected exports preserve relative paths by default, are partial, and do n
   assert.equal(result.filesCount, 1);
 });
 
-test('labels use the selected revision’s recorded branch and project-wide number, retaining extension and saved content', async () => {
+test('labels use the selected version’s recorded branch and project-wide number, retaining extension and saved content', async () => {
   const f = await fixture();
-  await f.working.writeFileText(['Assembly.SLDASM'], 'Main revision two');
+  await f.working.writeFileText(['Assembly.SLDASM'], 'Main version two');
   await captureRevision(f.working, f.vault, { branchId: 'branch-main', summary: 'Main R2', notes, workingFolders: f.folders });
   const branch = await createDesignBranch({ vaultDir: f.vault, destinationParent: await f.disk.getDirectory(['Cases'], { create: true }), workingFolders: f.folders, sourceRevisionId: f.plan.revisionId, name: 'Alternative', reason: 'Different fit' });
   const bindings = { ...f.folders, [branch.branch.branchId]: branch.workingDir };
   await branch.workingDir.writeFileText(['Parts', 'Part1.SLDPRT'], 'alternative saved bytes');
   const saved = await captureRevision(branch.workingDir, f.vault, { branchId: branch.branch.branchId, summary: 'Alternative R3', notes, workingFolders: bindings });
   const plan = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { kind: 'selected', selectedPaths: ['Parts/Part1.SLDPRT'], labelFilenames: true });
-  assert.equal(plan.folderName, 'Actuator - Alternative - R03');
-  assert.equal(plan.files[0].exportedPath, 'Parts/Part1_Alternative_R03.SLDPRT');
+  assert.equal(plan.folderName, 'Actuator - Alternative - V3');
+  assert.equal(plan.files[0].exportedPath, 'Parts/Part1_Alternative_V3.SLDPRT');
   const result = await f.run(plan, { workingFolders: bindings });
   const output = await f.parent.getDirectory([result.folderName]);
-  assert.equal(await output.readFileText(['Parts', 'Part1_Alternative_R03.SLDPRT']), 'alternative saved bytes');
+  assert.equal(await output.readFileText(['Parts', 'Part1_Alternative_V3.SLDPRT']), 'alternative saved bytes');
   assert.match(await output.readFileText([plan.summaryName]), /reference repair.*references were not rewritten/);
 });
 
@@ -109,8 +109,8 @@ test('sanitized or case-folded filename collisions block the preview rather than
   assert.deepEqual(await f.parent.listEntries(), []);
   const corrected = prepareReviewExport(saved.vaultState, saved.revision.manifest.revisionId, { ...request, selectedPaths: ['Pin?.SLDPRT'] });
   await f.run(corrected);
-  assert.equal(corrected.files[0].exportedPath, 'Pin-_Main_R02.SLDPRT');
-  assert.equal(await (await f.parent.getDirectory([corrected.folderName])).readFileText(['Pin-_Main_R02.SLDPRT']), 'Pin?.SLDPRT');
+  assert.equal(corrected.files[0].exportedPath, 'Pin-_Main_V2.SLDPRT');
+  assert.equal(await (await f.parent.getDirectory([corrected.folderName])).readFileText(['Pin-_Main_V2.SLDPRT']), 'Pin?.SLDPRT');
 });
 
 test('summary/marker name collisions preserve snapshot files and the preview explicitly names the alternative metadata file', async () => {
@@ -207,9 +207,9 @@ test('cancelling before verification creates nothing and legacy snapshots export
 });
 
 test('export folder names keep spaces, replace illegal characters and cap the base at 64 characters', async () => {
-  assert.equal(exportFolderBaseName('Packaging Gripper', 'Main', 'R03'), 'Packaging Gripper - Main - R03');
-  assert.equal(exportFolderBaseName('A:B/C', 'x*y', 'R01'), 'A-B-C - x-y - R01');
-  assert.equal(exportFolderBaseName('', '', 'R01'), 'Project - Branch - R01');
+  assert.equal(exportFolderBaseName('Packaging Gripper', 'Main', 'V3'), 'Packaging Gripper - Main - V3');
+  assert.equal(exportFolderBaseName('A:B/C', 'x*y', 'V1'), 'A-B-C - x-y - V1');
+  assert.equal(exportFolderBaseName('', '', 'V1'), 'Project - Case - V1');
   for (const unit of ['P', '设', '😀', 'é ']) {
     const name = exportFolderBaseName(unit.repeat(200), unit.repeat(200), 'R12');
     assert.ok(name.length <= 64, `${unit} ${name.length}`);
@@ -220,8 +220,8 @@ test('export folder names keep spaces, replace illegal characters and cap the ba
 
 test('the standard clash counter is proposed case-insensitively and only that shape is accepted at export', async () => {
   const f = await fixture();
-  await f.parent.getDirectory(['actuator - main - r01'], { create: true });
-  assert.equal(await suggestReviewExportFolder(f.parent, f.plan.folderName), 'Actuator - Main - R01 (2)');
+  await f.parent.getDirectory(['actuator - main - v1'], { create: true });
+  assert.equal(await suggestReviewExportFolder(f.parent, f.plan.folderName), 'Actuator - Main - V1 (2)');
   await f.run(f.plan, { folderName: f.plan.folderName + ' (2)' });
   for (const bad of ['-2', ' (0)', ' (1)', ' (02)', ' (2)x', ' (2) ', '_2']) {
     await assert.rejects(f.run(f.plan, { folderName: f.plan.folderName + bad }), /destination name/, bad);
@@ -231,13 +231,13 @@ test('the standard clash counter is proposed case-insensitively and only that sh
 
 test('a reserved device-name base gets the standard counter, stays within 64 and round-trips through clashes', async () => {
   for (const [project, branch] of [['CON.x', 'Main'], ['nul.txt', 'Main'], ['Gripper', 'CON.x'], ['Gripper', 'nul.txt'], ['com1.' + 'y'.repeat(40), 'Main']]) {
-    const base = exportFolderBaseName(project, branch, 'R01');
+    const base = exportFolderBaseName(project, branch, 'V1');
     assert.ok(!isReservedFolderName(base), base);
     assert.ok(base.length <= 64, base);
   }
-  assert.equal(exportFolderBaseName('CON.x', 'Main', 'R01'), 'CON (2).x - Main - R01');
+  assert.equal(exportFolderBaseName('CON.x', 'Main', 'V1'), 'CON (2).x - Main - V1');
   const f = await fixture();
-  const base = exportFolderBaseName('CON.x', 'Main', 'R01');
+  const base = exportFolderBaseName('CON.x', 'Main', 'V1');
   assert.ok(acceptsExportFolderName(base, base) && acceptsExportFolderName(base, base + ' (3)') && !acceptsExportFolderName(base, base + '-2'));
   await f.parent.getDirectory([base], { create: true });
   const next = await suggestReviewExportFolder(f.parent, base);
@@ -249,14 +249,14 @@ test('a reserved device-name base gets the standard counter, stays within 64 and
 
 test('truncation of project and branch parts strips a trailing space or dot', () => {
   const project = 'A'.repeat(27) + ' . tail', branch = 'B'.repeat(23) + ' . tail';
-  assert.equal(exportFolderBaseName(project, branch, 'R01'), 'A'.repeat(27) + ' - ' + 'B'.repeat(23) + ' - R01');
+  assert.equal(exportFolderBaseName(project, branch, 'V1'), 'A'.repeat(27) + ' - ' + 'B'.repeat(23) + ' - V1');
 });
 
 test('prepareReviewExport succeeds for a reserved-looking project name and uses the counter base', async () => {
   const f = await fixture();
   const state = { ...f.saved.vaultState, project: { ...f.saved.vaultState.project, name: 'CON.x' } };
   const plan = prepareReviewExport(state, f.plan.revisionId, complete);
-  assert.equal(plan.folderName, 'CON (2).x - Main - R01');
+  assert.equal(plan.folderName, 'CON (2).x - Main - V1');
   assert.ok(!isReservedFolderName(plan.folderName));
   assert.ok(plan.folderName.length <= 64);
 });

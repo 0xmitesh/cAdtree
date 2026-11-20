@@ -43,7 +43,7 @@ test('reference browsing is one search box without mutation controls or project 
   assert.equal(ui.queryAllByRole('combobox').length, 0, 'no Branch or Part / file filters');
   assert.equal(ui.queryByRole('combobox', { name: 'Branch' }), null);
   assert.equal(ui.queryByRole('combobox', { name: 'Part / file' }), null);
-  for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future revisions']) assert.equal(ui.queryByRole('button', { name }), null);
+  for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future versions']) assert.equal(ui.queryByRole('button', { name }), null);
   const search = ui.getByRole('searchbox', { name: 'Search references' });
   assert.equal(ui.container.querySelectorAll('.reference-card').length, 5);
   // The file a reference applies to.
@@ -56,7 +56,7 @@ test('reference browsing is one search box without mutation controls or project 
   assert.ok(ui.getByRole('button', { name: 'Download Beta requirement (Beta.txt)' }));
   fireEvent.change(search, { target: { value: 'Alpha updated.txt' } });
   assert.equal(ui.container.querySelectorAll('.reference-card').length, 1);
-  assert.ok(ui.getByText('Alternative · Rev 004'));
+  assert.ok(ui.getByText('Alternative · V4'));
   assert.ok(ui.getByText('Part: B.SLDPRT'));
   fireEvent.click(ui.getByRole('button', { name: 'Download Alpha requirement (Alpha updated.txt)' }));
   await waitFor(() => assert.equal(copies.length, 1));
@@ -76,7 +76,7 @@ async function openReferences(f: Awaited<ReturnType<typeof fixture>>) {
   return ui;
 }
 
-test('Add reference stores files without saving a revision, applies them to the whole project and refreshes the list', async () => {
+test('Add reference stores files without saving a version, applies them to the whole project and refreshes the list', async () => {
   const f = await fixture();
   const ui = await openReferences(f);
   assert.ok(ui.getByText(/No references yet/));
@@ -93,7 +93,7 @@ test('Add reference stores files without saving a revision, applies them to the 
   await waitFor(() => assert.ok(document.activeElement === ui.getByRole('button', { name: 'Add reference…' }), 'focus returns to Add reference…'));
   await waitFor(() => assert.ok(ui.getByText(/Added 2 references to the project/)));
   const saved = await openExistingVault(f.project.vaultDir);
-  assert.equal(saved.revisions.length, 1, 'no revision was saved');
+  assert.equal(saved.revisions.length, 1, 'no version was saved');
   const library = saved.references!.library;
   assert.deepEqual(library.map(ref => ref.title), ['Requirement.pdf', 'Brief.txt']);
   assert.ok(library.every(ref => ref.projectVersionId === ref.versions[0].versionId && ref.description === 'From the customer'));
@@ -170,7 +170,7 @@ test('Add reference publishes each file in one write; a failing file names itsel
   await waitFor(() => assert.ok(writes.count > 0, 'the guide was refreshed after the published file'));
 });
 
-test('Stop applying removes a reference from the whole project after a confirm; it stays listed and earlier revisions keep it', async () => {
+test('Stop applying removes a reference from the whole project after a confirm; it stays listed and earlier versions keep it', async () => {
   const f = await fixture();
   const ui = await openReferences(f);
   fireEvent.click(ui.getByRole('button', { name: 'Add reference…' }));
@@ -185,7 +185,7 @@ test('Stop applying removes a reference from the whole project after a confirm; 
   // Asking, then keeping, changes nothing.
   const before = inventorySignature(await readVerifiedInventory(f.home));
   fireEvent.click(ui.getByRole('button', { name: stopName }));
-  assert.ok(ui.getByText(/Revisions you save from now on will not include it/));
+  assert.ok(ui.getByText(/Versions you save from now on will not include it/));
   fireEvent.click(ui.getByRole('button', { name: 'Keep' }));
   assert.ok(ui.getByRole('button', { name: stopName }));
   assert.equal(inventorySignature(await readVerifiedInventory(f.home)), before);
@@ -198,10 +198,10 @@ test('Stop applying removes a reference from the whole project after a confirm; 
   const state = await openExistingVault(f.project.vaultDir);
   assert.equal(state.references!.library.length, 1);
   assert.equal(state.references!.library[0].projectVersionId, null);
-  assert.equal(links(state, first.revision.manifest.revisionId), 1, 'the earlier revision keeps it');
+  assert.equal(links(state, first.revision.manifest.revisionId), 1, 'the earlier version keeps it');
   await f.working.writeFileText(['part.SLDPRT'], 'geometry v3');
   const second = await captureRevision(f.working, f.project.vaultDir, { branchId, summary: 'Without it', notes, workingFolders: f.project.workingFolders });
-  assert.equal(links(second.vaultState, second.revision.manifest.revisionId), 0, 'new revisions no longer carry it');
+  assert.equal(links(second.vaultState, second.revision.manifest.revisionId), 0, 'new versions no longer carry it');
 });
 
 test('Stop applying is hidden without an action and disabled in a read-only project', async () => {
@@ -280,7 +280,7 @@ test('clicking a saved reference downloads its pinned version and reports corrup
   assert.equal(copies.length, 1, 'Corrupted bytes must never be offered as a download');
 });
 
-test('Changes attaches new reference files with notes to the whole revision or a new part, preserving the draft on navigation', async () => {
+test('Changes attaches new reference files with notes to the whole version or a new part, preserving the draft on navigation', async () => {
   const f = await fixture();
   await f.working.writeFileText(['New.SLDPRT'], 'new component');
   const scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
@@ -292,18 +292,18 @@ test('Changes attaches new reference files with notes to the whole revision or a
     savedId = saved.revision.manifest.revisionId;
   } };
   let ui = render(<ChangesCaptureView {...props} />);
-  assert.equal(ui.queryByText('Revision references'), null);
+  assert.equal(ui.queryByText('Version references'), null);
   fireEvent.click(ui.getByRole('button', { name: '+ Attach reference files' }));
   fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [source(), new File(['Customer brief'], 'Brief.txt')] } });
   fireEvent.change(ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf' }), { target: { value: 'Increase clearance' } });
   fireEvent.change(ui.getByRole('combobox', { name: 'Applies to Requirement.pdf' }), { target: { value: 'path:New.SLDPRT' } });
   fireEvent.change(ui.getByRole('textbox', { name: 'Reference note for Brief.txt' }), { target: { value: 'Overall design intent' } });
-  fireEvent.change(ui.getByRole('textbox', { name: /Revision summary/ }), { target: { value: 'Follow source' } });
+  fireEvent.change(ui.getByRole('textbox', { name: /Version summary/ }), { target: { value: 'Follow source' } });
   assert.equal(await inventorySignature(await readVerifiedInventory(f.project.vaultDir)), before, 'Choosing files must not write anything before Save');
   ui.unmount();
   ui = render(<ChangesCaptureView {...props} />);
   assert.equal((ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf' }) as HTMLTextAreaElement).value, 'Increase clearance');
-  fireEvent.click(ui.getByRole('button', { name: 'Save revision' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Save version' }));
   await waitFor(() => assert.ok(savedId));
   const saved = await openExistingVault(f.project.vaultDir), links = saved.references!.contexts[savedId].record!.links;
   assert.equal(links.length, 2);
@@ -336,13 +336,13 @@ test('already-saved references stay behind a collapsed Manage references disclos
   const toggle = ui.getByRole('button', { name: 'Manage references (1)' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
   assert.equal(ui.queryByRole('textbox', { name: 'Reference note for Requirement.pdf 1' }), null);
-  assert.equal(ui.queryByRole('button', { name: 'Remove from this revision' }), null);
+  assert.equal(ui.queryByRole('button', { name: 'Remove from this version' }), null);
   assert.ok(ui.getByLabelText('Reference files'), 'the attach control stays visible');
   fireEvent.change(ui.getByLabelText('Reference files'), { target: { files: [new File(['Customer brief'], 'Brief.txt')] } });
   assert.ok(ui.getByRole('textbox', { name: 'Reference note for Brief.txt' }), 'new attachments are shown as before');
   fireEvent.click(toggle);
   assert.equal((ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf 1' }) as HTMLTextAreaElement).value, 'Kept note');
-  fireEvent.click(ui.getByRole('button', { name: 'Remove from this revision' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Remove from this version' }));
   assert.equal(ui.queryByRole('button', { name: /Manage references/ }), null);
 });
 
@@ -362,7 +362,7 @@ test('stale reference decisions remain visible until explicitly reviewed and leg
   cleanup();
   const legacy = { ...state, references: { ...state.references!, contexts: { [f.first.revision.manifest.revisionId]: { status: 'legacy' as const } } } };
   const history = render(<RevisionReferenceContext state={legacy} revisionId={f.first.revision.manifest.revisionId} />);
-  assert.ok(history.getByText('No references were saved with this revision.'));
+  assert.ok(history.getByText('No references were saved with this version.'));
   assert.equal(history.queryByText('Requirement'), null);
 });
 

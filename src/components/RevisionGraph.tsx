@@ -10,7 +10,7 @@ const revisionName = (graph: Graph, id: string) => {
   const node = graph.nodes.find((n) => n.id === id);
   return node ? formatRevisionNumber(node.revision.manifest.displayNumber) : null;
 };
-/** Plain wording for a recorded copy, e.g. "copied from Rev 010". */
+/** Plain wording for a recorded copy, e.g. "copied from V10". */
 function copyNotes(graph: Graph, childId: string): string[] {
   return graph.copies
     .filter((c) => c.child === childId)
@@ -146,7 +146,7 @@ export function RevisionGraph({
   return (
     <section
       className="history-canvas"
-      aria-label={mode === "graph" ? "Revision graph" : "Revision list"}
+      aria-label={mode === "graph" ? "Version graph" : "Version list"}
       style={
         ancestry && highlightedBranch
           ? ({ "--case-color": highlightedBranch.color } as React.CSSProperties)
@@ -157,7 +157,7 @@ export function RevisionGraph({
         <span>
           {fileRecords
             ? `${changeCount} ${changeCount === 1 ? "change" : "changes"} to this file`
-            : `${graph.nodes.length} revisions`}{" "}
+            : `${graph.nodes.length} versions`}{" "}
           {fileRecords && unavailableCount > 0 ? (
             <span className="muted">
               {`· ${unavailableCount} ${unavailableCount === 1 ? "version" : "versions"} could not be compared`}
@@ -174,7 +174,7 @@ export function RevisionGraph({
           aria-label={
             fileRecords
               ? "Filter file history by branch ancestry"
-              : "Show a case's revisions"
+              : "Show a case's versions"
           }
         >
           {graph.branches.map((branch) => (
@@ -192,8 +192,8 @@ export function RevisionGraph({
                 fileRecords
                   ? `Filter to ${branch.name} ancestry; does not switch the working branch`
                   : branch.current
-                    ? `Show ${branch.name} revisions · current branch`
-                    : `Show ${branch.name} revisions`
+                    ? `Show ${branch.name} versions · current branch`
+                    : `Show ${branch.name} versions`
               }
               onClick={() => toggleBranch(branch.id)}
             >
@@ -226,7 +226,7 @@ export function RevisionGraph({
         className={`graph-viewport ${mode}`}
         ref={viewport}
         tabIndex={0}
-        aria-label="Scrollable history. Use arrow keys on a revision to inspect history."
+        aria-label="Scrollable history. Use arrow keys on a version to inspect history."
       >
         {mode === "graph" ? (
           <div className="graph-stage" style={{ width, height }}>
@@ -357,7 +357,7 @@ export function RevisionGraph({
                         className={`graph-dot ${fileRecords?.get(node.id)?.kind === "context" ? "context-dot" : ""} ${node.latest ? "latest" : ""} ${node.warnings.length ? "damaged" : ""}`}
                         style={{ left: position.x - NODE_RADIUS - 12 }}
                       >
-                        <span aria-hidden="true">{`R${String(node.revision.manifest.displayNumber).padStart(3, "0")}`}</span>
+                        <span aria-hidden="true">{formatRevisionNumber(node.revision.manifest.displayNumber)}</span>
                       </span>
                       <span className="graph-label" style={{ left: labelX }}>
                         <span className="revision-eyebrow">
@@ -418,7 +418,7 @@ export function RevisionGraph({
                             title={
                               fileRecords
                                 ? `Filter to ${branch.name} ancestry; does not switch the working branch`
-                                : `Show ${branch.name} revisions${branch.current ? " · active working branch" : ""}`
+                                : `Show ${branch.name} versions${branch.current ? " · active working branch" : ""}`
                             }
                           >
                             <GitBranch size={11} />
@@ -507,7 +507,7 @@ export function RevisionGraph({
               {fileRecords ? "Show all branches" : "Clear highlight"}
             </button>
           ) : (
-            "Select a revision to inspect · ↑ ↓ to navigate"
+            "Select a version to inspect · ↑ ↓ to navigate"
           )}
         </span>
         {mode === "graph" ? (

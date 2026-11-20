@@ -325,7 +325,7 @@ async function start() {
     rootHandle: (home.root as RealFileSystemAdapter).handle,
   });
   document.getElementById("demo-counts")!.textContent =
-    `${home.workspaces.length} workspaces · ${projects.length} projects · ${branchCount} branches · ${revisionCount} revisions`;
+    `${home.workspaces.length} workspaces · ${projects.length} projects · ${branchCount} branches · ${revisionCount} versions`;
   document.getElementById("loading")!.remove();
   createRoot(document.getElementById("root")!).render(<App />);
 }

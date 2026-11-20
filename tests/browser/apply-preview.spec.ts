@@ -21,7 +21,7 @@ test("actual App: the Copy files dialog lists only the case's changes, needs a c
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   const current = page.getByRole("region", { name: "Project context" });
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
-  await page.getByRole("button", { name: /Rev 003: Redesign only Part-X/ }).click();
+  await page.getByRole("button", { name: /V3: Redesign only Part-X/ }).click();
   const open = page.getByRole("button", { name: "Copy files from Part-X redesign…", exact: true });
   await open.click();
   const dialog = page.getByRole("dialog", { name: "Copy files from Part-X redesign" });
@@ -36,12 +36,12 @@ test("actual App: the Copy files dialog lists only the case's changes, needs a c
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(open).toBeFocused();
-  await expect(page.getByRole("button", { name: /Rev 003: Redesign only Part-X/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: /V3: Redesign only Part-X/ })).toHaveAttribute("aria-pressed", "true");
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
   // Ordinary Compare stays separate.
   await page.getByRole("button", { name: "Compare", exact: true }).click();
-  const compareDialog = page.getByRole("dialog", { name: "Compare saved revisions" });
-  await expect(compareDialog.getByRole("combobox", { name: "To revision" })).toHaveValue(fixture.ids[2]);
+  const compareDialog = page.getByRole("dialog", { name: "Compare saved versions" });
+  await expect(compareDialog.getByRole("combobox", { name: "To version" })).toHaveValue(fixture.ids[2]);
   await compareDialog.getByRole("button", { name: "Close comparison", exact: true }).click();
   // The active case changes only through the Explorer, before opening a new dialog.
   await page.setViewportSize({ width: 390, height: 844 });
@@ -52,7 +52,7 @@ test("actual App: the Copy files dialog lists only the case's changes, needs a c
     .click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await expect(current).toHaveAttribute("data-branch-id", fixture.conflictDestinationId);
-  await page.getByRole("button", { name: /Rev 005: Source additions, deletion and conflicts/ }).click();
+  await page.getByRole("button", { name: /V5: Source additions, deletion and conflicts/ }).click();
   await page.getByRole("button", { name: "Copy files from Conflicting source…", exact: true }).click();
   const conflicts = page.getByRole("dialog", { name: "Copy files from Conflicting source" });
   const copy = conflicts.getByRole("button", { name: "Copy files", exact: true });

@@ -38,11 +38,11 @@ test("the design cases panel has no Saved activity and divergence section; Compa
   fireEvent.click(
     ui.getByRole("button", { name: "Compare Alternative with Main" }),
   );
-  const dialog = ui.getByRole("dialog", { name: "Compare saved revisions" });
+  const dialog = ui.getByRole("dialog", { name: "Compare saved versions" });
   assert.equal(
     (
       within(dialog).getByRole("combobox", {
-        name: "From revision",
+        name: "From version",
       }) as HTMLSelectElement
     ).value,
     "r1",
@@ -50,7 +50,7 @@ test("the design cases panel has no Saved activity and divergence section; Compa
   assert.equal(
     (
       within(dialog).getByRole("combobox", {
-        name: "To revision",
+        name: "To version",
       }) as HTMLSelectElement
     ).value,
     "r2",
@@ -81,7 +81,7 @@ test("unavailable ancestry leaves healthy endpoint comparison available, and hid
   assert.equal(
     (
       within(dialog).getByRole("combobox", {
-        name: "From revision",
+        name: "From version",
       }) as HTMLSelectElement
     ).value,
     "c3",

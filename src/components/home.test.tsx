@@ -237,7 +237,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   await idle(ui);
   nav(ui, "Changes");
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "Case A draft" } },
   );
   fireEvent.click(
@@ -256,13 +256,13 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "",
   );
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "AutoCAD draft" } },
   );
   fireEvent.click(ui.getByRole("treeitem", { name: "cam 2" }));
@@ -275,7 +275,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Case A draft",
@@ -304,7 +304,7 @@ test("workspace switching isolates scans, branches and project/branch drafts wit
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Case A draft",
@@ -459,7 +459,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   );
   nav(ui, "Changes");
   fireEvent.change(
-    changes(ui).getByRole("textbox", { name: /Revision summary/ }),
+    changes(ui).getByRole("textbox", { name: /Version summary/ }),
     { target: { value: "Main draft" } },
   );
   fireEvent.click(tree.getByRole("treeitem", { name: "cam 2" }));
@@ -468,7 +468,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Main draft",
@@ -516,7 +516,7 @@ test("sidebar explorer expands independently, navigates projects and branches ac
   assert.equal(
     (
       changes(ui).getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Main draft",

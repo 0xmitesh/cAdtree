@@ -85,7 +85,7 @@ test('home Readme: header, every section, the checksum commands and the format r
     '2. If cAdtree is unavailable',
     '3. Folder layout of a Cadtree home',
     '4. Get your latest files',
-    '5. Get an older revision, or single files back',
+    '5. Get an older version, or single files back',
     '6. Notes and references',
     '7. Rules',
     '8. Short tutorials (when cAdtree is available)',
@@ -103,11 +103,11 @@ test('home Readme: header, every section, the checksum commands and the format r
   assert.ok(lines.includes('   Mac:      shasum -a 256 "<file>"'));
   const flat = text.replace(/\s+/g, ' ');
   assert.match(flat, /does not show that the design is correct/);
-  assert.match(flat, /whole folder tree of the revision, not single files/);
+  assert.match(flat, /whole folder tree of the version, not single files/);
   // The restore page comes first, with the manual steps as the fallback, and the manual steps start with the Windows extension tip.
   assert.ok(flat.indexOf('double-click _RESTORE cAdtree.html') > 0);
-  assert.ok(flat.indexOf('double-click _RESTORE cAdtree.html') < flat.indexOf('Rebuild a revision by hand'));
-  assert.match(flat, /Rebuild a revision by hand \(if the restore page is not available\) -+ 1\. On Windows, turn on View → Show → File name extensions in File Explorer first; the renamed copy must not end in \.bin\./);
+  assert.ok(flat.indexOf('double-click _RESTORE cAdtree.html') < flat.indexOf('Rebuild a version by hand'));
+  assert.match(flat, /Rebuild a version by hand \(if the restore page is not available\) -+ 1\. On Windows, turn on View → Show → File name extensions in File Explorer first; the renamed copy must not end in \.bin\./);
   assert.match(flat, /Chrome or Microsoft Edge/);
   assert.match(flat, /cannot open a folder from a typed path/);
   assert.match(flat, /Never edit, move, rename or delete anything inside a vault folder/);
@@ -130,7 +130,7 @@ test('home Readme: header, every section, the checksum commands and the format r
   }
   assert.match(flat, /files: a list of path, size, sha256, lastModified/);
   assert.match(flat, /parentRevisionId/);
-  assert.match(flat, /A revision counts only when this file exists/);
+  assert.match(flat, /A version counts only when this file exists/);
   assert.match(flat, /Never infer order from an ID/);
   assert.match(flat, /references\/completed\/ \(the code/);
   assert.match(flat, /parent: \{catalogId, sha256\}/);
@@ -138,21 +138,21 @@ test('home Readme: header, every section, the checksum commands and the format r
   assert.match(flat, /older design cases may instead be stored as <branchId>\.json with no ready marker/);
   assert.match(flat, /Main cannot be hidden\. If you are working on that case, cAdtree switches you to Main/);
   assert.match(flat, /choose Changes on the left/);
-  assert.match(flat, /one branch's revisions can skip numbers/);
-  assert.match(flat, /saves the result as a new revision by itself/);
-  assert.match(flat, /Main revisions before the case started/);
+  assert.match(flat, /one branch's versions can skip numbers/);
+  assert.match(flat, /saves the result as a new version by itself/);
+  assert.match(flat, /Main versions before the case started/);
 });
 
 test('home Readme: tutorials use the real button names and describe no feature that does not exist', () => {
   const text = buildHomeReadme({ homeName: 'Cadtree' });
   const flat = text.replace(/\s+/g, ' '); // prose is wrapped, so look for labels without line breaks
-  for (const title of ['Save a revision', 'Create a design case', 'Bring an older revision back onto a branch (Bring back)',
+  for (const title of ['Save a version', 'Create a design case', 'Bring an older version back onto a branch (Bring back)',
     'Copy files from a design case', 'Export a copy', 'Hide a design case']) {
     assert.ok(text.split('\r\n').includes(title), `tutorial "${title}"`);
   }
-  for (const label of ['Save revision', 'Create design case from this revision', 'Create design case', 'Bring back onto',
+  for (const label of ['Save version', 'Create design case from this version', 'Create design case', 'Bring back onto',
     'Save my changes first', 'Copy files from', 'Copy files', 'Keep mine', 'Take theirs', 'Save now', 'Why', 'Export a copy', 'Choose folder…', 'Include references', 'Hide case',
-    'Show hidden cases', 'Unhide', 'Revision summary', 'Case name', 'Engineering reason', 'Add a description', 'What you noticed']) {
+    'Show hidden cases', 'Unhide', 'Version summary', 'Case name', 'Engineering reason', 'Add a description', 'What you noticed']) {
     assert.ok(flat.includes(label), `mentions "${label}"`);
   }
   assert.doesNotMatch(text, /restore copy|convert|cloud|collaborat|upload|sync/i);
@@ -209,7 +209,7 @@ test('home Index lists workspaces and projects with their folders and Map paths'
   // Order is by name and does not depend on discovery order; no revision data.
   assert.ok(lines.indexOf('    Client ABC') < lines.indexOf('    Personal SolidWorks'));
   assert.equal(text, buildHomeIndex({ generatedAt: GENERATED, homeName: 'Cadtree', workspaces: [...state.workspaces].reverse() }));
-  assert.doesNotMatch(text, /revision|Rev \d/i);
+  assert.doesNotMatch(text, /version|Rev \d/i);
 });
 
 test('home Index: an empty home, and workspaces or projects that are not healthy', async () => {

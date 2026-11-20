@@ -238,7 +238,7 @@ async function cleanDestination(
     );
   if (scan.hasChanges)
     throw new Error(
-      "Destination has uncaptured file or directory changes. Save a revision first, then refresh and review the plan. No edits were discarded or captured automatically.",
+      "Destination has uncaptured file or directory changes. Save a version first, then refresh and review the plan. No edits were discarded or captured automatically.",
     );
   await assertFolderRemovalsReady(working, plan, context.destination.manifest.files);
 }
@@ -297,7 +297,7 @@ async function assertFolderRemovalsReady(
   }
   if (other.length)
     throw new Error(
-      `Destination changed: ${other.join(", ")} would remain inside a folder this application removes. Save a revision first, then refresh and review the plan. No working files were changed.`,
+      `Destination changed: ${other.join(", ")} would remain inside a folder this application removes. Save a version first, then refresh and review the plan. No working files were changed.`,
     );
   for (const [path, names] of clutter)
     throw new Error(
@@ -713,7 +713,7 @@ export async function applyUnderLock(
       review.destinationBranchId,
       options,
     );
-    await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
+    await validateDirectoryIsolation(working, vault, "Working folder", "Version vault");
     await cleanDestination(working, state, review, options);
     const op = await startOperation(vault, options, {
       sourceBranchId: context.source.manifest.branchId,
@@ -797,7 +797,7 @@ export type ApplyAndSaveResult =
       reason: string;
       error: unknown;
     };
-/** "Brought back Rev 003" or "Copied 2 files from <case>". */
+/** "Brought back V3" or "Copied 2 files from <case>". */
 export function applySaveSummary(
   state: VaultState,
   record: ApplicationRecord,
@@ -808,7 +808,7 @@ export function applySaveSummary(
     );
     return source
       ? `Brought back ${formatRevisionNumber(source.manifest.displayNumber)}`
-      : "Brought back an earlier revision";
+      : "Brought back an earlier version";
   }
   const name =
     state.branches.find((b) => b.branchId === record.sourceBranchId)?.name ??
@@ -900,7 +900,7 @@ export async function applyAndSave(
             summary,
             revision,
             vaultState: reloaded,
-            cacheWarning: `The revision was published, but its last step reported: ${error instanceof Error ? error.message : String(error)}`,
+            cacheWarning: `The version was published, but its last step reported: ${error instanceof Error ? error.message : String(error)}`,
           };
         if (current) op.status = current.status;
       } catch {
@@ -991,7 +991,7 @@ export async function replaceWorkingFiles(
     assertCaseWritable(state, request.branchId);
     noUnfinished(state, request.branchId);
     const working = await connections(vault, state, request.branchId, request);
-    await validateDirectoryIsolation(working, vault, "Working folder", "Revision vault");
+    await validateDirectoryIsolation(working, vault, "Working folder", "Version vault");
     const vaultPlace = await projectFolder.resolveRelativePath(vault);
     if (vaultPlace?.length !== 1 || vaultPlace[0] !== "vault")
       throw new Error(
@@ -1310,7 +1310,7 @@ export function discardedNoteText(input: {
         ? "kept inside cAdtree only (see below)"
         : entry.kind === "new folder"
           ? "not copied (path too long)"
-          : "put back from the saved revision; nothing to keep";
+          : "put back from the saved version; nothing to keep";
     lines.push(`  ${what[entry.kind]}: ${entry.path}`, `    ${where}`);
   }
   const inside = input.entries.filter((e) => e.insideOnly);

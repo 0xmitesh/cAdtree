@@ -74,14 +74,14 @@ async function createFromUI(
 ) {
   fireEvent.click(ctx.ui.getByRole("button", { name: "History" }));
   fireEvent.click(
-    ctx.ui.getByRole("button", { name: /Rev 001: Original housing/ }),
+    ctx.ui.getByRole("button", { name: /V1: Original housing/ }),
   );
   fireEvent.click(
-    ctx.ui.getByRole("button", { name: "Create design case from this revision" }),
+    ctx.ui.getByRole("button", { name: "Create design case from this version" }),
   );
   await waitFor(() => assert.ok(ctx.ui.queryByRole("dialog")));
   const dialog = within(ctx.ui.getByRole("dialog"));
-  assert.ok(dialog.getByText(/Rev 001 on Main/));
+  assert.ok(dialog.getByText(/V1 on Main/));
   fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), {
     target: { value: name },
   });
@@ -129,13 +129,13 @@ test("reopening an established branch with a damaged marker keeps its selector, 
     await selectBranch(ui, branch.branchId);
     await waitFor(() => assert.equal(appBusy(ui), false));
     fireEvent.click(
-      ui.getByRole("button", { name: /Rev 002: Established damaged case/ }),
+      ui.getByRole("button", { name: /V2: Established damaged case/ }),
     );
     assert.ok(ui.getByRole("heading", { name: "Established damaged case" }));
     assert.equal(
       (
         ui.getByRole("button", {
-          name: "Create design case from this revision",
+          name: "Create design case from this version",
         }) as HTMLButtonElement
       ).disabled,
       true,
@@ -173,7 +173,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
     assert.ok(ctx.ui.getByRole("heading", { name: "1 changed file" })),
   );
   let changes = visibleChanges(ctx.ui.container);
-  fireEvent.change(changes.getByRole("textbox", { name: /Revision summary/ }), {
+  fireEvent.change(changes.getByRole("textbox", { name: /Version summary/ }), {
     target: { value: "Main draft" },
   });
   fireEvent.click(
@@ -192,7 +192,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   const branch = await createFromUI(ctx, "Case A");
   assert.equal((await openExistingVault(ctx.vault)).revisions.length, 1);
   assert.ok(
-    ctx.ui.getByRole("button", { name: "Started from Rev 001 on Main" }),
+    ctx.ui.getByRole("button", { name: "Started from V1 on Main" }),
   );
   const branchFolder = (await resolveManagedProject(ctx.root, ctx.project.record.containerPath)).workingFolders[branch.branchId]!;
   await branchFolder.writeFileBytes(["Part.SLDPRT"], new Uint8Array([7, 8]));
@@ -209,13 +209,13 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "",
   );
   assert.equal(changes.queryByText("Main file note"), null);
-  fireEvent.change(changes.getByRole("textbox", { name: /Revision summary/ }), {
+  fireEvent.change(changes.getByRole("textbox", { name: /Version summary/ }), {
     target: { value: "Case A draft" },
   });
   fireEvent.click(
@@ -230,7 +230,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Main draft",
@@ -257,12 +257,12 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: /Revision summary/,
+        name: /Version summary/,
       }) as HTMLInputElement
     ).value,
     "Case A draft",
   );
-  fireEvent.click(changes.getByRole("button", { name: "Save revision" }));
+  fireEvent.click(changes.getByRole("button", { name: "Save version" }));
   await waitFor(async () =>
     assert.equal((await openExistingVault(ctx.vault)).revisions.length, 2),
   );
@@ -276,7 +276,7 @@ test("App creates branches, preserves Main and branch notes, and keeps graph hig
   fireEvent.click(ctx.ui.getByRole("button", { name: "Main" }));
   assert.equal(currentBranchId(ctx.ui), branch.branchId);
   fireEvent.click(
-    ctx.ui.getByRole("button", { name: "Started from Rev 001 on Main" }),
+    ctx.ui.getByRole("button", { name: "Started from V1 on Main" }),
   );
   fireEvent.click(ctx.ui.getByRole("button", { name: "List" }));
   assert.ok(ctx.ui.getByRole("heading", { name: "Original housing" }));
@@ -323,7 +323,7 @@ test("App rejects branch switching during an asynchronous scan", async () => {
   ctx.main.setHooks({ onBeforeRead: undefined });
 });
 
-test("multiple unmodified branch labels share their actual baseline node without creating revisions", async () => {
+test("multiple unmodified branch labels share their actual baseline node without creating versions", async () => {
   const ctx = await setup();
   cleanup();
   const folders = { "branch-main": ctx.main };
@@ -350,7 +350,7 @@ test("multiple unmodified branch labels share their actual baseline node without
     />,
   );
   for (const name of ["Main", "Case A", "Case B", "Case C"])
-    assert.ok(ui.getByRole("button", { name: `${name} head at Rev 001` }));
+    assert.ok(ui.getByRole("button", { name: `${name} head at V1` }));
   assert.equal(ui.container.querySelectorAll(".graph-dot").length, 1);
   assert.equal(
     ui.container.querySelectorAll(".graph-lines path[data-child]").length,
@@ -372,7 +372,7 @@ test("branch creation shows cancellable progress and reports the incomplete fold
     },
   });
   fireEvent.click(
-    ctx.ui.getByRole("button", { name: "Create design case from this revision" }),
+    ctx.ui.getByRole("button", { name: "Create design case from this version" }),
   );
   await waitFor(() => assert.ok(ctx.ui.queryByRole("dialog")));
   const dialog = within(ctx.ui.getByRole("dialog"));

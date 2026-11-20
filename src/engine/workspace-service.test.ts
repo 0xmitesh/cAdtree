@@ -133,7 +133,7 @@ test("a missing projects folder fails as a plain error, not a retained destinati
   });
 });
 
-test("two projects import and reopen from one root with exact independent leaves and no artificial revisions", async () => {
+test("two projects import and reopen from one root with exact independent leaves and no artificial versions", async () => {
   const root = new InMemoryFileSystemAdapter("Workspace");
   const [sourceA, sourceB] = await Promise.all([
     cadSource("Source A"),

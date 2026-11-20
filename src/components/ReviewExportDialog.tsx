@@ -65,12 +65,12 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
             const next = new Set(previous); next.has(file.path) ? next.delete(file.path) : next.add(file.path); return next;
           })} /> {file.path}</span></label>)}
         </div>
-        <label className="recovery-external-choice"><span><input type="checkbox" checked={labelFilenames} onChange={e => setLabelFilenames(e.target.checked)} /> Add branch and revision to filenames</span></label>
+        <label className="recovery-external-choice"><span><input type="checkbox" checked={labelFilenames} onChange={e => setLabelFilenames(e.target.checked)} /> Add branch and version to filenames</span></label>
         <p className="muted small">Use labelled filenames for standalone review copies. Renamed files may require reference repair when used by other documents; cAdtree does not rewrite native references.</p>
       </> : <p>Preserves every saved internal filename and relative directory, including empty directories.</p>}
       <label className="recovery-external-choice"><span><input type="checkbox" checked={includeReferences} onChange={e => { setIncludeReferences(e.target.checked); setError(''); }} /> Include references</span></label>
       <p className="muted small">{includeReferences
-        ? (plan ? (plan.references.length ? `${plan.references.length} reference attachment${plan.references.length === 1 ? '' : 's'} will be copied into a ${plan.referencesDirectory} folder.` : 'No reference attachments apply to this revision.') : '')
+        ? (plan ? (plan.references.length ? `${plan.references.length} reference attachment${plan.references.length === 1 ? '' : 's'} will be copied into a ${plan.referencesDirectory} folder.` : 'No reference attachments apply to this version.') : '')
         : 'Reference attachments will not be copied.'}</p>
       {preview.error ? <Notice type="error">{preview.error}</Notice> : null}
       {plan ? <>

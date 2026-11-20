@@ -130,13 +130,13 @@ async function refreshAndState(f: Fixture) {
   return { state: project.vaultState, result };
 }
 
-test('data table: occurrences are capped (oldest first, with a count of the rest), names are sorted, corrupted revisions are left out', () => {
+test('data table: occurrences are capped (oldest first, with a count of the rest), names are sorted, corrupted versions are left out', () => {
   const shared = sha(7);
   const revisions: FakeRevision[] = [];
   for (let n = 1; n <= 30; n++) revisions.push({ id: `rev-${String(n).padStart(2, '0')}`, number: n, files: [{ path: `Folder ${String(n).padStart(2, '0')}/part ${n % 2 ? 'b' : 'a'}.bin`, sha256: shared }] });
   revisions.push({ id: 'rev-bad', number: 31, corrupted: true, files: [{ path: 'Damaged/only.bin', sha256: sha(8) }] });
   const data = buildRestoreData({ generatedAt: 'x', projectName: 'P', state: fakeState(revisions) });
-  assert.deepEqual(Object.keys(data.files), [shared], 'a corrupted revision contributes nothing');
+  assert.deepEqual(Object.keys(data.files), [shared], 'a corrupted version contributes nothing');
   const entry = data.files[shared]!;
   assert.equal(entry.occurrences.length, OCCURRENCE_CAP);
   assert.equal(entry.more, 30 - OCCURRENCE_CAP);

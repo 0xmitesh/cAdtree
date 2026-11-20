@@ -19,7 +19,7 @@ async function fixture() {
   return { working, vault, state, scan, input };
 }
 
-test('new baseline saves attachments, exact bytes, author and part mapping together; unchanged CAD can receive a reference-only revision', async () => {
+test('new baseline saves attachments, exact bytes, author and part mapping together; unchanged CAD can receive a reference-only version', async () => {
   const f = await fixture();
   const saved = await captureRevision(f.working, f.vault, f.input);
   const id = saved.revision.manifest.revisionId, link = saved.vaultState.references!.contexts[id].record!.links[0];
@@ -54,10 +54,10 @@ test('an interrupted capture retains stored attachments for retry without import
   const f = await fixture(), write = f.vault.writeFileText.bind(f.vault);
   let fail = true, retry = { ...f.input };
   f.vault.writeFileText = async (path, text, options) => {
-    if (fail && path[0] === 'completed') { fail = false; throw new Error('Interrupted revision save'); }
+    if (fail && path[0] === 'completed') { fail = false; throw new Error('Interrupted version save'); }
     return write(path, text, options);
   };
-  await assert.rejects(captureRevision(f.working, f.vault, { ...f.input, onReferenceAttachmentsStored: review => { retry = { ...f.input, referenceReview: review, referenceAttachments: [] }; } }), /Interrupted revision save/);
+  await assert.rejects(captureRevision(f.working, f.vault, { ...f.input, onReferenceAttachmentsStored: review => { retry = { ...f.input, referenceReview: review, referenceAttachments: [] }; } }), /Interrupted version save/);
   assert.equal(retry.referenceAttachments!.length, 0);
   const interrupted = await openExistingVault(f.vault);
   assert.equal(interrupted.revisions.length, 0);

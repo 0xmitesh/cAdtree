@@ -51,7 +51,7 @@ async function applyOnto(vault: FileSystemDirectoryAdapter, workingFolders: Mana
   return applyReviewed(vault, review, { workingFolders });
 }
 
-test('a new revision gets a record ID used by manifest, completion, component and reference files; every consumer works on it', async () => {
+test('a new version gets a record ID used by manifest, completion, component and reference files; every consumer works on it', async () => {
   const p = await project();
   const writes: string[] = [];
   p.root.setHooks({ onBeforeWrite: (full) => { writes.push(full); } });
@@ -105,7 +105,7 @@ test('a new revision gets a record ID used by manifest, completion, component an
   }
 });
 
-test('a revision-ID clash draws a new ID before anything else is written and never touches the first revision', async () => {
+test('a revision-ID clash draws a new ID before anything else is written and never touches the first version', async () => {
   const p = await project();
   const fixed = '20260101-000000-aaaaaa', alt = '20260101-000000-bbbbbb';
   assert.equal(await save(p, 'one', 'First', () => fixed), fixed);
@@ -134,7 +134,7 @@ test('a leftover attempt (staging session) with the drawn ID is a clash; retries
   let calls = 0;
   await assert.rejects(
     captureRevision(p.main, p.vault, { branchId: MAIN_BRANCH_ID, summary: 'Third', notes, workingFolders: p.created.workingFolders, newRevisionId: () => { calls++; return calls % 2 ? leftover : taken; } }),
-    /No free revision ID after 5 attempts\. Nothing was written/,
+    /No free version ID after 5 attempts\. Nothing was written/,
   );
   assert.equal(calls, MAX_REVISION_ID_ATTEMPTS);
   assert.deepEqual((await (await p.vault.getDirectory(['staging'])).listEntries()).map((e) => e.name).sort(), stagingBefore);
@@ -180,7 +180,7 @@ test('history whose record IDs sort against creation order loads, verifies, keep
   assert.equal(compareSavedRevisions(await openExistingVault(p.vault), o1, DESC(9)).status, 'compared');
 });
 
-test('Knowledge Lab records can cite record-ID revisions', async () => {
+test('Knowledge Lab records can cite record-ID versions', async () => {
   const p = await project();
   const oldId = await save(p, 'v1', 'First');
   const newId = await save(p, 'v2', 'Second');

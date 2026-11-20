@@ -189,10 +189,10 @@ export interface RevisionListingInput {
 export function buildRevisionListing(input: RevisionListingInput): string {
   const { state, revision } = input;
   const manifest = revision.manifest;
-  const doc = header('revision listing', `Describes revision saved at: ${input.generatedAt}`);
-  doc.line().kv('Project', input.projectName).kv('Revision', formatRevisionNumber(manifest.displayNumber)).kv('Revision ID', manifest.revisionId);
+  const doc = header('version listing', `Describes version saved at: ${input.generatedAt}`);
+  doc.line().kv('Project', input.projectName).kv('Version', formatRevisionNumber(manifest.displayNumber)).kv('Version ID', manifest.revisionId);
   doc.kv('Branch', `${branchName(state, manifest.branchId)} (branch ID: ${manifest.branchId})`);
-  doc.kv('Parent revision', manifest.parentRevisionId ? revisionLabel(state, manifest.parentRevisionId) : 'none');
+  doc.kv('Parent version', manifest.parentRevisionId ? revisionLabel(state, manifest.parentRevisionId) : 'none');
   doc.kv('Saved', manifest.captureCompletedAt).kv('Summary', manifest.summary);
 
   doc.section('NOTES');
@@ -219,9 +219,9 @@ export function buildRevisionListing(input: RevisionListingInput): string {
 
   referenceLines(doc, state, manifest.revisionId);
 
-  doc.section('HOW TO REBUILD THIS REVISION');
+  doc.section('HOW TO REBUILD THIS VERSION');
   doc.line(`Easiest: open ${PROJECT_RESTORE_PAGE_FILENAME} in the project folder (the folder that contains "vault") in Google`, 4);
-  doc.line('Chrome or Microsoft Edge, choose "Rebuild a whole revision" and pick this revision. It rebuilds every', 4);
+  doc.line('Chrome or Microsoft Edge, choose "Rebuild a whole version" and pick this version. It rebuilds every', 4);
   doc.line('folder and file and checks each one.', 4);
   doc.line();
   doc.line('By hand (without the page): object file paths above are relative to the project folder.', 4);
@@ -240,7 +240,7 @@ export function buildRevisionListing(input: RevisionListingInput): string {
 
 function referenceLines(doc: Doc, state: VaultState, revisionId: string): void {
   const context = state.references?.contexts[revisionId];
-  doc.section('REFERENCES CAPTURED WITH THIS REVISION');
+  doc.section('REFERENCES CAPTURED WITH THIS VERSION');
   if (context?.status === 'unavailable') {
     doc.line('Reference records could not be read when this file was written.', 4);
     return;
@@ -262,7 +262,7 @@ function referenceLines(doc: Doc, state: VaultState, revisionId: string): void {
       doc.kv('Original file', version.originalFilename, 8).kv('Object file', objectPath(version.sha256), 8);
       doc.kv('Version', `${versionNumber(reference, version)} (imported ${version.importedAt})`, 8);
     }
-    doc.kv('Added', link.origin === 'project' ? 'as a project-wide reference' : 'for this revision', 8);
+    doc.kv('Added', link.origin === 'project' ? 'as a project-wide reference' : 'for this version', 8);
     if (link.componentPath) doc.kv('Applies to', link.componentPath, 8);
     if (link.locator.trim()) doc.kv('Where in the document', link.locator, 8);
     if (link.explanation.trim()) doc.kv('Explanation', link.explanation, 8);
@@ -297,7 +297,7 @@ export function buildProjectMap(input: ProjectMapInput): string {
     'Covers up to',
     latest
       ? `${formatRevisionNumber(latest.manifest.displayNumber)} (${latest.manifest.revisionId}), saved ${latest.manifest.captureCompletedAt}`
-      : 'no saved revisions yet',
+      : 'no saved versions yet',
   );
   doc.line('Paths in this file are relative to the project folder (the folder that contains this file).');
 
@@ -323,7 +323,7 @@ export function buildProjectMap(input: ProjectMapInput): string {
     doc.kv('Created', branch.createdAt, 4).kv('Reason', branch.reason, 4);
   }
 
-  doc.section(`REVISIONS (${revisions.length}), oldest first`);
+  doc.section(`VERSIONS (${revisions.length}), oldest first`);
   if (!revisions.length) doc.line(NONE, 4);
   for (const revision of revisions) {
     const manifest = revision.manifest;
@@ -336,7 +336,7 @@ export function buildProjectMap(input: ProjectMapInput): string {
     doc.kv(
       'Listing',
       revision.integrityStatus === 'corrupted'
-        ? 'none (this revision record is damaged)'
+        ? 'none (this version record is damaged)'
         : input.failedListings?.includes(manifest.revisionId)
           ? `${listed} (listing could not be written; see the manifest)`
           : listed,
@@ -369,7 +369,7 @@ export function buildProjectMap(input: ProjectMapInput): string {
 
   doc.section('HOW TO RECOVER WITHOUT cAdtree');
   doc.line(`Easiest: open ${PROJECT_RESTORE_PAGE_FILENAME} (next to this file) in Google Chrome or Microsoft Edge. It rebuilds a`, 4);
-  doc.line('whole revision into an empty folder, or saves single files from the vault under their original names,', 4);
+  doc.line('whole version into an empty folder, or saves single files from the vault under their original names,', 4);
   doc.line('with every checksum checked. It works offline.', 4);
   doc.line();
   doc.line('By hand:', 4);
@@ -377,11 +377,11 @@ export function buildProjectMap(input: ProjectMapInput): string {
   doc.line('Discarded changes: copies of unsaved changes discarded in cAdtree are kept in Discarded/<date time>/', 4);
   doc.line(`next to this file. Each such folder has ${DISCARDED_NOTE_FILENAME}, which says what was discarded and how`, 4);
   doc.line('to put files back. cAdtree never deletes them.', 4);
-  doc.line('An older revision: open its listing (path under REVISIONS). It lists every folder and file with the', 4);
+  doc.line('An older version: open its listing (path under VERSIONS). It lists every folder and file with the', 4);
   doc.line('object file to copy and the SHA-256 to check, and explains how to rebuild it. On Windows, turn on', 4);
   doc.line('View → Show → File name extensions first; the renamed copy must not end in .bin.', 4);
   checkInstructions(doc, 4);
-  doc.line('Always rebuild the whole folder tree of a revision, not single files: assemblies and drawings find their', 4);
+  doc.line('Always rebuild the whole folder tree of a version, not single files: assemblies and drawings find their', 4);
   doc.line('parts by name and relative path.', 4);
   return doc.text();
 }
@@ -421,7 +421,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   doc.heading('1. What cAdtree is');
   doc.para(
     'cAdtree is a local-first tool for keeping the history of CAD work. It saves complete, recoverable snapshots of a ' +
-      'project (called revisions) together with the engineering notes about what changed and why, and it lets you try ' +
+      'project (called versions) together with the engineering notes about what changed and why, and it lets you try ' +
       'design alternatives (called design cases) without disturbing your main design. It runs in a web browser, so ' +
       'nothing has to be installed, and your files stay on your own disk, in the folders described in this file. It ' +
       'is not tied to one CAD program because it stores your files exactly as they are: it does not open or ' +
@@ -439,7 +439,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'can still do all of this with only a file browser (File Explorer or Finder) and a text editor:',
   );
   doc.para('copy your latest files (section 4);', 4, '- ');
-  doc.para('rebuild any older revision, or get single files back, with the restore page or by hand (section 5);', 4, '- ');
+  doc.para('rebuild any older version, or get single files back, with the restore page or by hand (section 5);', 4, '- ');
   doc.para('read the engineering notes and find the reference documents (section 6).', 4, '- ');
   doc.line().para(
     'Before you try anything, copy this whole home folder to a safe place, so that every step below works on a copy. ' +
@@ -459,22 +459,22 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     ['    .cadtree-workspace.json', "the workspace's identity record (leave alone)"],
     ['    projects/', ''],
     ['      <Project>/', 'one project'],
-    ['        _MAP cAdtree.txt', "the project's Map: branches, revisions, references"],
-    ['        _RESTORE cAdtree.html', 'restores files or a revision (use Chrome or Edge)'],
+    ['        _MAP cAdtree.txt', "the project's Map: branches, versions, references"],
+    ['        _RESTORE cAdtree.html', 'restores files or a version (use Chrome or Edge)'],
     ['        working/', ''],
     ['          main/', "Main's latest files: ordinary CAD folders and files"],
     ['          <Design case>/', "one design case's latest files, apart from Main"],
     ['        vault/', 'the saved history (never change anything in here)'],
     ['          objects/<xx>/<sha256>.bin', 'every saved file, stored under its SHA-256 checksum'],
-    ['          revisions/<id>.txt', 'one revision in full: files, sizes, checksums, notes'],
-    ['          revisions/<id>.manifest.json', 'the same revision as a record'],
+    ['          revisions/<id>.txt', 'one version in full: files, sizes, checksums, notes'],
+    ['          revisions/<id>.manifest.json', 'the same version as a record'],
     ['        .cadtree/', 'records tying the project and its cases to folders'],
   ];
   for (const [path, what] of tree) doc.line(treeLine(path, what), 2);
   doc.line().para(
     'Folder names are the readable names chosen in cAdtree. cAdtree identifies workspaces and projects by IDs stored ' +
       'in their records, not by their folder names. Each project also has its own short guide: the Map (_MAP ' +
-      'cAdtree.txt) lists its branches, every revision and its references, and repeats how to recover without cAdtree. ' +
+      'cAdtree.txt) lists its branches, every version and its references, and repeats how to recover without cAdtree. ' +
       'The restore page (_RESTORE cAdtree.html) does the recovery for you in a web browser.',
   );
 
@@ -487,33 +487,33 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   ]);
   doc.line().para(
     'The working folders hold the files as you last left them, including edits that were not yet saved as a ' +
-      'revision. Copy the whole folder, not single files: assemblies and drawings find their parts by name and ' +
-      'relative path. To get the exact state of a saved revision instead, or if the working folders are damaged or ' +
+      'version. Copy the whole folder, not single files: assemblies and drawings find their parts by name and ' +
+      'relative path. To get the exact state of a saved version instead, or if the working folders are damaged or ' +
       'gone, use the restore page described in section 5.',
   );
 
-  doc.heading('5. Get an older revision, or single files back');
+  doc.heading('5. Get an older version, or single files back');
   doc.para(
     'The easiest way is the restore page. Open the project folder and double-click _RESTORE cAdtree.html: it opens in ' +
-      'your web browser, needs no internet and installs nothing. It has two parts. "Rebuild a whole revision" (Google ' +
-      "Chrome or Microsoft Edge on a computer) asks for the project's vault folder, lists the saved revisions, asks for " +
+      'your web browser, needs no internet and installs nothing. It has two parts. "Rebuild a whole version" (Google ' +
+      "Chrome or Microsoft Edge on a computer) asks for the project's vault folder, lists the saved versions, asks for " +
       'a new empty folder outside the vault and rebuilds every folder and file under its original name, checking every ' +
       'checksum. "Restore single files" works in any modern browser: drag a file from vault/objects onto the page and it ' +
       'saves a copy under its original name. A web page cannot open a folder from a typed path, so choose or drag the ' +
       'folder or file instead. If the page disagrees with the vault, the vault is correct.',
   );
-  steps(doc, 'Rebuild a revision by hand (if the restore page is not available)', [
+  steps(doc, 'Rebuild a version by hand (if the restore page is not available)', [
     'On Windows, turn on View → Show → File name extensions in File Explorer first; the renamed copy must not end in .bin.',
-    "Open the project's Map, _MAP cAdtree.txt. Under REVISIONS, find the revision by its number, date and summary. " +
-      "Revision numbers count across the whole project and all of its design cases, so one branch's revisions can skip numbers. Each " +
-      'revision names its branch (Main or a design case).',
-    'Open the listing named under that revision: vault/revisions/<revision ID>.txt. It lists every folder and ' +
-      'every file of the revision with its path, size, SHA-256 checksum and the object file that holds its bytes ' +
+    "Open the project's Map, _MAP cAdtree.txt. Under VERSIONS, find the version by its number, date and summary. " +
+      "Version numbers count across the whole project and all of its design cases, so one branch's versions can skip numbers. Each " +
+      'version names its branch (Main or a design case).',
+    'Open the listing named under that version: vault/revisions/<version ID>.txt. It lists every folder and ' +
+      'every file of the version with its path, size, SHA-256 checksum and the object file that holds its bytes ' +
       '(vault/objects/<first two characters of the checksum>/<checksum>.bin).',
     'Make a new, empty folder outside the vault. Create every folder in the listing, including empty ones. For each ' +
       'file, copy its object file into the right folder and rename the copy to the file name in the listing. Work on ' +
       'copies only: never rename or move anything inside the vault.',
-    'Rebuild the whole folder tree of the revision, not single files: assemblies and drawings find their parts by ' +
+    'Rebuild the whole folder tree of the version, not single files: assemblies and drawings find their parts by ' +
       'name and relative path.',
     {
       text: 'Check each file against its listed checksum. The two results must be identical:',
@@ -524,18 +524,18 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'program will find every reference: open the assembly and check it.',
   ]);
   doc.line().para(
-    'If a listing is missing, the same information is in vault/revisions/<revision ID>.manifest.json (see section 9). ' +
-      'Only a revision that also has vault/completed/<revision ID>.done.json is complete.',
+    'If a listing is missing, the same information is in vault/revisions/<version ID>.manifest.json (see section 9). ' +
+      'Only a version that also has vault/completed/<version ID>.done.json is complete.',
   );
 
   doc.heading('6. Notes and references');
   doc.para(
-    "Engineering notes: each revision's listing shows its summary, then its NOTES (Problem, Modification, " +
-      'Observations) and NOTES ON INDIVIDUAL FILES. The Map shows a one-line summary of every revision.',
+    "Engineering notes: each version's listing shows its summary, then its NOTES (Problem, Modification, " +
+      'Observations) and NOTES ON INDIVIDUAL FILES. The Map shows a one-line summary of every version.',
   );
   doc.line().para(
     "Reference documents: the Map's REFERENCES section lists every reference document with its original file name " +
-      'and the object file that holds it. Each revision listing has a section REFERENCES CAPTURED WITH THIS REVISION ' +
+      'and the object file that holds it. Each version listing has a section REFERENCES CAPTURED WITH THIS VERSION ' +
       'with the explanation that was written for it. Reference files are stored under their checksum like every ' +
       'other saved file, so drag the object file onto the restore page, or copy it and rename the copy to its recorded ' +
       'original file name (with Windows file name extensions turned on). A checksum ' +
@@ -550,7 +550,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     '- ',
   );
   doc.para(
-    'The guide files (_README, _INDEX, _MAP, _RESTORE and the revision listings) are generated by cAdtree. If one disagrees with ' +
+    'The guide files (_README, _INDEX, _MAP, _RESTORE and the version listings) are generated by cAdtree. If one disagrees with ' +
       'the records in the vault, the vault is correct. Edits you make to a guide file are overwritten.',
     0,
     '- ',
@@ -573,44 +573,44 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'Open cAdtree in Google Chrome or Microsoft Edge and open your Cadtree home, then the workspace and the project. ' +
       'Button names are shown as they appear on screen.',
   );
-  steps(doc, 'Save a revision', [
+  steps(doc, 'Save a version', [
     'Close your CAD documents, then choose Changes on the left. cAdtree checks your files by itself and lists what changed.',
-    'Check the changed files. Enter a Revision summary (required). Optionally choose + Add a description ' +
+    'Check the changed files. Enter a Version summary (required). Optionally choose + Add a description ' +
       '(with More detail for Why and What you noticed) or + Attach reference files.',
-    'Choose Save revision. The new revision appears in History.',
+    'Choose Save version. The new version appears in History.',
   ]);
   steps(doc, 'Create a design case', [
-    'Choose History and select the saved revision to start from.',
-    'Choose Create design case from this revision.',
+    'Choose History and select the saved version to start from.',
+    'Choose Create design case from this version.',
     'Enter a Case name and an Engineering reason, then choose Create design case.',
-    'cAdtree makes a new folder for the case under working/ with every file of that revision. Open that folder in ' +
+    'cAdtree makes a new folder for the case under working/ with every file of that version. Open that folder in ' +
       'your CAD program. To work on the case, select it under the project in the Explorer.',
   ]);
-  steps(doc, 'Bring an older revision back onto a branch (Bring back)', [
+  steps(doc, 'Bring an older version back onto a branch (Bring back)', [
     'Select the branch in the Explorer so that it is the active branch. If it has unsaved changes, save them first: ' +
       'the dialog offers Save my changes first.',
-    "In History, select an earlier revision from that branch's history (for a design case this includes the Main revisions " +
+    "In History, select an earlier version from that branch's history (for a design case this includes the Main versions " +
       'before the case started) and choose Bring back onto <branch>… (for example ' +
       '"Bring back onto Main…").',
     'The dialog lists every file that will change (for example "12 files will change"). Add a Why if you like ' +
       '(optional), close the files in your CAD program, and choose Bring back.',
-    'cAdtree changes the working files and saves the result as a new revision by itself, for example "Saved as ' +
-      'Rev 006. To undo, bring back Rev 005." History shows the revision as brought back.',
+    'cAdtree changes the working files and saves the result as a new version by itself, for example "Saved as ' +
+      'V6. To undo, bring back V5." History shows the version as brought back.',
   ]);
   steps(doc, 'Copy files from a design case', [
     'Select the branch that should receive the files (for example Main) in the Explorer, so it is the active branch.',
-    'In History, select a revision of the design case and choose Copy files from <case>….',
+    'In History, select a version of the design case and choose Copy files from <case>….',
     'The files the case changed are listed and ticked; untick any you do not want. For a file changed on both sides, ' +
       'choose Keep mine or Take theirs (there is no default). Add a Why if you like (optional).',
     'Close the files in your CAD program and choose Copy files. cAdtree copies them and saves the result as a new ' +
-      'revision by itself. The design case is not deleted.',
+      'version by itself. The design case is not deleted.',
     "If the save itself fails, your working files are fine: choose Save now to save them with the normal Save.",
   ]);
   steps(doc, 'Export a copy', [
-    'In History, select the revision you want to look at or share.',
+    'In History, select the version you want to look at or share.',
     'Choose Export a copy, then Complete project or Selected files.',
     'Choose Choose folder… and pick the folder that will hold the copy. Leave Include references ticked to also copy ' +
-      'the revision\'s reference attachments.',
+      'the version\'s reference attachments.',
     'Choose Export a copy. cAdtree writes a verified copy of the saved files into a new folder named ' +
       '<Project> - <Branch> - R<nn>; reference attachments go into a References folder inside it. Nothing in your ' +
       'project changes.',
@@ -630,9 +630,9 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
       'only reads can ignore it, but must never write to these records.',
   );
   doc.line().para(
-    'IDs of revisions, design cases (every branch except Main), references and reference versions look like ' +
+    'IDs of versions, design cases (every branch except Main), references and reference versions look like ' +
       'YYYYMMDD-HHMMSS-xxxxxx: the UTC time, then six random lowercase letters or digits. Never infer order from an ID: ' +
-      'the order of revisions comes from parentRevisionId links and the recorded times. Main is always branch-main. ' +
+      'the order of versions comes from parentRevisionId links and the recorded times. Main is always branch-main. ' +
       'Home, workspace, registration, project and component IDs are UUIDs with a prefix (home-, workspace-, ' +
       'registration-, proj-, component-). Apply operations are named YYYYMMDD-HHMMSS.',
   );
@@ -677,26 +677,26 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     [
       'branchId, projectId, name, reason, createdAt, isMain',
       'older design cases may instead be stored as <branchId>.json with no ready marker, like Main',
-      'startingRevisionId: the revision a design case started from (null for Main)',
+      'startingRevisionId: the version a design case started from (null for Main)',
       '.ready.json: branchId, projectId and recordSha256 (the SHA-256 of the branch record)',
     ],
   );
-  record('revisions/<revisionId>.manifest.json', 'One saved revision.', [
-    'revisionId, projectId, branchId, displayNumber (the project-wide revision number)',
-    'parentRevisionId: the revision it follows (null for the first one); this link, not the ID, gives the order',
+  record('revisions/<revisionId>.manifest.json', 'One saved version.', [
+    'revisionId, projectId, branchId, displayNumber (the project-wide version number)',
+    'parentRevisionId: the version it follows (null for the first one); this link, not the ID, gives the order',
     'captureStartedAt, captureCompletedAt, summary',
     'notes: problem, modification, observations',
     'fileNotes: a list of path, problem, modification, observations',
-    "directories: every folder of the revision, relative to the revision's top folder (this includes empty folders)",
+    "directories: every folder of the version, relative to the version's top folder (this includes empty folders)",
     'files: a list of path, size, sha256, lastModified; the bytes are in objects/<first two characters of sha256>/<sha256>.bin',
   ]);
-  record('completed/<revisionId>.done.json', 'Proof that the revision was saved completely.', [
+  record('completed/<revisionId>.done.json', 'Proof that the version was saved completely.', [
     'revisionId, branchId, displayNumber, projectId, completedAt, manifestSha256',
-    'A revision counts only when this file exists; a manifest without one is an unfinished save and must be ignored.',
+    'A version counts only when this file exists; a manifest without one is an unfinished save and must be ignored.',
   ]);
   record('objects/<xx>/<sha256>.bin', 'The exact bytes of one saved file or reference document.', [
     'xx is the first two hexadecimal characters of the SHA-256 of the bytes, which is also the file name',
-    'content-addressed: one object serves every revision and reference that has the same bytes',
+    'content-addressed: one object serves every version and reference that has the same bytes',
   ]);
   record('references/catalogs/<catalogId>.json', 'The reference documents known at some point.', [
     'A catalog counts only once its publication marker exists: a folder named <catalogId>.<code>.done in ' +
@@ -706,10 +706,10 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
     'references: a list of referenceId, title, description, tags, removed, projectVersionId and versions',
     'each version: versionId, originalFilename, fileType, size, sha256 (its object), importedAt',
   ]);
-  record('references/contexts/<revisionId>.json', 'Which references applied to one revision, and why.', [
+  record('references/contexts/<revisionId>.json', 'Which references applied to one version, and why.', [
     'revisionId, branchId, catalogId and catalogSha256 (the catalog in force for it; null when there is none)',
     'links: a list of referenceId, versionId, origin ("project" for a project-wide reference, "revision" for one ' +
-      'added for this revision), locator, explanation, componentPath',
+      'added for this version), locator, explanation, componentPath',
   ]);
   record('case-lifecycle/<branchId>.<sequence>.json', 'The history of a design case being hidden or unhidden.', [
     'branchId, sequence (1, 2, ...; the file name carries it as six digits: <branchId>.000001.json), status ("active", ' +

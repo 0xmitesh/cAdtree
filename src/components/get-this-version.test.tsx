@@ -21,7 +21,7 @@ afterEach(cleanup);
 
 const HOUSING = "Parts/Housing.SLDPRT";
 const revBtn = (ui: ReturnType<typeof render>, n: string) =>
-  ui.getByRole("button", { name: new RegExp(`Rev ${n}:`) });
+  ui.getByRole("button", { name: new RegExp(`^V${Number(n)}:`) });
 const files = (ui: ReturnType<typeof render>) =>
   ui.container.querySelector(".detail-files") as HTMLElement;
 
@@ -33,7 +33,7 @@ function spy(overrides: Partial<GetVersionCheck> = {}, extra: Partial<GetVersion
       checks.push([revisionId, path]);
       return {
         projectId: "visual-project", branchId: "branch-main", revisionId, path,
-        revisionLabel: `Rev 00${revisionId.slice(1)}`, fromLabel: `Rev 00${revisionId.slice(1)}`, planHash: "h", blockers: [],
+        revisionLabel: `V${revisionId.slice(1)}`, fromLabel: `V${revisionId.slice(1)}`, planHash: "h", blockers: [],
         hasUnsavedEdits: false, keptFolder: "Discarded/2026-11-20 09.30", ...overrides,
       };
     },
@@ -55,7 +55,7 @@ const props = (getVersion?: GetVersionController): HistoryRecoveryViewProps => (
   getVersion,
 });
 
-test("revision details: each saved file offers Get this version; none without the controller", () => {
+test("version details: each saved file offers Get this version; none without the controller", () => {
   const ui = render(<HistoryRecoveryView {...props(spy().controller)} />);
   fireEvent.click(revBtn(ui, "001"));
   assert.equal(within(files(ui)).getAllByRole("button", { name: "Get this version" }).length, 5);
@@ -65,7 +65,7 @@ test("revision details: each saved file offers Get this version; none without th
   assert.equal(within(files(without)).queryAllByRole("button", { name: "Get this version" }).length, 0);
 });
 
-test("not offered on deleted rows or damaged revisions", () => {
+test("not offered on deleted rows or damaged versions", () => {
   const state = historyState(3);
   state.revisions[2].manifest.files = state.revisions[2].manifest.files.filter(
     (f) => f.path !== "Drawings/Actuator.SLDDRW",
@@ -83,11 +83,11 @@ test("not offered on deleted rows or damaged revisions", () => {
   damaged.revisions[1].integrityStatus = "corrupted";
   const d = render(<HistoryRecoveryView {...props(spy().controller)} vaultState={damaged} />);
   fireEvent.click(revBtn(d, "002"));
-  assert.match(d.container.textContent!, /Damaged revision/);
+  assert.match(d.container.textContent!, /Damaged version/);
   assert.equal(within(files(d)).queryAllByRole("button", { name: "Get this version" }).length, 0);
 });
 
-test("the latest revision's file is not offered when the working file still matches it", () => {
+test("the latest version's file is not offered when the working file still matches it", () => {
   const latest = historyState(3).revisions[2].manifest.files.find((f) => f.path === HOUSING)!;
   let working: { sha256: string; size: number } | null = { sha256: latest.sha256, size: latest.size };
   const ui = render(<HistoryRecoveryView {...props(spy({}, { workingFile: () => working }).controller)} />);
@@ -100,7 +100,7 @@ test("the latest revision's file is not offered when the working file still matc
   assert.equal(within(files(edited)).getAllByRole("button", { name: "Get this version" }).length, 1);
 });
 
-test("File history: the picked file's row offers Get this version for an older revision", async () => {
+test("File history: the picked file's row offers Get this version for an older version", async () => {
   const { controller, checks } = spy();
   const ui = render(<HistoryRecoveryView {...props(controller)} />);
   pickFile(ui, HOUSING);
@@ -118,7 +118,7 @@ test("confirm dialog: the question, no warning without unsaved edits, and Confir
   await waitFor(() =>
     assert.match(
       dialog.textContent!,
-      /Put Parts\/Housing\.SLDPRT from Rev 002 into your working folder\? It will show as an unsaved change\./,
+      /Put Parts\/Housing\.SLDPRT from V2 into your working folder\? It will show as an unsaved change\./,
     ),
   );
   assert.doesNotMatch(dialog.textContent!, /current edits/);
@@ -138,7 +138,7 @@ test("confirm dialog: warns that unsaved edits are kept; blockers and a blocked 
   );
   cleanup();
   const blocked = render(
-    <HistoryRecoveryView {...props(spy({ blockers: ["This file was renamed since that revision."] }).controller)} />,
+    <HistoryRecoveryView {...props(spy({ blockers: ["This file was renamed since that version."] }).controller)} />,
   );
   fireEvent.click(revBtn(blocked, "002"));
   fireEvent.click(within(files(blocked)).getByRole("button", { name: "Get this version" }));
@@ -245,7 +245,7 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
   );
   const check = await result.current.check(r1, "A.txt");
   assert.deepEqual(check.blockers, []);
-  assert.equal(check.revisionLabel, "Rev 001");
+  assert.equal(check.revisionLabel, "V1");
   assert.equal(check.hasUnsavedEdits, true);
   assert.equal(writableChecks, 0, "the check only reads");
   await result.current.confirm(check);
@@ -255,7 +255,7 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
   assert.equal(refreshes, 1);
   assert.match(
     banners.at(-1)!.message,
-    /^Rev 001 of A\.txt is in your working folder\. Save to keep it, or Discard to undo\. The file it replaced is kept in Discarded\//,
+    /^V1 of A\.txt is in your working folder\. Save to keep it, or Discard to undo\. The file it replaced is kept in Discarded\//,
   );
   const state = await openExistingVault(vault);
   assert.equal(branchApplications(state, "branch-main")[0].status, "done");
@@ -281,8 +281,8 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
     })
   ).revision.manifest;
   const other = await result.current.check(caseRev.revisionId, "A.txt");
-  assert.equal(other.fromLabel, `Rev 00${caseRev.displayNumber} on Lighter`);
-  assert.equal(check.fromLabel, "Rev 001");
+  assert.equal(other.fromLabel, `V${caseRev.displayNumber} on Lighter`);
+  assert.equal(check.fromLabel, "V1");
 });
 
 test("an interrupted Get this version is labelled Undo the unfinished Get this version", () => {

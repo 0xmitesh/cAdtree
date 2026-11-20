@@ -138,15 +138,15 @@ test("unavailable shared ancestry stays explicit; Close keeps the History select
   const state = fixture();
   state.revisions[7].manifest.parentRevisionId = "missing";
   const ui = render(<HistoryRecoveryView {...props(state)} />);
-  fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V8:/ }));
   fireEvent.click(ui.getByRole("button", { name: "Copy files from Prototype…" }));
   const dialog = ui.getByRole("dialog", { name: "Copy files from Prototype" });
   assert.match(within(dialog).getByRole("alert").textContent!, /can't be done right now/);
   assert.equal(ui.queryByRole("textbox", { name: "Why (optional)" }), null);
   fireEvent.click(ui.getByRole("button", { name: "Close" }));
-  assert.equal(ui.getByRole("button", { name: /Rev 008:/ }).getAttribute("aria-pressed"), "true");
+  assert.equal(ui.getByRole("button", { name: /V8:/ }).getAttribute("aria-pressed"), "true");
   fireEvent.click(ui.getByRole("button", { name: "Compare" }));
-  fireEvent.change(ui.getByRole("combobox", { name: "From revision" }), { target: { value: "r6" } });
+  fireEvent.change(ui.getByRole("combobox", { name: "From version" }), { target: { value: "r6" } });
   assert.ok(ui.getByRole("status", { name: "Comparison counts" }));
 });
 
@@ -154,11 +154,11 @@ test("closing the dialog preserves History inspection and file filter; project c
   const state = fixture();
   const ui = render(<HistoryRecoveryView {...props(state)} />);
   pickFile(ui, path);
-  fireEvent.click(ui.getByRole("button", { name: /Rev 008:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V8:/ }));
   fireEvent.click(ui.getByRole("button", { name: "Copy files from Prototype…" }));
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   assert.equal(filePicker(ui).value, path);
-  assert.equal(ui.getByRole("button", { name: /Rev 008:/ }).getAttribute("aria-pressed"), "true");
+  assert.equal(ui.getByRole("button", { name: /V8:/ }).getAttribute("aria-pressed"), "true");
   fireEvent.click(ui.getByRole("button", { name: "Copy files from Prototype…" }));
   const second = fixture();
   second.project.projectId = "second";

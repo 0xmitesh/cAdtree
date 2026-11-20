@@ -50,7 +50,7 @@ const TUTORIAL_CARDS: TutorialCard[] = [
   {
     id: "design-alternatives",
     title: "Explore design alternatives",
-    description: "Create a separate design direction from a saved revision.",
+    description: "Create a separate design direction from a saved version.",
     preview: "alternatives",
     category: "secondary",
     status: "available",

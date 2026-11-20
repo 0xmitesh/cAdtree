@@ -302,7 +302,7 @@ test("archived cases remain inspectable and the activity/Compare workflow writes
   );
   assert.deepEqual(after, before);
 });
-test("selective application provenance never adds ancestry; only a later normal capture adds a Main revision", async () => {
+test("selective application provenance never adds ancestry; only a later normal capture adds a Main version", async () => {
   const f = await savedFixture(),
     branchId = f.branch.branch.branchId;
   const beforeState = await openExistingVault(f.vault);

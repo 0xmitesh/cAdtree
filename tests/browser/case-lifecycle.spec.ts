@@ -113,7 +113,7 @@ for (const width of [1366, 390])
       await waitForScan(page);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await page
-        .getByRole("textbox", { name: /Revision summary/ })
+        .getByRole("textbox", { name: /Version summary/ })
         .fill("Keep this case-scoped engineering draft");
       await page
         .getByRole("button", { name: /Add a description/ })
@@ -152,7 +152,7 @@ for (const width of [1366, 390])
         exact: true,
       });
       await expect(modal).toContainText(
-        "Its folder and saved revisions stay in place",
+        "Its folder and saved versions stay in place",
       );
       await modal
         .getByRole("button", { name: "Hide case", exact: true })
@@ -200,7 +200,7 @@ for (const width of [1366, 390])
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await nav.getByRole("button", { name: "Changes", exact: true }).click();
       await expect(
-        page.getByRole("textbox", { name: /Revision summary/ }),
+        page.getByRole("textbox", { name: /Version summary/ }),
       ).toHaveValue("Keep this case-scoped engineering draft");
       await expect(
         page.getByRole("textbox", {
@@ -255,7 +255,7 @@ for (const width of [1366, 390])
     });
     await nav.getByRole("button", { name: "History", exact: true }).click();
     await page
-      .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })
+      .getByRole("button", { name: /V3: Redesign only Part-X/ })
       .press("Enter");
     await expect(page.locator(".detail-meta")).toContainText(
       "Part-X redesign · Hidden",
@@ -268,15 +268,15 @@ for (const width of [1366, 390])
     ).toBeVisible();
     await pickFile(page, "Parts/Part-X.SLDPRT");
     await page
-      .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })
+      .getByRole("button", { name: /V3: Redesign only Part-X/ })
       .press("Enter");
     await page.getByRole("button", { name: "Compare", exact: true }).click();
     const compare = page.getByRole("dialog", {
-      name: "Compare saved revisions",
+      name: "Compare saved versions",
     });
     await expect(compare).toBeVisible();
     await expect(
-      compare.getByRole("region", { name: "To overall notes at Rev 003" }),
+      compare.getByRole("region", { name: "To overall notes at V3" }),
     ).toContainText("Overall: Redesign only Part-X");
     await compare
       .getByRole("button", { name: "Close comparison", exact: true })

@@ -50,7 +50,7 @@ export function CreateBranchDialog({
       <p className="muted">
         Creates an independent working copy of all {source.files.length} files
         and {source.directories.length} directories, including empty folders.
-        The vault and saved revision are shared.
+        The vault and saved version are shared.
       </p>
       {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
       <form

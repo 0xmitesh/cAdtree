@@ -153,18 +153,18 @@ test("Copy files saves by itself; the quiet rescan then shows no changes and Und
   fireEvent.click(copy.getByRole("button", { name: "Copy files" }));
   const banner = await waitFor(() => {
     const text = document.body.textContent!;
-    assert.match(text, /Saved as Rev \d+\. To undo, bring back Rev \d+\./);
+    assert.match(text, /Saved as V\d+\. To undo, bring back V\d+\./);
     return text;
   }, { timeout: 5000 });
   assert.ok(await sample.main.hasFile(["Rib.SLDPRT"]));
   assert.equal(ui.queryByRole("dialog", { name: /^Copy files from / }), null);
-  const previous = banner.match(/bring back (Rev \d+)\./)![1];
+  const previous = banner.match(/bring back (V\d+)\./)![1];
   fireEvent.click(ui.getByRole("button", { name: "Undo" }));
   assert.ok(await ui.findByRole("dialog", { name: `Bring back ${previous} onto Main` }));
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   // Nothing clicked: the quiet rescan shows the folder matches the new revision.
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  await waitFor(() => assert.match(document.body.textContent!, /No changes since Rev/), { timeout: 5000 });
+  await waitFor(() => assert.match(document.body.textContent!, /No changes since V\d+/), { timeout: 5000 });
   assert.equal(ui.queryByRole("button", { name: "Scan for changes" }), null);
 });
 
@@ -174,14 +174,14 @@ test("the Scan for changes button is gone; the Changes page shows its state as t
   assert.match(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Scanned/);
 });
 
-test("a revision draft survives a quiet rescan", async () => {
+test("a version draft survives a quiet rescan", async () => {
   const { sample, ui } = await openSample();
   await sample.main.writeFileText(["Draft-file.txt"], "one");
   await waitForScan(ui);
-  fireEvent.change(ui.getByRole("textbox", { name: /Revision summary/ }), { target: { value: "My unsaved draft" } });
+  fireEvent.change(ui.getByRole("textbox", { name: /Version summary/ }), { target: { value: "My unsaved draft" } });
   await sample.main.writeFileText(["Draft-file.txt"], "two, longer");
   await waitForScan(ui);
-  assert.equal((ui.getByRole("textbox", { name: /Revision summary/ }) as HTMLInputElement).value, "My unsaved draft");
+  assert.equal((ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement).value, "My unsaved draft");
 });
 
 test("the quiet scan never asks for folder access", async () => {

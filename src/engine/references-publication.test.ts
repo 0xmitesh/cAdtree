@@ -176,7 +176,7 @@ test('a stray file in references/completed fails loading with the strict publica
   await assert.rejects(importReferenceAttachment(f.vault, f.projectId, source(), metadata), /Reference evidence unavailable/);
 });
 
-test('first reference enrollment interrupted after file creation preserves an existing legacy revision and can capture before retry', async () => {
+test('first reference enrollment interrupted after file creation preserves an existing legacy version and can capture before retry', async () => {
   const f = await fixture(); await f.working.writeFileText(['part'], 'legacy CAD'); const first = await f.save();
   const id = first.revision.manifest.revisionId, completionPath = ['completed', `${id}.done.json`];
   const completion = JSON.parse(await f.disk.readFileText(completionPath)); delete completion.referenceContext;
@@ -222,7 +222,7 @@ for (const nextAction of ['import', 'capture'] as const) test(`empty references 
   if (nextAction === 'capture') assert.equal((await importReferenceAttachment(f.vault, f.projectId, source(), metadata)).references!.library.length, 1);
 });
 
-test('an empty references parent cannot replace enrollment required by a committed revision', async () => {
+test('an empty references parent cannot replace enrollment required by a committed version', async () => {
   const f = await fixture(); await f.working.writeFileText(['part'], 'saved CAD'); const saved = await f.save();
   await f.disk.removeEntry(['references'], { recursive: true });
   await f.disk.getDirectory(['references'], { create: true });
@@ -236,7 +236,7 @@ test('an empty references parent cannot replace enrollment required by a committ
   assert.deepEqual(await (await f.disk.getDirectory(['references'])).listEntries(), []);
 });
 
-test('nonempty reference storage requiring a missing enrollment remains unavailable without revision links', async () => {
+test('nonempty reference storage requiring a missing enrollment remains unavailable without version links', async () => {
   const f = await fixture(); await importReferenceAttachment(f.vault, f.projectId, source(), metadata);
   await f.disk.removeEntry(['references', 'enrollment'], { recursive: true });
   const reopened = await openExistingVault(f.vault);

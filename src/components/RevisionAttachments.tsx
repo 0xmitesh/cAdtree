@@ -25,7 +25,7 @@ export function RevisionAttachments({ state, scan, identityReview, review, onRev
     const selected = value.component?.kind === 'existing' ? `id:${value.component.componentId}` : value.component?.kind === 'pending' ? `path:${value.component.path}` : '';
     return <>
       <label className="field"><span>Applies to</span><select aria-label={`Applies to ${name}`} value={selected} onChange={event => update({ ...value, component: !event.target.value ? undefined : event.target.value.startsWith('id:') ? { kind: 'existing', componentId: event.target.value.slice(3) } : { kind: 'pending', path: event.target.value.slice(5) } })}>
-        <option value="">Whole revision</option>
+        <option value="">Whole version</option>
         {selected && !options.some(option => option.value === selected) ? <option value={selected}>Previous file — choose again</option> : null}
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select></label>
@@ -40,7 +40,7 @@ export function RevisionAttachments({ state, scan, identityReview, review, onRev
       onAttachments([...attachments, ...chosen]);
       event.currentTarget.value = '';
     }} /></label>
-    <p className="muted small">Files are copied when you save the revision. Add a note and choose where each file belongs.</p>
+    <p className="muted small">Files are copied when you save the version. Add a note and choose where each file belongs.</p>
     {attachments.map(attachment => <fieldset className="attachment-editor" key={attachment.draftId} disabled={busy}>
       <legend>{attachment.source.name}</legend><p className="muted small">{formatBytes(attachment.source.size)} · Ready to attach</p>
       {fields(attachment.source.name, attachment, change => onAttachments(attachments.map(item => item.draftId === attachment.draftId ? { ...item, ...change } : item)))}
@@ -56,10 +56,10 @@ export function RevisionAttachments({ state, scan, identityReview, review, onRev
             <legend>{reference?.title ?? name}</legend><p className="muted small">{name} · Saved file</p>
             {fields(`${name} ${index + 1}`, link, change => onReview({ ...review, explicit: review.explicit.map((item, i) => i === index ? { ...item, ...change } : item) }))}
             {link.locator ? <p className="small">Location: {link.locator}</p> : null}
-            <button className="text-button danger" type="button" onClick={() => onReview({ ...review, explicit: review.explicit.filter((_, i) => i !== index) })}>Remove from this revision</button>
+            <button className="text-button danger" type="button" onClick={() => onReview({ ...review, explicit: review.explicit.filter((_, i) => i !== index) })}>Remove from this version</button>
           </fieldset>;
         })}
-        {carried.map(reference => <p className="muted small" key={reference.referenceId}>{reference.title} · Whole revision · Carried forward</p>)}
+        {carried.map(reference => <p className="muted small" key={reference.referenceId}>{reference.title} · Whole version · Carried forward</p>)}
       </div> : null}
     </> : null}
   </div>;

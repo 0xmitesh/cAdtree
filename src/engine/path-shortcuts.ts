@@ -61,7 +61,7 @@ async function existingFile(
     await directory.statFile(segments);
   } catch {
     throw new Error(
-      "File path unavailable. The file is missing or cannot be read. Scan the relevant branch or reconnect the workspace; export the revision for historical bytes.",
+      "File path unavailable. The file is missing or cannot be read. Scan the relevant branch or reconnect the workspace; export the version for historical bytes.",
     );
   }
   return location;

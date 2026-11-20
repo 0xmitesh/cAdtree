@@ -52,7 +52,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await expect(page.locator('.project-context-case')).toHaveCount(0);
   await expect(view.getByRole('combobox')).toHaveCount(0);
   await expect(view.locator('.reference-card')).toHaveCount(4);
-  for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future revisions']) await expect(view.getByRole('button', { name, exact: true })).toHaveCount(0);
+  for (const name of ['Import reference', 'Edit details', 'Add new version', 'Use this version in project context', 'Remove from current context', 'Stop inheriting in future versions']) await expect(view.getByRole('button', { name, exact: true })).toHaveCount(0);
   const search = view.getByRole('searchbox', { name: 'Search references' });
   // The file a reference applies to.
   await search.fill('B.SLDPRT');
@@ -68,7 +68,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await expect(view.locator('.reference-card')).toHaveCount(4);
   await search.fill('Alpha updated.txt');
   await expect(view.locator('.reference-card')).toHaveCount(1);
-  await expect(view).toContainText('Alternative · Rev 003');
+  await expect(view).toContainText('Alternative · V3');
   await expect(view).toContainText('Part: B.SLDPRT');
   await search.fill('Alpha.txt');
   await expect(view.locator('.reference-card')).toHaveCount(1);
@@ -96,16 +96,16 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   ]);
   await page.getByRole('combobox', { name: 'Applies to Clearance.pdf', exact: true }).selectOption({ label: 'B.SLDPRT' });
   await page.getByRole('textbox', { name: 'Reference note for Clearance.pdf', exact: true }).fill('Maintain the bearing clearance');
-  await page.getByRole('textbox', { name: 'Reference note for Customer brief.txt', exact: true }).fill('Whole revision intent');
-  await page.getByRole('textbox', { name: /Revision summary/ }).fill('Attach client sources');
+  await page.getByRole('textbox', { name: 'Reference note for Customer brief.txt', exact: true }).fill('Whole version intent');
+  await page.getByRole('textbox', { name: /Version summary/ }).fill('Attach client sources');
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-  await page.getByRole('button', { name: 'Save revision', exact: true }).click();
-  await expect(page.getByText(/Published and verified Rev 004/)).toBeVisible();
+  await page.getByRole('button', { name: 'Save version', exact: true }).click();
+  await expect(page.getByText(/Published and verified V4/)).toBeVisible();
   await page.getByRole('navigation').getByRole('button', { name: 'History', exact: true }).click();
-  await page.getByRole('button', { name: /Rev 004:/ }).click();
+  await page.getByRole('button', { name: /V4:/ }).click();
   await page.getByRole('button', { name: 'Saved references', exact: true }).click();
   await expect(page.locator('.revision-detail')).toContainText('Maintain the bearing clearance');
-  await expect(page.locator('.revision-detail')).toContainText('Whole revision intent');
+  await expect(page.locator('.revision-detail')).toContainText('Whole version intent');
   await expect(page.locator('.revision-detail')).toContainText('Saved by Test Engineer');
   const historyDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download Clearance.pdf', exact: true }).click();
@@ -117,7 +117,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await page.getByRole('navigation').getByRole('button', { name: 'References', exact: true }).click();
   await view.getByRole('searchbox', { name: 'Search references' }).fill('Clearance.pdf');
   await expect(view.locator('.reference-card')).toHaveCount(1);
-  await expect(view).toContainText('Main · Rev 004');
+  await expect(view).toContainText('Main · V4');
   await expect(view).toContainText('Part: B.SLDPRT');
   await expect(view).toContainText('Maintain the bearing clearance');
   await expect(view.getByRole('button', { name: 'Download Clearance.pdf (Clearance.pdf)', exact: true })).toBeVisible();

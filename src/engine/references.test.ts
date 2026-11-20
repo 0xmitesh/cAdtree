@@ -290,7 +290,7 @@ test('applyToProject publishes the reference and its project version in one cata
   assert.ok(failed.references!.library.every(ref => ref.projectVersionId === null));
 });
 
-test('interrupted revision publication does not commit context; retry uses a fresh revision and keeps exact links', async () => {
+test('interrupted version publication does not commit context; retry uses a fresh version and keeps exact links', async () => {
   const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'geometry');
   const write = f.vault.writeFileText.bind(f.vault); let fail = true;
@@ -324,7 +324,7 @@ test('complete project copy, adoption, workspace import and disk-only relocation
   }
 });
 
-test('legacy revisions remain unannotated without rewriting manifests and missing or unsupported evidence is never regenerated', async () => {
+test('legacy versions remain unannotated without rewriting manifests and missing or unsupported evidence is never regenerated', async () => {
   const f = await fixture(); await f.working.writeFileText(['part'], 'legacy bytes'); const first = await f.save();
   if (await f.vault.hasFile(['reference-context.json'])) await f.vault.removeEntry(['reference-context.json']);
   await f.vault.removeEntry(['references'], { recursive: true });
@@ -474,7 +474,7 @@ test('reserved device names with several dots get the standard counter and never
   assert.equal(output.referencesCount, 3); assert.deepEqual(output.referencesSkipped, []);
 });
 
-test('a reference attached only to another revision stays out of this revision\'s export', async () => {
+test('a reference attached only to another version stays out of this revision\'s export', async () => {
   const f = await fixture();
   await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
   await f.working.writeFileText(['part'], 'one'); const first = await f.save();
@@ -494,7 +494,7 @@ test('context equality ignores display path but preserves exact version, origin,
   for (const change of [{ versionId: 'other' }, { componentId: 'other' }, { locator: 'page 5' }, { origin: 'project' as const }]) assert.notEqual(referenceContextSignature([link]), referenceContextSignature([{ ...link, ...change }]));
 });
 
-test('a missing committed context or a rechecksummed wrong revision binding is unavailable without losing CAD recovery', async () => {
+test('a missing committed context or a rechecksummed wrong version binding is unavailable without losing CAD recovery', async () => {
   for (const missing of [true, false]) {
     const f = await fixture(); await updateProjectReference(f.vault, f.projectId, f.ref.referenceId, { projectVersionId: f.version.versionId });
     await f.working.writeFileText(['part'], 'geometry'); const first = await f.save(), id = first.revision.manifest.revisionId;

@@ -153,7 +153,7 @@ test.describe("restore page, Mode 1: single files from a file:// page", () => {
     await input.setInputFiles(object(built.shas.bracketV2!));
     const card = viewer.locator("#results1 .card").first();
     await expect(card).toContainText("Matches the project's history");
-    await expect(card).toContainText("Rev 002, Main, Parts/Bracket.SLDPRT");
+    await expect(card).toContainText("V2, Main, Parts/Bracket.SLDPRT");
     expect(await card.getByRole("button").count()).toBe(1);
     const [download] = await Promise.all([viewer.waitForEvent("download"), card.getByRole("button", { name: 'Save as "Bracket.SLDPRT"' }).click()]);
     expect(download.suggestedFilename()).toBe("Bracket.SLDPRT");
@@ -170,7 +170,7 @@ test.describe("restore page, Mode 1: single files from a file:// page", () => {
     const [unicodeDownload] = await Promise.all([viewer.waitForEvent("download"), cards.nth(1).getByRole("button").click()]);
     expect(unicodeDownload.suggestedFilename()).toBe("Ünïcode Teil.SLDPRT");
     expect(readFileSync((await unicodeDownload.path())!).equals(bytesFromBase64(built.objects[built.shas.unicode!]!))).toBe(true);
-    await expect(cards.nth(2)).toContainText("Rev 001, Main, Parts/Bracket.SLDPRT");
+    await expect(cards.nth(2)).toContainText("V1, Main, Parts/Bracket.SLDPRT");
 
     // A reference document.
     await input.setInputFiles(object(reference));
@@ -192,7 +192,7 @@ test.describe("restore page, Mode 1: single files from a file:// page", () => {
     expect(await viewer.locator("#results1 .card").getByRole("button").count()).toBe(0);
     // The same file with its true bytes is fine.
     await input.setInputFiles(write(damagedName, bytesFromBase64(built.objects[built.shas.assembly!]!)));
-    await expect(viewer.locator("#results1 .card")).toContainText("Rev 001, Main, Assembly/Main.SLDASM");
+    await expect(viewer.locator("#results1 .card")).toContainText("V1, Main, Assembly/Main.SLDASM");
 
     expect(errors).toEqual([]);
     expect(outbound).toEqual([]);
@@ -213,7 +213,7 @@ test.describe("restore page, Mode 1: single files from a file:// page", () => {
       transfer.items.add(new File([bytes], "9a5f-unrelated-name.bin"));
       document.querySelector("#drop-zone")!.dispatchEvent(new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true }));
     }, data);
-    await expect(viewer.locator("#results1 .card")).toContainText("Rev 001, Main, Assembly/Main.SLDASM");
+    await expect(viewer.locator("#results1 .card")).toContainText("V1, Main, Assembly/Main.SLDASM");
   });
 });
 
@@ -277,12 +277,12 @@ const queueVault = (page: Page, built: Built) =>
 async function chooseVaultAndRevision(page: Page, built: Built, number: string): Promise<void> {
   await queueVault(page, built);
   await page.locator("#choose-vault").click();
-  await expect(page.locator("#vault-status")).toContainText("Vault found: 2 complete revision(s)");
+  await expect(page.locator("#vault-status")).toContainText("Vault found: 2 complete version(s)");
   await expect(page.locator("#revision-list label")).toHaveCount(2);
   await page.locator("#revision-list label", { hasText: number }).locator("input").check();
 }
 
-test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed with real OPFS handles)", () => {
+test.describe("restore page, Mode 2: rebuild a whole version (picker stubbed with real OPFS handles)", () => {
   test("reads the vault read-only, refuses bad destinations, rebuilds every folder and file and verifies them", async ({ page }) => {
     test.setTimeout(120000);
     const errors: string[] = [];
@@ -307,13 +307,13 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
       await w.__vault.getDirectoryHandle("scratch-empty", { create: true });
     });
     await page.locator("#choose-vault").click();
-    await expect(page.locator("#vault-status")).toContainText("Vault found: 2 complete revision(s)");
+    await expect(page.locator("#vault-status")).toContainText("Vault found: 2 complete version(s)");
     const labels = page.locator("#revision-list label");
     await expect(labels).toHaveCount(2);
-    await expect(labels.nth(0)).toContainText("Rev 001");
+    await expect(labels.nth(0)).toContainText("V1");
     await expect(labels.nth(0)).toContainText("Main");
     await expect(labels.nth(0)).toContainText("Base");
-    await expect(labels.nth(1)).toContainText("Rev 002");
+    await expect(labels.nth(1)).toContainText("V2");
     // The summary is shown as text, not markup.
     await expect(labels.nth(1)).toContainText("Stiffer bracket <b>bold</b> & more");
     expect(await page.locator("#revision-list b").count()).toBe(0);
@@ -361,7 +361,7 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
     // Step 4.
     await page.locator("#rebuild").click();
     const total = built.files.length;
-    await expect(page.locator("#report")).toContainText(`Rev 002: ${total} of ${total} file(s) written, 0 missing, 0 damaged, 0 failed;`);
+    await expect(page.locator("#report")).toContainText(`V2: ${total} of ${total} file(s) written, 0 missing, 0 damaged, 0 failed;`);
     await expect(page.locator("#report .status.good")).toBeVisible();
     // Success changes nothing about the picker modes: the vault was asked for read-only, the destination for read-write.
     expect(await page.evaluate(() => (window as any).__pickerCalls.map((c: any) => c?.mode))).toEqual(
@@ -423,7 +423,7 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
     expect(tampered).toBe(true);
 
     await openRestorePage(page, built.html);
-    await chooseVaultAndRevision(page, built, "Rev 002");
+    await chooseVaultAndRevision(page, built, "V2");
     const vaultBefore: string[] = await page.evaluate(() => (window as any).__snapshot((window as any).__vault));
     await page.evaluate(() => (window as any).__queueFolder("rebuild-target", {}));
     await page.locator("#choose-dest").click();
@@ -432,9 +432,9 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
 
     const total = built.files.length;
     // Shaft.SLDPRT and "Shaft copy.SLDPRT" share the flipped object; the Unicode file is gone; Main.SLDASM is a byte short.
-    await expect(page.locator("#report")).toContainText(`Rev 002: ${total - 4} of ${total} file(s) written, 1 missing, 3 damaged, 0 failed;`);
+    await expect(page.locator("#report")).toContainText(`V2: ${total - 4} of ${total} file(s) written, 1 missing, 3 damaged, 0 failed;`);
     await expect(page.locator("#report .status.bad")).toBeVisible();
-    await expect(page.locator("#report")).toContainText("Do not use this rebuilt folder as the full revision");
+    await expect(page.locator("#report")).toContainText("Do not use this rebuilt folder as the full version");
     const rows = page.locator("#report table").first().locator("tr");
     await expect(rows.filter({ hasText: "missing" })).toContainText("Parts/Ünïcode Teil.SLDPRT");
     await expect(rows.filter({ hasText: "damaged" })).toHaveCount(3);
@@ -452,15 +452,15 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
     expect(await page.evaluate(() => (window as any).__snapshot((window as any).__vault))).toEqual(vaultBefore);
   });
 
-  test("Rev 001 rebuilds its own older bytes", async ({ page }) => {
+  test("V1 rebuilds its own older bytes", async ({ page }) => {
     test.setTimeout(120000);
     const built = await buildProject(page);
     await openRestorePage(page, built.html);
-    await chooseVaultAndRevision(page, built, "Rev 001");
+    await chooseVaultAndRevision(page, built, "V1");
     await page.evaluate(() => (window as any).__queueFolder("older", {}));
     await page.locator("#choose-dest").click();
     await page.locator("#rebuild").click();
-    await expect(page.locator("#report .status.good")).toContainText("Rev 001:");
+    await expect(page.locator("#report .status.good")).toContainText("V1:");
     const rebuilt: string[] = await page.evaluate(() => (window as any).__snapshot((window as any).__lastQueued));
     expect(rebuilt).toContain(`F Parts/Bracket.SLDPRT ${built.shas.bracketV1}`);
     expect(rebuilt.some((line) => line.includes(String(built.shas.bracketV2)))).toBe(false);
@@ -479,13 +479,13 @@ test.describe("restore page, Mode 2: rebuild a whole revision (picker stubbed wi
     await openRestorePage(page, built.html);
     await queueVault(page, built);
     await page.locator("#choose-vault").click();
-    await expect(page.locator("#vault-status")).toContainText("Vault found: 1 complete revision(s)");
+    await expect(page.locator("#vault-status")).toContainText("Vault found: 1 complete version(s)");
     await expect(page.locator("#revision-list label")).toHaveCount(1);
-    await expect(page.locator("#revision-list")).toContainText(`Revision ${built.revisions[1]!.id} is not listed`);
+    await expect(page.locator("#revision-list")).toContainText(`Version ${built.revisions[1]!.id} is not listed`);
   });
 });
 
-test("the page's checksum of a manifest agrees with the engine's, and revisions failing the integrity rule are listed but cannot be rebuilt", async ({ page }) => {
+test("the page's checksum of a manifest agrees with the engine's, and versions failing the integrity rule are listed but cannot be rebuilt", async ({ page }) => {
   test.setTimeout(120000);
   const built = await buildProject(page);
   // Real manifests, through the engine's own function (on the app page) and the page's port of it (on the restore page).
@@ -536,13 +536,13 @@ test("the page's checksum of a manifest agrees with the engine's, and revisions 
   }, { baseName: built.baseName, containerPath: built.containerPath, id: secondId });
   await queueVault(page, built);
   await page.locator("#choose-vault").click();
-  await expect(page.locator("#vault-status")).toContainText("Vault found: 1 complete revision(s) and 1 damaged");
+  await expect(page.locator("#vault-status")).toContainText("Vault found: 1 complete version(s) and 1 damaged");
   const damaged = page.locator("#revision-list label", { hasText: "damaged" });
   await expect(damaged).toHaveCount(1);
   await expect(damaged).toContainText("cannot rebuild");
   await expect(damaged).toContainText("does not match");
   await expect(damaged.locator("input")).toBeDisabled();
-  await expect(page.locator("#revision-list label", { hasText: "Rev 001" }).locator("input")).toBeEnabled();
+  await expect(page.locator("#revision-list label", { hasText: "V1" }).locator("input")).toBeEnabled();
 });
 
 test("a browser without the folder picker still offers single files and explains Mode 2", async ({ page, context }) => {

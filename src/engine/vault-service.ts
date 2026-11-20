@@ -275,7 +275,7 @@ export async function initializeProjectVault(
     throw new Error('Project name is required.');
   }
 
-  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Revision vault');
+  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Version vault');
 
   const existingEntries = await vaultDir.listEntries();
   if (existingEntries.length > 0) {
@@ -286,7 +286,7 @@ export async function initializeProjectVault(
       );
     }
     throw new Error(
-      `Vault directory "${vaultDir.name}" is not empty (contains ${existingEntries.length} item(s)). Select a dedicated new or empty folder for the revision vault.`
+      `Vault directory "${vaultDir.name}" is not empty (contains ${existingEntries.length} item(s)). Select a dedicated new or empty folder for the version vault.`
     );
   }
 
@@ -475,7 +475,7 @@ export async function openExistingVault(
           } catch (error) {
             readyMarkerError = `Branch ready marker is missing, unreadable, or malformed: ${error instanceof Error ? error.message : String(error)}`;
             if (!establishedBranchIds.has(branchId)) {
-              incompleteAttempts.push({ id: branchId, kind: 'uncompleted_branch', path: recordPath, detail: 'Branch publication has no valid ready marker and no committed revision. Its working copy may be incomplete; it is excluded from ready branches. Retry into a fresh folder.' });
+              incompleteAttempts.push({ id: branchId, kind: 'uncompleted_branch', path: recordPath, detail: 'Branch publication has no valid ready marker and no committed version. Its working copy may be incomplete; it is excluded from ready branches. Retry into a fresh folder.' });
               continue;
             }
           }
@@ -732,7 +732,7 @@ export async function openExistingVault(
   // Check for orphan completion records whose manifest file is completely missing
   for (const [revId, comp] of completionMap.entries()) {
     if (!seenManifestRevisionIds.has(revId)) {
-      const errReason = `Committed revision ${revId} has a completion record (${comp.rawPath}) but its manifest file is missing.`;
+      const errReason = `Committed version ${revId} has a completion record (${comp.rawPath}) but its manifest file is missing.`;
       corruptedRecords.push({
         recordPath: comp.rawPath,
         revisionId: revId,
@@ -776,7 +776,7 @@ export async function openExistingVault(
         .map((r) => `${formatRevisionNumber(r.manifest.displayNumber)} (${r.manifest.revisionId})`)
         .join(', ');
       damagedBranchHeads[branch.branchId] =
-        `Branch "${branch.name}" contains damaged committed revision(s): ${damagedLabels}. ` +
+        `Branch "${branch.name}" contains damaged committed version(s): ${damagedLabels}. ` +
         `The intended branch head cannot be safely established; new captures are blocked to prevent history loss or duplicate numbering.`;
       // Point branchHeads to the highest displayNumber revision on the branch so UI never silently falls back to an older head
       branchHeads[branch.branchId] =
@@ -814,7 +814,7 @@ export async function openExistingVault(
       branchBaselineEndpoints[branch.branchId] = leaves[0];
     if (missingParentRev) {
       damagedBranchHeads[branch.branchId] =
-        `Revision ${formatRevisionNumber(missingParentRev.manifest.displayNumber)} references missing parent revision "${missingParentRev.manifest.parentRevisionId}".`;
+        `Version ${formatRevisionNumber(missingParentRev.manifest.displayNumber)} references missing parent version "${missingParentRev.manifest.parentRevisionId}".`;
       branchHeads[branch.branchId] =
         branchRevs[branchRevs.length - 1]?.manifest.revisionId ?? null;
       continue;
@@ -907,7 +907,7 @@ export function computeRevisionDiff(
   if (!parentRev) {
     return {
       status: 'unavailable',
-      unavailableReason: `Comparison unavailable: recorded parent revision (${parentId}) was not found in vault.`,
+      unavailableReason: `Comparison unavailable: recorded parent version (${parentId}) was not found in vault.`,
       parentRevisionId: parentId,
       parentDisplayNumber: null,
       added: [],
@@ -976,7 +976,7 @@ export async function verifyRevisionObjects(
 }
 
 export function formatRevisionNumber(displayNumber: number): string {
-  return `Rev ${String(displayNumber).padStart(3, '0')}`;
+  return `V${displayNumber}`;
 }
 
 export function sanitizeFileSpecificNotes(

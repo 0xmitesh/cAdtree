@@ -200,7 +200,7 @@ export function useCaptureActions({
           message: `${renamed ? `${renamed} ` : ""}${
             result.hasChanges
               ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
-              : "This working folder matches its branch’s saved revision."
+              : "This working folder matches its branch’s saved version."
           }`,
         });
     });

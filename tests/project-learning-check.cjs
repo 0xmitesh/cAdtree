@@ -49,7 +49,7 @@ async function start(){const s=await compareApplyRecoverSample();const caseBytes
       await page.getByRole('button',{name:/Add a description/}).click();
       await page.getByRole('textbox',{name:'Overall: Description',exact:true}).fill('Keep intent');
       await nav.getByRole('button',{name:'History',exact:true}).click();
-      await page.getByRole('button',{name:/Rev 004: Reduced bracket thickness/}).click();
+      await page.getByRole('button',{name:/V4: Reduced bracket thickness/}).click();
       const before=await page.evaluate(()=>window.sample.signature());
       const selected=await page.locator('.revision-detail').innerText();
       // R5: one stable working destination across project views, distinct from inspection.

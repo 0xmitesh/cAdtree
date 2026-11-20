@@ -30,7 +30,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
     return node;
   }
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
-  function formatRevision(n) { return 'Rev ' + String(n).padStart(3, '0'); }
+  function formatRevision(n) { return 'V' + String(n); }
   function formatSize(n) {
     if (n < 1024) return n + ' bytes';
     if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
@@ -199,8 +199,8 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
   if (!window.showDirectoryPicker || !subtle) {
     clear(mode2);
     mode2.appendChild(el('p', !window.showDirectoryPicker
-      ? 'Rebuilding a whole revision needs a browser that can open folders, such as Google Chrome or Microsoft Edge on a computer. This browser cannot. You can still restore single files above, or use the steps in the Map.'
-      : 'This browser does not provide checksums (crypto.subtle) for pages opened from a file, so a revision cannot be rebuilt and checked here. Try Chrome or Edge, or use the steps in the Map.', 'status warn'));
+      ? 'Rebuilding a whole version needs a browser that can open folders, such as Google Chrome or Microsoft Edge on a computer. This browser cannot. You can still restore single files above, or use the steps in the Map.'
+      : 'This browser does not provide checksums (crypto.subtle) for pages opened from a file, so a version cannot be rebuilt and checked here. Try Chrome or Edge, or use the steps in the Map.', 'status warn'));
     return;
   }
 
@@ -274,17 +274,17 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
         var read = await readJson(revisionsDir, id + '.manifest.json');
         var manifest = read.value;
         if (!manifest || typeof manifest !== 'object' || manifest.revisionId !== id || !isCount(manifest.displayNumber) || !Array.isArray(manifest.files) || !Array.isArray(manifest.directories) || !manifest.notes || typeof manifest.notes !== 'object') {
-          throw new Error('the revision record is not valid');
+          throw new Error('the version record is not valid');
         }
         manifest.files.forEach(function (file) {
           if (!file || typeof file.path !== 'string' || !isHash(file.sha256) || !isCount(file.size)) throw new Error('a file entry is not valid');
         });
         manifest.directories.forEach(function (dir) { if (typeof dir !== 'string') throw new Error('a folder entry is not valid'); });
-        // The same integrity rule as cAdtree itself (vault-service). A revision that fails any check is listed but cannot be rebuilt.
+        // The same integrity rule as cAdtree itself (vault-service). A version that fails any check is listed but cannot be rebuilt.
         var damage = [];
         if (manifest.projectId !== DATA.projectId) damage.push("it belongs to a different project");
         if (manifest.branchId !== done.branchId) damage.push("its branch does not match its completion record");
-        if (manifest.displayNumber !== done.displayNumber) damage.push("its revision number does not match its completion record");
+        if (manifest.displayNumber !== done.displayNumber) damage.push("its version number does not match its completion record");
         if (manifest.manifestPayloadSha256 !== await payloadChecksum(manifest)) damage.push("its internal checksum does not match");
         if (await sha256Hex(read.bytes) !== done.manifestSha256) damage.push("its checksum does not match its completion record");
         list.push({
@@ -297,7 +297,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
           manifest: manifest
         });
       } catch (error) {
-        problems.push('Revision ' + id + ' is not listed: ' + errorText(error) + '.');
+        problems.push('Version ' + id + ' is not listed: ' + errorText(error) + '.');
       }
     }
     list.sort(function (a, b) { return a.completedAt < b.completedAt ? -1 : a.completedAt > b.completedAt ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
@@ -306,7 +306,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
 
   function renderRevisions(problems) {
     clear(revisionList);
-    if (!revisions.length) revisionList.appendChild(el('p', 'This vault has no complete revisions.', 'status warn'));
+    if (!revisions.length) revisionList.appendChild(el('p', 'This vault has no complete versions.', 'status warn'));
     revisions.forEach(function (revision) {
       var label = el('label', null, 'choice');
       var radio = document.createElement('input');
@@ -360,7 +360,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
     revisions = loaded.revisions;
     vaultStatus.className = 'status good';
     var damagedCount = revisions.filter(function (r) { return r.damaged; }).length;
-    vaultStatus.textContent = 'Vault found: ' + (revisions.length - damagedCount) + ' complete revision(s)' + (damagedCount ? ' and ' + damagedCount + ' damaged' : '') + '. It is opened read-only; nothing is written to it.';
+    vaultStatus.textContent = 'Vault found: ' + (revisions.length - damagedCount) + ' complete version(s)' + (damagedCount ? ' and ' + damagedCount + ' damaged' : '') + '. It is opened read-only; nothing is written to it.';
     renderRevisions(loaded.problems);
     updateButtons();
   });
@@ -452,7 +452,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
       if (!pathCheck.segments) { counts.failed++; rows.push({ state: 'failed', path: file.path, detail: 'Skipped: ' + pathCheck.error + '.' }); continue; }
       var segments = pathCheck.segments;
       var lower = segments.join('/').toLowerCase();
-      if (seen.has(lower)) { counts.failed++; rows.push({ state: 'failed', path: file.path, detail: 'Skipped: another file in this revision has the same name apart from capital letters.' }); continue; }
+      if (seen.has(lower)) { counts.failed++; rows.push({ state: 'failed', path: file.path, detail: 'Skipped: another file in this version has the same name apart from capital letters.' }); continue; }
       seen.add(lower);
       var buffer;
       try {
@@ -539,7 +539,7 @@ export const RESTORE_PAGE_SCRIPT = String.raw`
     var summary = formatRevision(revision.number) + ': ' + counts.written + ' of ' + result.total + ' file(s) written, ' + counts.missing + ' missing, ' + counts.damaged + ' damaged, ' + counts.failed + ' failed; ' + counts.folders + ' folder(s) created.';
     report.appendChild(el('p', summary, ok ? 'status good' : 'status bad'));
     if (!ok) {
-      report.appendChild(el('p', 'Do not use this rebuilt folder as the full revision. Files that are missing, damaged or failed were not written:', 'label'));
+      report.appendChild(el('p', 'Do not use this rebuilt folder as the full version. Files that are missing, damaged or failed were not written:', 'label'));
       report.appendChild(reportTable(problems));
     } else {
       report.appendChild(el('p', 'Every file was checked against its saved checksum before it was written and again after. That shows the bytes are the ones that were saved. It does not show that the design is right: open the assembly in your CAD program and check it.', 'fine'));

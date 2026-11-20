@@ -36,7 +36,7 @@ const directory = ['components'];
 const boundaryPath = [...directory, 'boundary.json'];
 const readyPath = [...directory, 'ready.json'];
 const recordPath = (id: string) => {
-  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unsafe revision identity.');
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unsafe version identity.');
   return [...directory, 'revisions', `${id}.json`];
 };
 export const componentRecordPath = recordPath;
@@ -133,10 +133,10 @@ export async function readComponentEvidence(vault: FileSystemDirectoryAdapter, s
     const pending = state.revisions.filter(r => !legacy.has(r.manifest.revisionId));
     const componentRevisions = await vault.getDirectory([...directory, 'revisions']);
     for (const entry of await componentRevisions.listEntries()) {
-      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) throw new Error('Unexpected component revision evidence.');
+      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) throw new Error('Unexpected component version evidence.');
       const revisionId = entry.name.slice(0, -5);
       if (legacy.has(revisionId)) throw new Error('Component record conflicts with the legacy boundary.');
-      if (!revisions.has(revisionId)) state.incompleteAttempts.push({ id: revisionId, kind: 'uncompleted_component', path: `components/revisions/${entry.name}`, detail: 'Component mapping has no committed revision; it is not published identity history.' });
+      if (!revisions.has(revisionId)) state.incompleteAttempts.push({ id: revisionId, kind: 'uncompleted_component', path: `components/revisions/${entry.name}`, detail: 'Component mapping has no committed version; it is not published identity history.' });
     }
     const loaded: ComponentRecord[] = [];
     // Parent order is structural, never inferred from revision numbering.

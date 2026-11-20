@@ -90,7 +90,7 @@ export function getBranchBaseline(
   }
   if (!branch.isMain && !branch.startingRevisionId) {
     throw new Error(
-      `Branch "${branch.name}" has no starting revision. Saving is blocked.`,
+      `Branch "${branch.name}" has no starting version. Saving is blocked.`,
     );
   }
   if (branch.startingRevisionId)
@@ -113,7 +113,7 @@ export function getBranchBaseline(
   }
   if (branch.startingRevisionId && cursor !== branch.startingRevisionId)
     throw new Error(
-      `Branch "${branch.name}" does not connect to its recorded starting revision.`,
+      `Branch "${branch.name}" does not connect to its recorded starting version.`,
     );
   return id ? assertRevisionAncestry(state, id) : null;
 }
@@ -127,12 +127,12 @@ export function assertRevisionAncestry(
   let result: RevisionManifest | undefined;
   while (id) {
     if (seen.has(id))
-      throw new Error("Cyclic revision ancestry. Operation blocked.");
+      throw new Error("Cyclic version ancestry. Operation blocked.");
     seen.add(id);
     const matches = state.revisions.filter((r) => r.manifest.revisionId === id);
     if (matches.length !== 1 || matches[0].integrityStatus === "corrupted") {
       throw new Error(
-        `Starting or parent revision "${id}" is missing, ambiguous, or damaged. Operation blocked.`,
+        `Starting or parent version "${id}" is missing, ambiguous, or damaged. Operation blocked.`,
       );
     }
     const rev = matches[0];
@@ -216,7 +216,7 @@ export async function validateWorkingFolderBindings(
       dir,
       vault,
       `"${branch.name}" working folder`,
-      "Revision vault",
+      "Version vault",
     );
     for (const other of connected) {
       await validateDirectoryIsolation(

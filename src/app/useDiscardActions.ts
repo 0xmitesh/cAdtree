@@ -127,7 +127,7 @@ export function useDiscardActions({
           throw new Error("Project identity changed. Reopen the project.");
         const baseline = getBranchBaseline(state, branchId);
         if (!baseline)
-          throw new Error("This case has no saved revision yet, so there is nothing to go back to.");
+          throw new Error("This case has no saved version yet, so there is nothing to go back to.");
         const working = workingFolders[branchId] ?? workingDir;
         if (!working) throw new Error("Reconnect the working folder first.");
         const scan = await scanForReplace(working, branchId, baseline, {

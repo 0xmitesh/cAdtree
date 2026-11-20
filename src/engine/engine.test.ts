@@ -254,7 +254,7 @@ test('Regression Fix 1: Unreadable or structurally malformed committed manifests
   // Capture Revision 001
   const rev1 = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
-    summary: 'Revision 1 baseline',
+    summary: 'Version 1 baseline',
     notes: { problem: '', modification: '', observations: '' },
   });
   assert.equal(rev1.revision.manifest.displayNumber, 1);
@@ -266,7 +266,7 @@ test('Regression Fix 1: Unreadable or structurally malformed committed manifests
   );
   const rev2 = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
-    summary: 'Revision 2 edit',
+    summary: 'Version 2 edit',
     notes: { problem: '', modification: '', observations: '' },
   });
   assert.equal(rev2.revision.manifest.displayNumber, 2);
@@ -300,7 +300,7 @@ test('Regression Fix 1: Unreadable or structurally malformed committed manifests
         summary: 'Should be blocked due to unreadable Rev 2 head',
         notes: { problem: '', modification: '', observations: '' },
       }),
-    /damaged committed revision/
+    /damaged committed version/
   );
 
   // Restore readability, then replace Rev 2 manifest with valid JSON missing required fields (e.g. missing files/notes/directories)
@@ -791,7 +791,7 @@ test('Backward compatibility: existing vault manifests without fileNotes open an
   // Capture a revision WITHOUT fileNotes (matches pre-refinement schema format)
   const capLegacy = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
-    summary: 'Legacy revision without fileNotes field',
+    summary: 'Legacy version without fileNotes field',
     notes: {
       problem: 'Overall problem',
       modification: 'Overall modification',
@@ -826,7 +826,7 @@ test('Backward compatibility: existing vault manifests without fileNotes open an
   );
   const capWithFileNote = await captureRevision(workingDir, vaultDir, {
     branchId: MAIN_BRANCH_ID,
-    summary: 'Revision with integrity-protected fileNotes',
+    summary: 'Version with integrity-protected fileNotes',
     notes: { problem: '', modification: '', observations: '' },
     fileNotes: [
       {

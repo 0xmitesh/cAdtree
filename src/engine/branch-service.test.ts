@@ -304,7 +304,7 @@ test("committed branch identity with an unvalidated record blocks writes even if
   }
 });
 
-test("Milestone 2: three complete independent cases share Rev 001, diverge, and continue with global numbering", async () => {
+test("Milestone 2: three complete independent cases share V1, diverge, and continue with global numbering", async () => {
   const { main, vault, first, workingFolders, create } = await setup();
   const original = await inventory(main);
   for (const value of [22, 33]) {
@@ -511,7 +511,7 @@ test("folder identity and ancestor checks reject overlap and require every branc
   const { main, vault, create, workingFolders } = await setup();
   await assert.rejects(
     create("A", undefined, { destinationParent: vault }),
-    /inside the revision vault/,
+    /inside the version vault/,
   );
   const child = await main.getDirectory(["NestedDestination"], {
     create: true,
@@ -763,7 +763,7 @@ test("competing heads after reopening remain visible and cannot be used to creat
   await assert.rejects(create("From ambiguous case", "fork-2"), /competing/);
 });
 
-test("missing/damaged starting revisions and ambiguous heads block scans and captures after reopening", async () => {
+test("missing/damaged starting versions and ambiguous heads block scans and captures after reopening", async () => {
   const { vault, create, first, main } = await setup();
   const result = await create();
   const record: BranchRecord = {

@@ -50,7 +50,7 @@ for (const width of [1366, 390])
     await nav.getByRole("button", { name: "Changes", exact: true }).click();
     await waitForScan(page);
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-    const summary = page.getByRole("textbox", { name: /Revision summary/ });
+    const summary = page.getByRole("textbox", { name: /Version summary/ });
     await summary.fill("Main draft stays intact during case review");
     await page
       .getByRole("button", { name: /Add a description/ })
@@ -76,7 +76,7 @@ for (const width of [1366, 390])
     const filePicker = fileInput(page);
     await pickFile(page, "Parts/Part-X.SLDPRT");
     await page
-      .getByRole("button", { name: /Rev 003: Redesign only Part-X/ })
+      .getByRole("button", { name: /V3: Redesign only Part-X/ })
       .press("Enter");
     await expect(page.locator(".revision-detail")).toContainText(
       "Redesign only Part-X",
@@ -119,26 +119,26 @@ for (const width of [1366, 390])
     await compare.focus();
     await compare.press("Enter");
     const dialog = page.getByRole("dialog", {
-      name: "Compare saved revisions",
+      name: "Compare saved versions",
       exact: true,
     });
     await expect(
-      dialog.getByRole("combobox", { name: "From revision" }),
+      dialog.getByRole("combobox", { name: "From version" }),
     ).toHaveValue(fixture.ids[2]);
     await expect(
-      dialog.getByRole("combobox", { name: "To revision" }),
+      dialog.getByRole("combobox", { name: "To version" }),
     ).toHaveValue(fixture.ids[1]);
     await expect(dialog).toContainText("Scope: All project files");
     await expect(dialog).toContainText("Part-X redesign · Hidden");
     await expect(
       dialog.getByRole("region", {
-        name: "From overall notes at Rev 003",
+        name: "From overall notes at V3",
         exact: true,
       }),
     ).toContainText("Overall: Redesign only Part-X");
     await expect(
       dialog.getByRole("region", {
-        name: "To overall notes at Rev 002",
+        name: "To overall notes at V2",
         exact: true,
       }),
     ).toContainText("Overall: Main with 20 files");

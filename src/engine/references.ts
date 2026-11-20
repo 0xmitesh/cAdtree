@@ -233,11 +233,11 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
       }
       try {
         const publication = revision.completion.referenceContext;
-        if (publication?.schemaVersion !== 1) throw new Error(publication ? 'Unsupported committed reference context schema.' : 'Revision completion has no required reference context binding.');
+        if (publication?.schemaVersion !== 1) throw new Error(publication ? 'Unsupported committed reference context schema.' : 'Version completion has no required reference context binding.');
         const content = await vault.readFileText([...DATA, 'contexts', `${revisionId}.json`]);
         if (publication.contextSha256 !== hashString(content) || publication.boundarySha256 !== boundary.payloadSha256) throw new Error('Committed reference context checksum or enrollment binding mismatch.');
         const record: RevisionReferenceContext = JSON.parse(content); validateSeal(record, state.project.projectId);
-        if (record.revisionId !== revisionId || record.branchId !== revision.manifest.branchId || record.parentRevisionId !== revision.manifest.parentRevisionId || record.manifestSha256 !== revision.completion.manifestSha256 || record.boundarySha256 !== boundary.payloadSha256 || typeof record.contextOnly !== 'boolean') throw new Error('Reference context does not bind to the exact committed revision.');
+        if (record.revisionId !== revisionId || record.branchId !== revision.manifest.branchId || record.parentRevisionId !== revision.manifest.parentRevisionId || record.manifestSha256 !== revision.completion.manifestSha256 || record.boundarySha256 !== boundary.payloadSha256 || typeof record.contextOnly !== 'boolean') throw new Error('Reference context does not bind to the exact committed version.');
         const catalog = record.catalogId === null ? undefined : result.catalogs[record.catalogId];
         if (record.catalogId === null ? record.catalogSha256 !== null : !catalog || catalog.sha256 !== record.catalogSha256) throw new Error('Reference context catalog is missing or mismatched.');
         validateLinks(record.links, catalog?.record.references ?? [], state.components?.status === 'available' ? state.components.revisions[revisionId]?.files ?? [] : [], revision.manifest);
@@ -251,7 +251,7 @@ export async function readReferenceEvidence(vault: FileSystemDirectoryAdapter, s
     if (await vault.hasDirectory([...DATA, 'contexts'])) for (const entry of await (await vault.getDirectory([...DATA, 'contexts'])).listEntries()) {
       const id = entry.name.replace(/\.json$/, '');
       if (entry.kind !== 'file' || !/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Unexpected reference context evidence.');
-      if (!state.revisions.some(r => r.manifest.revisionId === id)) state.incompleteAttempts.push({ id, kind: 'uncompleted_reference', path: `references/contexts/${entry.name}`, detail: 'Reference context has no committed revision and is not historical context.' });
+      if (!state.revisions.some(r => r.manifest.revisionId === id)) state.incompleteAttempts.push({ id, kind: 'uncompleted_reference', path: `references/contexts/${entry.name}`, detail: 'Reference context has no committed version and is not historical context.' });
     }
     for (const ref of result.library) for (const v of ref.versions) if (!await vault.hasFile(getObjectPathSegments(v.sha256))) throw new Error(`Attachment content is missing: ${v.originalFilename} (${v.versionId}).`);
     if (contextError) throw new Error(contextError);

@@ -37,19 +37,19 @@ test("actual App: Get this version puts one older file into the working folder a
   await waitForScan(page);
   await nav("History");
   // Main's latest (Rev 002) changed Other/Part-X.SLDPRT; get the Rev 001 version back.
-  await page.getByRole("button", { name: /Rev 001: Base with 5 files/ }).press("Enter");
+  await page.getByRole("button", { name: /V1: Base with 5 files/ }).press("Enter");
   const row = page.locator(".detail-file").filter({ hasText: "Other/Part-X.SLDPRT" });
   await row.getByRole("button", { name: "Get this version", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Get this version" });
   await expect(dialog).toContainText(
-    "Put Other/Part-X.SLDPRT from Rev 001 into your working folder? It will show as an unsaved change.",
+    "Put Other/Part-X.SLDPRT from V1 into your working folder? It will show as an unsaved change.",
   );
   await expect(dialog).not.toContainText("current edits");
   await dialog.getByRole("button", { name: "Get this version", exact: true }).click();
   await expect(dialog).toHaveCount(0, { timeout: 30_000 });
   await expect(
     page.getByText(
-      /^Rev 001 of Other\/Part-X\.SLDPRT is in your working folder\. Save to keep it, or Discard to undo\./,
+      /^V1 of Other\/Part-X\.SLDPRT is in your working folder\. Save to keep it, or Discard to undo\./,
     ),
   ).toBeVisible();
   const after = await fixtureCall(page, fixture, "readApplicationFixture");

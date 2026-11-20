@@ -6,7 +6,7 @@ import { readVerifiedInventory, throwIfCancelled, type CopyOptions } from './cop
 import { getObjectPathSegments, verifyStoredObject } from './object-store';
 import { hashString } from './hash';
 import { withProjectWriterLock } from './locks';
-import { computeManifestPayloadChecksum, openExistingVault } from './vault-service';
+import { computeManifestPayloadChecksum, formatRevisionNumber, openExistingVault } from './vault-service';
 import { validateWindowsSegments } from '../utils/folder-path';
 import { clashKey, folderNameFor, isReservedFolderName, pickFreeName, withCounter } from './folder-names';
 import { capturedReferenceLibrary } from './references';
@@ -71,16 +71,18 @@ function noteLines(notes: { problem: string; modification: string; observations:
 }
 
 export function exportFolderBaseName(projectName: string, branchName: string, revisionLabel: string): string {
-  const branch = capUnits(folderNameFor(branchName, 'Branch'), 24) || 'Branch';
+  const branch = capUnits(folderNameFor(branchName, 'Case'), 24) || 'Case';
+  // "V3" is 2 to 4 characters for the first 999 versions; a longer label takes its extra characters from the project part.
+  const extra = Math.max(0, revisionLabel.length - 4);
   const build = (projectLimit: number) => {
     const project = capUnits(folderNameFor(projectName, 'Project'), projectLimit) || 'Project';
     return folderNameFor(`${project} - ${branch} - ${revisionLabel}`, 'Export');
   };
-  const base = build(28);
+  const base = build(28 - extra);
   if (!isReservedFolderName(base)) return base;
   // "CON.x - …" is a reserved device name: the standard counter goes before the first dot.
   // The project part gives up 4 units so " (2)" keeps the whole base within 64.
-  const shorter = build(24);
+  const shorter = build(24 - extra);
   return isReservedFolderName(shorter) ? withCounter(shorter, 2) : shorter;
 }
 export function acceptsExportFolderName(base: string, name: string): boolean {
@@ -146,7 +148,7 @@ function referencesSection(plan: Pick<ReviewExportPlan, 'references' | 'referenc
   const quote = (value: unknown) => JSON.stringify(value);
   return [
     '', plan.referencesDirectory && included.length ? `Reference attachments (copied to ${quote(plan.referencesDirectory + '/')}; content verified against the saved hash):` : 'Reference attachments:',
-    ...(!included.length && !missing.length ? ['None apply to this saved revision.'] : []),
+    ...(!included.length && !missing.length ? ['None apply to this saved version.'] : []),
     ...included.flatMap(ref => [
       `${quote(ref.originalFilename)} -> ${quote(ref.exportedPath)}`,
       `  Title: ${quote(ref.title)}; SHA-256: ${ref.sha256}; bytes: ${ref.size}`,
@@ -162,7 +164,7 @@ function composeSummary(plan: Pick<ReviewExportPlan, 'summaryBase' | 'references
 function planReferences(state: VaultState, revisionId: string, selected: { path: string; componentId: string | null }[], complete: boolean): { references: Omit<ReviewExportReference, 'exportedPath'>[]; skipped: ReviewExportSkippedReference[] } {
   const context = state.references?.contexts[revisionId];
   if (!context || context.status === 'legacy') return { references: [], skipped: [] };
-  if (context.status !== 'available' || !context.record) return { references: [], skipped: [{ label: 'All reference attachments', reason: context.reason ?? 'Reference information for this revision is unavailable.' }] };
+  if (context.status !== 'available' || !context.record) return { references: [], skipped: [{ label: 'All reference attachments', reason: context.reason ?? 'Reference information for this version is unavailable.' }] };
   const library = capturedReferenceLibrary(state, revisionId);
   const paths = new Set(selected.map(f => f.path)), ids = new Set(selected.flatMap(f => f.componentId ? [f.componentId] : []));
   const byVersion = new Map<string, Omit<ReviewExportReference, 'exportedPath'>>(), skipped: ReviewExportSkippedReference[] = [];
@@ -182,11 +184,11 @@ function planReferences(state: VaultState, revisionId: string, selected: { path:
 /** Pure preview: recorded revision context only; no working files or absolute locations. */
 export function prepareReviewExport(state: VaultState, revisionId: string, request: ReviewExportRequest): ReviewExportPlan {
   const revision = state.revisions.find(r => r.manifest.revisionId === revisionId);
-  if (!revision || revision.integrityStatus === 'corrupted') throw new Error('Choose an intact saved revision to export.');
+  if (!revision || revision.integrityStatus === 'corrupted') throw new Error('Choose an intact saved version to export.');
   const manifest = revision.manifest;
-  if (manifest.projectId !== state.project.projectId || computeManifestPayloadChecksum(manifest) !== manifest.manifestPayloadSha256) throw new Error('The saved revision manifest is invalid.');
+  if (manifest.projectId !== state.project.projectId || computeManifestPayloadChecksum(manifest) !== manifest.manifestPayloadSha256) throw new Error('The saved version manifest is invalid.');
   const branch = state.branches.find(b => b.branchId === manifest.branchId);
-  if (!branch) throw new Error('The selected revision’s recorded branch is unavailable; its review label cannot be established.');
+  if (!branch) throw new Error('The selected version’s recorded branch is unavailable; its review label cannot be established.');
   if (!['complete', 'selected'].includes(request.kind) || (request.kind === 'complete' && request.labelFilenames)) throw new Error('Filename labels are available only for selected-file copies.');
   if (request.kind === 'selected' && (!request.selectedPaths.length || new Set(request.selectedPaths).size !== request.selectedPaths.length)) throw new Error('Select at least one file, with each path selected once.');
   const selected = request.kind === 'complete' ? manifest.files : request.selectedPaths.map(path => {
@@ -195,8 +197,8 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     if (!file) throw new Error(`Selected file is absent from this snapshot: ${path}`);
     return file;
   });
-  const revisionLabel = `R${String(manifest.displayNumber).padStart(2, '0')}`;
-  const branchLabel = portableLabel(branch.name, 'Branch');
+  const revisionLabel = formatRevisionNumber(manifest.displayNumber);
+  const branchLabel = portableLabel(branch.name, 'Case');
   const folderName = exportFolderBaseName(state.project.name, branch.name, revisionLabel);
   const evidence = state.components?.status === 'available' ? state.components.revisions[revisionId] : undefined;
   const files = selected.map(file => {
@@ -240,9 +242,9 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     request.kind === 'selected' ? 'PARTIAL — selected files only. CAD dependencies are not discovered or included automatically.' : 'COMPLETE — all files and directories recorded in this saved snapshot. External CAD dependencies are not discovered automatically.',
     `Project: ${quote(state.project.name)} (${state.project.projectId})`,
     `Branch: ${quote(branch.name)} (${branch.branchId})`,
-    `Revision: ${revisionLabel} (${manifest.revisionId})`,
+    `Version: ${revisionLabel} (${manifest.revisionId})`,
     `Saved date: ${manifest.captureCompletedAt}`,
-    `Revision summary: ${quote(manifest.summary)}`,
+    `Version summary: ${quote(manifest.summary)}`,
     ...noteLines(manifest.notes, 'Description'),
     'These are ordinary copies of the saved files. Editing them does not update saved history.',
     ...(includeReferences ? [] : ['Project reference attachments are not included in this exported copy.']),
@@ -287,7 +289,7 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       throwIfCancelled(signal);
       const state = await openExistingVault(vaultDir);
       const current = prepareReviewExport(state, plan.revisionId, plan.request);
-      if (JSON.stringify(current) !== JSON.stringify(plan)) throw new Error('The saved revision or export preview changed. Reopen the review dialog.');
+      if (JSON.stringify(current) !== JSON.stringify(plan)) throw new Error('The saved version or export preview changed. Reopen the review dialog.');
       if (!acceptsExportFolderName(plan.folderName, folderName)) throw new Error('The destination name no longer matches the labelled preview.');
       portablePath(folderName);
       if (splitAndValidatePath(folderName).length !== 1) throw new Error('The export must be one fresh child folder.');

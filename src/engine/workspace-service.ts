@@ -23,6 +23,7 @@ import {
   initializeProjectVault,
   openExistingVault,
   verifyRevisionObjects,
+  formatRevisionNumber,
 } from "./vault-service";
 import { createDesignBranch } from "./branch-service";
 import {
@@ -470,7 +471,7 @@ export async function adoptProject(
   await validateDirectoryIsolation(
     sourceVault,
     root,
-    "Original revision vault",
+    "Original version vault",
     "cAdtree workspace",
   );
   for (const branch of initial.branches) {
@@ -615,7 +616,7 @@ export async function adoptProject(
             totalFiles: reopened.revisions.length,
             processedBytes: 0,
             totalBytes: 0,
-            message: `Verifying stored content for adopted revision ${revision.manifest.displayNumber}…`,
+            message: `Verifying stored content for adopted version ${formatRevisionNumber(revision.manifest.displayNumber)}…`,
           });
           const verified = await verifyRevisionObjects(
             vault,

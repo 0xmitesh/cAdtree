@@ -16,7 +16,7 @@ afterEach(async () => {
   Reflect.deleteProperty(window, "showDirectoryPicker");
 });
 
-test("Project Learn preserves the working case, inspected revision, scan and all pending note drafts without reopening folders", async () => {
+test("Project Learn preserves the working case, inspected version, scan and all pending note drafts without reopening folders", async () => {
   const sample = await compareApplyRecoverSample();
   await sample.caseFolder.writeFileText(["Bracket.SLDPRT"], "Uncaptured lighter bracket");
   const ui = render(<App />);
@@ -28,7 +28,7 @@ test("Project Learn preserves the working case, inspected revision, scan and all
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
   await waitForScan(ui);
   await waitFor(() => assert.equal(appBusy(ui), false));
-  const summary = ui.getByRole("textbox", { name: /Revision summary/ });
+  const summary = ui.getByRole("textbox", { name: /Version summary/ });
   fireEvent.change(summary, { target: { value: "Keep this pending summary" } });
   fireEvent.click(ui.getByRole("button", { name: /Add a description/ }));
   const overall = ui.getByRole("textbox", { name: "Overall: Description" });
@@ -37,7 +37,7 @@ test("Project Learn preserves the working case, inspected revision, scan and all
   const fileNote = ui.getByRole("textbox", { name: "Bracket.SLDPRT: Note" });
   fireEvent.change(fileNote, { target: { value: "Keep this file-specific draft" } });
   fireEvent.click(nav.getByRole("button", { name: "History" }));
-  fireEvent.click(ui.getByRole("button", { name: /Rev 004: Reduced bracket thickness/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V4: Reduced bracket thickness/ }));
   const details = ui.container.querySelector(".revision-detail")!;
   const inspected = details.textContent;
   const before = inventorySignature(await readVerifiedInventory(sample.home));
@@ -72,7 +72,7 @@ test("Project Learn preserves the working case, inspected revision, scan and all
   assert.equal(ui.container.querySelector(".revision-detail"), details, "History was not unmounted");
   assert.equal(details.textContent, inspected);
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  assert.equal(ui.getByRole("textbox", { name: /Revision summary/ }), summary, "Changes was not unmounted");
+  assert.equal(ui.getByRole("textbox", { name: /Version summary/ }), summary, "Changes was not unmounted");
   assert.equal((summary as HTMLInputElement).value, "Keep this pending summary");
   assert.equal((overall as HTMLTextAreaElement).value, "Keep this engineering intent");
   assert.equal((fileNote as HTMLTextAreaElement).value, "Keep this file-specific draft");

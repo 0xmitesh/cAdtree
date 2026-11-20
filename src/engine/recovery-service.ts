@@ -11,7 +11,7 @@ import { withProjectWriterLock } from './locks';
 import { validateOperationWorkingFolders, type WorkingFolderBindings } from './branch-state';
 import { getObjectPathSegments, verifyStoredObject } from './object-store';
 import { FileEntry, ProgressUpdate, RestoreResult } from './types';
-import { computeManifestPayloadChecksum, openExistingVault } from './vault-service';
+import { computeManifestPayloadChecksum, formatRevisionNumber, openExistingVault } from './vault-service';
 
 export interface RestoreRevisionOptions {
   vaultDir: FileSystemDirectoryAdapter;
@@ -63,7 +63,7 @@ async function executeVerifiedRecovery(params: {
   await validateDirectoryIsolation(
     vaultDir,
     destinationDir,
-    'Revision vault',
+    'Version vault',
     'Recovery destination'
   );
 
@@ -95,15 +95,12 @@ async function executeVerifiedRecovery(params: {
     }
     const targetRev = vaultState.revisions.find((r) => r.manifest.revisionId === revisionId);
     if (!targetRev) {
-      throw new Error(`Revision "${revisionId}" does not exist in committed vault history.`);
+      throw new Error(`Version "${revisionId}" does not exist in committed vault history.`);
     }
 
     if (targetRev.integrityStatus === 'corrupted') {
       throw new Error(
-        `Cannot restore Rev ${String(targetRev.manifest.displayNumber).padStart(
-          3,
-          '0'
-        )}: revision is marked as damaged (${targetRev.integrityErrors.join('; ')}).`
+        `Cannot restore ${formatRevisionNumber(targetRev.manifest.displayNumber)}: version is marked as damaged (${targetRev.integrityErrors.join('; ')}).`
       );
     }
 
@@ -339,7 +336,7 @@ async function executeVerifiedRecovery(params: {
             const errorMsg = err instanceof Error ? err.message : String(err);
             await destinationDir.writeFileText(
               [RECOVERY_MARKER_FILENAME],
-              `WARNING: cAdtree restore of Revision ${manifest.displayNumber} (${
+              `WARNING: cAdtree restore of ${formatRevisionNumber(manifest.displayNumber)} (${
                 manifest.revisionId
               }) DID NOT COMPLETE.\n` +
                 `Timestamp: ${new Date().toISOString()}\n` +

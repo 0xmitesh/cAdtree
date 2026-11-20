@@ -109,7 +109,7 @@ test("Swap reverses additions/deletions, directories, and modified before/after 
     current: forward.diff.modified[0].previous,
   });
 });
-test("same revision and equal hashes are unchanged regardless of timestamp, size or notes", () => {
+test("same version and equal hashes are unchanged regardless of timestamp, size or notes", () => {
   const { state, from } = endpoints();
   const result = compareSavedRevisions(state, "r1", "r1");
   if (result.status !== "compared")

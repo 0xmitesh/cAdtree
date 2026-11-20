@@ -111,7 +111,7 @@ export function AppNotices({
             <Notice>
               {vaultState.incompleteAttempts.length} incomplete or
               interrupted operation(s) retained. These are not committed
-              revisions.
+              versions.
               <button
                 className="text-button"
                 disabled={busy}

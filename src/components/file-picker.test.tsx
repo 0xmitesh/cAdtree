@@ -102,7 +102,7 @@ test("a renamed component appears once under its latest name and its history con
     ui.container.querySelectorAll('.graph-row[data-file-history-kind="change"]').length,
     3,
   );
-  fireEvent.click(ui.getByRole("button", { name: /Rev 002:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V2:/ }));
   const details = ui.getByRole("region", { name: "Selected file history" }).textContent!;
   assert.match(details, /Renamed/);
   assert.ok(details.includes(oldHousing));
@@ -216,13 +216,13 @@ test("a file deleted and re-added under the same path gives two entries, each wi
   const rows = () => ui.container.querySelectorAll('.graph-row[data-file-history-kind="change"]').length;
   pickFile(ui, `${path} · aaaaaaaa`);
   assert.equal(rows(), 2);
-  fireEvent.click(ui.getByRole("button", { name: /Rev 002:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V2:/ }));
   assert.match(statuses(), /Deleted/);
-  assert.equal(ui.queryByRole("button", { name: /Rev 003:/ }), null);
+  assert.equal(ui.queryByRole("button", { name: /V3:/ }), null);
   pickFile(ui, `${path} · bbbbbbbb`);
   assert.equal(filePicker(ui).value, `${path} · bbbbbbbb`);
   assert.equal(rows(), 1);
-  fireEvent.click(ui.getByRole("button", { name: /Rev 003:/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V3:/ }));
   assert.match(statuses(), /Added/);
-  assert.equal(ui.queryByRole("button", { name: /Rev 001:/ }), null);
+  assert.equal(ui.queryByRole("button", { name: /V1:/ }), null);
 });

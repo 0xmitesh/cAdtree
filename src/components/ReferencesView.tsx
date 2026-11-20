@@ -81,7 +81,7 @@ function ProjectReferencesView({ state, busy, progress, onCancel, onRetrieve, on
       <label className="field"><span>Reference files</span><input key={pickerKey} type="file" multiple disabled={addPending || busy} onChange={event => setAddFiles(Array.from(event.currentTarget.files ?? []))} /></label>
       {addFiles.length ? <ul className="muted small">{addFiles.map((file, index) => <li key={`${file.name}:${index}`}>{file.name} · {formatBytes(file.size)}</li>)}</ul> : null}
       <label className="field"><span>Note (optional)</span><textarea maxLength={8000} rows={3} value={addNote} disabled={addPending || busy} placeholder="What is this reference for?" onChange={event => setAddNote(event.target.value)} /></label>
-      <p className="muted small">Applies to the whole project. It is included whenever you save a revision. To tie a file to one part, attach it when you save a revision.</p>
+      <p className="muted small">Applies to the whole project. It is included whenever you save a version. To tie a file to one part, attach it when you save a version.</p>
       {addError ? <Notice type="error">{addError}</Notice> : null}
       <div className="button-row">
         <button className="button primary" type="button" disabled={!addFiles.length || addPending || busy || Boolean(addBlockReason)} onClick={() => void submitAdd()}>Add</button>
@@ -94,7 +94,7 @@ function ProjectReferencesView({ state, busy, progress, onCancel, onRetrieve, on
     {stopError ? <Notice type="error">{stopError}</Notice> : null}
     {busy ? <OperationProgress progress={progress} onCancel={onCancel} /> : null}
     <p className="muted small" role="status">{browser.unavailable ? 'References unavailable' : `${references.length} reference file${references.length === 1 ? '' : 's'}`}</p>
-    {!references.length && !browser.unavailable ? <p className="muted">{browser.entries.length ? 'No matching references. Try another search.' : 'No references yet. Use Add reference, or attach files when you save a revision.'}</p> : null}
+    {!references.length && !browser.unavailable ? <p className="muted">{browser.entries.length ? 'No matching references. Try another search.' : 'No references yet. Use Add reference, or attach files when you save a version.'}</p> : null}
     {references.map(({ reference, version, uses }) => <section className="panel reference-card" key={`${reference.referenceId}:${version.versionId}`}>
       <h2><button className="reference-download" type="button" disabled={busy || downloading || browser.unavailable} aria-label={`Download ${reference.title} (${version.originalFilename})`} onClick={() => void download(reference.referenceId, version.versionId)}>
         <Download size={18} aria-hidden="true" /><span>{reference.title}</span>
@@ -106,13 +106,13 @@ function ProjectReferencesView({ state, busy, progress, onCancel, onRetrieve, on
       {uses.length ? <ul className="reference-uses" aria-label={`Where ${version.originalFilename} is used`}>{uses.map((use, index) => <li key={`${use.revisionId}:${index}`}>
         <strong>{use.branchName} · {formatRevisionNumber(use.displayNumber)}</strong>
         <span>{use.summary}</span>
-        <span>{use.partPath ? `Part: ${use.partPath}` : 'Whole revision'}</span>
+        <span>{use.partPath ? `Part: ${use.partPath}` : 'Whole version'}</span>
         {use.locator ? <span>Location: {use.locator}</span> : null}
         {use.explanation ? <span>{use.explanation}</span> : null}
-      </li>)}</ul> : reference.projectVersionId === version.versionId && !reference.removed ? <p className="muted small">Applies to the whole project. It is included in the next revision you save.</p> : <p className="muted small">Not attached to a saved revision yet.</p>}
+      </li>)}</ul> : reference.projectVersionId === version.versionId && !reference.removed ? <p className="muted small">Applies to the whole project. It is included in the next version you save.</p> : <p className="muted small">Not attached to a saved version yet.</p>}
       {onStopApplying && reference.projectVersionId === version.versionId && !reference.removed ? (confirmStop === reference.referenceId
         ? <div className="reference-stop" role="group" aria-label={`Stop applying ${reference.title} to the whole project`}>
-          <p className="small">Stop applying {reference.title} to the whole project? Revisions you save from now on will not include it. It stays here, and earlier revisions keep it.</p>
+          <p className="small">Stop applying {reference.title} to the whole project? Versions you save from now on will not include it. It stays here, and earlier versions keep it.</p>
           <div className="button-row">
             <button className="button primary" type="button" disabled={busy || Boolean(addBlockReason)} onClick={() => void stop(reference.referenceId)}>Stop applying</button>
             <button className="text-button" type="button" disabled={busy} onClick={() => setConfirmStop('')}>Keep</button>

@@ -89,7 +89,7 @@ export function DiagnosticsView({
   const vaultRow = (
     <div className="settings-row">
       <div>
-        <strong>Revision vault</strong>
+        <strong>Version vault</strong>
         <p>{vaultFolderName ?? "Connected vault"}</p>
       </div>
       <span className="connection-dot">Connected</span>
@@ -162,11 +162,11 @@ export function DiagnosticsView({
           ) : null}
           <div className="form-body">
             <p>
-              Metadata checks validate revision records. File content checks
+              Metadata checks validate version records. File content checks
               read the stored files and compare their checksums.
             </p>
             <p className="muted">
-              {checked} of {state.revisions.length} revisions have verified
+              {checked} of {state.revisions.length} versions have verified
               file contents in this session.
             </p>
             <button
@@ -199,7 +199,7 @@ export function DiagnosticsView({
                     heads.
                   </p>
                   <details>
-                    <summary>Revision identities</summary>
+                    <summary>Version identities</summary>
                     {heads.map((h) => (
                       <p className="file-path" key={h}>
                         {h}
@@ -217,7 +217,7 @@ export function DiagnosticsView({
                     <strong className="file-path">{r.recordPath}</strong>
                     <p>{r.reason}</p>
                     {r.revisionId ? (
-                      <p className="file-path">Revision: {r.revisionId}</p>
+                      <p className="file-path">Version: {r.revisionId}</p>
                     ) : null}
                   </Notice>
                 ))}
@@ -242,7 +242,7 @@ export function DiagnosticsView({
                 {state.incompleteAttempts.length})
               </summary>
               <p>
-                These attempts are not committed revisions or published references and are excluded from
+                These attempts are not committed versions or published references and are excluded from
                 history and the reference library.
               </p>
               {state.incompleteAttempts.map((r) => (
@@ -268,8 +268,8 @@ export function DiagnosticsView({
                   <dt>{b.name}</dt>
                   <dd>{b.branchId}</dd>
                   <dt>Head</dt>
-                  <dd>{state.branchHeads[b.branchId] ?? "No revision"}</dd>
-                  <dt>Starting revision</dt>
+                  <dd>{state.branchHeads[b.branchId] ?? "No version"}</dd>
+                  <dt>Starting version</dt>
                   <dd>{b.startingRevisionId ?? "None"}</dd>
                   <dt>Reason</dt>
                   <dd>{b.reason || "—"}</dd>
@@ -283,7 +283,7 @@ export function DiagnosticsView({
               <p>
                 Reset remembered folder connections and saved folder addresses for
                 all workspaces in this browser. CAD files, saved
-                revisions, reference attachments and accounts are not deleted.
+                versions, reference attachments and accounts are not deleted.
               </p>
               <button
                 className="button secondary"
@@ -304,7 +304,7 @@ export function DiagnosticsView({
           <p>
             This affects saved folder connections and addresses across all
             workspaces in this browser, not just this project.
-            It does not delete CAD files, saved revisions, reference attachments
+            It does not delete CAD files, saved versions, reference attachments
             or accounts.
           </p>
           <p>

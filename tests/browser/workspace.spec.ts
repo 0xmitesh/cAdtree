@@ -20,7 +20,7 @@ for (const viewport of [
       path: path.join(screenshotDir, `history-${viewport.width}.png`),
       fullPage: true,
     });
-    await page.getByRole("button", { name: /Rev 002: Refine/ }).click();
+    await page.getByRole("button", { name: /V2: Refine/ }).click();
     await expect(
       page.getByRole("heading", { name: "Refine housing clearance" }),
     ).toBeVisible();
@@ -29,7 +29,7 @@ for (const viewport of [
       page.getByRole("heading", { name: "Refine housing clearance" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Graph", exact: true }).click();
-    await page.getByRole("button", { name: /Rev 002: Refine/ }).focus();
+    await page.getByRole("button", { name: /V2: Refine/ }).focus();
     // Newest first: the next newer revision is above.
     await page.keyboard.press("ArrowUp");
     await expect(
@@ -46,7 +46,7 @@ for (const viewport of [
       .getByRole("button", { name: "Changes", exact: true })
       .click();
     await page
-      .getByRole("textbox", { name: /Revision summary/ })
+      .getByRole("textbox", { name: /Version summary/ })
       .fill("Refine housing clearance");
     await page
       .getByRole("button", { name: "Add note for Parts/Housing.SLDPRT" })
@@ -85,12 +85,12 @@ for (const scenario of ["empty", "single", "branches", "long", "damaged"]) {
       ).toHaveAttribute("aria-pressed", "true");
       // The chip selects the case's latest revision; nothing is faded.
       await expect(
-        page.getByRole("button", { name: /^Rev 008:/ }),
+        page.getByRole("button", { name: /^V8:/ }),
       ).toHaveAttribute("aria-pressed", "true");
       await expect(page.locator(".graph-row.dimmed")).toHaveCount(0);
     }
     if (scenario === "long") {
-      const latest = page.getByRole("button", { name: /Rev 120:/ });
+      const latest = page.getByRole("button", { name: /V120:/ });
       await latest.focus();
       // Newest first: End reaches the oldest revision, Home returns to the newest.
       await page.keyboard.press("End");

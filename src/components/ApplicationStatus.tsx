@@ -326,9 +326,9 @@ export function AppliedFromDetails({
             </p>
             <p className="small">
               {reverted
-                ? "Files were brought back from the earlier revision before this normal revision was saved."
-                : "Selected file states were applied before this normal revision was saved."} CAD reference and rebuild checks remain the engineer's
-              responsibility. The revision keeps its ordinary destination
+                ? "Files were brought back from the earlier version before this normal version was saved."
+                : "Selected file states were applied before this normal version was saved."} CAD reference and rebuild checks remain the engineer's
+              responsibility. The version keeps its ordinary destination
               parent.
             </p>
             <ul className="application-actions">

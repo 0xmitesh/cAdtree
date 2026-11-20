@@ -127,7 +127,7 @@ export async function createDesignBranch(
     if (componentBlock) throw new Error(componentBlock);
     await validateWorkingFolderBindings(state, vaultDir, workingFolders);
     if ((await vaultDir.queryPermission("readwrite")) !== "granted")
-      throw new Error("Reconnect the revision vault with write permission.");
+      throw new Error("Reconnect the version vault with write permission.");
     if ((await destinationParent.queryPermission("readwrite")) !== "granted")
       throw new Error(
         "Write permission is required for the destination parent folder.",
@@ -138,7 +138,7 @@ export async function createDesignBranch(
       (await vaultDir.resolveRelativePath(destinationParent)) !== null
     ) {
       throw new Error(
-        "The destination parent is inside the revision vault. Choose a separate parent.",
+        "The destination parent is inside the version vault. Choose a separate parent.",
       );
     }
     for (const branch of state.branches) {
@@ -212,7 +212,7 @@ export async function createDesignBranch(
         workingDir,
         vaultDir,
         "New branch working folder",
-        "Revision vault",
+        "Version vault",
       );
       for (const branch of state.branches) {
         await validateDirectoryIsolation(

@@ -53,14 +53,14 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await expect(identity.getByText(/Confirmed rename:/)).toHaveCount(0);
   if (width === 390) await matchManually();
   else await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
-  await page.getByRole('textbox', { name: /Revision summary/ }).fill('Correct component filename');
-  await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+  await page.getByRole('textbox', { name: /Version summary/ }).fill('Correct component filename');
+  await page.getByRole('button', { name: 'Save version', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('heading', { name: '0 changed files' })).toBeVisible();
   await page.getByRole('navigation').getByRole('button', { name: 'History', exact: true }).click();
   await pickComponent(page, info.componentId, 'parts/cliper.SLDPRT');
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('Confirmed rename: parts/caliper.SLDPRT → parts/cliper.SLDPRT')).toBeVisible();
-  await page.getByRole('button', { name: /^Rev 001: Original component/ }).click();
+  await page.getByRole('button', { name: /^V1: Original component/ }).click();
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('parts/caliper.SLDPRT', { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Project context" })).toHaveAttribute('data-branch-id', 'branch-main');
   await expect(page.getByRole('region', { name: 'Selected file history' }).getByText('Initial design', { exact: true })).toBeVisible();
@@ -72,8 +72,8 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   const dialog = page.getByRole('dialog', { name: 'Treat as new component' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Confirm new component' }).click();
-  await page.getByRole('textbox', { name: /Revision summary/ }).fill('Unrelated replacement');
-  await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+  await page.getByRole('textbox', { name: /Version summary/ }).fill('Unrelated replacement');
+  await page.getByRole('button', { name: 'Save version', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
   const replacementId = await page.evaluate(async () => {
     const vaultPath = '/src/engine/vault-service.ts';

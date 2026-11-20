@@ -10,7 +10,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/tests/synthetic.html");
   await expect(page.locator("#demo-counts")).toHaveText(
-    "4 workspaces · 9 projects · 28 branches · 60 revisions",
+    "4 workspaces · 9 projects · 28 branches · 60 versions",
     { timeout: 90_000 },
   );
   await page
@@ -62,7 +62,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   ).toHaveCount(0);
   await expect(page.getByText(/Opened managed location/)).toHaveCount(0);
   const graph = page.getByRole("region", {
-    name: "Revision graph",
+    name: "Version graph",
     exact: true,
   });
   const contextBox = (await current.boundingBox())!;
@@ -95,11 +95,11 @@ test("current App: compact headings, branch context, bounded resizing and mobile
   // The drawing summary must describe the actual changed document, not a part.
   await expect(
     page
-      .getByRole("complementary", { name: "Revision details" })
+      .getByRole("complementary", { name: "Version details" })
       .locator(".detail-files")
       .getByText("Drawings/Assembly.SLDDRW", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Rev 004: Explore lighter/ }).click();
+  await page.getByRole("button", { name: /V4: Explore lighter/ }).click();
   await expect(
     page.getByRole("heading", {
       name: "Explore lighter construction",
@@ -150,7 +150,7 @@ test("current App: compact headings, branch context, bounded resizing and mobile
 
   const nav = page.getByRole("navigation");
   await nav.getByRole("button", { name: "Changes", exact: true }).click();
-  const summary = page.getByRole("textbox", { name: /Revision summary/ });
+  const summary = page.getByRole("textbox", { name: /Version summary/ });
   await summary.fill("Main scoped layout review");
   await tree
     .getByRole("treeitem", {

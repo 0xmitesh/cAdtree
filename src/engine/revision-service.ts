@@ -28,6 +28,7 @@ import {
   computeManifestPayloadChecksum,
   openExistingVault,
   sanitizeFileSpecificNotes,
+  formatRevisionNumber,
 } from './vault-service';
 
 export class ReviewStaleError extends Error {
@@ -93,10 +94,10 @@ export async function captureRevision(
 ): Promise<CaptureRevisionResult> {
   const cleanSummary = input.summary.trim();
   if (!cleanSummary) {
-    throw new Error('Revision summary is required.');
+    throw new Error('Version summary is required.');
   }
 
-  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Revision vault');
+  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Version vault');
 
   // Peek project ID first so we can lock on the exact projectId
   const initialVaultState = await openExistingVault(vaultDir);
@@ -139,7 +140,7 @@ export async function captureUnderLock(
   assertHoldsProjectWriterLock(lock, projectId);
   const cleanSummary = input.summary.trim();
   if (!cleanSummary) {
-    throw new Error('Revision summary is required.');
+    throw new Error('Version summary is required.');
   }
   if (input.expectedSnapshot) assertValidSnapshot(input.expectedSnapshot);
   // Files the caller expects to save count as tracked, so listed OS clutter is kept.
@@ -161,7 +162,7 @@ export async function captureUnderLock(
   const reconciled = input.reviewedChangesSignature && branchApplications(vaultState, input.branchId).find(op => op.status === 'captured' && op.events.some(event => event.kind === 'capture' && event.revisionId === op.capturedRevisionId && event.reviewedChangesSignature === input.reviewedChangesSignature));
   if (reconciled) {
     const revision = vaultState.revisions.find(r => r.manifest.revisionId === reconciled.capturedRevisionId)!;
-    return { revision, vaultState, cacheWarning: 'Reconciled the existing published application revision; no duplicate capture was created.' };
+    return { revision, vaultState, cacheWarning: 'Reconciled the existing published application version; no duplicate capture was created.' };
   }
   const pendingApplication = branchApplications(vaultState, input.branchId).find(op => op.status === 'applied');
   getBranchBaseline(vaultState, input.branchId);
@@ -184,7 +185,7 @@ export async function captureUnderLock(
     throw new Error(
       `Branch "${branch.name}" has competing heads (${vaultState.competingHeads[
         branch.branchId
-      ].join(', ')}). Resolve repository inconsistency before capturing new revisions.`
+      ].join(', ')}). Resolve repository inconsistency before capturing new versions.`
     );
   }
 
@@ -199,15 +200,12 @@ export async function captureUnderLock(
     );
     if (!parentRev) {
       throw new Error(
-        `Baseline revision "${parentRevisionId}" referenced by branch "${branch.name}" is missing from committed history.`
+        `Baseline version "${parentRevisionId}" referenced by branch "${branch.name}" is missing from committed history.`
       );
     }
     if (parentRev.integrityStatus === 'corrupted') {
       throw new Error(
-        `Baseline revision Rev ${String(parentRev.manifest.displayNumber).padStart(
-          3,
-          '0'
-        )} is marked as corrupted and cannot be used as a parent baseline.`
+        `Baseline version ${formatRevisionNumber(parentRev.manifest.displayNumber)} is marked as corrupted and cannot be used as a parent baseline.`
       );
     }
     baselineManifest = parentRev.manifest;
@@ -276,7 +274,7 @@ export async function captureUnderLock(
   const referenceContextOnly = !freshScan.hasChanges && referenceChanged && !input.identityReview?.replacements.length;
   if (!freshScan.hasChanges && !input.identityReview?.replacements.length && !referenceChanged) {
     throw new Error(
-      'No changes detected between the working folder and the latest saved revision. Capture skipped to avoid an unnecessary revision.'
+      'No changes detected between the working folder and the latest saved version. Capture skipped to avoid an unnecessary version.'
     );
   }
 
@@ -320,7 +318,7 @@ export async function captureUnderLock(
   let sessionId = '';
   for (let attempt = 1; ; attempt++) {
     const candidate = (input.newRevisionId ?? newRecordId)();
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(candidate)) throw new Error('Invalid revision ID. Nothing was written.');
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(candidate)) throw new Error('Invalid version ID. Nothing was written.');
     const known =
       vaultState.revisions.some((r) => r.manifest.revisionId === candidate) ||
       (await vaultDir.hasFile(revisionManifestPath(candidate))) ||
@@ -339,7 +337,7 @@ export async function captureUnderLock(
       }
     }
     if (attempt >= MAX_REVISION_ID_ATTEMPTS)
-      throw new Error(`No free revision ID after ${MAX_REVISION_ID_ATTEMPTS} attempts. Nothing was written. Try again.`);
+      throw new Error(`No free version ID after ${MAX_REVISION_ID_ATTEMPTS} attempts. Nothing was written. Try again.`);
   }
   // Step 3: Write new objects, close writes, reopen stored bytes, and verify size/hash.
   // Reused objects are also verified before the new revision relies on them.
@@ -443,7 +441,7 @@ export async function captureUnderLock(
     totalFiles: allSnapshotFiles.length,
     processedBytes: totalBytes,
     totalBytes,
-    message: 'Writing and verifying revision manifest...',
+    message: 'Writing and verifying version manifest...',
   });
 
   const captureCompletedAt = new Date().toISOString();
@@ -497,7 +495,7 @@ export async function captureUnderLock(
     totalFiles: allSnapshotFiles.length,
     processedBytes: totalBytes,
     totalBytes,
-    message: 'Publishing revision completion record...',
+    message: 'Publishing version completion record...',
   });
 
   const completion: CompletionRecord = {
@@ -560,7 +558,7 @@ export async function captureUnderLock(
     );
     await vaultDir.writeFileText(['cache', 'index.json'], cachePayload);
   } catch (cacheErr) {
-    cacheWarning = `Revision was published and verified, but optional cache update failed: ${
+    cacheWarning = `Version was published and verified, but optional cache update failed: ${
       cacheErr instanceof Error ? cacheErr.message : String(cacheErr)
     }`;
   }
@@ -570,7 +568,7 @@ export async function captureUnderLock(
     (r) => r.manifest.revisionId === revisionId
   );
   if (!publishedRevision) {
-    throw new Error('Unexpected state: published revision not found when reloading vault.');
+    throw new Error('Unexpected state: published version not found when reloading vault.');
   }
   if (componentDraft && updatedVaultState.components?.status !== 'available') throw new Error(updatedVaultState.components?.reason ?? 'Component publication could not be verified.');
   if (updatedVaultState.references?.status !== 'available') throw new Error(updatedVaultState.references?.reason ?? 'Reference context publication could not be verified.');

@@ -36,9 +36,9 @@ test("References has no case selector while the other project views show the cur
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
   await waitForScan(ui);
   await waitFor(() => assert.equal(appBusy(ui), false));
-  fireEvent.change(ui.getByRole("textbox", { name: /Revision summary/ }), { target: { value: "Keep the Main engineering draft" } });
+  fireEvent.change(ui.getByRole("textbox", { name: /Version summary/ }), { target: { value: "Keep the Main engineering draft" } });
   fireEvent.click(nav.getByRole("button", { name: "History" }));
-  fireEvent.click(ui.getByRole("button", { name: /Rev 004: Reduced bracket thickness/ }));
+  fireEvent.click(ui.getByRole("button", { name: /V4: Reduced bracket thickness/ }));
   const inspection = ui.container.querySelector(".revision-detail")!.textContent;
   assert.match(inspection!, /Lightweight bracket/);
   for (const view of ["Changes", "References", "Settings", "History"]) {
@@ -56,7 +56,7 @@ test("References has no case selector while the other project views show the cur
   }
   assert.equal(ui.container.querySelector(".revision-detail")!.textContent, inspection);
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  assert.equal((ui.getByRole("textbox", { name: /Revision summary/ }) as HTMLInputElement).value, "Keep the Main engineering draft");
+  assert.equal((ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement).value, "Keep the Main engineering draft");
   assert.equal(inventorySignature(await readVerifiedInventory(sample.home)), before);
 });
 

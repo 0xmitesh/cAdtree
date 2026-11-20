@@ -288,7 +288,7 @@ test('drift: every path written by a full workflow is covered by a template and 
   console.log(`path-budget: ${internalFiles.length} files, ${internalDirs.length} folders checked; unexercised templates: ${unexercised.join('; ') || 'none'}`);
   // The deepest templates must actually be reached by this workflow.
   assert.ok(dirs.has('Discarded/2026-01-01 00.00') && dirs.has('Discarded/2026-01-01 00.00 (2)'), 'two discarded copies');
-  for (const label of ['discarded copy folder', 'discarded copy note', 'application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'project offline restore page', 'vault revision listing']) {
+  for (const label of ['discarded copy folder', 'discarded copy note', 'application unexpected-recovery copy', 'application event', 'knowledge publication marker', 'vault content object', 'design case incomplete marker', 'project offline map', 'project offline restore page', 'vault version listing']) {
     assert.ok(used.has(label), `workflow did not exercise: ${label}`);
   }
 });

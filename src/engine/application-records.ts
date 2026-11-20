@@ -528,7 +528,7 @@ function classify(operation: ApplicationOperation, state: VaultState) {
   }
   if (published.size > 1)
     throw new Error(
-      "Application provenance was attached to more than one revision.",
+      "Application provenance was attached to more than one version.",
     );
   if (published.size) {
     operation.status = "captured";

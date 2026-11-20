@@ -123,16 +123,16 @@ test("creating a workspace and a project writes the home Index, and the project'
   assert.match(await readText(home, [INDEX]), /_MAP cAdtree\.txt/);
 });
 
-test("saving a revision refreshes the Map and writes the revision listing; a failed save does neither", async () => {
+test("saving a version refreshes the Map and writes the version listing; a failed save does neither", async () => {
   const f = await seeded();
   const ui = render(<App />);
   await openProject(ui, f.home);
   await f.main.writeFileBytes(["Part.SLDPRT"], new Uint8Array([3, 2]));
   await scanMain(ui);
-  fireEvent.change(changesPage(ui).getByRole("textbox", { name: /Revision summary/ }), { target: { value: "Main draft" } });
+  fireEvent.change(changesPage(ui).getByRole("textbox", { name: /Version summary/ }), { target: { value: "Main draft" } });
   // The working folder changes after the review: the save is refused as stale, nothing is published.
   await f.main.writeFileBytes(["Late.SLDPRT"], new Uint8Array([9]));
-  fireEvent.click(changesPage(ui).getByRole("button", { name: "Save revision" }));
+  fireEvent.click(changesPage(ui).getByRole("button", { name: "Save version" }));
   await idle(ui);
   await waitFor(() => assert.ok(ui.getByRole("button", { name: "confirm this file set" })));
   await settle();
@@ -142,7 +142,7 @@ test("saving a revision refreshes the Map and writes the revision listing; a fai
 
   // Confirm the new file set and save for real.
   fireEvent.click(ui.getByRole("button", { name: "confirm this file set" }));
-  fireEvent.click(changesPage(ui).getByRole("button", { name: "Save revision" }));
+  fireEvent.click(changesPage(ui).getByRole("button", { name: "Save version" }));
   await waitFor(async () => assert.equal((await openExistingVault(f.project.vaultDir)).revisions.length, 2));
   await idle(ui);
   const revisions = (await openExistingVault(f.project.vaultDir)).revisions;
@@ -162,8 +162,8 @@ test("creating a design case and hiding it refresh the Map", async () => {
   const ui = render(<App />);
   await openProject(ui, f.home);
   fireEvent.click(ui.getByRole("button", { name: "History" }));
-  fireEvent.click(ui.getByRole("button", { name: /Rev 001: Original housing/ }));
-  fireEvent.click(ui.getByRole("button", { name: "Create design case from this revision" }));
+  fireEvent.click(ui.getByRole("button", { name: /V1: Original housing/ }));
+  fireEvent.click(ui.getByRole("button", { name: "Create design case from this version" }));
   await waitFor(() => assert.ok(ui.queryByRole("dialog")));
   const dialog = within(ui.getByRole("dialog"));
   fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), { target: { value: "Lighter collar" } });

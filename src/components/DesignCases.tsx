@@ -234,7 +234,7 @@ export function DesignCases({
           </p>
           <p>
             {hiding
-              ? "The case leaves History and the Explorer. Its folder and saved revisions stay in place; turn on Show hidden cases to see it again."
+              ? "The case leaves History and the Explorer. Its folder and saved versions stay in place; turn on Show hidden cases to see it again."
               : "The case shows again in History and the Explorer. No files change, and you stay on the case you are working on."}
           </p>
           {hiding && action.branchId === activeBranchId ? (

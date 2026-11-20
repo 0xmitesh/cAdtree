@@ -68,7 +68,7 @@ test("competing same-branch heads have separate lanes and remain explicit", () =
     false,
   );
 });
-test("120 revisions retain every node and all parent edges", () => {
+test("120 versions retain every node and all parent edges", () => {
   const graph = layoutRevisions(historyState(120), "branch-main");
   assert.equal(graph.nodes.length, 120);
   assert.equal(graph.edges.length, 119);
@@ -131,7 +131,7 @@ test("a captured copy adds a secondary link without touching parents, lanes or r
   // Copies are not ancestry.
   assert.equal(ancestryOf(graph, "r6").has("p2"), false);
 });
-test("a bring back links to the earlier revision of the same branch", () => {
+test("a bring back links to the earlier version of the same branch", () => {
   const graph = layoutRevisions(
     withCopy(scenarioState("branches"), "r6", "r3", "revert", "captured", "branch-main"),
     "branch-main",
@@ -180,7 +180,7 @@ const assertNoLineFromNowhere = (graph: ReturnType<typeof layoutRevisions>) => {
   for (const c of graph.copies) assert.ok(ids.has(c.child) && ids.has(c.source));
   for (const b of graph.branches) for (const h of b.headIds) assert.ok(ids.has(h));
 };
-test("Hide case: a hidden case's own revisions and chip leave the graph; Show hidden cases brings them back faded", () => {
+test("Hide case: a hidden case's own versions and chip leave the graph; Show hidden cases brings them back faded", () => {
   const state = hideCase(scenarioState("branches"), "prototype");
   const full = layoutRevisions(state, "branch-main");
   const shown = layoutRevisions(state, "branch-main", { hideHiddenCases: false });
@@ -211,7 +211,7 @@ test("Hide case: a hidden case's own revisions and chip leave the graph; Show hi
     layoutRevisions(plain, "branch-main"),
   );
 });
-test("Hide case: revisions a shown case branched from or copied from stay (faded) with their ancestors", () => {
+test("Hide case: versions a shown case branched from or copied from stay (faded) with their ancestors", () => {
   const state = hideCase(scenarioState("branches"), "prototype");
   // A shown case started from the hidden case's p1 and has no revisions of its own yet.
   state.branches.push({
@@ -257,7 +257,7 @@ test("Hide case: the working case is never left out, and a hidden case's copy of
   assert.deepEqual(graph.copies, []);
   assertNoLineFromNowhere(graph);
 });
-test("Hide case: a shown revision's damaged parent on a hidden case stays visible beside its warning", () => {
+test("Hide case: a shown version's damaged parent on a hidden case stays visible beside its warning", () => {
   const state = hideCase(scenarioState("branches"), "prototype");
   state.revisions.find((r) => r.manifest.revisionId === "p1")!.integrityStatus = "corrupted";
   state.revisions.push(revision("m7", "p1", 9));
