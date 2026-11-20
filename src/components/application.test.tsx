@@ -111,6 +111,7 @@ test("the status is branch scoped: not saved offers Save now only, with no Aband
     onCancel: () => {},
     onRecover: async () => {},
     onSaveNow: (op: ApplicationOperation) => saved.push(op.operationId),
+    onDontSave: async () => {},
   };
   const ui = render(<ApplicationStatus {...props} branchId={f.source.manifest.branchId} />);
   assert.equal(ui.queryByRole("region"), null);

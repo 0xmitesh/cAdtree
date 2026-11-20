@@ -70,6 +70,7 @@ export type ProjectViewsProps = {
   handleApplyAndSave: ApplicationActions["handleApplyAndSave"];
   handleRecoverApplication: ApplicationActions["handleRecoverApplication"];
   handleSaveNow: ApplicationActions["handleSaveNow"];
+  handleDontSave: ApplicationActions["handleDontSave"];
   notSavedReasons: ApplicationActions["notSavedReasons"];
   bringBackRequest: ApplicationActions["bringBackRequest"];
   capturePrefill: ApplicationActions["capturePrefill"];
@@ -127,6 +128,7 @@ export function ProjectViews({
   handleApplyAndSave,
   handleRecoverApplication,
   handleSaveNow,
+  handleDontSave,
   notSavedReasons,
   bringBackRequest,
   capturePrefill,
@@ -174,6 +176,7 @@ export function ProjectViews({
         onCancel={handleCancelOperation}
         notSavedReasons={notSavedReasons}
         onRecover={handleRecoverApplication}
+        onDontSave={handleDontSave}
         onSaveNow={(op) => {
           handleSaveNow(op);
           navigate("changes");

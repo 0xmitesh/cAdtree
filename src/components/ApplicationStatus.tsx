@@ -19,6 +19,7 @@ export function ApplicationStatus({
   onCancel,
   onRecover,
   onSaveNow,
+  onDontSave,
 }: {
   state: VaultState;
   branchId: string;
@@ -30,8 +31,14 @@ export function ApplicationStatus({
   onRecover: (id: string) => Promise<void>;
   /** Opens the normal Save with the summary and Why prefilled. */
   onSaveNow: (op: ApplicationOperation) => void;
+  /** Stops waiting to save a written Bring back or Copy (engine `abandonApplication`);
+   * the working files stay as they are. */
+  onDontSave: (id: string) => Promise<void>;
 }) {
-  const [confirmation, setConfirmation] = useState<ApplicationOperation | null>(null);
+  const [confirmation, setConfirmation] = useState<{
+    op: ApplicationOperation;
+    kind: "undo" | "dont-save";
+  } | null>(null);
   const [error, setError] = useState("");
   const [closed, setClosed] = useState(false);
   const pending = branchApplications(state, branchId).filter((op) =>
@@ -43,7 +50,9 @@ export function ApplicationStatus({
     if (!confirmation || busy) return;
     setError("");
     try {
-      await onRecover(confirmation.operationId);
+      await (confirmation.kind === "undo"
+        ? onRecover(confirmation.op.operationId)
+        : onDontSave(confirmation.op.operationId));
       setConfirmation(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -122,12 +131,31 @@ export function ApplicationStatus({
                     Save now
                   </button>
                 ) : null}
+                {op.status === "applied" ? (
+                  <details className="disclosure">
+                    <summary>Details</summary>
+                    <p className="small">
+                      If you don't want to save this {what(op)} (for example,
+                      you already put the files back), choose Don't save it.
+                    </p>
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => {
+                        setConfirmation({ op, kind: "dont-save" });
+                        setError("");
+                      }}
+                    >
+                      Don't save it
+                    </button>
+                  </details>
+                ) : null}
                 {op.status === "unresolved" ? (
                   <button
                     className="button secondary"
                     disabled={busy}
                     onClick={() => {
-                      setConfirmation(op);
+                      setConfirmation({ op, kind: "undo" });
                       setError("");
                       setClosed(false);
                     }}
@@ -140,16 +168,45 @@ export function ApplicationStatus({
           </section>
         );
       })}
-      {confirmation ? (
+      {confirmation?.kind === "dont-save" ? (
         <Modal
-          title={`Undo the unfinished ${what(confirmation)}`}
+          title={`Don't save this ${what(confirmation.op)}`}
+          busy={busy}
+          onClose={() => setConfirmation(null)}
+        >
+          {error ? <Notice type="error">{error}</Notice> : null}
+          <p>
+            Your working files stay as they are; cAdtree just stops waiting to
+            save this {what(confirmation.op)}. Any changes show as unsaved
+            changes, and you can save them yourself.
+          </p>
+          <div className="modal-actions">
+            <button
+              className="button secondary"
+              disabled={busy}
+              onClick={() => setConfirmation(null)}
+            >
+              Cancel
+            </button>
+            <button
+              className="button primary"
+              disabled={busy}
+              onClick={() => void confirm()}
+            >
+              Don't save it
+            </button>
+          </div>
+        </Modal>
+      ) : confirmation ? (
+        <Modal
+          title={`Undo the unfinished ${what(confirmation.op)}`}
           busy={busy}
           onClose={() => setConfirmation(null)}
         >
           {error ? <Notice type="error">{error}</Notice> : null}
           <p>
             Save and close these files in your CAD program first. Only files that
-            still hold what the {what(confirmation)} wrote are put back
+            still hold what the {what(confirmation.op)} wrote are put back
             automatically. Anything else is left as it is and, when readable,
             copied into the record. Other files and folders are not touched.
           </p>
@@ -176,7 +233,7 @@ export function ApplicationStatus({
               disabled={busy || !closed}
               onClick={() => void confirm()}
             >
-              Undo the unfinished {what(confirmation)}
+              Undo the unfinished {what(confirmation.op)}
             </button>
           </div>
         </Modal>

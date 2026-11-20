@@ -9,7 +9,7 @@ import { revision, scenarioState, historyState } from "../../tests/history-data"
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import { initializeProjectVault, openExistingVault } from "../engine/vault-service";
 import { captureRevision } from "../engine/revision-service";
-import { prepareApplyPreview } from "../engine/apply-preview";
+import { buildApplyPreview, prepareApplyPreview } from "../engine/apply-preview";
 import { applyAndSave } from "../engine/application-service";
 import type { ApplicationReview } from "../engine/application-records";
 afterEach(cleanup);
@@ -224,6 +224,25 @@ test("deriveChoices: a removed folder is removed only with every file and subfol
   const kept = deriveChoices(rows, false, new Set(["Old/Sub/A.txt"]), {});
   for (const p of ["Old", "Old/Sub", "Old/Sub/A.txt"]) assert.equal(p in kept, false, p);
   assert.equal(kept["New"]?.selected, true);
+});
+
+test("deriveChoices: a renamed (identity-blocked) file stays, so its removed folder stays too, with no untick message", () => {
+  const state = scenarioState("branches");
+  state.revisions[1].manifest.directories.push("Old", "Old/Sub");
+  state.revisions[1].manifest.files.push({ path: "Old/Sub/A.txt", sha256: "a", size: 1, lastModified: 0 });
+  state.revisions[5].manifest.directories.push("Old", "Old/Sub");
+  state.revisions[5].manifest.files.push({ path: "Old/Sub/A.txt", sha256: "a", size: 1, lastModified: 0 });
+  const prep = prepareApplyPreview(state, "p2", "branch-main", "merge");
+  if (prep.status !== "available") throw new Error(prep.reason);
+  const rows = prep.context.rows.map((row) =>
+    row.path === "Old/Sub/A.txt" ? { ...row, identityBlock: "Renamed." } : row,
+  );
+  for (const revert of [false, true]) {
+    const choices = deriveChoices(rows, revert, new Set(), {});
+    for (const p of ["Old", "Old/Sub", "Old/Sub/A.txt"]) assert.equal(p in choices, false, `${p} (revert ${revert})`);
+    const plan = buildApplyPreview({ ...prep.context, rows }, choices, "");
+    assert.equal(plan.blockers.some((b) => /untick it/.test(b)), false, `revert ${revert}`);
+  }
 });
 
 test("the 'holds only system files' error from the save shows in the dialog and nothing is written", async () => {

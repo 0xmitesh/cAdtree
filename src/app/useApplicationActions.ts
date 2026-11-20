@@ -1,5 +1,6 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import {
+  abandonApplication,
   applySaveSummary,
   applyAndSave,
   recoverApplication,
@@ -39,6 +40,8 @@ export type BringBackRequest = { projectId: string; revisionId: string; nonce: n
 /** The normal Save, prefilled after a Bring back or Copy that was written but not saved. */
 export type CapturePrefill = {
   projectId: string;
+  /** The operation it saves: the prefill applies only while that operation is `applied`. */
+  operationId: string;
   branchId: string;
   summary: string;
   notes: RevisionNotes;
@@ -68,6 +71,17 @@ export function useApplicationActions({
   const [notSavedReasons, setNotSavedReasons] = useState<Record<string, string>>({});
   const [bringBackRequest, setBringBackRequest] = useState<BringBackRequest | null>(null);
   const [capturePrefill, setCapturePrefill] = useState<CapturePrefill | null>(null);
+  // Once its operation is saved or finished, the prefill is dropped for good.
+  const prefillStillPending =
+    !capturePrefill ||
+    (vaultState?.project.projectId === capturePrefill.projectId &&
+      (vaultState.applicationOperations ?? []).some(
+        (op) =>
+          op.operationId === capturePrefill.operationId && op.status === "applied",
+      ));
+  useEffect(() => {
+    if (!prefillStillPending) setCapturePrefill(null);
+  }, [prefillStillPending]);
   const applicationFolders = async (state: VaultState) => {
     if (!managedProject || !workspace) return workingFolders;
     const current = await resolveManagedProject(
@@ -161,11 +175,44 @@ export function useApplicationActions({
     if (!vaultState || !op.record) return;
     setCapturePrefill({
       projectId: vaultState.project.projectId,
+      operationId: op.operationId,
       branchId: op.destinationBranchId,
       summary: applySaveSummary(vaultState, op.record),
       notes: { problem: op.record.plan.reason ?? "", modification: "", observations: "" },
       key: `${op.operationId}:${Date.now()}`,
     });
+  };
+  /** Don't save it: the working files stay; cAdtree stops waiting to save the operation. */
+  const handleDontSave = async (id: string) => {
+    if (!vaultDir || !vaultState) return;
+    await perform(
+      "apply",
+      async (context) => {
+        try {
+          await assertProjectWritable(context);
+          await requestApplicationWriteAccess(vaultDir, workingDir);
+          await abandonApplication(
+            vaultDir,
+            vaultState.project.projectId,
+            activeBranchId,
+            id,
+          );
+          if (context.current()) {
+            setCapturePrefill((previous) =>
+              previous?.operationId === id ? null : previous,
+            );
+            setStatusBanner({
+              type: "success",
+              message:
+                "cAdtree is no longer waiting to save it. Your working files were not changed.",
+            });
+          }
+        } finally {
+          if (context.current()) await refreshApplicationState();
+        }
+      },
+      true,
+    );
   };
   const handleRecoverApplication = async (id: string) => {
     if (!vaultDir || !vaultState) return;
@@ -204,8 +251,9 @@ export function useApplicationActions({
     handleApplyAndSave,
     handleRecoverApplication,
     handleSaveNow,
+    handleDontSave,
     notSavedReasons,
     bringBackRequest,
-    capturePrefill,
+    capturePrefill: prefillStillPending ? capturePrefill : null,
   };
 }

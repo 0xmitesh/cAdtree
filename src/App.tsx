@@ -1005,6 +1005,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     handleApplyAndSave,
     handleRecoverApplication,
     handleSaveNow,
+    handleDontSave,
     notSavedReasons,
     bringBackRequest,
     capturePrefill,
@@ -1425,6 +1426,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   handleApplyAndSave={handleApplyAndSave}
                   handleRecoverApplication={handleRecoverApplication}
                   handleSaveNow={handleSaveNow}
+                  handleDontSave={handleDontSave}
                   notSavedReasons={notSavedReasons}
                   bringBackRequest={bringBackRequest}
                   capturePrefill={capturePrefill}

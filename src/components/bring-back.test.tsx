@@ -307,7 +307,11 @@ function hook(f: Awaited<ReturnType<typeof project>>, initial: VaultState) {
       },
     }),
   );
-  return { rendered, banners, state: () => state, refreshes: () => refreshes };
+  const setState = (next: VaultState) => {
+    state = next;
+    rendered.rerender();
+  };
+  return { rendered, banners, state: () => state, setState, refreshes: () => refreshes };
 }
 const revertReview = (state: VaultState, sourceId: string, reason = "") => {
   const prep = prepareApplyPreview(state, sourceId, "branch-main", "revert");
@@ -368,6 +372,7 @@ test("not saved: the files stay, the status says why with Save now, and the pref
       onSaveNow={(o) => {
         saveNow = o;
       }}
+      onDontSave={async () => {}}
     />,
   );
   assert.match(
@@ -389,6 +394,58 @@ test("not saved: the files stay, the status says why with Save now, and the pref
   assert.equal(linked.status, "captured");
   assert.equal(linked.capturedRevisionId, saved.revision.manifest.revisionId);
   assert.equal(linked.events.filter((e) => e.kind === "capture").length, 1);
+  // Once saved, the prefill is gone: going back to Changes fills nothing in.
+  act(() => h.setState(after));
+  assert.equal(h.rendered.result.current.capturePrefill, null);
+  act(() => h.setState(state));
+  assert.equal(h.rendered.result.current.capturePrefill, null, "dropped for good, not just hidden");
+});
+
+test("Don't save it: the files stay, the case is no longer blocked and a later Bring back saves", async () => {
+  const f = await project();
+  const h = hook(f, await openExistingVault(f.vault));
+  f.vault.setHooks({
+    onBeforeWrite: (path) => {
+      if (path.includes("/revisions/")) throw new Error("manifest write failed");
+    },
+  });
+  await act(async () => {
+    await h.rendered.result.current.handleApplyAndSave(revertReview(h.state(), f.r1.revisionId));
+  });
+  f.vault.setHooks({ onBeforeWrite: undefined });
+  const op = branchApplications(h.state(), "branch-main").at(-1)!;
+  assert.equal(op.status, "applied");
+  act(() => h.rendered.result.current.handleSaveNow(op));
+  assert.ok(h.rendered.result.current.capturePrefill);
+  // The user put the file back by hand: nothing to save, the case would stay blocked.
+  await f.main.writeFileText(["A.txt"], "a2");
+  await assert.rejects(
+    h.rendered.result.current.handleApplyAndSave(revertReview(h.state(), f.r1.revisionId)),
+    /unfinished application.*Don't save it/,
+  );
+  // The status offers Don't save it inside Details, with a confirm.
+  let dontSave = "";
+  const ui = render(
+    <ApplicationStatus state={h.state()} branchId="branch-main" busy={false} progress={null} onCancel={() => {}}
+      onRecover={async () => {}} onSaveNow={() => {}} onDontSave={async (id) => { dontSave = id; }} />,
+  );
+  fireEvent.click(ui.getByRole("button", { name: "Don't save it" }));
+  const confirm = ui.getByRole("dialog", { name: "Don't save this Bring back" });
+  assert.match(confirm.textContent!, /Your working files stay as they are; cAdtree just stops waiting to save this Bring back\./);
+  fireEvent.click(within(confirm).getByRole("button", { name: "Don't save it" }));
+  await waitFor(() => assert.equal(dontSave, op.operationId));
+  await act(async () => {
+    await h.rendered.result.current.handleDontSave(op.operationId);
+  });
+  assert.equal(await f.main.readFileText(["A.txt"]), "a2", "working files untouched");
+  assert.equal(branchApplications(h.state(), "branch-main").at(-1)!.status, "abandoned");
+  assert.equal(h.rendered.result.current.capturePrefill, null);
+  let result: any;
+  await act(async () => {
+    result = await h.rendered.result.current.handleApplyAndSave(revertReview(h.state(), f.r1.revisionId));
+  });
+  assert.equal(result.status, "saved");
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
 });
 
 test("an interrupted write is labelled Undo the unfinished Bring back and needs the CAD-close acknowledgement", async () => {
@@ -397,7 +454,7 @@ test("an interrupted write is labelled Undo the unfinished Bring back and needs 
   op.status = "unresolved";
   let recovers = 0;
   const ui = render(
-    <ApplicationStatus state={state} branchId="branch-main" busy={false} progress={null} onCancel={() => {}} onRecover={async () => { recovers++; }} onSaveNow={() => {}} />,
+    <ApplicationStatus state={state} branchId="branch-main" busy={false} progress={null} onCancel={() => {}} onRecover={async () => { recovers++; }} onSaveNow={() => {}} onDontSave={async () => {}} />,
   );
   assert.match(ui.getByRole("region").textContent!, /A Bring back was interrupted/);
   assert.equal(ui.queryByRole("button", { name: "Save now" }), null);
@@ -461,4 +518,7 @@ test("Save now fills the normal save once per request: summary, and Why with the
   fireEvent.change(summary(), { target: { value: "Edited" } });
   ui.rerender(view({ summary: "Brought back Rev 001", notes, key: "op:1" }));
   assert.equal(summary().value, "Edited", "the same request does not overwrite the user's edits");
+  ui.rerender(view({ summary: "Brought back Rev 001", notes: { ...notes, problem: "Other" }, key: "op:2" }));
+  assert.equal(summary().value, "Edited", "a new request fills only empty fields");
+  assert.equal((ui.getByRole("textbox", { name: "Overall: Why" }) as HTMLTextAreaElement).value, "Wrong turn");
 });

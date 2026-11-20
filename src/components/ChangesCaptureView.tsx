@@ -130,8 +130,14 @@ export function ChangesCaptureView({
   const prefillKey = prefill?.key;
   useEffect(() => {
     if (!prefill) return;
-    setSummary(prefill.summary);
-    setNotes(prefill.notes);
+    // Fill only empty fields: the user's own draft is never overwritten.
+    setSummary((current) => (current.trim() ? current : prefill.summary));
+    setNotes((current) => {
+      const next = { ...current };
+      for (const key of Object.keys(prefill.notes) as (keyof RevisionNotes)[])
+        if (!next[key]?.trim()) next[key] = prefill.notes[key];
+      return next;
+    });
     if (Object.values(prefill.notes).some((value) => value.trim()))
       setShowOverall(true);
     // Only a new Save now request fills the form again.

@@ -67,13 +67,27 @@ export function deriveChoices(
       choices[row.path] = { selected: true, decision: "use-source" };
   }
   const folders = rows.filter((row) => isFolder(row) && isSelectable(row));
-  if (revert) {
-    for (const row of folders)
-      choices[row.path] = { selected: true, decision: "use-source" };
-    return choices;
-  }
   const takes = (path: string) => choices[path]?.decision === "use-source";
   const depth = (path: string) => path.split("/").length;
+  // A renamed (identity-blocked) file is left where it is, so its folder stays.
+  const staying = rows.filter((row) => !isFolder(row) && row.identityBlock);
+  const removable = (folder: PreviewFileRow) =>
+    !staying.some((file) => inside(folder.path, file.path));
+  if (revert) {
+    const removedHere = new Set<string>();
+    for (const row of [...folders].sort((a, b) => depth(b.path) - depth(a.path))) {
+      if (row.sourceChange === "deleted") {
+        const subfolders = folders.filter(
+          (other) => other.sourceChange === "deleted" && inside(row.path, other.path),
+        );
+        if (!removable(row) || subfolders.some((other) => !removedHere.has(other.path)))
+          continue;
+        removedHere.add(row.path);
+      }
+      choices[row.path] = { selected: true, decision: "use-source" };
+    }
+    return choices;
+  }
   const added = folders.filter((row) => row.sourceChange === "added");
   const create = new Set(
     added
@@ -97,7 +111,7 @@ export function deriveChoices(
     const foldersGo = removed
       .filter((other) => inside(row.path, other.path))
       .every((other) => remove.has(other.path));
-    if (filesGo && foldersGo) remove.add(row.path);
+    if (filesGo && foldersGo && removable(row)) remove.add(row.path);
   }
   for (const path of [...create, ...remove])
     choices[path] = { selected: true, decision: "use-source" };
@@ -246,7 +260,11 @@ function ApplyBody({
             ? row.sourceChange === "added"
               ? "Will be created"
               : "Will be removed"
-            : "Not copied"}
+            : context.rows.some(
+                  (file) => !isFolder(file) && file.identityBlock && inside(row.path, file.path),
+                )
+              ? "Kept: it holds a renamed file"
+              : "Not copied"}
       </span>
     </li>
   );
