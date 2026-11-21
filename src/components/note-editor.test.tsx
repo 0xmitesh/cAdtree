@@ -5,6 +5,7 @@ import { useState } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { RevisionNotes } from "../engine/types";
 import { NoteEditor } from "./NoteEditor";
+import { NotesText } from "./ui";
 afterEach(cleanup);
 
 function Harness({ initial, onChange }: { initial: RevisionNotes; onChange: (n: RevisionNotes) => void }) {
@@ -33,4 +34,15 @@ test("More detail opens by itself when Why or What you noticed already has text"
   }
   const onlyNote = render(<Harness initial={{ ...empty, modification: "Just a note" }} onChange={() => {}} />);
   assert.equal((onlyNote.getByText("More detail").closest("details") as HTMLDetailsElement).open, false);
+});
+
+test("saved notes read back as Description for a version and Note for a file", () => {
+  const notes: RevisionNotes = { problem: "", modification: "Thicker flange", observations: "" };
+  const version = render(<NotesText notes={notes} />);
+  assert.ok(version.getByText("Description"));
+  assert.equal(version.queryByText("Note"), null);
+  cleanup();
+  const file = render(<NotesText notes={notes} file />);
+  assert.ok(file.getByText("Note"));
+  assert.equal(file.queryByText("Description"), null);
 });

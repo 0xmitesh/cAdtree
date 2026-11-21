@@ -5,21 +5,11 @@
  * Clearing this IndexedDB store must never destroy project state or prevent reopening a vault.
  */
 
-export interface RememberedProjectBinding {
-  projectId: string;
-  projectName: string;
-  vaultHandle?: FileSystemDirectoryHandle;
-  branchWorkingHandles: Record<string, FileSystemDirectoryHandle>;
-  vaultFolderName: string;
-  workingFolderNames: Record<string, string>;
-  lastOpenedAt: string;
-  activeBranchId?: string;
-}
-
 import { normalizeFolderPath } from '../utils/folder-path';
 
 const DB_NAME = 'cadtree_convenience_v1';
 const DB_VERSION = 1;
+/** No longer written; kept so existing browser databases open and "clear convenience data" empties it. */
 const STORE_BINDINGS = 'project_bindings';
 const STORE_PREFS = 'ui_preferences';
 
@@ -88,11 +78,6 @@ export async function getWorkspacePath(workspaceId: string, rootHandle?: FileSys
   }
   try { return typeof saved.path === 'string' ? normalizeFolderPath(saved.path) : ''; } catch { return ''; }
 }
-
-/** Deprecated names keep existing local Windows preference callers compatible. */
-export const saveWorkspaceWindowsPath = saveWorkspacePath;
-export const getWorkspaceWindowsPath = getWorkspacePath;
-export const bindWorkspaceWindowsPathToRoot = bindWorkspacePathToRoot;
 
 export interface RememberedWorkspace {
   workspaceId: string;
@@ -190,118 +175,6 @@ function openDatabase(): Promise<IDBDatabase> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error('Failed to open IndexedDB.'));
   });
-}
-
-export async function saveRememberedProjectBinding(
-  binding: RememberedProjectBinding
-): Promise<void> {
-  if (!isIndexedDbAvailable()) return;
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BINDINGS, 'readwrite');
-    tx.objectStore(STORE_BINDINGS).put(binding);
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error ?? new Error('Failed to save project binding in IndexedDB.'));
-    };
-  });
-}
-
-/** Merge one branch binding in a single IDB transaction, retaining all other handles. */
-export async function rememberBranchConnection(
-  project: { projectId: string; projectName: string; vaultHandle: FileSystemDirectoryHandle; vaultFolderName: string },
-  branchId: string,
-  workingHandle?: FileSystemDirectoryHandle,
-): Promise<void> {
-  if (!isIndexedDbAvailable()) throw new Error('IndexedDB is unavailable; folder connections will last only for this session.');
-  const db = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BINDINGS, 'readwrite');
-    const store = tx.objectStore(STORE_BINDINGS);
-    const request = store.get(project.projectId);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error ?? new Error('Could not remember this case connection.')); };
-    request.onsuccess = () => {
-      const previous = request.result as RememberedProjectBinding | undefined;
-      const updated = { ...previous, ...project, activeBranchId: branchId, lastOpenedAt: new Date().toISOString(),
-        branchWorkingHandles: { ...previous?.branchWorkingHandles, ...(workingHandle ? { [branchId]: workingHandle } : {}) },
-        workingFolderNames: { ...previous?.workingFolderNames, ...(workingHandle ? { [branchId]: workingHandle.name } : {}) },
-      } satisfies RememberedProjectBinding;
-      store.put(updated);
-    };
-  });
-}
-
-export async function listRememberedProjectBindings(): Promise<RememberedProjectBinding[]> {
-  if (!isIndexedDbAvailable()) return [];
-  try {
-    const db = await openDatabase();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_BINDINGS, 'readonly');
-      const req = tx.objectStore(STORE_BINDINGS).getAll();
-      tx.oncomplete = () => {
-        db.close();
-        const items = (req.result as RememberedProjectBinding[]) ?? [];
-        items.sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt));
-        resolve(items);
-      };
-      tx.onabort = tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    return [];
-  }
-}
-
-export async function getRememberedProjectBinding(
-  projectId: string
-): Promise<RememberedProjectBinding | null> {
-  if (!isIndexedDbAvailable()) return null;
-  try {
-    const db = await openDatabase();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE_BINDINGS, 'readonly');
-      const req = tx.objectStore(STORE_BINDINGS).get(projectId);
-      tx.oncomplete = () => {
-        db.close();
-        resolve((req.result as RememberedProjectBinding) ?? null);
-      };
-      tx.onabort = tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    return null;
-  }
-}
-
-export async function removeRememberedProjectBinding(projectId: string): Promise<void> {
-  if (!isIndexedDbAvailable()) return;
-  try {
-    const db = await openDatabase();
-    await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_BINDINGS, 'readwrite');
-      const store = tx.objectStore(STORE_BINDINGS);
-      store.delete(projectId);
-      tx.oncomplete = () => {
-        db.close();
-        resolve();
-      };
-      tx.onerror = () => {
-        db.close();
-        reject(tx.error);
-      };
-    });
-  } catch {
-    // Ignore
-  }
 }
 
 export async function clearAllConvenienceMetadata(): Promise<void> {

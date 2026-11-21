@@ -214,7 +214,7 @@ export function CompareRevisionsDialog({
                     {formatRevisionNumber(revision.manifest.displayNumber)}
                   </strong>
                   {notes.map((note) => (
-                    <NotesText key={note.path} notes={note} />
+                    <NotesText key={note.path} notes={note} file />
                   ))}
                 </div>
               ) : (

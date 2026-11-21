@@ -21,8 +21,8 @@ import {
 import { importProject } from "../engine/workspace-service";
 import {
   clearAllConvenienceMetadata,
-  getWorkspaceWindowsPath,
-  saveWorkspaceWindowsPath,
+  getWorkspacePath,
+  saveWorkspacePath,
 } from "../engine/idb-store";
 import {
   FilePathShortcutsProvider,
@@ -115,7 +115,7 @@ test("native folder selection precedes required address; invalid, empty and canc
   await ready(ui);
   const home = await openHome(first);
   assert.equal(
-    await getWorkspaceWindowsPath(home.identity.homeId, nativeDirectory(first)),
+    await getWorkspacePath(home.identity.homeId, nativeDirectory(first)),
     "D:\\工程 Designs\\Cadtree",
   );
   assert.ok(
@@ -140,11 +140,11 @@ test("two homes retain isolated addresses; saved paths reconnect without a promp
   await completeHomeAddress(ui, '"\\\\server\\share\\Home B\\"');
   await ready(ui);
   assert.equal(
-    await getWorkspaceWindowsPath(homeA.identity.homeId, nativeDirectory(a)),
+    await getWorkspacePath(homeA.identity.homeId, nativeDirectory(a)),
     "D:\\Home A",
   );
   assert.equal(
-    await getWorkspaceWindowsPath(homeB.identity.homeId, nativeDirectory(b)),
+    await getWorkspacePath(homeB.identity.homeId, nativeDirectory(b)),
     "\\\\server\\share\\Home B",
   );
   menu(ui);
@@ -261,7 +261,7 @@ test("configured homes provide one-click descendant copies and one canonical add
   );
   assert.equal(picked.calls(), 1);
   assert.equal(
-    await getWorkspaceWindowsPath(home.identity.homeId),
+    await getWorkspacePath(home.identity.homeId),
     "D:\\Cadtree",
   );
 });
@@ -373,6 +373,6 @@ test("home identity is rechecked after address entry before saving or completing
     ),
   );
   assert.equal(ui.queryByRole("button", { name: "Create workspace" }), null);
-  assert.equal(await getWorkspaceWindowsPath(original.identity.homeId), "");
-  assert.equal(await getWorkspaceWindowsPath(different.identity.homeId), "");
+  assert.equal(await getWorkspacePath(original.identity.homeId), "");
+  assert.equal(await getWorkspacePath(different.identity.homeId), "");
 });

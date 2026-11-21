@@ -430,7 +430,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     ) : null}
                     {fileNotes.length ? (
                       fileNotes.map((note) => (
-                        <NotesText key={note.path} notes={note} />
+                        <NotesText key={note.path} notes={note} file />
                       ))
                     ) : (
                       <p className="muted small">
@@ -647,7 +647,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       fileNotes.map((note) => (
                         <section className="file-note-read" key={note.path}>
                           <strong className="file-path">{note.path}</strong>
-                          <NotesText notes={note} />
+                          <NotesText notes={note} file />
                         </section>
                       ))
                     ) : (

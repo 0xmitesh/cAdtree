@@ -23,8 +23,8 @@ import {
 } from "./FilePathShortcuts";
 import {
   clearAllConvenienceMetadata,
-  getWorkspaceWindowsPath,
-  saveWorkspaceWindowsPath,
+  getWorkspacePath,
+  saveWorkspacePath,
 } from "../engine/idb-store";
 import { InMemoryFileSystemAdapter } from "../engine/fs-adapter";
 import {
@@ -159,7 +159,7 @@ test("a first path click offers setup, saves locally, rechecks the file, then co
     composeWindowsFilePaths("D:\\CAD Workspace", location).folder,
   );
   assert.equal(checks, 2);
-  assert.equal(await getWorkspaceWindowsPath("ws-one"), "D:\\CAD Workspace");
+  assert.equal(await getWorkspacePath("ws-one"), "D:\\CAD Workspace");
   assert.ok(ui.getByText("Folder path copied"));
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(copied.length, 2));
@@ -177,7 +177,7 @@ test("a first path click offers setup, saves locally, rechecks the file, then co
 });
 
 test("a branch-root file copies its working folder; the secondary action includes its filename", async () => {
-  await saveWorkspaceWindowsPath("ws-one", "D:\\CAD Workspace");
+  await saveWorkspacePath("ws-one", "D:\\CAD Workspace");
   const copied: string[] = [];
   clipboard(async (value) => {
     copied.push(value);
@@ -210,7 +210,7 @@ test("a branch-root file copies its working folder; the secondary action include
 });
 
 test("clipboard feedback waits for success; denied or unavailable access offers a selectable plain-path fallback", async () => {
-  await saveWorkspaceWindowsPath("ws-one", "D:\\Workspace");
+  await saveWorkspacePath("ws-one", "D:\\Workspace");
   let finish!: () => void;
   clipboard(
     () =>
@@ -255,8 +255,8 @@ test("clipboard feedback waits for success; denied or unavailable access offers 
 });
 
 test("workspace switching and clearing convenience data never reuse another workspace's absolute root", async () => {
-  await saveWorkspaceWindowsPath("ws-one", "D:\\One");
-  await saveWorkspaceWindowsPath("ws-two", "E:\\Two");
+  await saveWorkspacePath("ws-one", "D:\\One");
+  await saveWorkspacePath("ws-two", "E:\\Two");
   const copied: string[] = [];
   clipboard(async (value) => {
     copied.push(value);
@@ -335,7 +335,7 @@ test("unconfigured shortcuts can be cancelled or invalid input corrected without
   });
   fireEvent.click(ui.getByRole("button", { name: "Save and copy" }));
   await waitFor(() => assert.ok(ui.getByRole("alert")));
-  assert.equal(await getWorkspaceWindowsPath("ws-one"), "");
+  assert.equal(await getWorkspacePath("ws-one"), "");
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   assert.ok(ui.queryByRole("dialog") === null);
   assert.ok(ui.queryByText("Folder path copied") === null);
@@ -409,7 +409,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
     name: "Case A",
     reason: "Alternative",
   });
-  await saveWorkspaceWindowsPath(ws.identity.workspaceId, "D:\\工程 Workspace");
+  await saveWorkspacePath(ws.identity.workspaceId, "D:\\工程 Workspace");
   const picks: FileSystemDirectoryHandle[] = [];
   Object.assign(window, {
     showDirectoryPicker: async () => {
@@ -430,7 +430,7 @@ test("App keeps the workspace overview separate, copies explicit history-branch/
   assert.ok(!ui.queryByRole("dialog"));
   await act(async () => {
     assert.equal(
-      await getWorkspaceWindowsPath(ws.identity.workspaceId),
+      await getWorkspacePath(ws.identity.workspaceId),
       "D:\\工程 Workspace",
     );
   });
