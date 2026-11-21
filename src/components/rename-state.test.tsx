@@ -79,7 +79,7 @@ test("Capture draft and last-used case survive renaming the project folder", asy
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
   await waitForScan(ui);
   await idle(ui);
-  fireEvent.change(ui.getByRole("textbox", { name: /Version summary/ }), { target: { value: "Draft kept across rename" } });
+  fireEvent.change(ui.getByRole("textbox", { name: /What changed/ }), { target: { value: "Draft kept across rename" } });
   // Leave for another project, then rename the first one on disk.
   await openOther(ui);
   await renameFolder(sample.workspace.root, OLD, NEW);
@@ -88,7 +88,7 @@ test("Capture draft and last-used case survive renaming the project folder", asy
   assert.equal(currentBranchId(ui), sample.caseId, "reopens on the case last used, not Main");
   fireEvent.click(within(ui.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Changes" }));
   await waitFor(() =>
-    assert.equal((ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement).value, "Draft kept across rename"),
+    assert.equal((ui.getByRole("textbox", { name: /What changed/ }) as HTMLInputElement).value, "Draft kept across rename"),
   );
 });
 

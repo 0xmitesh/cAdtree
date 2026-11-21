@@ -28,11 +28,10 @@ test("Project Learn preserves the working case, inspected version, scan and all 
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
   await waitForScan(ui);
   await waitFor(() => assert.equal(appBusy(ui), false));
-  const summary = ui.getByRole("textbox", { name: /Version summary/ });
+  const summary = ui.getByRole("textbox", { name: /What changed/ });
   fireEvent.change(summary, { target: { value: "Keep this pending summary" } });
-  fireEvent.click(ui.getByRole("button", { name: /Add a description/ }));
-  const overall = ui.getByRole("textbox", { name: "Overall: Description" });
-  fireEvent.change(overall, { target: { value: "Keep this engineering intent" } });
+  const overall = ui.getByRole("textbox", { name: "Overall: Why" });
+  fireEvent.change(overall, { target: { value: "Keep this reason" } });
   fireEvent.click(ui.getByRole("button", { name: "Add note for Bracket.SLDPRT" }));
   const fileNote = ui.getByRole("textbox", { name: "Bracket.SLDPRT: Note" });
   fireEvent.change(fileNote, { target: { value: "Keep this file-specific draft" } });
@@ -72,9 +71,9 @@ test("Project Learn preserves the working case, inspected version, scan and all 
   assert.equal(ui.container.querySelector(".revision-detail"), details, "History was not unmounted");
   assert.equal(details.textContent, inspected);
   fireEvent.click(nav.getByRole("button", { name: "Changes" }));
-  assert.equal(ui.getByRole("textbox", { name: /Version summary/ }), summary, "Changes was not unmounted");
+  assert.equal(ui.getByRole("textbox", { name: /What changed/ }), summary, "Changes was not unmounted");
   assert.equal((summary as HTMLInputElement).value, "Keep this pending summary");
-  assert.equal((overall as HTMLTextAreaElement).value, "Keep this engineering intent");
+  assert.equal((overall as HTMLTextAreaElement).value, "Keep this reason");
   assert.equal((fileNote as HTMLTextAreaElement).value, "Keep this file-specific draft");
   assert.ok(ui.getByRole("button", { name: "Add note for Bracket.SLDPRT" }), "scan remains available");
   assert.equal(picks, 0);

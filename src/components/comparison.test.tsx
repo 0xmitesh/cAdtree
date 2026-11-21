@@ -30,6 +30,8 @@ test("Compare initializes from the actual parent, swaps endpoints, compares nona
   const dialog = within(
     ui.getByRole("dialog", { name: "Compare saved versions" }),
   );
+  // The "differs from Main" line belongs to Compare with Main only.
+  assert.equal(dialog.queryByTestId("compare-with-main-note"), null);
   assert.equal(
     (
       dialog.getByRole("combobox", {

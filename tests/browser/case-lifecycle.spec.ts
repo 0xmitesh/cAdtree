@@ -113,13 +113,14 @@ for (const width of [1366, 390])
       await waitForScan(page);
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await page
-        .getByRole("textbox", { name: /Version summary/ })
+        .getByRole("textbox", { name: /What changed/ })
         .fill("Keep this case-scoped engineering draft");
       await page
-        .getByRole("button", { name: /Add a description/ })
+        .locator(".capture-form summary", { hasText: "More detail" })
+        .first()
         .click();
       await page
-        .getByRole("textbox", { name: "Overall: Description", exact: true })
+        .getByRole("textbox", { name: "Overall: Why", exact: true })
         .fill("Session draft survives lifecycle metadata changes");
       await page
         .getByRole("button", {
@@ -200,11 +201,11 @@ for (const width of [1366, 390])
       await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
       await nav.getByRole("button", { name: "Changes", exact: true }).click();
       await expect(
-        page.getByRole("textbox", { name: /Version summary/ }),
+        page.getByRole("textbox", { name: /What changed/ }),
       ).toHaveValue("Keep this case-scoped engineering draft");
       await expect(
         page.getByRole("textbox", {
-          name: "Overall: Description",
+          name: "Overall: Why",
           exact: true,
         }),
       ).toHaveValue("Session draft survives lifecycle metadata changes");

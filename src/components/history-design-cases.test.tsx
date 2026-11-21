@@ -23,7 +23,7 @@ test('History owns the existing case activity/Compare panel without changing ins
   await waitFor(()=>assert.equal(appBusy(ui),false));
   const nav=within(ui.getByRole('navigation',{name:'Primary navigation'}));
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
-  const summary=ui.getByRole('textbox',{name:/Version summary/});
+  const summary=ui.getByRole('textbox',{name:/What changed/});
   fireEvent.change(summary,{target:{value:'Keep this engineering draft'}});
   fireEvent.click(nav.getByRole('button',{name:'History'}));
   pickFile(ui, 'Bracket.SLDPRT');
@@ -42,8 +42,9 @@ test('History owns the existing case activity/Compare panel without changing ins
   const compare=cases.getByRole('button',{name:'Compare Lightweight bracket with Main'});
   compare.focus();fireEvent.click(compare);
   const comparison=within(ui.getByRole('dialog',{name:'Compare saved versions'}));
-  assert.equal((comparison.getByRole('combobox',{name:'From version'}) as HTMLSelectElement).value,s.source.manifest.revisionId);
-  assert.equal((comparison.getByRole('combobox',{name:'To version'}) as HTMLSelectElement).value,s.destination.manifest.revisionId);
+  assert.equal((comparison.getByRole('combobox',{name:'From version'}) as HTMLSelectElement).value,s.destination.manifest.revisionId);
+  assert.equal((comparison.getByRole('combobox',{name:'To version'}) as HTMLSelectElement).value,s.source.manifest.revisionId);
+  assert.match(comparison.getByTestId('compare-with-main-note').textContent!,/Shows how Lightweight bracket differs from Main/);
   assert.match(ui.getByRole('dialog',{name:'Compare saved versions'}).textContent!,/All project files/);
   fireEvent.click(comparison.getByRole('button',{name:'Close comparison'}));
   assert.equal(document.activeElement,compare);

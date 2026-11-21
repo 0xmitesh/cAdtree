@@ -50,13 +50,14 @@ for (const width of [1366, 390])
     await nav.getByRole("button", { name: "Changes", exact: true }).click();
     await waitForScan(page);
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-    const summary = page.getByRole("textbox", { name: /Version summary/ });
+    const summary = page.getByRole("textbox", { name: /What changed/ });
     await summary.fill("Main draft stays intact during case review");
     await page
-      .getByRole("button", { name: /Add a description/ })
+      .locator(".capture-form summary", { hasText: "More detail" })
+      .first()
       .click();
     await page
-      .getByRole("textbox", { name: "Overall: Description", exact: true })
+      .getByRole("textbox", { name: "Overall: Why", exact: true })
       .fill("Overall session draft");
     await page
       .getByRole("button", {
@@ -124,24 +125,24 @@ for (const width of [1366, 390])
     });
     await expect(
       dialog.getByRole("combobox", { name: "From version" }),
-    ).toHaveValue(fixture.ids[2]);
+    ).toHaveValue(fixture.ids[1]);
     await expect(
       dialog.getByRole("combobox", { name: "To version" }),
-    ).toHaveValue(fixture.ids[1]);
+    ).toHaveValue(fixture.ids[2]);
     await expect(dialog).toContainText("Scope: All project files");
     await expect(dialog).toContainText("Part-X redesign · Hidden");
     await expect(
       dialog.getByRole("region", {
-        name: "From overall notes at V3",
-        exact: true,
-      }),
-    ).toContainText("Overall: Redesign only Part-X");
-    await expect(
-      dialog.getByRole("region", {
-        name: "To overall notes at V2",
+        name: "From overall notes at V2",
         exact: true,
       }),
     ).toContainText("Overall: Main with 20 files");
+    await expect(
+      dialog.getByRole("region", {
+        name: "To overall notes at V3",
+        exact: true,
+      }),
+    ).toContainText("Overall: Redesign only Part-X");
     await page.screenshot({
       path: `artifacts/screenshots/case-activity-compare-${width}.png`,
     });
@@ -173,7 +174,7 @@ for (const width of [1366, 390])
       "Main draft stays intact during case review",
     );
     await expect(
-      page.getByRole("textbox", { name: "Overall: Description", exact: true }),
+      page.getByRole("textbox", { name: "Overall: Why", exact: true }),
     ).toHaveValue("Overall session draft");
     await expect(
       page.getByRole("textbox", {

@@ -575,14 +575,14 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   );
   steps(doc, 'Save a version', [
     'Close your CAD documents, then choose Changes on the left. cAdtree checks your files by itself and lists what changed.',
-    'Check the changed files. Enter a Version summary (required). Optionally choose + Add a description ' +
-      '(with More detail for Why and What you noticed) or + Attach reference files.',
+    'Check the changed files. Enter What changed (required, one line). Optionally open More detail ' +
+      '(Why and What you noticed) or choose + Attach reference files.',
     'Choose Save version. The new version appears in History.',
   ]);
   steps(doc, 'Create a design case', [
     'Choose History and select the saved version to start from.',
     'Choose Create design case from this version.',
-    'Enter a Case name and a Why (the reason for the case), then choose Create design case.',
+    'Enter a Case name and, if you like, a Why (the reason for the case), then choose Create design case.',
     'cAdtree makes a new folder for the case under working/ with every file of that version. Open that folder in ' +
       'your CAD program. To work on the case, select it under the project in the Explorer.',
   ]);

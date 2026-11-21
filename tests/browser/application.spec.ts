@@ -68,7 +68,7 @@ for (const width of [1366, 390])
     await expect(dialog.getByRole("button", { name: "Copy files", exact: true })).toHaveCount(0);
     await dialog.getByRole("button", { name: "Save my changes first", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("textbox", { name: /Version summary/ })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /What changed/ })).toBeVisible();
     const unchanged = await readFixture(page, fixture);
     expect(unchanged.main).toEqual(before.main);
     expect(unchanged.state.applicationOperations).toEqual([]);

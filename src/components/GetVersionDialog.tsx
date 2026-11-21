@@ -80,10 +80,18 @@ export function GetVersionDialog({
       {!check && !error ? <p className="muted">Checking your working folder…</p> : null}
       {check ? (
         <>
-          <p>
-            Put <strong className="file-path">{path}</strong> from {check.fromLabel} into
-            your working folder? It will show as an unsaved change.
-          </p>
+          {check.fromCase ? (
+            <p data-testid="get-version-other-case">
+              Get {check.revisionLabel} of <strong className="file-path">{path}</strong> from{" "}
+              <strong>{check.fromCase}</strong>. It goes into {check.intoCase}'s working
+              folder as an unsaved change.
+            </p>
+          ) : (
+            <p>
+              Put <strong className="file-path">{path}</strong> from {check.fromLabel} into
+              your working folder? It will show as an unsaved change.
+            </p>
+          )}
           {blocked ? <Notice type="error">{blocked}</Notice> : null}
           {!blocked && check.hasUnsavedEdits ? (
             <Notice type="info">

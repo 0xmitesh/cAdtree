@@ -103,8 +103,6 @@ export async function createDesignBranch(
   const reason = options.reason.trim();
   const initial = await openExistingVault(vaultDir);
   validateName(initial, name);
-  if (!reason)
-    throw new Error("Add a short reason for this case.");
   onProgress?.({
     phase: "acquiring_lock",
     processedFiles: 0,

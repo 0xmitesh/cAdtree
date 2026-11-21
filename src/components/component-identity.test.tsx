@@ -91,7 +91,7 @@ test('files whose name and bytes both changed are not suggested in the panel; a 
   const panel = within(ui.getByRole('region',{name:'Renamed files'}));
   assert.ok(panel.getByText('Confirmed rename: old → first'));
   assert.equal(ui.queryByRole('button',{name:'Match to a new file — old'}),null);
-  fireEvent.change(ui.getByRole('textbox',{name:/Version summary/}),{target:{value:'Renamed and edited'}});
+  fireEvent.change(ui.getByRole('textbox',{name:/What changed/}),{target:{value:'Renamed and edited'}});
   fireEvent.click(ui.getByRole('button',{name:/^Save version$/}));
   await waitFor(()=>assert.ok(captured));
   assert.deepEqual(captured.identityReview.renames,[{from:'old',to:'first'}]);
@@ -180,7 +180,7 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
     await captureRevision(f.working, f.vault, { ...input, branchId, workingFolders: bindings });
     captures++;
   }} />);
-  fireEvent.change(ui.getByRole('textbox', { name: /Version summary/ }), { target: { value: 'Capture applied component' } });
+  fireEvent.change(ui.getByRole('textbox', { name: /What changed/ }), { target: { value: 'Capture applied component' } });
   fireEvent.click(ui.getByRole('button', { name: 'Match to a new file — old' }));
   const match = within(ui.getByRole('dialog', { name: 'Match to a new file' }));
   fireEvent.change(match.getByRole('combobox'), { target: { value: 'first' } });
@@ -201,17 +201,54 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
   assert.equal(reopened.components?.status, 'available');
 });
 
-test('Changes saves the single Description and per-file Note into modification, leaving Why and What you noticed empty', async () => {
+test('Save version asks for one required line plus More detail (Why, What you noticed); there is no Description field', async () => {
   const f = await fixture();
   let params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0] | undefined;
   const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { onCapture: async (p: typeof params) => { params = p; } })} />);
-  fireEvent.change(ui.getByRole('textbox', { name: /Version summary/ }), { target: { value: 'Notes check' } });
-  fireEvent.click(ui.getByRole('button', { name: /Add a description/ }));
-  fireEvent.change(ui.getByRole('textbox', { name: 'Overall: Description' }), { target: { value: 'Overall words' } });
+  const line = ui.getByRole('textbox', { name: /What changed/ }) as HTMLInputElement;
+  assert.equal(line.required, true);
+  assert.equal(ui.queryByRole('textbox', { name: /Version summary/ }), null);
+  assert.equal(ui.queryByRole('textbox', { name: /Description/ }), null);
+  assert.equal(ui.queryByRole('button', { name: /Add a description/ }), null);
+  const more = ui.getByText('More detail').closest('details') as HTMLDetailsElement;
+  assert.equal(more.open, false);
+  fireEvent.click(ui.getByText('More detail'));
+  fireEvent.change(line, { target: { value: 'Thicker flange' } });
+  fireEvent.change(ui.getByRole('textbox', { name: 'Overall: Why' }), { target: { value: 'Cracked in test' } });
+  fireEvent.change(ui.getByRole('textbox', { name: 'Overall: What you noticed' }), { target: { value: 'Fits now' } });
+  fireEvent.click(ui.getByRole('button', { name: /^Save version$/ }));
+  await waitFor(() => assert.ok(params));
+  assert.equal(params!.summary, 'Thicker flange');
+  assert.deepEqual(params!.notes, { problem: 'Cracked in test', modification: '', observations: 'Fits now' });
+});
+
+test('an empty What changed line is refused with a plain message and nothing is saved', async () => {
+  const f = await fixture();
+  let captures = 0;
+  const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { onCapture: async () => { captures++; } })} />);
+  const form = ui.getByRole('button', { name: /^Save version$/ }).closest('form')!;
+  fireEvent.submit(form);
+  await waitFor(() => assert.ok(ui.getByText('Say what changed in one line.')));
+  assert.equal(captures, 0);
+});
+
+test('Save now prefill fills What changed and opens More detail with Why', async () => {
+  const f = await fixture();
+  const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { prefill: { summary: 'Bring back V1', notes: { problem: 'Wrong turn', modification: '', observations: '' }, key: 'k1' } })} />);
+  await waitFor(() => assert.equal((ui.getByRole('textbox', { name: /What changed/ }) as HTMLInputElement).value, 'Bring back V1'));
+  assert.equal((ui.getByRole('textbox', { name: 'Overall: Why' }) as HTMLTextAreaElement).value, 'Wrong turn');
+  await waitFor(() => assert.equal((ui.getByText('More detail').closest('details') as HTMLDetailsElement).open, true));
+});
+
+test('Changes saves the per-file Note into modification, leaving Why and What you noticed empty', async () => {
+  const f = await fixture();
+  let params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0] | undefined;
+  const ui = render(<ChangesCaptureView {...changesProps(f.state, f.scan, { onCapture: async (p: typeof params) => { params = p; } })} />);
+  fireEvent.change(ui.getByRole('textbox', { name: /What changed/ }), { target: { value: 'Notes check' } });
   fireEvent.click(ui.getByRole('button', { name: 'Add note for first' }));
   fireEvent.change(ui.getByRole('textbox', { name: 'first: Note' }), { target: { value: 'File words' } });
   fireEvent.click(ui.getByRole('button', { name: /^Save version$/ }));
   await waitFor(() => assert.ok(params));
-  assert.deepEqual(params!.notes, { problem: '', modification: 'Overall words', observations: '' });
+  assert.deepEqual(params!.notes, { problem: '', modification: '', observations: '' });
   assert.deepEqual(params!.fileNotes, [{ path: 'first', problem: '', modification: 'File words', observations: '' }]);
 });

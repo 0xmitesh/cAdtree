@@ -64,7 +64,7 @@ async function scanAndDraft(ui: ReturnType<typeof render>, summary: string) {
   nav(ui, "Changes");
   await waitForScan(ui);
   await idle(ui);
-  fireEvent.change(ui.getByRole("textbox", { name: /Version summary/ }), { target: { value: summary } });
+  fireEvent.change(ui.getByRole("textbox", { name: /What changed/ }), { target: { value: summary } });
 }
 
 test("Returning after the open project's folder is renamed: notice, still open, new location in use, case kept", async () => {
@@ -113,7 +113,7 @@ test("Saving after a rename writes nothing to the old path, shows the notice, an
   // Retry: the draft is kept, rescan, then save at the new location.
   await waitForScan(ui);
   await idle(ui);
-  assert.equal((ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement).value, "Saved after rename");
+  assert.equal((ui.getByRole("textbox", { name: /What changed/ }) as HTMLInputElement).value, "Saved after rename");
   fireEvent.click(ui.getByRole("button", { name: "Save version" }));
   await idle(ui);
   assert.equal(await revisionCount(root, NEW), before + 1);

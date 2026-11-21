@@ -84,10 +84,10 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
       await page.screenshot({ path: "artifacts/screenshots/import-project.png" });
       await page.getByRole("button", { name: "Choose project folder" }).click();
       await expect(
-        page.getByRole("textbox", { name: /Version summary/ }),
+        page.getByRole("textbox", { name: /What changed/ }),
       ).toBeEnabled();
       await page
-        .getByRole("textbox", { name: /Version summary/ })
+        .getByRole("textbox", { name: /What changed/ })
         .fill(`Baseline ${name}`);
       await page
         .getByRole("button", { name: "Save version", exact: true })
@@ -290,7 +290,7 @@ test("Cadtree home: create, import, capture, switch, reopen and rediscover in Ch
   await waitForScan(page);
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   await page
-    .getByRole("textbox", { name: /Version summary/ })
+    .getByRole("textbox", { name: /What changed/ })
     .fill("Offline version");
   await page
     .getByRole("button", { name: "Save version", exact: true })

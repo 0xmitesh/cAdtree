@@ -53,7 +53,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   await expect(identity.getByText(/Confirmed rename:/)).toHaveCount(0);
   if (width === 390) await matchManually();
   else await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
-  await page.getByRole('textbox', { name: /Version summary/ }).fill('Correct component filename');
+  await page.getByRole('textbox', { name: /What changed/ }).fill('Correct component filename');
   await page.getByRole('button', { name: 'Save version', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
   await expect(page.getByRole('heading', { name: '0 changed files' })).toBeVisible();
@@ -72,7 +72,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
   const dialog = page.getByRole('dialog', { name: 'Treat as a new file' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Confirm new file' }).click();
-  await page.getByRole('textbox', { name: /Version summary/ }).fill('Unrelated replacement');
+  await page.getByRole('textbox', { name: /What changed/ }).fill('Unrelated replacement');
   await page.getByRole('button', { name: 'Save version', exact: true }).click();
   await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
   const replacementId = await page.evaluate(async () => {

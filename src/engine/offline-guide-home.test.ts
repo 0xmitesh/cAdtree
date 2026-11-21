@@ -152,7 +152,7 @@ test('home Readme: tutorials use the real button names and describe no feature t
   }
   for (const label of ['Save version', 'Create design case from this version', 'Create design case', 'Bring back onto',
     'Save my changes first', 'Copy files from', 'Copy files', 'Keep mine', 'Take theirs', 'Save now', 'Why', 'Export a copy', 'Choose folder…', 'Include references', 'Hide case',
-    'Show hidden cases', 'Unhide', 'Version summary', 'Case name', 'Add a description', 'What you noticed']) {
+    'Show hidden cases', 'Unhide', 'What changed', 'Case name', 'More detail', 'What you noticed']) {
     assert.ok(flat.includes(label), `mentions "${label}"`);
   }
   assert.doesNotMatch(text, /restore copy|convert|cloud|collaborat|upload|sync/i);

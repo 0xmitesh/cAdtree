@@ -25,6 +25,10 @@ export type GetVersionCheck = {
   revisionLabel: string;
   /** "V3", or "V8 on <case>" when the version belongs to another case. */
   fromLabel: string;
+  /** The other case's name when the version belongs to a case other than the active one; otherwise null. */
+  fromCase: string | null;
+  /** The active case's name (where the file goes). */
+  intoCase: string;
   planHash: string;
   /** Why it cannot be done now (empty when it can). */
   blockers: string[];
@@ -33,6 +37,9 @@ export type GetVersionCheck = {
   /** Where the replaced file will be kept, e.g. "Discarded/2026-11-20 09.30" (the minute may move on). */
   keptFolder: string;
 };
+
+const caseName = (state: { branches: { branchId: string; name: string }[] }, branchId: string) =>
+  state.branches.find((branch) => branch.branchId === branchId)?.name ?? "this case";
 
 export type GetVersionController = {
   check: (revisionId: string, path: string) => Promise<GetVersionCheck>;
@@ -110,6 +117,11 @@ export function useGetVersionActions({
             revision && revision.manifest.branchId !== activeBranchId
               ? `${revisionLabel} on ${caseLabel(state, revision.manifest.branchId)}`
               : revisionLabel,
+          fromCase:
+            revision && revision.manifest.branchId !== activeBranchId
+              ? caseName(state, revision.manifest.branchId)
+              : null,
+          intoCase: caseName(state, activeBranchId),
           planHash: replacePlanHash(plan),
           blockers: plan.blockers,
           hasUnsavedEdits:

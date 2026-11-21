@@ -244,7 +244,7 @@ export function prepareReviewExport(state: VaultState, revisionId: string, reque
     `Case: ${quote(branch.name)} (${branch.branchId})`,
     `Version: ${revisionLabel} (${manifest.revisionId})`,
     `Saved date: ${manifest.captureCompletedAt}`,
-    `Version summary: ${quote(manifest.summary)}`,
+    `What changed: ${quote(manifest.summary)}`,
     ...noteLines(manifest.notes, 'Description'),
     'These are ordinary copies of the saved files. Editing them does not update saved history.',
     ...(includeReferences ? [] : ['Project reference attachments are not included in this exported copy.']),

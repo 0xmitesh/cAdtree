@@ -129,7 +129,7 @@ test("saving a version refreshes the Map and writes the version listing; a faile
   await openProject(ui, f.home);
   await f.main.writeFileBytes(["Part.SLDPRT"], new Uint8Array([3, 2]));
   await scanMain(ui);
-  fireEvent.change(changesPage(ui).getByRole("textbox", { name: /Version summary/ }), { target: { value: "Main draft" } });
+  fireEvent.change(changesPage(ui).getByRole("textbox", { name: /What changed/ }), { target: { value: "Main draft" } });
   // The working folder changes after the review: the save is refused as stale, nothing is published.
   await f.main.writeFileBytes(["Late.SLDPRT"], new Uint8Array([9]));
   fireEvent.click(changesPage(ui).getByRole("button", { name: "Save version" }));
