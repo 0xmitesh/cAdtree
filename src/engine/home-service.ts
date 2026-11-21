@@ -576,7 +576,7 @@ async function register(
           totalFiles: 0,
           processedBytes: 0,
           totalBytes: 0,
-          message: "Publishing the verified workspace…",
+          message: "Finishing the workspace…",
         });
         throwIfCancelled(options.signal);
         publishing = true;

@@ -315,7 +315,7 @@ export async function createDesignBranch(
         totalFiles: source.files.length,
         processedBytes: inventory.totalBytes,
         totalBytes: inventory.totalBytes,
-        message: "Publishing the verified design case…",
+        message: "Finishing the design case…",
       });
       checkCancelled(signal);
       publicationAttempted = true;
