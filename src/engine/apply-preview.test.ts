@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { historyState, revision } from "../../tests/history-data";
 import {
+  applyModeFor,
   buildApplyPreview,
   prepareApplyPreview,
   type ApplyPreviewContext,
@@ -493,4 +494,213 @@ test("nested removals: a parent is removable only together with its subfolders",
   const both = buildApplyPreview(c, { Deep: chosen(), "Deep/Inner": chosen() }, "Reason");
   assert.equal(both.ready, true, both.blockers.join("|"));
   assert.equal(both.resultDirectories.some((d) => d.startsWith("Deep")), false);
+});
+
+// ---- Copy remembers earlier copies ----
+type CopyState = ReturnType<typeof historyState>;
+function version(
+  id: string,
+  parent: string | null,
+  number: number,
+  branchId: string,
+  files: Record<string, string>,
+) {
+  const r = revision(id, parent, number, branchId);
+  r.manifest.files = Object.entries(files).map(([p, h]) => file(p, h));
+  r.manifest.directories = [];
+  return r;
+}
+function addCase(state: CopyState, branchId: string, startingRevisionId: string) {
+  state.branches.push({
+    ...state.branches[0],
+    branchId,
+    name: branchId,
+    isMain: false,
+    startingRevisionId,
+  });
+}
+function addCopy(
+  state: CopyState,
+  child: string,
+  source: string,
+  destinationBranchId: string,
+  sourceBranchId: string,
+  status = "captured",
+) {
+  state.applicationOperations = [
+    ...(state.applicationOperations ?? []),
+    {
+      operationId: `apply-${child}-${source}`,
+      destinationBranchId,
+      relativePath: `applications/${destinationBranchId}/x`,
+      status,
+      capturedRevisionId: child,
+      events: [],
+      record: { sourceBranchId, plan: { sourceRevisionId: source, mode: "merge" } },
+    } as never,
+  ];
+}
+/** Main m1; case X: x1, x2; X2 was copied into Main as m2; X saved x3 afterwards. */
+function copiedOnce(mainBracket = "b2") {
+  const state = historyState(0);
+  addCase(state, "x", "m1");
+  state.revisions = [
+    version("m1", null, 1, "branch-main", { "Bracket.txt": "b0", "Other.txt": "o0" }),
+    version("x1", "m1", 2, "x", { "Bracket.txt": "b1", "Other.txt": "o0" }),
+    version("x2", "x1", 3, "x", { "Bracket.txt": "b2", "Other.txt": "o0", "New.txt": "n2" }),
+    version("m2", "m1", 4, "branch-main", {
+      "Bracket.txt": mainBracket,
+      "Other.txt": "o0",
+      "New.txt": "n2",
+    }),
+    version("x3", "x2", 5, "x", { "Bracket.txt": "b3", "Other.txt": "o0", "New.txt": "n2" }),
+  ];
+  state.branchHeads = { "branch-main": "m2", x: "x3" };
+  addCopy(state, "m2", "x2", "branch-main", "x");
+  return state;
+}
+const kindOf = (c: ApplyPreviewContext, path: string) =>
+  c.rows.find((r) => r.entry === "file" && r.path === path)?.kind;
+
+test("a second copy from the same case compares with the earlier copy: only new changes are offered", () => {
+  const state = copiedOnce();
+  const c = context(state, "x3");
+  assert.equal(c.base.manifest.revisionId, "x2");
+  assert.equal(c.baseViaCopy, true);
+  assert.equal(kindOf(c, "Bracket.txt"), "available", "a plain change, not Changed in both");
+  assert.equal(kindOf(c, "New.txt"), "no-source-change", "already taken");
+  assert.equal(kindOf(c, "Other.txt"), "no-source-change");
+  const plan = buildApplyPreview(
+    c,
+    { "Bracket.txt": chosen() },
+    "",
+  );
+  assert.equal(plan.ready, true);
+  assert.equal(plan.baseRevisionId, "x2");
+  assert.equal(plan.actions.find((a) => a.path === "Bracket.txt")?.operation, "replace");
+});
+test("a file left out last time is not offered again unless the case changes it again", () => {
+  // Main kept its own bracket (b0) when X2 was copied.
+  const state = copiedOnce("b0");
+  state.revisions.find((r) => r.manifest.revisionId === "x3")!.manifest.files =
+    [file("Bracket.txt", "b2"), file("Other.txt", "o0"), file("New.txt", "n2"), file("Later.txt", "l3")];
+  const c = context(state, "x3");
+  assert.equal(c.base.manifest.revisionId, "x2");
+  assert.equal(kindOf(c, "Bracket.txt"), "no-source-change");
+  assert.equal(kindOf(c, "Later.txt"), "available");
+  // Changed again in the case: offered (and changed in both, since Main kept its own).
+  state.revisions.find((r) => r.manifest.revisionId === "x3")!.manifest.files[0].sha256 = "b3";
+  assert.equal(kindOf(context(state, "x3"), "Bracket.txt"), "conflict");
+});
+test("without the earlier copy link the old starting point is used", () => {
+  const state = copiedOnce();
+  state.applicationOperations = [];
+  const c = context(state, "x3");
+  assert.equal(c.base.manifest.revisionId, "m1");
+  assert.equal(c.baseViaCopy, false);
+  assert.equal(kindOf(c, "Bracket.txt"), "conflict");
+});
+test("copying back in the other direction: Main into a case after the case copied from Main", () => {
+  const state = historyState(0);
+  addCase(state, "x", "m1");
+  state.revisions = [
+    version("m1", null, 1, "branch-main", { "Main.txt": "a0", "Case.txt": "c0" }),
+    version("m2", "m1", 2, "branch-main", { "Main.txt": "a2", "Case.txt": "c0" }),
+    version("x1", "m1", 3, "x", { "Main.txt": "a0", "Case.txt": "c1" }),
+    // x2: Main's m2 copied into the case.
+    version("x2", "x1", 4, "x", { "Main.txt": "a2", "Case.txt": "c1" }),
+    version("m3", "m2", 5, "branch-main", { "Main.txt": "a3", "Case.txt": "c0" }),
+  ];
+  state.branchHeads = { "branch-main": "m3", x: "x2" };
+  addCopy(state, "x2", "m2", "x", "branch-main");
+  const c = context(state, "m3", "x");
+  assert.equal(c.base.manifest.revisionId, "m2");
+  assert.equal(c.baseViaCopy, true);
+  assert.equal(kindOf(c, "Main.txt"), "available");
+  assert.equal(kindOf(c, "Case.txt"), "no-source-change");
+  // And back: copying the case into Main starts from m2, which the case already holds.
+  const back = context(state, "x2", "branch-main");
+  assert.equal(back.base.manifest.revisionId, "m2");
+  assert.equal(back.baseViaCopy, true);
+});
+test("a version copied into a case is still a Copy, never a Bring back", () => {
+  const state = copiedOnce();
+  assert.equal(applyModeFor(state, "x2", "branch-main"), "merge");
+  assert.equal(applyModeFor(state, "x3", "branch-main"), "merge");
+  assert.equal(applyModeFor(state, "m1", "branch-main"), "revert");
+  const reverted = prepareApplyPreview(state, "x2", "branch-main", "revert");
+  assert.equal(reverted.status, "unavailable");
+});
+test("copies that cross back and forth leave two candidates: the parent-line starting point is used", () => {
+  const state = historyState(0);
+  addCase(state, "x", "m1");
+  state.revisions = [
+    version("m1", null, 1, "branch-main", { "F.txt": "f0" }),
+    version("m2", "m1", 2, "branch-main", { "F.txt": "f0", "M.txt": "m2" }),
+    version("x1", "m1", 3, "x", { "F.txt": "f0", "X.txt": "x1" }),
+    version("x2", "x1", 4, "x", { "F.txt": "f0", "X.txt": "x1" }),
+    version("m3", "m2", 5, "branch-main", { "F.txt": "f0", "M.txt": "m2", "X.txt": "x1" }),
+    version("x3", "x2", 6, "x", { "F.txt": "f0", "M.txt": "m2", "X.txt": "x1" }),
+  ];
+  state.branchHeads = { "branch-main": "m3", x: "x3" };
+  addCopy(state, "m3", "x1", "branch-main", "x");
+  addCopy(state, "x3", "m2", "x", "branch-main");
+  const c = context(state, "x3");
+  assert.equal(c.base.manifest.revisionId, "m1");
+  assert.equal(c.baseViaCopy, false);
+});
+test("an unreadable, unfinished or damaged copy record adds nothing", () => {
+  const unfinished = copiedOnce();
+  unfinished.applicationOperations![0].status = "applied";
+  assert.equal(context(unfinished, "x3").base.manifest.revisionId, "m1");
+  const unreadable = copiedOnce();
+  unreadable.applicationOperations = [
+    {
+      operationId: "x",
+      destinationBranchId: "*",
+      relativePath: "applications",
+      status: "unavailable",
+      events: [],
+      error: "unreadable",
+    } as never,
+  ];
+  assert.equal(context(unreadable, "x3").base.manifest.revisionId, "m1");
+  const damagedSource = copiedOnce();
+  damagedSource.revisions.find((r) => r.manifest.revisionId === "x2")!.integrityStatus =
+    "corrupted";
+  const result = prepareApplyPreview(damagedSource, "x3", "branch-main");
+  assert.equal(result.status, "unavailable", "x3 follows the damaged x2: no plan");
+});
+test("a damaged version on the path through an earlier copy refuses; nothing is guessed", () => {
+  const state = copiedOnce();
+  // Main continues after the copy; the version in between is damaged.
+  state.revisions.push(version("m3", "m2", 6, "branch-main", { "Bracket.txt": "b2" }));
+  state.revisions.push(version("m4", "m3", 7, "branch-main", { "Bracket.txt": "b2" }));
+  state.branchHeads["branch-main"] = "m4";
+  assert.equal(context(state, "x3").base.manifest.revisionId, "x2");
+  state.revisions.find((r) => r.manifest.revisionId === "m3")!.integrityErrors = ["damaged"];
+  const result = prepareApplyPreview(state, "x3", "branch-main");
+  assert.equal(result.status, "unavailable");
+  if (result.status === "unavailable")
+    assert.match(result.reason, /shared history is unavailable/);
+  // A damaged version that is not on any path in use does not block.
+  const harmless = copiedOnce();
+  harmless.revisions.push(version("y1", "m1", 9, "branch-main", {}));
+  harmless.revisions.find((r) => r.manifest.revisionId === "y1")!.integrityErrors = ["damaged"];
+  assert.equal(context(harmless, "x3").base.manifest.revisionId, "x2");
+});
+test("already copied: the source is the base only because of the copy, so there is nothing new", () => {
+  const state = copiedOnce();
+  const result = prepareApplyPreview(state, "x2", "branch-main");
+  assert.equal(result.status, "unavailable");
+  if (result.status === "unavailable")
+    assert.equal(
+      result.reason,
+      "Everything in V3 is already in this case from an earlier copy. There's nothing new to copy.",
+    );
+  // A parent-line ancestor keeps the Bring back message.
+  const ancestor = prepareApplyPreview(state, "m1", "branch-main");
+  assert.equal(ancestor.status, "unavailable");
+  if (ancestor.status === "unavailable")
+    assert.match(ancestor.reason, /Use "Bring back"/);
 });

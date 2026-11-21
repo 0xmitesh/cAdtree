@@ -343,3 +343,45 @@ test("an unreadable tracked file still refuses Bring back before any write", asy
   assert.equal(await f.main.readFileText(["A.txt"]), before);
   assert.equal((await f.ops()).length, 0);
 });
+
+test("a second Copy from the same case starts from the earlier copy: new changes are plain, review and save agree, and copying again says there is nothing new", async () => {
+  const f = await project();
+  const created = await createDesignBranch({
+    vaultDir: f.vault,
+    destinationParent: f.cases,
+    workingFolders: f.folders,
+    sourceRevisionId: f.r2.revisionId,
+    name: "Lighter collar",
+    reason: "Try",
+  });
+  const caseId = created.branch.branchId;
+  const caseDir = created.workingDir;
+  f.folders[caseId] = caseDir;
+  await f.w(caseDir, "A.txt", "case a");
+  const first = (await f.save(caseDir, caseId, "Case change 1")).revision.manifest;
+  const copy1 = await applyAndSave(f.vault, await f.review(first.revisionId, "merge"), f.options);
+  assert.equal(copy1.status, "saved");
+  // Copying the same version again: everything is already here.
+  const again = prepareApplyPreview(await openExistingVault(f.vault), first.revisionId, "branch-main", "merge");
+  assert.equal(again.status, "unavailable");
+  if (again.status === "unavailable")
+    assert.equal(
+      again.reason,
+      `Everything in V${first.displayNumber} is already in this case from an earlier copy. There's nothing new to copy.`,
+    );
+  // The case changes A.txt again; Main is untouched since the copy.
+  await f.w(caseDir, "A.txt", "case a again");
+  const second = (await f.save(caseDir, caseId, "Case change 2")).revision.manifest;
+  const prepared = prepareApplyPreview(await openExistingVault(f.vault), second.revisionId, "branch-main", "merge");
+  assert.equal(prepared.status, "available");
+  if (prepared.status !== "available") return;
+  assert.equal(prepared.context.base.manifest.revisionId, first.revisionId);
+  assert.equal(prepared.context.baseViaCopy, true);
+  assert.equal(prepared.context.rows.find((r) => r.path === "A.txt")?.kind, "available");
+  // The save-time recheck recomputes the same base and plan.
+  const copy2 = await applyAndSave(f.vault, await f.review(second.revisionId, "merge"), f.options);
+  assert.equal(copy2.status, "saved");
+  assert.equal(await f.main.readFileText(["A.txt"]), "case a again");
+  if (copy2.status === "saved")
+    assert.equal(copy2.operation.record?.plan.baseRevisionId, first.revisionId);
+});

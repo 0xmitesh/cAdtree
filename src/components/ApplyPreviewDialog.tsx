@@ -201,6 +201,7 @@ function ApplyBody({
     [context, choices, reason],
   );
   const sourceLabel = formatRevisionNumber(context.source.manifest.displayNumber);
+  const baseLabel = formatRevisionNumber(context.base.manifest.displayNumber);
   const destinationName = caseLabel(state, context.destinationBranchId);
   const sourceCase = caseLabel(state, context.source.manifest.branchId);
   const fileRows = context.rows.filter(
@@ -470,6 +471,11 @@ function ApplyBody({
           These are the files {sourceCase} changed ({sourceLabel}). Ticked files
           are copied into {destinationName}, and the result is saved as a new
           version. Close these files in the app you use first.
+        </p>
+        <p className="muted small" aria-label="Compared with">
+          {context.baseViaCopy
+            ? `Compared with ${baseLabel}, from an earlier copy.`
+            : `Compared with ${baseLabel}, where these cases' histories meet.`}
         </p>
         {!fileRows.length && !folderRows.length ? (
           <Notice>

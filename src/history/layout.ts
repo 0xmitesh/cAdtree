@@ -330,3 +330,66 @@ export function ancestryOf(graph: RevisionGraph, headId: string): Set<string> {
   }
   return ids;
 }
+
+/**
+ * A version's shared history for Copy: its own parent line, plus, for every
+ * earlier Copy saved inside that line (a usable `graph.copies` link of merge
+ * mode), the copied-from version and *its* shared history, followed
+ * recursively. Bring back links add nothing (their source is already on the
+ * parent line). Loop-safe.
+ */
+export function sharedHistoryOf(graph: RevisionGraph, headId: string): Set<string> {
+  const merges = new Map<string, string[]>();
+  for (const link of graph.copies)
+    if (link.mode === "merge")
+      merges.set(link.child, [...(merges.get(link.child) ?? []), link.source]);
+  const parent = new Map(graph.edges.map((e) => [e.child, e.parent]));
+  const ids = new Set<string>();
+  const pending = [headId];
+  while (pending.length) {
+    let id: string | undefined = pending.pop();
+    // A version already seen brings its whole parent line with it.
+    while (id && !ids.has(id)) {
+      ids.add(id);
+      for (const source of merges.get(id) ?? []) pending.push(source);
+      id = parent.get(id);
+    }
+  }
+  return ids;
+}
+
+export interface CopyBase {
+  baseId: string;
+  /** True when the base was reached through an earlier Copy: the parent line
+   * alone would have given a different (older) starting point. */
+  viaCopy: boolean;
+}
+
+/**
+ * The starting point for copying `sourceId` into the branch whose newest
+ * version is `destinationHeadId`: the latest version both sides share, where
+ * earlier Copies count as shared history. Exactly one latest shared version
+ * is used; if copies cross back and forth and there are several candidates
+ * (or none), it falls back to the first shared version on the parent lines.
+ * Returns null when the parent lines share nothing and copies do not settle it.
+ */
+export function copyBaseOf(
+  graph: RevisionGraph,
+  sourceId: string,
+  destinationHeadId: string,
+): CopyBase | null {
+  const sourceLine = ancestryOf(graph, sourceId);
+  const parentBase =
+    [...ancestryOf(graph, destinationHeadId)].find((id) => sourceLine.has(id)) ??
+    null;
+  const sourceShared = sharedHistoryOf(graph, sourceId);
+  const destinationShared = sharedHistoryOf(graph, destinationHeadId);
+  const shared = [...destinationShared].filter((id) => sourceShared.has(id));
+  const history = new Map(shared.map((id) => [id, sharedHistoryOf(graph, id)]));
+  const latest = shared.filter(
+    (id) => !shared.some((other) => other !== id && history.get(other)!.has(id)),
+  );
+  if (latest.length === 1)
+    return { baseId: latest[0], viaCopy: latest[0] !== parentBase };
+  return parentBase ? { baseId: parentBase, viaCopy: false } : null;
+}
