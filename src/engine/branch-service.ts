@@ -1,6 +1,5 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { FolderAccessError } from '../utils/folder-access';
-import { FileConflictError, validateDirectoryIsolation } from "./fs-adapter";
+import { FileConflictError, FolderAccessError, validateDirectoryIsolation } from "./fs-adapter";
 import { newRecordId } from "./ids";
 import {
   assertRevisionAncestry,

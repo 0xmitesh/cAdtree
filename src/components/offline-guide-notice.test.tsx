@@ -8,7 +8,7 @@ import { resolveManagedProject } from "../engine/workspace-service";
 import { PROJECT_MAP_FILENAME } from "../engine/offline-guide-paths";
 import type { GuideRefreshResult } from "../engine/offline-guide";
 import { guideFailureReason, refreshGuidesAfter, useGuideProblem } from "../app/offline-guide-refresh";
-import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
+import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import { DiagnosticsView } from "./DiagnosticsView";
 
 Object.assign(globalThis, { indexedDB });
@@ -60,7 +60,7 @@ test("a failed offline guide write shows a quiet notice in Settings; a later suc
   assert.equal(await quietly(() => refreshGuidesAfter({ project: target })), undefined);
   await waitFor(() => assert.ok(ui.getByText(NOTICE)), { timeout: 10_000 });
   const text = ui.container.querySelector(".notice")!.textContent!;
-  assert.match(text, /the project map couldn.t be written \(disk full\)/);
+  assert.match(text, /the project map couldn.t be written\./);
   assert.match(text, /It will try again after your next save\./);
 
   sample.home.setHooks({ onBeforeWrite: undefined });
@@ -73,9 +73,34 @@ test("a refresh that is skipped for a normal reason is not a failure", () => {
   const skipped: GuideRefreshResult = { status: "skipped", reason: "The project is read-only.", written: [], failed: [] };
   assert.equal(guideFailureReason(skipped), null);
   assert.equal(guideFailureReason({ status: "written", written: [], failed: [] }), null);
-  assert.match(guideFailureReason({ ...skipped, error: "Not allowed." })!, /couldn.t be read \(Not allowed\)/);
+  assert.match(guideFailureReason({ ...skipped, error: "Not allowed." })!, /^the folder couldn.t be read$/);
   assert.match(
     guideFailureReason({ status: "partial", written: [], failed: [{ path: "vault/revisions/a.txt", error: "x" }, { path: "_RESTORE cAdtree.html", error: "y" }] })!,
-    /^a version listing and the restore page couldn.t be written \(x\)$/,
+    /^a version listing and the restore page couldn.t be written$/,
   );
+});
+
+test("a notice is per project: another project's Settings does not show it, and a skip (read-only or duplicate) clears it", async () => {
+  const sample = await compareApplyRecoverSample();
+  const containerPath = sample.project.record.containerPath;
+  const state = (await resolveManagedProject(sample.workspace.root, containerPath)).vaultState;
+  const ui = render(<Harness state={state} root={sample.workspace.root} containerPath={containerPath} />);
+  sample.home.setHooks({ onBeforeWrite: (full) => { if (full.endsWith(PROJECT_MAP_FILENAME)) throw new Error("disk full"); } });
+  const target = { workspaceRoot: sample.workspace.root, containerPath };
+  await quietly(() => refreshGuidesAfter({ project: target }));
+  await waitFor(() => assert.ok(ui.getByText(NOTICE)), { timeout: 10_000 });
+
+  // Switching to another project (or another workspace) of the same session: no notice.
+  ui.rerender(<Harness state={state} root={sample.workspace.root} containerPath="projects/Another" />);
+  assert.equal(ui.queryByText(NOTICE), null);
+  ui.rerender(<Harness state={state} root={new InMemoryFileSystemAdapter("Other")} containerPath={containerPath} />);
+  assert.equal(ui.queryByText(NOTICE), null);
+  ui.rerender(<Harness state={state} root={sample.workspace.root} containerPath={containerPath} />);
+  assert.ok(ui.getByText(NOTICE));
+
+  // The workspace is no longer writable: the refresh is skipped, and the old notice goes away.
+  sample.home.setHooks({ onBeforeWrite: undefined, writePermission: "prompt" });
+  await quietly(() => refreshGuidesAfter({ project: target }));
+  for (let i = 0; i < 100 && ui.queryByText(NOTICE); i++) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)); });
+  assert.equal(ui.queryByText(NOTICE), null);
 });

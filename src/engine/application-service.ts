@@ -1,5 +1,4 @@
-import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { FolderAccessError } from "../utils/folder-access";
+import { FolderAccessError, type FileSystemDirectoryAdapter } from "./fs-adapter";
 import {
   FileConflictError,
   splitAndValidatePath,

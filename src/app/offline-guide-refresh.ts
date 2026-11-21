@@ -62,7 +62,6 @@ const fileLabel = (path: string): string => {
   if (path.includes("revisions/")) return "a version listing";
   return "a guide file";
 };
-const sentence = (text: string) => text.trim().replace(/[.\s]+$/, "");
 
 /**
  * What went wrong in plain words, or null when the refresh did not fail. A refresh that was skipped for a normal
@@ -72,17 +71,20 @@ export function guideFailureReason(result: GuideRefreshResult): string | null {
   if (result.status === "partial" && result.failed.length) {
     const labels = [...new Set(result.failed.map((entry) => fileLabel(entry.path)))];
     const what = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0];
-    return `${what} couldn't be written (${sentence(result.failed[0].error)})`;
+    return `${what} couldn’t be written`;
   }
-  if (result.status === "skipped" && result.error !== undefined) return `the folder couldn't be read (${sentence(result.error)})`;
+  if (result.status === "skipped" && result.error !== undefined) return "the folder couldn’t be read";
   return null;
 }
 
-/** A finished refresh: remembers a failure, clears the earlier one after a success, ignores a normal skip. */
+/**
+ * A finished refresh: remembers a failure; clears the earlier one after a success, and also after a normal skip
+ * (the project became read-only or a duplicate, or the home is no longer writable), so a notice never outlives
+ * the state it describes. The technical detail stays in the console.
+ */
 function report(root: object, key: string, result: GuideRefreshResult) {
   const reason = guideFailureReason(result);
-  if (reason !== null) setFailure(root, key, reason);
-  else if (result.status === "written") setFailure(root, key, null);
+  setFailure(root, key, reason);
 }
 
 /** The latest failure for the open project (or its home), or null. Re-renders when it changes. */

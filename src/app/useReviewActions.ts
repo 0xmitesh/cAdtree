@@ -37,7 +37,7 @@ export function useReviewActions({
       signal: context.signal, onProgress: context.progress,
       resolveWorkingFolders: managedProject && workspace ? async () => {
         const current = await resolveManagedProject(workspace.root, managedProject.record.containerPath);
-        if (current.record.projectId !== plan.projectId || !current.ready || current.issues.length) throw new FolderAccessError('Reconnect the project to validate its working-folder isolation before exporting.');
+        if (current.record.projectId !== plan.projectId || !current.ready || current.issues.length) throw new Error('Reconnect the project to validate its working-folder isolation before exporting.');
         return current.workingFolders;
       } : undefined,
     });

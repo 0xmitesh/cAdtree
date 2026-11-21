@@ -1,5 +1,4 @@
-import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { FolderAccessError } from "../utils/folder-access";
+import { FolderAccessError, type FileSystemDirectoryAdapter } from "./fs-adapter";
 import { withProjectWriterLock } from "./locks";
 import { openExistingVault } from "./vault-service";
 import {

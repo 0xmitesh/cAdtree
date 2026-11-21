@@ -1,5 +1,4 @@
-import { checkCaseInsensitiveCollisions, splitAndValidatePath, validateDirectoryIsolation, type FileSystemDirectoryAdapter } from './fs-adapter';
-import { FolderAccessError } from '../utils/folder-access';
+import { FolderAccessError, checkCaseInsensitiveCollisions, splitAndValidatePath, validateDirectoryIsolation, type FileSystemDirectoryAdapter } from './fs-adapter';
 import { validateWorkingFolderBindings, type WorkingFolderBindings } from './branch-state';
 import { computeRequiredParentDirectories } from './recovery-service';
 import { partitionSystemFiles } from './scanner';

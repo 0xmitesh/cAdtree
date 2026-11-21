@@ -917,6 +917,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     activeBranchId,
     managedProject,
     workspace,
+    homeRoot: home?.root ?? null,
     authStateRef,
     scanResult,
     perform,
