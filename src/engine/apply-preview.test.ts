@@ -746,3 +746,25 @@ test("copyBaseOf is linear: 2,000 versions with a copy and a Bring back run well
   assert.deepEqual(result, { baseId: "x1", viaCopy: true });
   assert.ok(elapsed < 200, `took ${elapsed} ms`);
 });
+test("a Bring back link that does not point back along its own line is ignored: Main's own changes are not hidden", () => {
+  const state = copiedOnce();
+  state.revisions.push(
+    version("m3", "m2", 6, "branch-main", { "Bracket.txt": "b2", "Other.txt": "o0", "New.txt": "n2" }),
+  );
+  state.branchHeads["branch-main"] = "m3";
+  // Main never copied X2 (no merge record). Damaged record: a Bring back on
+  // Main whose source is on another case.
+  state.applicationOperations = [];
+  addCopy(state, "m3", "x2", "branch-main", "branch-main", "captured", "revert");
+  const c = context(state, "x3");
+  assert.equal(c.base.manifest.revisionId, "m1");
+  assert.equal(c.baseViaCopy, false);
+  assert.deepEqual(
+    copyBaseOf(layoutRevisions(state, "branch-main"), "x3", "m3"),
+    { baseId: "m1", viaCopy: false },
+  );
+  // A real merge copy of X2 recorded as well still counts.
+  addCopy(state, "m2", "x2", "branch-main", "x");
+  const withCopy = copyBaseOf(layoutRevisions(state, "branch-main"), "x3", "m3");
+  assert.deepEqual(withCopy, { baseId: "x2", viaCopy: true });
+});

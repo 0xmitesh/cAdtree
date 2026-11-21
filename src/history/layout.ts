@@ -335,14 +335,29 @@ export function ancestryOf(graph: RevisionGraph, headId: string): Set<string> {
  * What counts as "already in" a version, one step back, for Copy: its parent,
  * plus the source of every earlier Copy saved as that version (usable
  * `graph.copies` links, merge mode). A saved Bring back makes its version equal
- * its source, so its steps back are the Bring back source(s) only: the versions
+ * its source, so its steps back are the Bring back source(s) only (when that
+ * source is an earlier version on the child's own parent line; any other revert
+ * link is ignored): the versions
  * between them, and any copies saved there, no longer count.
  */
 function sharedPredecessors(graph: RevisionGraph): Map<string, string[]> {
   const parent = new Map(graph.edges.map((e) => [e.child, e.parent]));
   const merges = new Map<string, string[]>();
   const reverts = new Map<string, string[]>();
+  // A real Bring back always names an earlier version on its own parent line;
+  // a revert link that does not is damaged evidence and is ignored.
+  const onOwnLine = (child: string, source: string) => {
+    const seen = new Set<string>();
+    let id = parent.get(child);
+    while (id && !seen.has(id)) {
+      if (id === source) return true;
+      seen.add(id);
+      id = parent.get(id);
+    }
+    return false;
+  };
   for (const link of graph.copies) {
+    if (link.mode === "revert" && !onOwnLine(link.child, link.source)) continue;
     const into = link.mode === "revert" ? reverts : merges;
     into.set(link.child, [...(into.get(link.child) ?? []), link.source]);
   }
