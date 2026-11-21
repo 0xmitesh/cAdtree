@@ -62,14 +62,14 @@ test("returning to the window rescans the case quietly: no busy state, no banner
   await focusWindow();
   await waitFor(() => assert.ok(ui.getByTestId("auto-check")));
   assert.equal(appBusy(ui), false);
-  assert.equal(ui.container.querySelector(".status-banner, [role='status']")?.textContent?.includes("Scan complete") ?? false, false);
+  assert.equal(ui.container.querySelector(".status-banner, [role='status']")?.textContent?.includes("Checked your files") ?? false, false);
   assert.equal(scannedAt(ui), first, "the old result stays on screen while checking");
   assert.equal(ui.queryByText("Added-outside.txt"), null);
   gate.release();
   await waitFor(() => assert.ok(ui.getByText("Added-outside.txt")));
   await waitFor(() => assert.equal(ui.queryByTestId("auto-check"), null));
   assert.notEqual(scannedAt(ui), first);
-  assert.equal(ui.queryByText(/Scan complete/), null);
+  assert.equal(ui.queryByText(/Checked your files/), null);
   assert.equal(appBusy(ui), false);
 });
 
@@ -140,7 +140,7 @@ test("no quiet scan starts while an operation runs or a dialog is open", async (
   assert.ok(nav);
 });
 
-test("Copy files saves by itself; the quiet rescan then shows no changes and Undo opens Bring back", async () => {
+test("Copy files saves by itself; the quiet rescan then shows no changes and the Bring back button opens Bring back", async () => {
   const { sample, ui, nav } = await openSample();
   fireEvent.click(nav.getByRole("button", { name: "History" }));
   fireEvent.click(await ui.findByRole("button", { name: /Reinforced mounting rib/ }));
@@ -159,7 +159,7 @@ test("Copy files saves by itself; the quiet rescan then shows no changes and Und
   assert.ok(await sample.main.hasFile(["Rib.SLDPRT"]));
   assert.equal(ui.queryByRole("dialog", { name: /^Copy files from / }), null);
   const previous = banner.match(/bring back (V\d+)\./)![1];
-  fireEvent.click(ui.getByRole("button", { name: "Undo" }));
+  fireEvent.click(ui.getByRole("button", { name: `Bring back ${previous}` }));
   assert.ok(await ui.findByRole("dialog", { name: `Bring back ${previous} onto Main` }));
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   // Nothing clicked: the quiet rescan shows the folder matches the new revision.
@@ -171,7 +171,7 @@ test("Copy files saves by itself; the quiet rescan then shows no changes and Und
 test("the Scan for changes button is gone; the Changes page shows its state as text", async () => {
   const { ui } = await openSample();
   assert.equal(ui.queryByRole("button", { name: /Scan for changes|Scanning/ }), null);
-  assert.match(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Scanned/);
+  assert.match(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Checked/);
 });
 
 test("a version draft survives a quiet rescan", async () => {
@@ -266,7 +266,7 @@ test("a check that cannot read the folder marks the result as not up to date, qu
   await focusWindow();
   await waitFor(() => assert.ok(ui.getByTestId("check-failed")));
   assert.match(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Not up to date/);
-  assert.doesNotMatch(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Latest scan/);
+  assert.doesNotMatch(ui.container.querySelector("[data-scanned-at]")!.textContent!, /Up to date/);
   assert.equal(ui.container.querySelector("[role='alert']"), null, "no banner for a background check");
   sample.home.setHooks({ readPermission: "granted" });
   const before = scannedAt(ui);

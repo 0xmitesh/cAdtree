@@ -144,7 +144,7 @@ export function HomeWorkspacesView(props: {
             <div className="panel projects-empty">
               <h2>Create your first workspace</h2>
               <p>
-                Group projects by client, CAD tool, or any name that works for
+                Group projects by client, app, or any name that works for
                 you.
               </p>
             </div>
@@ -235,7 +235,7 @@ export function HomeWorkspacesView(props: {
           onClose={() => setImporting(false)}
         >
           <p>
-            Create a verified managed copy inside {props.home?.root.name},
+            Create a checked copy inside {props.home?.root.name},
             including changes you have not saved as a version yet. The original
             workspace and its files remain untouched.
           </p>

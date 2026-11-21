@@ -285,7 +285,7 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
   assert.equal(check.fromLabel, "V1");
 });
 
-test("an interrupted Get this version is labelled Undo the unfinished Get this version", () => {
+test("an interrupted Get this version is labelled Put files back as they were", () => {
   const state = historyState(3);
   state.applicationOperations = [
     {
@@ -303,5 +303,5 @@ test("an interrupted Get this version is labelled Undo the unfinished Get this v
     <ApplicationStatus state={state} branchId="branch-main" busy={false} progress={null} onCancel={() => {}} onRecover={async () => {}} onSaveNow={() => {}} onDontSave={async () => {}} />,
   );
   assert.match(ui.getByRole("region").textContent!, /A Get this version was interrupted/);
-  assert.ok(ui.getByRole("button", { name: "Undo the unfinished Get this version" }));
+  assert.ok(ui.getByRole("button", { name: "Put files back as they were" }));
 });

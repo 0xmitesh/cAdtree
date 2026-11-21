@@ -49,7 +49,7 @@ for (const width of [1366, 390]) test(`actual App: confirmed rename and componen
     await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();
   }
   await expect(identity.getByText('Confirmed rename: parts/caliper.SLDPRT → parts/cliper.SLDPRT')).toBeVisible();
-  await identity.getByRole('button', { name: 'Cancel association' }).click();
+  await identity.getByRole('button', { name: 'Cancel rename' }).click();
   await expect(identity.getByText(/Confirmed rename:/)).toHaveCount(0);
   if (width === 390) await matchManually();
   else await identity.getByRole('button', { name: 'Confirm rename', exact: true }).click();

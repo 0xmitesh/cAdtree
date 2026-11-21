@@ -587,7 +587,7 @@ test("interruption at project publication and case mapping leaves no ready alter
         importProject(root, source, "Retry", {
           signal: controller.signal,
           onProgress: (progress) => {
-            if (progress.message === "Publishing the verified managed project…")
+            if (progress.message === "Finishing the project copy…")
               controller.abort();
           },
         }),

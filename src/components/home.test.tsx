@@ -34,7 +34,7 @@ import {
 import { captureRevision } from "../engine/revision-service";
 import {
   clearAllConvenienceMetadata,
-  saveWorkspaceWindowsPath,
+  saveWorkspacePath,
 } from "../engine/idb-store";
 
 Object.assign(globalThis, { indexedDB });
@@ -324,7 +324,7 @@ test("guided whole-workspace migration identifies managed location and never reu
     ["Uncaptured.bin"],
     "current edits",
   );
-  await saveWorkspaceWindowsPath(
+  await saveWorkspacePath(
     ws.identity.workspaceId,
     "D:\\Old external location",
   );

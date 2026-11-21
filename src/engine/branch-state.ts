@@ -216,7 +216,7 @@ export async function validateWorkingFolderBindings(
       dir,
       vault,
       `"${branch.name}" working folder`,
-      "Version vault",
+      "Saved versions folder",
     );
     for (const other of connected) {
       await validateDirectoryIsolation(

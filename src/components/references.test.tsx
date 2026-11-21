@@ -50,14 +50,14 @@ test('reference browsing is one search box without mutation controls or project 
   fireEvent.change(search, { target: { value: 'A-renamed.SLDPRT' } });
   assert.equal(ui.container.querySelectorAll('.reference-card').length, 1);
   assert.ok(ui.getByRole('button', { name: 'Download Alpha requirement (Alpha.txt)' }));
-  assert.ok(ui.getByText('Part: A-renamed.SLDPRT'));
+  assert.ok(ui.getByText('File: A-renamed.SLDPRT'));
   // A note, then a file name, then no match.
   fireEvent.change(search, { target: { value: 'Beta requirement description' } });
   assert.ok(ui.getByRole('button', { name: 'Download Beta requirement (Beta.txt)' }));
   fireEvent.change(search, { target: { value: 'Alpha updated.txt' } });
   assert.equal(ui.container.querySelectorAll('.reference-card').length, 1);
   assert.ok(ui.getByText('Alternative · V4'));
-  assert.ok(ui.getByText('Part: B.SLDPRT'));
+  assert.ok(ui.getByText('File: B.SLDPRT'));
   fireEvent.click(ui.getByRole('button', { name: 'Download Alpha requirement (Alpha updated.txt)' }));
   await waitFor(() => assert.equal(copies.length, 1));
   assert.equal(new TextDecoder().decode(copies[0]), 'Alpha two');
@@ -125,9 +125,9 @@ test('Add reference is disabled with a reason when the project is read-only, and
   const f = await fixture();
   const state = await openExistingVault(f.project.vaultDir);
   const calls: unknown[] = [];
-  let ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onAdd={async (...args) => { calls.push(args); }} addBlockReason="Managed project is read-only. Reconnect it." />);
+  let ui = render(<ReferencesView state={state} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} onAdd={async (...args) => { calls.push(args); }} addBlockReason="This project is read-only. Reconnect it." />);
   assert.equal((ui.getByRole('button', { name: 'Add reference…' }) as HTMLButtonElement).disabled, true);
-  const reason = ui.getByText('Managed project is read-only. Reconnect it.');
+  const reason = ui.getByText('This project is read-only. Reconnect it.');
   assert.equal((ui.getByRole('button', { name: 'Add reference…' }) as HTMLButtonElement).getAttribute('aria-describedby'), reason.id, 'the disabled button points at the reason');
   assert.equal(calls.length, 0);
   ui.unmount();
@@ -322,7 +322,7 @@ test('Changes attaches new reference files with notes to the whole version or a 
   cleanup();
   const browser = render(<ReferencesView state={saved} busy={false} progress={null} onCancel={() => {}} onRetrieve={async () => {}} />);
   assert.ok(browser.getByRole('button', { name: 'Download Requirement.pdf (Requirement.pdf)' }));
-  assert.ok(browser.getByText('Part: New.SLDPRT'));
+  assert.ok(browser.getByText('File: New.SLDPRT'));
 });
 
 test('already-saved references stay behind a collapsed Manage references disclosure; new attachments stay visible', async () => {

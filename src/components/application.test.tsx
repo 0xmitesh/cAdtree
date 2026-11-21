@@ -128,7 +128,7 @@ test("the status is case scoped: not saved offers Save now only, with no Abandon
   assert.match(ui.getByRole("region").textContent!, /but it wasn't saved: disk full\. Your working files are fine\./);
   f.operation.status = "unresolved";
   ui.rerender(<ApplicationStatus {...props} />);
-  assert.ok(ui.getByRole("button", { name: "Undo the unfinished Copy" }));
+  assert.ok(ui.getByRole("button", { name: "Put files back as they were" }));
   assert.equal(ui.queryByRole("button", { name: "Save now" }), null);
 });
 test("Copied files details distinguish originally applied and final captured bytes without replacing notes", () => {

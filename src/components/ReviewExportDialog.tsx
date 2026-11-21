@@ -59,15 +59,15 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
       <label className="export-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'complete'} onChange={() => { setKind('complete'); setError(''); }} /> Complete project</span></label>
       <label className="export-choice"><span><input type="radio" name="review-export-kind" checked={kind === 'selected'} onChange={() => { setKind('selected'); setError(''); }} /> Selected files</span></label>
       {kind === 'selected' ? <>
-        <Notice>This is a partial copy. CAD dependencies are not discovered or included automatically.</Notice>
+        <Notice>This is a partial copy. Other files these documents depend on are not added automatically.</Notice>
         <div className="change-table" role="group" aria-label="Files in this version">
           {revision?.manifest.files.map(file => <label className="export-choice" key={file.path}><span className="file-path"><input type="checkbox" aria-label={`Export ${file.path}`} checked={selected.has(file.path)} onChange={() => setSelected(previous => {
             const next = new Set(previous); next.has(file.path) ? next.delete(file.path) : next.add(file.path); return next;
           })} /> {file.path}</span></label>)}
         </div>
         <label className="export-choice"><span><input type="checkbox" checked={labelFilenames} onChange={e => setLabelFilenames(e.target.checked)} /> Add case and version to filenames</span></label>
-        <p className="muted small">Use labelled filenames for standalone review copies. Renamed files may require reference repair when used by other documents; cAdtree does not rewrite native references.</p>
-      </> : <p>Preserves every saved internal filename and relative directory, including empty directories.</p>}
+        <p className="muted small">Labelled filenames suit a copy you share on its own. If other documents link to a renamed file, those links may need fixing; cAdtree does not change links inside your documents.</p>
+      </> : <p>Keeps every saved file name and folder as it was, including empty folders.</p>}
       <label className="export-choice"><span><input type="checkbox" checked={includeReferences} onChange={e => { setIncludeReferences(e.target.checked); setError(''); }} /> Include references</span></label>
       <p className="muted small">{includeReferences
         ? (plan ? (plan.references.length ? `${plan.references.length} reference attachment${plan.references.length === 1 ? '' : 's'} will be copied into a ${plan.referencesDirectory} folder.` : 'No reference attachments apply to this version.') : '')
@@ -91,7 +91,7 @@ export function ReviewExportDialog({ state, revisionId, initialPaths = [], busy:
     </fieldset>
     {error ? <Notice type="error">{error}</Notice> : null}
     {busy && !choosing ? progress ? <OperationProgress progress={progress} onCancel={onCancel} /> : <button className="button secondary" onClick={onCancel}>Cancel export</button> : null}
-    {result ? <Notice type="success">Verified copy ready: {destination?.parent.name}/{result.folderName}/. {result.filesCount} saved files{result.referencesCount ? `, ${result.referencesCount} reference attachment${result.referencesCount === 1 ? '' : 's'}` : ''} and {result.summaryName}.</Notice> : null}
+    {result ? <Notice type="success">Copy ready and checked: {destination?.parent.name}/{result.folderName}/. {result.filesCount} saved files{result.referencesCount ? `, ${result.referencesCount} reference attachment${result.referencesCount === 1 ? '' : 's'}` : ''} and {result.summaryName}.</Notice> : null}
     {result?.referencesSkipped.length ? <Notice>{result.referencesSkipped.map(s => `Not included: ${s.label}: ${s.reason}`).join(' ')} The summary file lists them.</Notice> : null}
     <div className="modal-actions">
       <button type="button" className="button secondary" disabled={busy} onClick={onClose}>{result ? 'Close' : 'Cancel'}</button>

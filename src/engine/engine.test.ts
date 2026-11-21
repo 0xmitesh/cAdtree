@@ -374,7 +374,7 @@ test('Regression Fix 2: Same-count directory rename/replacement during capture a
         summary: 'Should abort on same-count directory swap',
         notes: { problem: '', modification: '', observations: '' },
       }),
-    /directory path set changed during capture/
+    /folders changed while saving/
   );
   vaultDir.setHooks({ onAfterWrite: undefined });
 

@@ -190,7 +190,7 @@ export function RevisionGraph({
               }
               title={
                 fileRecords
-                  ? `Filter to ${branch.name}; does not switch the working case`
+                  ? `Filter to ${branch.name}; does not switch the case`
                   : branch.current
                     ? `Show ${branch.name} versions · current case`
                     : `Show ${branch.name} versions`
@@ -211,7 +211,7 @@ export function RevisionGraph({
       {fileRecords ? (
         <p className="file-history-help muted small">
             Recorded file and confirmed name changes are shown. Case buttons filter the history;
-          they do not switch the working case. Markers show where a case started.
+          they do not switch the case. Markers show where a case started.
         </p>
       ) : null}
       {fileRecords && !graph.nodes.length ? (
@@ -378,7 +378,7 @@ export function RevisionGraph({
                             {fileRecords.get(node.id)?.status}
                             {fileRecords.get(node.id)?.file ? ` · ${fileRecords.get(node.id)!.file!.path}` : ''}
                             {fileRecords.get(node.id)?.origins.length
-                              ? ` · Origin of ${fileRecords.get(node.id)!.origins.join(", ")}`
+                              ? ` · Where ${fileRecords.get(node.id)!.origins.join(", ")} started`
                               : ""}
                           </span>
                         ) : null}
@@ -417,8 +417,8 @@ export function RevisionGraph({
                             onClick={() => toggleBranch(branch.id)}
                             title={
                               fileRecords
-                                ? `Filter to ${branch.name}; does not switch the working case`
-                                : `Show ${branch.name} versions${branch.current ? " · active working case" : ""}`
+                                ? `Filter to ${branch.name}; does not switch the case`
+                                : `Show ${branch.name} versions${branch.current ? " · current case" : ""}`
                             }
                           >
                             <GitBranch size={11} />
@@ -474,7 +474,7 @@ export function RevisionGraph({
                     {fileRecords.get(node.id)?.status}
                     {fileRecords.get(node.id)?.file ? ` · ${fileRecords.get(node.id)!.file!.path}` : ''}
                     {fileRecords.get(node.id)?.origins.length
-                      ? ` · Origin of ${fileRecords.get(node.id)!.origins.join(", ")}`
+                      ? ` · Where ${fileRecords.get(node.id)!.origins.join(", ")} started`
                       : ""}
                   </span>
                 ) : null}

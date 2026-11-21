@@ -511,7 +511,7 @@ test("folder identity and ancestor checks reject overlap and require every case 
   const { main, vault, create, workingFolders } = await setup();
   await assert.rejects(
     create("A", undefined, { destinationParent: vault }),
-    /inside the version vault/,
+    /inside the saved versions folder/,
   );
   const child = await main.getDirectory(["NestedDestination"], {
     create: true,

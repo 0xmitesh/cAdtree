@@ -470,7 +470,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
         if (!chosen?.workspace)
           throw new Error(
             chosen?.issues.join(" ") ||
-              "Workspace is unavailable. No directory was recreated.",
+              "Workspace is unavailable. No folder was recreated.",
           );
         if (!context.current()) return;
         leaveProject();
@@ -540,7 +540,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           );
           setStatusBanner({
             type: "success",
-            message: `${source ? "Verified copy ready. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "The original workspace was left unchanged; keep working only in this copy." : ""} ${pathBudgetWarnSentence(result.pathBudget)}`.trim(),
+            message: `${source ? "Copy ready and checked. Continue working in" : "Created workspace at"} ${home.root.name}/${result.directory}/. ${source ? "The original workspace was left unchanged; keep working only in this copy." : ""} ${pathBudgetWarnSentence(result.pathBudget)}`.trim(),
           });
           await persistWorkspace(result.workspace, undefined, undefined, next);
         } catch (error) {
@@ -698,7 +698,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           { root: current.root, path: project.record.containerPath },
         );
       } catch (error) {
-        message += ` Scan unavailable: ${error instanceof Error ? error.message : String(error)}`;
+        message += ` Checking your files failed: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
     if (context.current())
@@ -911,7 +911,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           context,
           (source
             ? `Continue working in this copy: ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}. The original "${source.name}" was left unchanged and is not tracked by this project. Open the new copy in the app you use and check its references. Save the first version yourself.`
-            : `Created project "${project.record.name}". Save your CAD files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/, then scan and save your first version.`) + (pathBudgetWarnSentence(project.pathBudget) ? ` ${pathBudgetWarnSentence(project.pathBudget)}` : ""),
+            : `Created project "${project.record.name}". Put your files in ${current.root.name}/${project.workingPaths[MAIN_BRANCH_ID]}/. cAdtree checks that folder for changes automatically; save your first version when you are ready.`) + (pathBudgetWarnSentence(project.pathBudget) ? ` ${pathBudgetWarnSentence(project.pathBudget)}` : ""),
         );
       },
       true,
@@ -1134,9 +1134,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       .filter((b) => !workingFolders[b.branchId])
       .map((b) => b.name) ?? [];
   const managedBlockReason = managedProject && projectUnavailable
-    ? `Managed project is read-only. ${projectUnavailable}`
+    ? `This project is read-only. ${projectUnavailable}`
     : managedProject && (!managedProject.ready || managedProject.issues.length)
-      ? `Managed project is read-only. ${managedProject.issues.join(" ")}`
+      ? `This project is read-only. ${managedProject.issues.join(" ")}`
       : undefined;
   const projectView =
     !homeView && activeTab !== "connect" && Boolean(vaultState && vaultDir);
@@ -1329,7 +1329,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
               }
               if (!current.ready || current.issues.length)
                 throw new Error(
-                  `Managed project is read-only. ${current.issues.join(" ")}`,
+                  `This project is read-only. ${current.issues.join(" ")}`,
                 );
             },
             true,

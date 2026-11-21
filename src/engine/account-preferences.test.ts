@@ -6,35 +6,27 @@ import { nativeDirectory } from "../../tests/native-fs";
 import {
   clearAllConvenienceMetadata,
   rememberHome, getRememberedHome, rememberWorkspace, getRememberedWorkspace,
-  saveWorkspacePath, getWorkspacePath, rememberBranchConnection,
-  getRememberedProjectBinding, listRememberedProjectBindings,
+  saveWorkspacePath, getWorkspacePath,
 } from "./idb-store";
 
 beforeEach(async () => { await clearAllConvenienceMetadata(); });
 afterEach(async () => { await clearAllConvenienceMetadata(); });
 
-test("the browser keeps one set of remembered homes, workspaces, addresses and case handles", async () => {
+test("the browser keeps one set of remembered homes, workspaces and addresses", async () => {
   const a = nativeDirectory(new InMemoryFileSystemAdapter("A"));
   const b = nativeDirectory(new InMemoryFileSystemAdapter("B"));
-  const project = { projectId: "project-1", projectName: "Bracket", vaultHandle: a, vaultFolderName: "Vault" };
   assert.equal(await getRememberedHome(), null);
   assert.equal(await getRememberedWorkspace(), null);
   assert.equal(await getWorkspacePath("workspace"), "");
-  assert.equal(await getRememberedProjectBinding(project.projectId), null);
-  assert.deepEqual(await listRememberedProjectBindings(), []);
 
   await rememberHome({ homeId: "home-a", name: "A", rootHandle: a });
   await rememberWorkspace({ workspaceId: "workspace", name: "A", rootHandle: a });
   await saveWorkspacePath("workspace", "D:\\Alice", a);
-  await rememberBranchConnection(project, "main", a);
   assert.equal((await getRememberedHome())!.homeId, "home-a");
   assert.equal((await getRememberedWorkspace())!.name, "A");
   assert.equal(await getWorkspacePath("workspace", a), "D:\\Alice");
   assert.equal(await getWorkspacePath("workspace", b), "", "an address is only returned for the folder it was saved with");
-  assert.deepEqual((await listRememberedProjectBindings())[0].workingFolderNames, { main: "A" });
 
-  await rememberBranchConnection({ ...project, vaultHandle: b }, "case-b", b);
-  assert.deepEqual((await getRememberedProjectBinding(project.projectId))!.workingFolderNames, { main: "A", "case-b": "B" });
   await rememberHome({ homeId: "home-b", name: "B", rootHandle: b });
   assert.equal((await getRememberedHome())!.homeId, "home-b");
 });

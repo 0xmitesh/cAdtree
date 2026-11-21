@@ -73,16 +73,16 @@ function validateAssociations(
   if (!Array.isArray(record.transfers) || new Set(record.transfers.map(t => t.path)).size !== record.transfers.length) throw new Error('Invalid applied component transfers.');
   const before = new Map(parentFiles.map(f => [f.path, f.componentId]));
   for (const transfer of record.transfers) {
-    const conflict = (reason: string) => new Error(`Component identity conflict at "${transfer.path}": ${reason} Resolve the association in Changes before saving.`);
-    if (record.renames.some(r => r.to === transfer.path)) throw conflict('an applied addition cannot also be a confirmed rename target. Cancel the rename association to keep the applied component identity.');
-    if (record.replacements.includes(transfer.path) || before.has(transfer.path)) throw conflict('an applied addition cannot also replace a tracked component.');
-    if (!record.files.some(f => f.path === transfer.path && f.componentId === transfer.componentId)) throw conflict('the applied component does not match the proposed snapshot mapping.');
+    const conflict = (reason: string) => new Error(`Rename conflict at "${transfer.path}": ${reason} Fix the rename choices in Changes before saving.`);
+    if (record.renames.some(r => r.to === transfer.path)) throw conflict('an applied addition cannot also be a confirmed rename target. Cancel the rename to keep the copied file with its own history.');
+    if (record.replacements.includes(transfer.path) || before.has(transfer.path)) throw conflict('an added file cannot also take the place of a tracked file.');
+    if (!record.files.some(f => f.path === transfer.path && f.componentId === transfer.componentId)) throw conflict('the copied file does not match what is about to be saved.');
   }
   for (const file of record.files) {
     const rename = record.renames.find(r => r.to === file.path);
     const inherited = record.replacements.includes(file.path) ? undefined : before.get(rename?.from ?? file.path);
     const transfer = record.transfers.find(t => t.path === file.path);
-    if (inherited ? inherited !== file.componentId : !transfer && allocated.has(file.componentId)) throw new Error(`Component identity conflict at "${file.path}": continuity contradicts the parent mapping or an existing registration. Resolve the association in Changes before saving.`);
+    if (inherited ? inherited !== file.componentId : !transfer && allocated.has(file.componentId)) throw new Error(`Rename conflict at "${file.path}": the file history does not match the version before it. Fix the rename choices in Changes before saving.`);
   }
 }
 async function writeVerified(vault: FileSystemDirectoryAdapter, path: string[], value: object) {
@@ -230,7 +230,7 @@ export function componentWriteBlock(state: VaultState): string | undefined {
   return state.components.status === 'available' ? undefined : state.components.reason;
 }
 export function createIdentityReview(state: VaultState, scan: ScanResult, renames: RenameDecision[], replacements: string[]): IdentityReview {
-  if (state.components?.status !== 'available') throw new Error('Enable component tracking before confirming identity decisions.');
+  if (state.components?.status !== 'available') throw new Error('Rename tracking is not turned on for this project, so renames cannot be confirmed.');
   return { projectId: state.project.projectId, branchId: scan.branchId, baselineRevisionId: scan.baselineRevisionId,
     baselineManifestSha256: state.revisions.find(r => r.manifest.revisionId === scan.baselineRevisionId)?.completion.manifestSha256 ?? null,
     boundarySha256: state.components.boundary!.payloadSha256, changesSignature: scan.changesSignature,
@@ -240,16 +240,16 @@ function validateDecisions(renames: RenameDecision[], replacements: string[], be
   if (!Array.isArray(renames) || !Array.isArray(replacements)) throw new Error('Invalid component decisions.');
   const from = new Set<string>(), to = new Set<string>();
   for (const rename of renames) {
-    if (!before.some(f => f.path === rename.from) || paths.includes(rename.from) || before.some(f => f.path === rename.to) || !paths.includes(rename.to) || from.has(rename.from) || to.has(rename.to)) throw new Error('Rename decisions must associate one missing tracked path with one new path.');
+    if (!before.some(f => f.path === rename.from) || paths.includes(rename.from) || before.some(f => f.path === rename.to) || !paths.includes(rename.to) || from.has(rename.from) || to.has(rename.to)) throw new Error('Rename decisions must match one missing file with one new file.');
     from.add(rename.from); to.add(rename.to);
   }
-  if (new Set(replacements).size !== replacements.length || replacements.some(p => !paths.includes(p) || !before.some(f => f.path === p) || to.has(p))) throw new Error('Invalid replacement decision.');
+  if (new Set(replacements).size !== replacements.length || replacements.some(p => !paths.includes(p) || !before.some(f => f.path === p) || to.has(p))) throw new Error('Invalid new-file choice.');
 }
 export function prepareComponentRecord(state: VaultState, scan: ScanResult, review?: IdentityReview): Omit<ComponentRecord, 'revisionId' | 'manifestSha256' | 'payloadSha256'> | undefined {
   const block = componentWriteBlock(state);
   if (block) throw new Error(block);
   if (state.components?.status !== 'available') {
-    if (review) throw new Error('Component tracking has not been enabled.');
+    if (review) throw new Error('Rename tracking has not been turned on for this project.');
     return undefined;
   }
   const parent = scan.baselineRevisionId ? state.components.revisions[scan.baselineRevisionId] : undefined;
@@ -278,7 +278,7 @@ export function prepareComponentRecord(state: VaultState, scan: ScanResult, revi
   for (const transfer of restored) {
     if (restored.some(t => (t.path === transfer.path) !== (t.componentId === transfer.componentId))) continue;
     if (transfers.some(t => t.path === transfer.path || t.componentId === transfer.componentId)) continue;
-    if (renames.some(r => r.to === transfer.path)) throw new Error(`Component identity conflict at "${transfer.path}": this file was just put back with Get this version; save it first, then rename.`);
+    if (renames.some(r => r.to === transfer.path)) throw new Error(`Rename conflict at "${transfer.path}": this file was just put back with Get this version; save it first, then rename.`);
     transfers.push(transfer);
   }
   const draft = { schemaVersion: 1, projectId: state.project.projectId, branchId: scan.branchId, boundarySha256: state.components.boundary!.payloadSha256,

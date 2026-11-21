@@ -83,10 +83,10 @@ for (const width of [1366, 390])
     await copy.click();
     // Writing and saving runs under one lock and can take a while on a loaded machine.
     await expect(dialog).toHaveCount(0, { timeout: 30_000 });
-    // Main's previous head (the Undo target) is Rev 002: Rev 003 to 005 belong to the case.
+    // Main's previous head (the Bring back V2 target) is Rev 002: Rev 003 to 005 belong to the case.
     await expect(page.getByText("Saved as V6. To undo, bring back V2.")).toBeVisible();
-    // Undo opens Bring back for Rev 002 in History; Cancel writes nothing.
-    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    // The Bring back V2 button opens Bring back for Rev 002 in History; Cancel writes nothing.
+    await page.getByRole("button", { name: "Bring back V2", exact: true }).click();
     const undoDialog = page.getByRole("dialog", { name: "Bring back V2 onto Main" });
     await expect(undoDialog.getByRole("status", { name: "What will change" })).toHaveText("1 file will change");
     await undoDialog.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -115,7 +115,7 @@ for (const width of [1366, 390])
     await page.getByRole("button", { name: /Return to Synthetic application preview/ }).click();
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
     await openProject();
-    await expect(page.getByRole("region", { name: "Bring back, Copy or Discard status" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Unfinished change to your files" })).toHaveCount(0);
     await nav("History");
     await page.getByRole("button", { name: /V6: Copied 1 file from Part-X redesign/ }).press("Enter");
     await expect(page.getByText(/^Copied from V3 on Part-X redesign/)).toBeVisible();
@@ -143,7 +143,7 @@ for (const width of [1366, 390])
     expect(errors).toEqual([]);
   });
 
-test("actual App: an interrupted Copy survives reload and Undo the unfinished Copy preserves unexpected later edits", async ({
+test("actual App: an interrupted Copy survives reload and Put files back as they were preserves unexpected later edits", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -153,18 +153,18 @@ test("actual App: an interrupted Copy survives reload and Undo the unfinished Co
   await dialog.getByRole("button", { name: "Copy files", exact: true }).click();
   await expect(dialog.getByRole("alert").filter({ hasText: "acknowledgement lost" })).toBeVisible();
   await page.keyboard.press("Escape");
-  const status = page.getByRole("region", { name: "Bring back, Copy or Discard status" });
+  const status = page.getByRole("region", { name: "Unfinished change to your files" });
   await expect(status).toContainText("A Copy was interrupted");
   await page.reload();
   await page.getByRole("button", { name: /Return to Synthetic application preview/ }).click();
   await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
   if (!(await status.isVisible())) await openProject();
-  await expect(status).toContainText("Saving and another Bring back, Copy or Discard are blocked");
+  await expect(status).toContainText("Saving and any other change to your files are blocked");
   await fixtureStep(page, fixture, "adjustFixtureMain");
-  await status.getByRole("button", { name: "Undo the unfinished Copy", exact: true }).click();
-  const recovery = page.getByRole("dialog", { name: "Undo the unfinished Copy" });
-  await recovery.getByRole("checkbox", { name: "I have saved and closed these files in my CAD program." }).check();
-  const undo = recovery.getByRole("button", { name: "Undo the unfinished Copy", exact: true });
+  await status.getByRole("button", { name: "Put files back as they were", exact: true }).click();
+  const recovery = page.getByRole("dialog", { name: "Put files back as they were" });
+  await recovery.getByRole("checkbox", { name: "I have saved and closed these files in the app I use." }).check();
+  const undo = recovery.getByRole("button", { name: "Put files back as they were", exact: true });
   await undo.click();
   await expect(recovery.getByRole("alert")).toContainText("Manual recovery required: Parts/Part-X.SLDPRT");
   expect(await recovery.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);

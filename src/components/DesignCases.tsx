@@ -106,7 +106,7 @@ export function DesignCases({
               : lifecycle.status === "unavailable"
                 ? "Hidden or visible state unavailable"
                 : "Active"}
-            {isCurrent ? " · Current working case" : ""}
+            {isCurrent ? " · Current case" : ""}
             {unsaved ? (
               <span className="case-unsaved-badge">
                 {unsaved} unsaved {unsaved === 1 ? "change" : "changes"}

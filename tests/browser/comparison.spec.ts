@@ -110,7 +110,7 @@ test("actual App: arbitrary saved comparisons, scoped history, Swap and read-onl
   ).toHaveText([...beforeSizes].reverse());
   await dialog.getByRole("button", { name: "Swap", exact: true }).click();
   await expectCounts(17, 2, 1, 2);
-  await dialog.getByText(/Project directory changes \(/).click();
+  await dialog.getByText(/Project folder changes \(/).click();
   await expect(
     dialog.getByText("Added · Empty new/", { exact: true }),
   ).toBeVisible();

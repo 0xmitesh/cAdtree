@@ -189,13 +189,13 @@ function noUnfinished(state: VaultState, branchId: string) {
   if (!op) return;
   if (!op.record)
     throw new Error(
-      "This case has an unfinished operation whose record can't be read. See the notice at the top before starting another Bring back, Copy, Discard or Get this version.",
+      "This case has an unfinished operation whose record can't be read. See the notice at the top before making another change to your files.",
     );
   const name = operationName(op.record.plan.mode);
   throw new Error(
     op.status === "applied"
       ? `This case has an unfinished ${name}: its files were written but not saved. Choose Save now or Don't save it before starting another.`
-      : `This case has an unfinished ${name}. Undo the unfinished ${name} before starting another.`,
+      : `This case has an unfinished ${name}. Choose Put files back as they were (see the notice at the top) before starting another.`,
   );
 }
 async function cleanDestination(
@@ -530,7 +530,7 @@ async function stageOperation(
         );
         if (!verification.valid)
           throw new Error(
-            `Source object unavailable for ${action.path}: ${verification.reason}. This operation is unfinished; recover it before retrying.`,
+            `Source object unavailable for ${action.path}: ${verification.reason}. This change is unfinished; choose Put files back as they were before retrying.`,
           );
         await stageFile(
           vault,
@@ -548,7 +548,7 @@ async function stageOperation(
         )
       )
         throw new Error(
-          `Destination changed before staging ${action.path}. Reopen and recover the unfinished operation.`,
+          `Destination changed before staging ${action.path}. Reopen the project and choose Put files back as they were.`,
         );
       if (action.before)
         await stageFile(
@@ -598,7 +598,7 @@ async function writeOperation(
       }
       if ((await folderState(working, folder.path)) !== "directory")
         throw new Error(
-          `Applied result verification failed at ${folder.path}; recover the unfinished operation.`,
+          `Applied result verification failed at ${folder.path}; choose Put files back as they were.`,
         );
       await appendApplicationEvent(vault, op, {
         kind: "written",
@@ -650,7 +650,7 @@ async function writeOperation(
         )
       )
         throw new Error(
-          `Applied result verification failed at ${action.path}; recover the unfinished operation.`,
+          `Applied result verification failed at ${action.path}; choose Put files back as they were.`,
         );
       bytes += action.after?.size ?? 0;
       await appendApplicationEvent(vault, op, {
@@ -676,7 +676,7 @@ async function writeOperation(
       await working.removeEntry(segments);
       if ((await folderState(working, folder.path)) !== "missing")
         throw new Error(
-          `Applied result verification failed at ${folder.path}; recover the unfinished operation.`,
+          `Applied result verification failed at ${folder.path}; choose Put files back as they were.`,
         );
       await appendApplicationEvent(vault, op, {
         kind: "written",
@@ -713,7 +713,7 @@ export async function applyUnderLock(
       review.destinationBranchId,
       options,
     );
-    await validateDirectoryIsolation(working, vault, "Working folder", "Version vault");
+    await validateDirectoryIsolation(working, vault, "Working folder", "Saved versions folder");
     await cleanDestination(working, state, review, options);
     const op = await startOperation(vault, options, {
       sourceBranchId: context.source.manifest.branchId,
@@ -991,7 +991,7 @@ export async function replaceWorkingFiles(
     assertCaseWritable(state, request.branchId);
     noUnfinished(state, request.branchId);
     const working = await connections(vault, state, request.branchId, request);
-    await validateDirectoryIsolation(working, vault, "Working folder", "Version vault");
+    await validateDirectoryIsolation(working, vault, "Working folder", "Saved versions folder");
     const vaultPlace = await projectFolder.resolveRelativePath(vault);
     if (vaultPlace?.length !== 1 || vaultPlace[0] !== "vault")
       throw new Error(
@@ -1386,7 +1386,7 @@ async function assertReplaceRemovalsReady(
   if (!startedMode) throw new ReplacePlanChangedError(appeared);
   const name = operationName(startedMode);
   throw new Error(
-    `Changes differ from what you saw: ${appeared.join(", ")}. No working files were changed. Undo the unfinished ${name}, then try again.`,
+    `Changes differ from what you saw: ${appeared.join(", ")}. No working files were changed. Choose Put files back as they were (see the notice at the top), then try again.`,
   );
 }
 export async function recoverApplication(

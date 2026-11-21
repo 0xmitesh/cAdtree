@@ -48,14 +48,14 @@ export function ComponentIdentityControls({ state, scan, value, onChange, busy }
   return <section className="component-identity panel" aria-label="Renamed files">
     <div className="panel-heading"><h2>Renamed files</h2></div>
     <div className="form-body">
-      {stale ? <Notice type="error">Your rename choices are out of date. Clear them, scan and confirm again. <button className="text-button" onClick={() => onChange(undefined)}>Clear rename choices</button></Notice> : null}
+      {stale ? <Notice type="error">Your rename choices are out of date. Clear them and confirm again. <button className="text-button" onClick={() => onChange(undefined)}>Clear rename choices</button></Notice> : null}
       {value?.renames.map(rename => <div className="identity-decision" key={rename.from}>
         <span className="file-path">Confirmed rename: {rename.from} → {rename.to}</span>
-        <button className="text-button" disabled={busy || stale} onClick={() => update(value.renames.filter(r => r.from !== rename.from))}>Cancel association</button>
+        <button className="text-button" disabled={busy || stale} onClick={() => update(value.renames.filter(r => r.from !== rename.from))}>Cancel rename</button>
       </div>)}
-      {value?.replacements.map(path => <div className="identity-decision" key={path}><span className="file-path">New file at {path}</span><button className="text-button" disabled={busy || stale} onClick={() => update(value.renames, value.replacements.filter(p => p !== path))}>Cancel replacement</button></div>)}
+      {value?.replacements.map(path => <div className="identity-decision" key={path}><span className="file-path">New file at {path}</span><button className="text-button" disabled={busy || stale} onClick={() => update(value.renames, value.replacements.filter(p => p !== path))}>Cancel new-file choice</button></div>)}
       {suggested.length ? <>
-        <p className="small">Confirm only if this is the same document. This does not rename files or fix references inside your CAD files. Leave it unconfirmed to record a deleted file and a new file.</p>
+        <p className="small">Confirm only if this is the same document. This does not rename files or fix links inside your documents. Leave it unconfirmed to record a deleted file and a new file.</p>
         {suggested.map(row)}
       </> : null}
     </div>
@@ -65,7 +65,7 @@ export function ComponentIdentityControls({ state, scan, value, onChange, busy }
 /** Confirmation for "Treat as a new file", opened from a file row's menu. */
 export function TreatAsNewDialog({ path, busy, onCancel, onConfirm }: { path: string; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
   return <Modal title="Treat as a new file" busy={busy} onClose={onCancel}>
-    <p>{`At the next successful save, ${path} will be tracked as a new file. The history of the old file stays available. Use this for an unrelated replacement, not an ordinary edit.`}</p>
+    <p>{`At the next successful save, ${path} will be tracked as a new file. The history of the old file stays available. Use this when an unrelated file took the old file's place, not for an ordinary edit.`}</p>
     <div className="modal-actions"><button className="button secondary" disabled={busy} onClick={onCancel}>Cancel</button><button className="button primary" disabled={busy} onClick={onConfirm}>Confirm new file</button></div>
   </Modal>;
 }
@@ -83,7 +83,7 @@ export function MatchRenameDialog({ from, scan, value, busy, onCancel, onConfirm
   const free = scan.added.filter(f => !value?.renames.some(r => r.to === f.path));
   return <Modal title="Match to a new file" busy={busy} onClose={onCancel}>
     <p className="file-path">Missing: {from}</p>
-    <p className="small">Choose the new file only if it is the same document. This does not rename files or fix references inside your CAD files.</p>
+    <p className="small">Choose the new file only if it is the same document. This does not rename files or fix links inside your documents.</p>
     <label className="field"><span>New file for {from}</span><select value={to} onChange={e => setTo(e.target.value)}>
       <option value="">Choose a new file</option>
       {free.map(f => <option key={f.path} value={f.path}>{f.path}{f.sha256 === identical ? ' — identical content' : ' — different content'}</option>)}

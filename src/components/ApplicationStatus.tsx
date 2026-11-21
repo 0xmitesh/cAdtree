@@ -72,28 +72,28 @@ export function ApplicationStatus({
           <section
             className="application-status"
             key={op.operationId}
-            aria-label="Bring back, Copy or Discard status"
+            aria-label="Unfinished change to your files"
           >
             <Notice type={op.status === "applied" ? "info" : "error"}>
               <strong>
                 {op.status === "applied"
                   ? `${op.record ? applySaveSummary(state, op.record) : "Files were copied"}, but it wasn't saved${reason ? `: ${reason}` : ""}. Your working files are fine.`
                   : op.status === "unresolved"
-                    ? `A ${what(op)} was interrupted. Saving and another Bring back, Copy or Discard are blocked until it is undone.`
-                    : "The record of a Bring back, Copy or Discard can't be read. Saving and another Bring back, Copy or Discard are blocked."}
+                    ? `A ${what(op)} was interrupted. Saving and any other change to your files are blocked until you put the files back as they were.`
+                    : "cAdtree can't read the saved details of a change to your files. Saving and any other change to your files are blocked."}
               </strong>
               {op.status === "applied" ? null : (
                 <p>
                   {op.status === "unresolved"
-                    ? "Undoing puts back the files it changed, from the copies it kept. Files edited since then are left as they are for you to check. Don't delete its record."
-                    : "Inspect the record below; it is kept on disk. Don't delete it."}
+                    ? "Putting the files back as they were restores them from the copies cAdtree kept. Files you edited since then are left as they are for you to check. Don't delete its saved details file."
+                    : "Look at the details below; the saved details file is kept on disk. Don't delete it."}
                 </p>
               )}
               {op.error ? <p>{op.error}</p> : null}
               {op.status === "applied" ? null : (
                 <details className="disclosure">
                   <summary>Details</summary>
-                  <p className="file-path">Record: vault/{op.relativePath}</p>
+                  <p className="file-path">Saved details file: vault/{op.relativePath}</p>
                   {op.record ? (
                     <>
                       {op.record.plan.reason ? <p>{op.record.plan.reason}</p> : null}
@@ -118,7 +118,7 @@ export function ApplicationStatus({
                       </ul>
                       <p className="small">
                         Copies of unexpected files, when readable, are kept under
-                        this record's unexpected/&lt;recovery ID&gt;/ folder with
+                        this saved details file's unexpected/&lt;recovery ID&gt;/ folder with
                         the same number. A partial file is never overwritten.
                         After putting affected files back by hand, try again.
                         New empty folders are kept.
@@ -166,7 +166,7 @@ export function ApplicationStatus({
                       setClosed(false);
                     }}
                   >
-                    Undo the unfinished {what(op)}
+                    Put files back as they were
                   </button>
                 ) : null}
               </div>
@@ -205,16 +205,17 @@ export function ApplicationStatus({
         </Modal>
       ) : confirmation ? (
         <Modal
-          title={`Undo the unfinished ${what(confirmation.op)}`}
+          title="Put files back as they were"
           busy={busy}
           onClose={() => setConfirmation(null)}
         >
           {error ? <Notice type="error">{error}</Notice> : null}
           <p>
-            Save and close these files in your CAD program first. Only files that
-            still hold what the {what(confirmation.op)} wrote are put back
-            automatically. Anything else is left as it is and, when readable,
-            copied into the record. Other files and folders are not touched.
+            The {what(confirmation.op)} was interrupted part way. Save and close
+            these files in the app you use first. Only files that still hold what
+            the {what(confirmation.op)} wrote are put back automatically.
+            Anything else is left as it is and, when readable, a copy is kept.
+            Other files and folders are not touched.
           </p>
           <OperationProgress progress={progress} onCancel={onCancel} />
           <label className="file-choice">
@@ -224,7 +225,7 @@ export function ApplicationStatus({
               disabled={busy}
               onChange={(e) => setClosed(e.target.checked)}
             />
-            I have saved and closed these files in my CAD program.
+            I have saved and closed these files in the app I use.
           </label>
           <div className="modal-actions">
             <button
@@ -239,7 +240,7 @@ export function ApplicationStatus({
               disabled={busy || !closed}
               onClick={() => void confirm()}
             >
-              Undo the unfinished {what(confirmation.op)}
+              Put files back as they were
             </button>
           </div>
         </Modal>
@@ -308,7 +309,13 @@ export function AppliedFromDetails({
   if (!operations.length) return null;
   return (
     <>
-      <h3>Copied files</h3>
+      <h3>
+        {operations.every((op) => op.record!.plan.mode === "revert")
+          ? "Brought back files"
+          : operations.every((op) => op.record!.plan.mode !== "revert")
+            ? "Copied files"
+            : "Changed files"}
+      </h3>
       {operations.map((op) => {
         const record = op.record!;
         const reverted = record.plan.mode === "revert";
@@ -327,7 +334,7 @@ export function AppliedFromDetails({
             <p className="small">
               {reverted
                 ? "Files were brought back from the earlier version before this normal version was saved."
-                : "The selected files were copied in before this version was saved."} Check in your CAD app that the files still open and rebuild
+                : "The selected files were copied in before this version was saved."} Check in the app you use that the files still open and rebuild
               as you expect.
             </p>
             <ul className="application-actions">

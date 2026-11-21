@@ -119,8 +119,8 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
           <div className="panel projects-empty">
             <h2>Add your first project</h2>
             <p>
-              Create an empty project, or import a verified copy of an existing
-              CAD folder. Your original stays untouched.
+              Create an empty project, or import a checked copy of an existing
+              folder of files. Your original stays untouched.
             </p>
           </div>
         ) : (
@@ -178,7 +178,7 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   ) : null}
                   {locations.map((entry) => (
                     <p className="file-path" key={entry.containerPath}>
-                      Workspace-relative location: {entry.containerPath}
+                      Folder in this workspace: {entry.containerPath}
                     </p>
                   ))}
                 </details>
@@ -222,8 +222,8 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
       </section>
 
       <p className="local-note">
-        Your CAD files stay on your storage. Save and close CAD documents before
-        importing or capturing.
+        Your files stay on your storage. Save and close your files in the app
+        you use before importing or saving a version.
       </p>
       {flow === "create" ? (
         <Modal
@@ -283,14 +283,14 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
           busy={busy}
         >
           <p>
-            Import a verified copy inside {props.workspace.identity.name}.
-            An ordinary CAD folder becomes a new project named after the folder.
-            A complete cAdtree project keeps its name, document IDs and saved history.
+            Import a checked copy inside {props.workspace.identity.name}.
+            An ordinary folder of files becomes a new project named after the folder.
+            A complete cAdtree project keeps its name, file identities and saved history.
             The original folder and its files remain untouched.
           </p>
           <p>
-            Save and close CAD documents before selecting the folder. Continue
-            working in the new copy after import and check its CAD references.
+            Save and close your files in the app you use before selecting the folder. Continue
+            working in the new copy after import and check that its links to other files still work.
           </p>
           {pickerMessage ? <Notice>{pickerMessage}</Notice> : null}
           {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}

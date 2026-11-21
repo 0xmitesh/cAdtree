@@ -12,7 +12,7 @@ export function RevisionReferenceContext({ state, revisionId, onRetrieve }: {
   const [busy, setBusy] = useState(false);
   const evidence = state.references?.contexts[revisionId];
   if ((!evidence || evidence.status === 'legacy') && (!state.references || state.references.status === 'legacy' || evidence?.status === 'legacy')) return <p className="muted">No references were saved with this version.</p>;
-  if (!evidence?.record || evidence.status !== 'available') return <Notice type="error">{evidence?.reason ?? state.references?.reason ?? 'Reference context is unavailable.'} Your saved CAD files are not affected.</Notice>;
+  if (!evidence?.record || evidence.status !== 'available') return <Notice type="error">{evidence?.reason ?? state.references?.reason ?? 'Reference context is unavailable.'} Your saved files are not affected.</Notice>;
   const context = evidence.record;
   const library = capturedReferenceLibrary(state, revisionId);
   return <div>
@@ -36,7 +36,7 @@ export function RevisionReferenceContext({ state, revisionId, onRetrieve }: {
         <p className="file-path">{version?.originalFilename ?? 'File unavailable'}</p>
         {version ? <p className="muted small"><span>Saved {formatTimestamp(version.importedAt)}</span><br /><span>{version.savedBy ? `Saved by ${version.savedBy.displayName}` : 'Author not recorded'}</span></p> : null}
         {link.locator ? <p>Location: {link.locator}</p> : null}{link.explanation ? <p style={{ whiteSpace: 'pre-wrap' }}>{link.explanation}</p> : null}
-        {link.componentPath ? <p className="file-path">Part: {link.componentPath}</p> : null}
+        {link.componentPath ? <p className="file-path">File: {link.componentPath}</p> : null}
       </section>;
     })}
     {context.links.length && onRetrieve ? <p className="muted small">Click a reference to download a copy. The original stays saved with your project.</p> : null}

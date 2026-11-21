@@ -756,7 +756,7 @@ export async function createManagedBranch(
 function assertWritable(project: ManagedProject) {
   if (!project.ready || project.issues.length)
     throw new Error(
-      `Managed project is read-only until its workspace connections and records are valid. ${project.issues.join(" ")}`,
+      `This project is read-only until its folder connections and records are valid. ${project.issues.join(" ")}`,
     );
 }
 /** What allocateProject needs to measure the future worst case of the new project folder. */
@@ -893,7 +893,7 @@ async function publishProject(
     totalFiles: 0,
     processedBytes: 0,
     totalBytes: 0,
-    message: "Publishing the verified managed project…",
+    message: "Finishing the project copy…",
   });
   throwIfCancelled(options.signal);
   try {

@@ -69,7 +69,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await search.fill('Alpha updated.txt');
   await expect(view.locator('.reference-card')).toHaveCount(1);
   await expect(view).toContainText('Alternative · V3');
-  await expect(view).toContainText('Part: B.SLDPRT');
+  await expect(view).toContainText('File: B.SLDPRT');
   await search.fill('Alpha.txt');
   await expect(view.locator('.reference-card')).toHaveCount(1);
   const event = page.waitForEvent('download');
@@ -100,7 +100,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await page.getByRole('textbox', { name: /Version summary/ }).fill('Attach client sources');
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await page.getByRole('button', { name: 'Save version', exact: true }).click();
-  await expect(page.getByText(/Published and verified V4/)).toBeVisible();
+  await expect(page.getByText(/Saved V4 on this case/)).toBeVisible();
   await page.getByRole('navigation').getByRole('button', { name: 'History', exact: true }).click();
   await page.getByRole('button', { name: /V4:/ }).click();
   await page.getByRole('button', { name: 'Saved references', exact: true }).click();
@@ -118,7 +118,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await view.getByRole('searchbox', { name: 'Search references' }).fill('Clearance.pdf');
   await expect(view.locator('.reference-card')).toHaveCount(1);
   await expect(view).toContainText('Main · V4');
-  await expect(view).toContainText('Part: B.SLDPRT');
+  await expect(view).toContainText('File: B.SLDPRT');
   await expect(view).toContainText('Maintain the bearing clearance');
   await expect(view.getByRole('button', { name: 'Download Clearance.pdf (Clearance.pdf)', exact: true })).toBeVisible();
   // Add a reference from the References page without saving a revision.

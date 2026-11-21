@@ -127,7 +127,7 @@ export async function createDesignBranch(
     if (componentBlock) throw new Error(componentBlock);
     await validateWorkingFolderBindings(state, vaultDir, workingFolders);
     if ((await vaultDir.queryPermission("readwrite")) !== "granted")
-      throw new Error("Reconnect the version vault with write permission.");
+      throw new Error("Reconnect the saved versions folder with write permission.");
     if ((await destinationParent.queryPermission("readwrite")) !== "granted")
       throw new Error(
         "Write permission is required for the destination parent folder.",
@@ -138,7 +138,7 @@ export async function createDesignBranch(
       (await vaultDir.resolveRelativePath(destinationParent)) !== null
     ) {
       throw new Error(
-        "The destination parent is inside the version vault. Choose a separate parent.",
+        "The destination parent is inside the saved versions folder. Choose a separate parent.",
       );
     }
     for (const branch of state.branches) {
@@ -212,7 +212,7 @@ export async function createDesignBranch(
         workingDir,
         vaultDir,
         "New case working folder",
-        "Version vault",
+        "Saved versions folder",
       );
       for (const branch of state.branches) {
         await validateDirectoryIsolation(
@@ -315,7 +315,7 @@ export async function createDesignBranch(
         totalFiles: source.files.length,
         processedBytes: inventory.totalBytes,
         totalBytes: inventory.totalBytes,
-        message: "Publishing the verified design case…",
+        message: "Finishing the design case…",
       });
       checkCancelled(signal);
       publicationAttempted = true;
@@ -327,7 +327,7 @@ export async function createDesignBranch(
       }
       if ((await vaultDir.readFileText(readyPath)) !== readyText)
         throw new Error(
-          "Case ready marker read-back verification failed. Reopen the vault to inspect its publication status.",
+          "Case ready marker read-back verification failed. Reopen the project to check what was saved.",
         );
       // The verified ready marker is the commit point; cancellation after it is success.
       const updated: VaultState = {

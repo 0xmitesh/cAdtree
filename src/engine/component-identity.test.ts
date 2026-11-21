@@ -319,7 +319,7 @@ test('an applied addition cannot also be a confirmed rename target; rejection pr
     writes.push(path.join('/'));
     return original(path, text, options);
   };
-  await assert.rejects(f.save({ identityReview: review, reviewedChangesSignature: scan.changesSignature }), /Component identity conflict.*new\.SLDPRT.*confirmed rename/);
+  await assert.rejects(f.save({ identityReview: review, reviewedChangesSignature: scan.changesSignature }), /Rename conflict.*new\.SLDPRT.*confirmed rename/);
   assert.deepEqual(writes, [], 'reject before capture provenance, component sidecar or completion writes');
   assert.equal(await inventory(f.vault), before, 'rejection leaves all vault evidence unchanged');
   const rejected = await openExistingVault(f.vault);

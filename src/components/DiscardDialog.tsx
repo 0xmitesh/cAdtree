@@ -136,7 +136,7 @@ export function DiscardDialog({
             {nothing ? null : (
               <p className="muted small">
                 These files go back to how they were in the last saved version. Other
-                unsaved files are not touched. Close these files in your CAD program first.
+                unsaved files are not touched. Close these files in the app you use first.
               </p>
             )}
             {replaceKeepsCopy(plan) ? (

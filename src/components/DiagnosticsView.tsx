@@ -83,8 +83,8 @@ export function DiagnosticsView({
   const vaultRow = (
     <div className="settings-row">
       <div>
-        <strong>Version vault</strong>
-        <p>{vaultFolderName ?? "Connected vault"}</p>
+        <strong>Saved versions folder</strong>
+        <p>{vaultFolderName ?? "Connected"}</p>
       </div>
       <span className="connection-dot">Connected</span>
     </div>
@@ -173,7 +173,7 @@ export function DiagnosticsView({
                 ? "Verifying file contents…"
                 : "Verify all file contents"}
             </button>
-            {state.references?.reason ? <Notice type="error">{state.references.reason} Opening references and saving new versions need valid reference records. Your CAD files are checked separately.</Notice> : null}
+            {state.references?.reason ? <Notice type="error">{state.references.reason} Opening references and saving new versions need valid reference records. Your files are checked separately.</Notice> : null}
             {Object.entries(state.damagedBranchHeads).map(([id, reason]) => (
               <Notice type="error" key={id}>
                 <strong>Damaged starting version</strong>
@@ -189,8 +189,8 @@ export function DiagnosticsView({
                     two latest versions
                   </strong>
                   <p>
-                    Saving is blocked. The vault has {heads.length} latest
-                    versions for this case.
+                    Saving is blocked. There are {heads.length} latest
+                    versions on this case.
                   </p>
                   <details>
                     <summary>Version IDs</summary>
@@ -276,7 +276,7 @@ export function DiagnosticsView({
               <summary>Reset folder connections</summary>
               <p>
                 Reset remembered folder connections and saved folder addresses for
-                all workspaces in this browser. CAD files, saved
+                all workspaces in this browser. Your files, saved
                 versions, reference attachments and accounts are not deleted.
               </p>
               <button
@@ -298,7 +298,7 @@ export function DiagnosticsView({
           <p>
             This affects saved folder connections and addresses across all
             workspaces in this browser, not just this project.
-            It does not delete CAD files, saved versions, reference attachments
+            It does not delete your files, saved versions, reference attachments
             or accounts.
           </p>
           <p>

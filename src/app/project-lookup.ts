@@ -11,7 +11,7 @@ export const PROJECT_NOT_FOUND =
 /** Info-level stop: the open project was re-found at a new folder and nothing was written. */
 export class ProjectRenamedNotice extends Error {}
 export const renamedNotice = (project: ManagedProject) =>
-  `This project's folder was renamed to '${project.record.containerPath.split("/").pop()}'. cAdtree found it by its project ID.`;
+  `This project's folder was renamed to '${project.record.containerPath.split("/").pop()}'. cAdtree found it again from its saved identity.`;
 export type OpenProjectLookup =
   | { kind: "ok"; workspace: WorkspaceState; project: ManagedProject; renamed: boolean }
   | { kind: "unavailable"; workspace: WorkspaceState; reason: string };

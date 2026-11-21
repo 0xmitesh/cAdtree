@@ -411,7 +411,7 @@ function ApplyBody({
           <p className="muted small">
             {destinationName}'s files will match {sourceLabel}, and the result
             is saved as a new version. Nothing is lost: the current version
-            stays in history. Close these files in your CAD program first.
+            stays in history. Close these files in the app you use first.
           </p>
           {blocked.length ? (
             <Notice>
@@ -469,7 +469,7 @@ function ApplyBody({
         <p className="muted small">
           These are the files {sourceCase} changed ({sourceLabel}). Ticked files
           are copied into {destinationName}, and the result is saved as a new
-          version. Close these files in your CAD program first.
+          version. Close these files in the app you use first.
         </p>
         {!fileRows.length && !folderRows.length ? (
           <Notice>

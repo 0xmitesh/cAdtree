@@ -54,7 +54,7 @@ export function AccountModal({
       <div className="auth-modal-body">
         <p className="muted auth-modal-subtitle">
           You do not need an account to use cAdtree: everything on your own
-          computer works without one, and your CAD files always stay on your
+          computer works without one, and your files always stay on your
           device. An account is only for features that may come later, such as
           sharing, cloud storage and an AI knowledge base. None of these are
           available yet.

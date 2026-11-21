@@ -321,13 +321,13 @@ export function ChangesCaptureView({
         </span>
         <span data-scanned-at={scan?.scannedAt}>
           {scan
-            ? "Scanned " +
+            ? "Checked " +
               formatTimestamp(scan.scannedAt) +
               (checkFailed
                 ? " · Not up to date"
                 : isScanStale
                   ? " · Not checked since your last change"
-                  : " · Latest scan")
+                  : " · Up to date")
             : checkFailed || isChecking
               ? null
               : "Not checked yet"}
@@ -345,7 +345,7 @@ export function ChangesCaptureView({
       {operationBlockReason ? <Notice>{operationBlockReason}</Notice> : null}
       {!workingFolderName ? (
         <Notice>
-          Connect a working folder to scan and save versions.{" "}
+          Connect a working folder to check for changes and save versions.{" "}
           <button className="text-button" onClick={onReattachWorkingFolder}>
             Connect folder
           </button>
@@ -391,7 +391,7 @@ export function ChangesCaptureView({
       {referenceConflict ? <Notice type="error">{referenceConflict} <button className="text-button" type="button" disabled={busy} onClick={() => { if (scan && effectiveReferences) setReferenceReview(createReferenceReview(vaultState, scan, effectiveReferences.explicit)); setShowAttachments(true); }}>Review current references</button></Notice> : null}
       {needsReview ? (
         <Notice type="error">
-          The latest scan differs from the file set you reviewed. Review the
+          Your files changed since you reviewed them. Review the
           updated changes, then{" "}
           <button
             className="text-button"
@@ -413,7 +413,7 @@ export function ChangesCaptureView({
               No changes since{" "}
               {head
                 ? formatRevisionNumber(head.manifest.displayNumber)
-                : "the last scan"}
+                : "the last check"}
             </h2>
             <p>
               Your working folder matches the saved project state.
@@ -454,8 +454,8 @@ export function ChangesCaptureView({
             <div className="empty-state compact">
               <RefreshCw size={25} />
               <p>
-                Save and close your CAD documents, then scan your working
-                folder.
+                Save and close your files in the app you use. cAdtree checks
+                your working folder for changes automatically.
               </p>
             </div>
           ) : (
@@ -543,7 +543,7 @@ export function ChangesCaptureView({
               0 ? (
                 <details className="disclosure">
                   <summary>
-                    Directory changes (
+                    Folder changes (
                     {scan.addedDirectories.length +
                       scan.deletedDirectories.length}
                     )
@@ -678,8 +678,8 @@ export function ChangesCaptureView({
                 </Notice>
               ) : null}
               <p className="save-reminder">
-                Save and close CAD documents before saving a version. We scan
-                again to verify the reviewed changes.
+                Save and close your files in the app you use before saving a
+                version. cAdtree checks them once more as it saves.
               </p>
               <button
                 className="button primary save-button"

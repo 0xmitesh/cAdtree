@@ -118,7 +118,7 @@ export function useCaptureActions({
       }
       if (!current.ready || current.issues.length)
         throw new Error(
-          `This managed project is read-only. ${current.issues.join(" ")}`,
+          `This project is read-only. ${current.issues.join(" ")}`,
         );
       folders = current.workingFolders;
       folder = folders[branchId];
@@ -126,7 +126,7 @@ export function useCaptureActions({
     } else state = await openExistingVault(vault);
     if (!folder)
       throw new Error(
-        "Connect the selected case’s working folder before scanning.",
+        "Connect the selected case’s working folder first.",
       );
     if (!context.current()) return;
     applyVaultState(state);
@@ -199,7 +199,7 @@ export function useCaptureActions({
           type: "info",
           message: `${renamed ? `${renamed} ` : ""}${
             result.hasChanges
-              ? `Scan complete: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
+              ? `Checked your files: ${result.added.length} added, ${result.modified.length} modified, ${result.deleted.length} deleted.`
               : "This working folder matches its case’s saved version."
           }`,
         });
@@ -220,7 +220,7 @@ export function useCaptureActions({
   ) => {
     if (!workingDir || !vaultDir || branchId !== activeBranchId)
       throw new Error(
-        "The active case connection changed. Scan again before saving.",
+        "The active case connection changed. Check your files again before saving.",
       );
     await perform(
       "capture",
@@ -268,7 +268,7 @@ export function useCaptureActions({
           if (context.current())
             setStatusBanner({
               type: "success",
-              message: `Published and verified ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this working case. ${result.cacheWarning ?? ""}`,
+              message: `Saved ${formatRevisionNumber(result.revision.manifest.displayNumber)} on this case. ${result.cacheWarning ?? ""}`,
             });
         } catch (error) {
           if (error instanceof ReviewStaleError && context.current())

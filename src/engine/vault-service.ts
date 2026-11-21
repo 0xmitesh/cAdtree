@@ -275,7 +275,7 @@ export async function initializeProjectVault(
     throw new Error('Project name is required.');
   }
 
-  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Version vault');
+  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Saved versions folder');
 
   const existingEntries = await vaultDir.listEntries();
   if (existingEntries.length > 0) {
