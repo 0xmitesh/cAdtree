@@ -5,6 +5,9 @@ import { presentPathBudgetError } from "../utils/path-budget-message";
 import { ProjectRenamedNotice } from "./project-lookup";
 import type { ActiveTab, BannerScope, Context, Operation, StatusBanner } from "./types";
 
+/** Engines report once per file; React gets at most about 10 updates a second so a big save doesn't re-render every mounted tab per file. */
+const PROGRESS_INTERVAL_MS = 100;
+
 export type UseOperationArgs = {
   activeTab: ActiveTab;
 };
@@ -25,10 +28,20 @@ export function useOperation({
   // The quiet background refresh (useAutoRefresh). A user operation always wins: it stops the refresh first.
   const backgroundRef = useRef<AbortController | null>(null);
   const contextVersion = useRef(0);
+  // Throttle state of the running operation: the phase last shown, the newest update not shown yet, and its flush timer.
+  const shownPhase = useRef<ProgressUpdate["phase"] | null>(null);
+  const pendingProgress = useRef<ProgressUpdate | null>(null);
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearProgressTimer = () => {
+    if (progressTimer.current) clearTimeout(progressTimer.current);
+    progressTimer.current = null;
+    pendingProgress.current = null;
+  };
 
   useEffect(
     () => () => {
       contextVersion.current++;
+      clearProgressTimer();
       operationRef.current?.abort();
     },
     [],
@@ -55,12 +68,28 @@ export function useOperation({
     setBannerScope(activeTab === "connect" ? "workspace" : "project");
     const current = () =>
       contextVersion.current === version && operationRef.current === abort;
+    shownPhase.current = null;
+    clearProgressTimer();
+    const showProgress = (p: ProgressUpdate) => {
+      clearProgressTimer();
+      shownPhase.current = p.phase;
+      setProgress(p);
+    };
     const context = {
       version,
       signal: abort.signal,
       current,
       progress: (p: ProgressUpdate) => {
-        if (current()) setProgress(p);
+        if (!current()) return;
+        // The first update and a new phase show at once; others wait for the trailing flush of the newest one.
+        if (p.phase !== shownPhase.current) return showProgress(p);
+        pendingProgress.current = p;
+        progressTimer.current ??= setTimeout(() => {
+          progressTimer.current = null;
+          const latest = pendingProgress.current;
+          pendingProgress.current = null;
+          if (latest && current()) showProgress(latest);
+        }, PROGRESS_INTERVAL_MS);
       },
     };
     try {
@@ -84,6 +113,7 @@ export function useOperation({
     } finally {
       if (operationRef.current === abort) {
         operationRef.current = null;
+        clearProgressTimer();
         setOperation(null);
         setProgress(null);
       }
