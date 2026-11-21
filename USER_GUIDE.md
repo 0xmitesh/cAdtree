@@ -264,7 +264,7 @@ Development regression: `npm run test:ui -- tests/browser/case-lifecycle.spec.ts
 
 The design cases panel lists each case with **Compare with Main** and **Hide case** (or, for a hidden case shown with **Show hidden cases**, **Unhide**). It has no separate activity or divergence section.
 
-Choose **Compare with Main** to open the existing saved comparison with **From = case saved baseline** and **To = Main saved baseline**, across all project files. Close it to return to the case information. This does not switch the case, scan folders, alter drafts, apply files, or write project records. Working edits are excluded. Existing comparison notes and metadata/content verification distinctions still apply.
+Choose **Compare with Main** to open the existing saved comparison with **From = Main's latest saved version** and **To = the case's latest saved version**, across all project files, so **Added**, **Modified** and **Deleted** describe what the case changed relative to Main. The dialog says so: **Shows how <case> differs from Main. If Main changed after <case> started, those changes show up here too.** (the line goes away if you change or swap the versions). Close it to return to the case information. This does not switch the case, scan folders, alter drafts, apply files, or write project records. Working edits are excluded. Existing comparison notes and metadata/content verification distinctions still apply.
 
 If a case's or Main's current saved baseline cannot be established, **Compare with Main** is disabled; ordinary History → Compare keeps its endpoint-only rules for explicitly selected healthy saved versions.
 

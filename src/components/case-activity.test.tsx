@@ -45,7 +45,7 @@ test("the design cases panel has no Saved activity and divergence section; Compa
         name: "From version",
       }) as HTMLSelectElement
     ).value,
-    "r1",
+    "r2",
   );
   assert.equal(
     (
@@ -53,8 +53,16 @@ test("the design cases panel has no Saved activity and divergence section; Compa
         name: "To version",
       }) as HTMLSelectElement
     ).value,
-    "r2",
+    "r1",
   );
+  // From = Main, To = the case: Added / Modified / Deleted describe what the case changed.
+  assert.match(
+    within(dialog).getByTestId("compare-with-main-note").textContent!,
+    /Shows how Alternative differs from Main\. If Main changed after Alternative started, those changes show up here too\./,
+  );
+  // Choosing other endpoints (here: Swap) removes the line, because it would no longer be true.
+  fireEvent.click(within(dialog).getByRole("button", { name: /Swap/ }));
+  assert.equal(within(dialog).queryByTestId("compare-with-main-note"), null);
   assert.match(dialog.textContent!, /Scope: All project files/);
   fireEvent.click(
     within(dialog).getByRole("button", { name: "Close comparison" }),
@@ -81,7 +89,7 @@ test("unavailable ancestry leaves healthy endpoint comparison available, and hid
   assert.equal(
     (
       within(dialog).getByRole("combobox", {
-        name: "From version",
+        name: "To version",
       }) as HTMLSelectElement
     ).value,
     "c3",

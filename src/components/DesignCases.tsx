@@ -34,6 +34,7 @@ export function DesignCases({
   const [comparison, setComparison] = useState<{
     fromId: string;
     toId: string;
+    caseName: string;
   } | null>(null);
   const [action, setAction] = useState<{
     branchId: string;
@@ -138,15 +139,18 @@ export function DesignCases({
             activity.main.status !== "available"
           }
           aria-label={`Compare ${branch.name} with Main`}
-          title="Compares this case's latest saved version with Main's latest saved version. Unsaved changes are not included."
+          title="Shows how this case's latest saved version differs from Main's latest saved version. Unsaved changes are not included."
           onClick={() => {
             if (
               activity.baseline.status === "available" &&
               activity.main.status === "available"
             )
+              // From = Main, To = the case, so Added / Modified / Deleted
+              // describe what the case changed relative to Main.
               setComparison({
-                fromId: activity.baseline.revision.manifest.revisionId,
-                toId: activity.main.revision.manifest.revisionId,
+                fromId: activity.main.revision.manifest.revisionId,
+                toId: activity.baseline.revision.manifest.revisionId,
+                caseName: branch.name,
               });
           }}
         >
@@ -213,6 +217,7 @@ export function DesignCases({
           inspectedId={comparison.toId}
           initialFromId={comparison.fromId}
           initialPath=""
+          caseVsMain={comparison.caseName}
           onClose={() => setComparison(null)}
         />
       ) : null}

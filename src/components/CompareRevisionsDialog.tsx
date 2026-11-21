@@ -19,12 +19,15 @@ export function CompareRevisionsDialog({
   inspectedId,
   initialPath,
   initialFromId,
+  caseVsMain,
   onClose,
 }: {
   state: VaultState;
   inspectedId: string;
   initialPath: string;
   initialFromId?: string;
+  /** Set by Compare with Main (From = Main, To = this case): adds one plain line while those defaults are still chosen. */
+  caseVsMain?: string;
   onClose: () => void;
 }) {
   const [toId, setToId] = useState(inspectedId);
@@ -242,6 +245,12 @@ export function CompareRevisionsDialog({
           From → To compares the saved files by their checksums. It does not
           look inside the files or check that they fit together.
         </p>
+        {caseVsMain && fromId === initialFromId && toId === inspectedId ? (
+          <p className="small" data-testid="compare-with-main-note">
+            Shows how {caseVsMain} differs from Main. If Main changed after{" "}
+            {caseVsMain} started, those changes show up here too.
+          </p>
+        ) : null}
         <div className="comparison-selectors">
           {endpointControls("From", fromId, setFromId)}
           <button

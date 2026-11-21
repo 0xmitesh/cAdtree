@@ -125,24 +125,24 @@ for (const width of [1366, 390])
     });
     await expect(
       dialog.getByRole("combobox", { name: "From version" }),
-    ).toHaveValue(fixture.ids[2]);
+    ).toHaveValue(fixture.ids[1]);
     await expect(
       dialog.getByRole("combobox", { name: "To version" }),
-    ).toHaveValue(fixture.ids[1]);
+    ).toHaveValue(fixture.ids[2]);
     await expect(dialog).toContainText("Scope: All project files");
     await expect(dialog).toContainText("Part-X redesign · Hidden");
     await expect(
       dialog.getByRole("region", {
-        name: "From overall notes at V3",
-        exact: true,
-      }),
-    ).toContainText("Overall: Redesign only Part-X");
-    await expect(
-      dialog.getByRole("region", {
-        name: "To overall notes at V2",
+        name: "From overall notes at V2",
         exact: true,
       }),
     ).toContainText("Overall: Main with 20 files");
+    await expect(
+      dialog.getByRole("region", {
+        name: "To overall notes at V3",
+        exact: true,
+      }),
+    ).toContainText("Overall: Redesign only Part-X");
     await page.screenshot({
       path: `artifacts/screenshots/case-activity-compare-${width}.png`,
     });
