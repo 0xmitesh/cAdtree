@@ -245,7 +245,7 @@ test("deriveChoices: a renamed (identity-blocked) file stays, so its removed fol
   }
 });
 
-test("the 'holds only system files' error from the save shows in the dialog and nothing is written", async () => {
+test("the 'holds only system or temporary files' error from the save shows in the dialog and nothing is written", async () => {
   const vault = new InMemoryFileSystemAdapter("DVault"),
     main = new InMemoryFileSystemAdapter("DMain");
   const folders = { "branch-main": main };
@@ -269,7 +269,7 @@ test("the 'holds only system files' error from the save shows in the dialog and 
   );
   fireEvent.click(ui.getByRole("button", { name: "Bring back" }));
   const alert = await waitFor(() => ui.getByRole("alert"));
-  assert.match(alert.textContent!, /Folder "New" holds only system files \(Thumbs\.db\)\./);
+  assert.match(alert.textContent!, /Folder "New" holds only system or temporary files \(Thumbs\.db\)\./);
   assert.equal(await main.readFileText(["New", "N.txt"]), "n");
   const after = await openExistingVault(vault);
   assert.equal(after.applicationOperations?.length ?? 0, 0);

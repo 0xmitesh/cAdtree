@@ -369,17 +369,17 @@ test('stale reference decisions remain visible until explicitly reviewed and leg
 
 
 
-test('Changes shows one muted line naming skipped system files, with at most three names', async () => {
+test('Changes shows one muted line naming skipped system or temporary files, with at most three names', async () => {
   const f = await fixture();
   await f.working.writeFileText(['.DS_Store'], 'finder');
   const scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
   const props = { vaultState: f.first.vaultState, activeBranchId: branchId, workingFolderName: 'Main', vaultFolderName: 'Vault', scanResult: scan, draftCache: new Map(), draftKey: 'skipped', isScanning: false, isCapturing: false, progress: null, statusBanner: null, onScan: async () => {}, onCancelOperation: () => {}, onReattachWorkingFolder: async () => {}, onCapture: async () => {} };
   let ui = render(<ChangesCaptureView {...props} />);
-  assert.equal(ui.getByTestId('skipped-system-files').textContent, 'Skipped 1 system file: .DS_Store');
+  assert.equal(ui.getByTestId('skipped-system-files').textContent, 'Skipped 1 system or temporary file: .DS_Store');
   ui.unmount();
   const many = { ...scan, skippedSystemFiles: ['a/.DS_Store', '.DS_Store', 'Thumbs.db', 'desktop.ini', '._x'] };
   ui = render(<ChangesCaptureView {...props} scanResult={many} />);
-  assert.equal(ui.getByTestId('skipped-system-files').textContent, 'Skipped 5 system files: a/.DS_Store, .DS_Store, Thumbs.db +2 more');
+  assert.equal(ui.getByTestId('skipped-system-files').textContent, 'Skipped 5 system or temporary files: a/.DS_Store, .DS_Store, Thumbs.db +2 more');
   ui.unmount();
   ui = render(<ChangesCaptureView {...props} scanResult={{ ...scan, skippedSystemFiles: [] }} />);
   assert.equal(ui.queryByTestId('skipped-system-files'), null);

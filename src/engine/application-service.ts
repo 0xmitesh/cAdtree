@@ -48,6 +48,7 @@ import {
 import { eventIdBase, eventIdCandidate } from "./ids";
 import {
   isSystemClutterName,
+  isTemporaryFileName,
   partitionSystemFiles,
   scanBranchChanges,
 } from "./scanner";
@@ -234,7 +235,7 @@ async function cleanDestination(
   );
   if (blocked.length)
     throw new Error(
-      `An untracked system file ${blocked.map((a) => a.path).join(", ")} exists at this path in the destination; remove it or save it first. No working files were changed.`,
+      `An untracked system or temporary file ${blocked.map((a) => a.path).join(", ")} is in the way at this path in the destination. Remove or rename it, then try again. No working files were changed.`,
     );
   if (scan.hasChanges)
     throw new Error(
@@ -245,7 +246,7 @@ async function cleanDestination(
 /**
  * Before any write: every folder this application removes must end up empty. What
  * remains after this apply's own deletions must not be user data (a destination
- * change) and must not be untracked OS clutter either: cAdtree never deletes user
+ * change) and must not be untracked OS clutter or temporary or lock files either: cAdtree never deletes user
  * files, clutter included, so the user is asked to delete it or untick the folder.
  */
 async function assertFolderRemovalsReady(
@@ -287,6 +288,7 @@ async function assertFolderRemovalsReady(
           !tracked.has(child) &&
           entry.kind === "file" &&
           (isSystemClutterName(entry.name) ||
+            isTemporaryFileName(entry.name) ||
             (entry.name.startsWith("._") &&
               entry.name.length > 2 &&
               names.has(entry.name.slice(2))));
@@ -301,7 +303,7 @@ async function assertFolderRemovalsReady(
     );
   for (const [path, names] of clutter)
     throw new Error(
-      `Folder "${path}" holds only system files (${names.join(", ")}). Delete them, or untick the folder, then try again. No working files were changed.`,
+      `Folder "${path}" holds only system or temporary files (${names.join(", ")}). Close the app that uses them or delete them, or untick the folder, then try again. No working files were changed.`,
     );
 }
 /** Absence is established by readable directory entries, never by hasFile (which
@@ -746,13 +748,12 @@ export async function applyUnderLock(
       );
     await cleanDestination(working, reloaded, review, options);
     await writeOperation(vault, working, op, options);
-    const rawResult = await readVerifiedInventory(working, options);
+    const resultPaths = new Set(plan.resultFiles.map((f) => f.path));
+    // An unreadable untracked lock or temp file never blocks the check, as in a scan.
+    const rawResult = await readVerifiedInventory(working, options, resultPaths);
     const result = {
       ...rawResult,
-      files: partitionSystemFiles(
-        rawResult.files,
-        new Set(plan.resultFiles.map((f) => f.path)),
-      ).files,
+      files: partitionSystemFiles(rawResult.files, resultPaths).files,
     };
     if (
       inventorySignature(result) !==

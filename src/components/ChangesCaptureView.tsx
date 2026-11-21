@@ -352,6 +352,7 @@ export function ChangesCaptureView({
               {e.path}: {e.error}
             </p>
           ))}
+          <p>If a file is open in another app, close it there, then try again.</p>
           <button className="text-button" onClick={onScan}>
             Retry scan
           </button>
@@ -359,7 +360,7 @@ export function ChangesCaptureView({
       ) : null}
       {scan?.skippedSystemFiles?.length ? (
         <p className="muted small" data-testid="skipped-system-files">
-          Skipped {scan.skippedSystemFiles.length} system{" "}
+          Skipped {scan.skippedSystemFiles.length} system or temporary{" "}
           {scan.skippedSystemFiles.length === 1 ? "file" : "files"}:{" "}
           {scan.skippedSystemFiles.slice(0, 3).join(", ")}
           {scan.skippedSystemFiles.length > 3

@@ -6,6 +6,7 @@ import {
 import {
   enumerateWorkingFolder,
   isEffectivelyEmpty,
+  partitionSystemErrors,
   partitionSystemFiles,
   isSystemClutterName,
   type EnumerateWorkingFolderResult,
@@ -33,9 +34,16 @@ export function inventorySignature(
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   });
 }
+/**
+ * Reads and hashes a folder, failing on any read error. With `expectedPaths` (a
+ * working folder whose tracked files are known), read errors for untracked system
+ * or temporary files (a lock file while its document is open) are dropped, the
+ * way a scan and a save drop them; every other read error still fails.
+ */
 export async function readVerifiedInventory(
   source: FileSystemDirectoryAdapter,
   options: CopyOptions = {},
+  expectedPaths?: ReadonlySet<string>,
 ) {
   const inventory = await enumerateWorkingFolder(source, {
     signal: options.signal,
@@ -50,11 +58,14 @@ export async function readVerifiedInventory(
         message: `Reading ${source.name}: ${path}…`,
       }),
   });
-  if (inventory.errors.length)
+  const errors = expectedPaths
+    ? partitionSystemErrors(inventory.errors, inventory.files, expectedPaths).errors
+    : inventory.errors;
+  if (errors.length)
     throw new Error(
-      `Cannot copy "${source.name}": ${inventory.errors.map((error) => `${error.path}: ${error.error}`).join("; ")}`,
+      `Cannot copy "${source.name}": ${errors.map((error) => `${error.path}: ${error.error}`).join("; ")}`,
     );
-  return inventory;
+  return { ...inventory, errors };
 }
 /** Bounded file streams; hashes and inventories establish best-effort source stability. */
 export async function copyVerifiedTree(

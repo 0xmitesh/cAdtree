@@ -74,7 +74,7 @@ cAdtree checks the working folder for changes by itself: when you return to the 
 
 In **Changes**, the **Save version** panel asks for one line: **What changed** (required). Open **More detail** to add **Why** and **What you noticed**; both are optional. Each changed file can also have its own **Note** (with its own **More detail**). There is no separate Description field. Versions saved earlier with a Description still show it under **Notes** in History, in Compare and in the files' history. **Save now** (after a Bring back or Copy that was not saved) fills **What changed** and, if you gave a reason, opens **More detail** with **Why** filled in.
 
-cAdtree skips untracked OS-generated files when scanning a working folder: `.DS_Store`, `Thumbs.db`, `desktop.ini`, and macOS `._name` companion files that sit beside `name`. The Changes view lists them as skipped and never saves them in a version. A file that is already part of a version is tracked normally, even with one of these names.
+cAdtree skips untracked system and temporary files when scanning a working folder: `.DS_Store`, `Thumbs.db`, `desktop.ini`, macOS `._name` companion files that sit beside `name`, and the helper files that apps create next to an open document (lock files such as `~$part.SLDPRT` or `.~lock.sheet.ods#`, and files ending in `.tmp`, `.bak`, `.dwl`, `.dwl2` or `.sv$`). The Changes view lists them as skipped and never saves them in a version, so a lock file never blocks saving. A file that is already part of a version is tracked normally, even with one of these names. If a regular file is open in another app and cAdtree cannot read it, saving waits: close it there, then try again.
 
 ## Work with cases
 

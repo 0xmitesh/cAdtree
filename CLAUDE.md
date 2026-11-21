@@ -73,9 +73,10 @@ Cadtree Home                 one user-chosen root; .cadtree-home.json + .cadtree
 
 **OS clutter:**
 - Untracked `.DS_Store`, `Thumbs.db`, `desktop.ini` and AppleDouble `._x` companions (when `x` exists) are skipped and listed in scans and captures. Tracked ones are handled like any file.
+- Temporary and lock files follow the same rule (2026-11-21): `isTemporaryFileName` matches `~$…`, `.~lock.…#`, and names ending `.tmp`, `.bak`, `.dwl`, `.dwl2`, `.sv$` or `.crswap`. Untracked ones are skipped and listed (never Added, never saved, an unreadable one never blocks a save); tracked ones are handled like any file.
 - The same rule applies to every verify-after-write comparison.
-- Empty-folder checks tolerate clutter-named files.
-- Code: `partitionSystemFiles`, `isEffectivelyEmpty` in `src/engine/scanner.ts`.
+- Empty-folder checks tolerate clutter-named files only; temporary or lock files do not count as empty, and Copy's root overwrite exception covers clutter only (deliberately strict). Apply's folder-removal check treats an untracked temporary or lock file like clutter: it stops the Apply before any write.
+- Code: `partitionSystemFiles`, `partitionSystemErrors`, `isTemporaryFileName`, `isEffectivelyEmpty` in `src/engine/scanner.ts`.
 
 **Stack:**
 - React 19, TypeScript, Vite and Tailwind.
@@ -241,7 +242,7 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - A Finder or Explorer rename changes a folder's location, not its display name (kept for now; open decision on adopting or showing both).
 - One ID standard: record ID `YYYYMMDD-HHMMSS-xxxxxx` for cases, revisions, references and Knowledge Lab records; event ID `YYYYMMDD-HHMMSS` + counter for Apply and recovery; no type prefixes; no branch or project names in IDs; vault objects stay content-addressed by SHA-256 (2026-11-10/11).
 - Clashes are detected with `FileConflictError` and redrawn or counted, never overwritten, and never detected by matching error text (2026-11-11, #60).
-- OS clutter files are ignored only when untracked, and the same rule applies to every verify-after-write check (2026-11-10).
+- OS clutter files are ignored only when untracked, and the same rule applies to every verify-after-write check (2026-11-10); untracked temporary and lock files (`~$x`, `.~lock.x#`, `.tmp`, `.bak`, `.dwl`, `.dwl2`, `.sv$`, `.crswap`) follow it too, while empty-folder checks and Copy's root overwrite exception stay clutter-only (2026-11-21).
 
 **Path limits**
 - One standard on every platform, so projects stay portable to Windows: warn from 200, block above 240 characters of full path, +7 for `.crswap`; cAdtree's own IDs were shortened first so its naming never causes path errors (Item 2, 2026-11-10).
@@ -258,7 +259,7 @@ These are decided. Build on them; don't redesign around them. The full decision 
 - "Restore copy" and `recoveries/` are gone and must not come back as a parallel path. Existing `recoveries/` folders are left untouched; cAdtree never deletes user data.
 - Saved automatically (2026-11-19, #108, #110, #112; replaces "Apply only changes working files; the user saves a revision afterwards"): Bring back and Copy files from <case> save a revision automatically after a successful write (`applyAndSave`: the save is `captureUnderLock` under the same lock, refused if a fresh scan differs from the plan's result). Copy shows one list; files changed on both sides need Keep mine / Take theirs, with no default. If the write succeeds but the save fails, the files stay and the user is offered Save now or Don't save it. Prepare, the confirm screen and Abandon pending provenance are gone. Review before apply (§3.4) is unchanged.
 - Discard (2026-11-19, #111, #113): Discard all… and Discard per file or folder put unsaved changes back to the latest saved revision without saving (`replaceWorkingFiles` mode `discard`); only the selected paths are checked and written. A plan that no longer matches the files is refused before anything is written (`ReplacePlanChangedError`) and the dialog reviews again; something that appears in a folder being removed after the operation has started stops it before any working-file write, leaving an unfinished Discard or Get this version to undo. Bring back with unsaved changes offers Save my changes first or Discard them.
-- Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files or a subfolder that stays is kept and not selectable; a folder to remove that holds only untracked OS clutter stops the Apply before any write (a deliberate exception to skipping untracked clutter: cAdtree never deletes it, so the user deletes it or unticks the folder); recovery undoes folder changes too. Case-only renames stay blocked at review.
+- Apply reviews folder changes like files (2026-11-15, #80–#81): folders added or removed between base and source are rows (pre-selected in Bring back); a removal whose folder would still hold files or a subfolder that stays is kept and not selectable; a folder to remove that holds only untracked OS clutter or temporary or lock files stops the Apply before any write (a deliberate exception to skipping untracked clutter: cAdtree never deletes it, so the user deletes it or unticks the folder); recovery undoes folder changes too. Case-only renames stay blocked at review.
 - Hide case (2026-11-19, #109; replaces archive): design cases can be hidden and unhidden (whole cases only, never Main; allowed with unsaved changes after a warning, which stay in the case's folder), never auto-deleted; a hidden case is read-only and leaves the graph and the Explorer unless Show hidden cases is on. Duplicated IDs become read-only, never merged.
 - Discarded copies (2026-11-19, #111): what Discard or Get this version replaces is kept in `projects/<P>/Discarded/<date time>/` (with `_DISCARDED cAdtree.txt`) and never deleted by cAdtree; a copy whose path is too long stays inside the vault only and is listed.
 

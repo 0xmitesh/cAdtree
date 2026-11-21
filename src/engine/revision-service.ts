@@ -252,7 +252,7 @@ export async function captureUnderLock(
   if (freshScan.errors.length > 0) {
     const firstErr = freshScan.errors[0];
     throw new Error(
-      `Nothing was saved because a file could not be read (${firstErr.path}): ${firstErr.error}`
+      `Nothing was saved because a file could not be read (${firstErr.path}): ${firstErr.error.replace(/\.$/, '')}. If it is open in another app, close it there, then try again.`
     );
   }
 
@@ -395,7 +395,7 @@ export async function captureUnderLock(
 
   if (postCaptureInventory.errors.length > 0) {
     throw new Error(
-      `Nothing was saved because the file "${postCaptureInventory.errors[0].path}" became unreadable while saving.`
+      `Nothing was saved because the file "${postCaptureInventory.errors[0].path}" became unreadable while saving. If it is open in another app, close it there, then try again.`
     );
   }
 
