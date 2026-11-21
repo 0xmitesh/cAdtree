@@ -248,7 +248,7 @@ export function CompareRevisionsDialog({
         {caseVsMain && fromId === initialFromId && toId === inspectedId ? (
           <p className="small" data-testid="compare-with-main-note">
             Shows how {caseVsMain} differs from Main. If Main changed after{" "}
-            {caseVsMain} started, those changes show up here too.
+            {caseVsMain} started, those changes show up here too, the other way round.
           </p>
         ) : null}
         <div className="comparison-selectors">

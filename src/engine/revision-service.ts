@@ -94,7 +94,7 @@ export async function captureRevision(
 ): Promise<CaptureRevisionResult> {
   const cleanSummary = input.summary.trim();
   if (!cleanSummary) {
-    throw new Error('Version summary is required.');
+    throw new Error('Say what changed in one line.');
   }
 
   await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Saved versions folder');
@@ -140,7 +140,7 @@ export async function captureUnderLock(
   assertHoldsProjectWriterLock(lock, projectId);
   const cleanSummary = input.summary.trim();
   if (!cleanSummary) {
-    throw new Error('Version summary is required.');
+    throw new Error('Say what changed in one line.');
   }
   if (input.expectedSnapshot) assertValidSnapshot(input.expectedSnapshot);
   // Files the caller expects to save count as tracked, so listed OS clutter is kept.

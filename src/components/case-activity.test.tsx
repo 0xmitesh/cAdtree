@@ -58,7 +58,7 @@ test("the design cases panel has no Saved activity and divergence section; Compa
   // From = Main, To = the case: Added / Modified / Deleted describe what the case changed.
   assert.match(
     within(dialog).getByTestId("compare-with-main-note").textContent!,
-    /Shows how Alternative differs from Main\. If Main changed after Alternative started, those changes show up here too\./,
+    /Shows how Alternative differs from Main\. If Main changed after Alternative started, those changes show up here too, the other way round\./,
   );
   // Choosing other endpoints (here: Swap) removes the line, because it would no longer be true.
   fireEvent.click(within(dialog).getByRole("button", { name: /Swap/ }));
