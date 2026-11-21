@@ -45,6 +45,16 @@ export function caseWriteBlock(
       ? `Case lifecycle records are unavailable. Inspect the kept lifecycle records before writing. ${lifecycle.error ?? ""}`
       : undefined;
 }
+/** Why a case cannot even be opened. A hidden case opens read-only (looking is allowed);
+ * only unreadable lifecycle records stop it. */
+export function caseOpenBlock(
+  state: VaultState,
+  branchId: string,
+): string | undefined {
+  return caseLifecycle(state, branchId).status === "unavailable"
+    ? caseWriteBlock(state, branchId)
+    : undefined;
+}
 export function assertCaseWritable(state: VaultState, branchId: string) {
   const reason = caseWriteBlock(state, branchId);
   if (reason) throw new Error(reason);

@@ -29,7 +29,7 @@ import { FilePathShortcutsProvider } from "./components/FilePathShortcuts";
 import { joinAddress } from "./engine/path-budget";
 import { enableComponentTracking } from './engine/component-identity';
 import { requestApplicationWriteAccess } from "./engine/application-service";
-import { assertCaseWritable } from "./engine/case-lifecycle";
+import { caseOpenBlock } from "./engine/case-lifecycle";
 import { type WorkingFolderBindings } from "./engine/branch-state";
 import {
   MAIN_BRANCH_ID,
@@ -151,6 +151,9 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     useState<FileSystemDirectoryAdapter | null>(null);
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
   const [activeBranchId, setActiveBranchId] = useState(MAIN_BRANCH_ID);
+  // The one "Show hidden cases" switch for History and every Explorer. Session only, off by default;
+  // WorkspaceTree turns it off when no hidden case is left.
+  const [showHiddenCases, setShowHiddenCases] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   // The last check of the files failed (quiet "Couldn't check files" line); cleared by the next successful scan.
   const [checkFailed, setCheckFailed] = useState(false);
@@ -633,8 +636,11 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     requestedBranchId?: string,
   ) => {
     if (!context.current()) return;
-    if (requestedBranchId)
-      assertCaseWritable(project.vaultState, requestedBranchId);
+    if (requestedBranchId) {
+      // A hidden case opens read-only; only unreadable lifecycle records stop it.
+      const openBlock = caseOpenBlock(project.vaultState, requestedBranchId);
+      if (openBlock) throw new Error(openBlock);
+    }
     if (
       requestedBranchId &&
       !project.vaultState.branches.some(
@@ -1268,6 +1274,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     activeBranchId,
     projectView,
     busy,
+    showHiddenCases,
+    onShowHiddenCasesChange: setShowHiddenCases,
     onWorkspace: async (entry) => {
       if (entry.key !== managedWorkspaceKey)
         await openHomeEntry(entry);
@@ -1432,6 +1440,8 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   vaultDir={vaultDir}
                   workingDir={workingDir}
                   activeBranchId={activeBranchId}
+                  showHiddenCases={showHiddenCases}
+                  onShowHiddenCasesChange={setShowHiddenCases}
                   activeTab={activeTab}
                   managedProject={managedProject}
                   workspace={workspace}

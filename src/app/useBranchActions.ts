@@ -1,4 +1,4 @@
-import { assertCaseWritable } from "../engine/case-lifecycle";
+import { caseOpenBlock } from "../engine/case-lifecycle";
 import { FolderAccessError } from "../utils/folder-access";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { CreateBranchParams } from "../components/CreateBranchDialog";
@@ -96,7 +96,9 @@ export function useBranchActions({
       applyVaultState(state);
       if (!state.branches.some((b) => b.branchId === branchId))
         throw new Error("Selected case is missing. Reopen the project.");
-      assertCaseWritable(state, branchId);
+      // A hidden case opens read-only; every write to it is still refused.
+      const openBlock = caseOpenBlock(state, branchId);
+      if (openBlock) throw new Error(openBlock);
       setActiveBranchId(branchId);
       if (outcome) outcome.switched = true;
       setWorkingDir(null);
@@ -179,7 +181,7 @@ export function useBranchActions({
           // Hidden or unhidden: update the Map's case status.
           refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
           const name = result.state.branches.find((branch) => branch.branchId === branchId)?.name;
-          message = `${status === "archived" ? `Hid ${name}. Turn on Show hidden cases in History or Explorer to see it again.` : `${name} is shown again.`} ${result.warning ?? ""}`.trim();
+          message = `${status === "archived" ? `Hid ${name}. Turn on Show hidden cases in History or Explorer to see it again; it then opens to look at, not to change.` : `${name} is shown again.`} ${result.warning ?? ""}`.trim();
           if (context.current()) {
             applyVaultState(result.state);
             if (!hidingWorkingCase) setStatusBanner({ type: "success", message });

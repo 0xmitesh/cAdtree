@@ -5,13 +5,14 @@ import { DesignCases } from "../components/DesignCases";
 import { DiagnosticsView } from "../components/DiagnosticsView";
 import { HistoryRecoveryView } from "../components/HistoryRecoveryView";
 import { ProjectContextHeader } from "../components/ProjectContextHeader";
+import { Notice } from "../components/ui";
 import { ReferencesView } from "../components/ReferencesView";
 import {
   applicationCaptureBlock,
   branchApplications,
   isFinishedOperation,
 } from "../engine/application-records";
-import { caseWriteBlock } from "../engine/case-lifecycle";
+import { caseLifecycle, caseWriteBlock } from "../engine/case-lifecycle";
 import { componentWriteBlock } from "../engine/component-identity";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import { joinAddress } from "../engine/path-budget";
@@ -44,6 +45,9 @@ export type ProjectViewsProps = {
   vaultDir: FileSystemDirectoryAdapter;
   workingDir: FileSystemDirectoryAdapter | null;
   activeBranchId: string;
+  /** The one "Show hidden cases" switch, shared with the Explorer. */
+  showHiddenCases: boolean;
+  onShowHiddenCasesChange: (show: boolean) => void;
   activeTab: ActiveTab;
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
@@ -108,6 +112,8 @@ export function ProjectViews({
   vaultDir,
   workingDir,
   activeBranchId,
+  showHiddenCases,
+  onShowHiddenCasesChange,
   activeTab,
   managedProject,
   workspace,
@@ -202,6 +208,13 @@ export function ProjectViews({
         activeBranchId={activeBranchId}
         showWorkingCase={activeTab !== 'references'}
       />
+      {caseLifecycle(vaultState, activeBranchId).status === "archived" ? (
+        <div className="page hidden-case-notice">
+          <Notice type="info">
+            This case is hidden, so you can look but not change it. Unhide it in History → Design cases to work on it again.
+          </Notice>
+        </div>
+      ) : null}
       <ApplicationStatus
         key={`${vaultState.project.projectId}:${activeBranchId}`}
         state={vaultState}
@@ -286,6 +299,8 @@ export function ProjectViews({
       </div>
       <div hidden={activeTab !== "history"}>
         <HistoryRecoveryView
+          showHiddenCases={showHiddenCases}
+          onShowHiddenCasesChange={onShowHiddenCasesChange}
           caseControls={(showHidden) => (
             <DesignCases
               state={vaultState}

@@ -44,6 +44,9 @@ import { getBranchBaseline } from "../engine/branch-state";
 export interface HistoryRecoveryViewProps {
   /** The Design cases panel; it gets the "Show hidden cases" switch's value. */
   caseControls?: ReactNode | ((showHidden: boolean) => ReactNode);
+  /** The one "Show hidden cases" switch, shared with the Explorer (kept by App). Without a setter the switch is not offered. */
+  showHiddenCases?: boolean;
+  onShowHiddenCasesChange?: (show: boolean) => void;
   onRetrieveReference?: (referenceId: string, versionId: string) => Promise<void>;
   onExportForReview?: ExportReviewAction;
   isExporting?: boolean;
@@ -84,15 +87,12 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
     onVerifySingleRevisionObjects,
     onCancelOperation,
   } = props;
-  const [showHidden, setShowHidden] = useState(false);
+  const showHidden = props.showHiddenCases ?? false;
+  const setShowHidden = props.onShowHiddenCasesChange;
   const hasHiddenCases = vaultState.branches.some(
     (branch) =>
       !branch.isMain && caseLifecycle(vaultState, branch.branchId).status === "archived",
   );
-  // The switch disappears with the last hidden case; start from "off" when one is hidden again.
-  useEffect(() => {
-    if (!hasHiddenCases) setShowHidden(false);
-  }, [hasHiddenCases]);
   const fullGraph = useMemo(
     () =>
       layoutRevisions(vaultState, activeBranchId, {
@@ -282,7 +282,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           </div>
         </div>
         <div className="project-heading-controls">
-          {hasHiddenCases ? (
+          {hasHiddenCases && setShowHidden ? (
             <label className="history-hidden-toggle">
               <input
                 type="checkbox"
