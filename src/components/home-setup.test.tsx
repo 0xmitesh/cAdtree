@@ -255,10 +255,13 @@ test("configured homes provide one-click descendant copies and one canonical add
       name: "Settings",
     }),
   );
+  // Settings is showing, and with a home there is no separate workspace location to configure.
+  assert.ok(ui.getByRole("heading", { name: /^Settings/ }));
   assert.equal(
     ui.queryByRole("button", { name: "Configure path shortcuts" }),
     null,
   );
+  assert.equal(ui.queryByText("Local workspace location"), null);
   assert.equal(picked.calls(), 1);
   assert.equal(
     await getWorkspacePath(home.identity.homeId),

@@ -500,7 +500,6 @@ test("Save now fills the normal save once per request: summary, and Why with the
       workingFolderName="main"
       vaultFolderName="Vault"
       scanResult={scan}
-      isScanStale={false}
       isScanning={false}
       isCapturing={false}
       progress={null}

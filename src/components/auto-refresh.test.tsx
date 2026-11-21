@@ -1,6 +1,6 @@
 import "../../tests/dom";
 import { indexedDB } from "fake-indexeddb";
-import test, { afterEach } from "node:test";
+import test, { afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import App from "../App";
@@ -260,6 +260,45 @@ test("a focus soon after the last run is postponed to the end of the interval, n
   }
 });
 
+test("time passing alone never marks the result as out of date", async () => {
+  const { ui } = await openSample();
+  const strip = () => ui.container.querySelector("[data-scanned-at]")!.textContent!;
+  assert.match(strip(), /Up to date/);
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await act(async () => { mock.timers.tick(60_000); });
+  } finally {
+    mock.timers.reset();
+  }
+  assert.match(strip(), /Up to date/);
+  assert.doesNotMatch(strip(), /Not checked since/);
+});
+
+test("while a check is running the strip does not claim 'Up to date'", () => {
+  const scan: ScanResult = { scannedAt: new Date(100_000).toISOString(), branchId: "branch-main", baselineRevisionId: null, baselineDisplayNumber: null, added: [], modified: [], deleted: [], unchanged: [], directories: [], addedDirectories: [], deletedDirectories: [], errors: [], hasChanges: false, canCapture: false, totalBytes: 0, changesSignature: "" };
+  const ui = render(
+    <ChangesCaptureView
+      vaultState={scenarioState("single")}
+      activeBranchId="branch-main"
+      workingFolderName="CAD working"
+      vaultFolderName="Vault"
+      scanResult={scan}
+      isScanning={false}
+      isChecking
+      isCapturing={false}
+      progress={null}
+      statusBanner={null}
+      onScan={async () => {}}
+      onCapture={async () => {}}
+      onCancelOperation={() => {}}
+      onReattachWorkingFolder={async () => {}}
+    />,
+  );
+  const text = ui.container.querySelector("[data-scanned-at]")!.textContent!;
+  assert.match(text, /Checking files/);
+  assert.doesNotMatch(text, /Up to date/);
+});
+
 test("a check that cannot read the folder marks the result as not up to date, quietly, with a Retry that works", async () => {
   const { sample, ui } = await openSample();
   sample.home.setHooks({ readPermission: "prompt" });
@@ -284,7 +323,6 @@ test("with no result yet, a failed check says so and offers Retry instead of 'Sc
       workingFolderName="CAD working"
       vaultFolderName="Vault"
       scanResult={null}
-      isScanStale={false}
       isScanning={false}
       isChecking={false}
       checkFailed

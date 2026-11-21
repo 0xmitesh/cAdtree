@@ -84,9 +84,7 @@ export function AppNotices({
               /></>
             ) : null}
             {statusBanner.type === "error" &&
-            /permission|reconnect|access|notallowed/i.test(
-              statusBanner.message,
-            ) &&
+            statusBanner.reconnect &&
             projectView ? (
               <button
                 className="text-button"

@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import { FolderAccessError } from "../utils/folder-access";
 import {
   replaceWorkingFiles,
   requestApplicationWriteAccess,
@@ -91,7 +92,7 @@ export function useGetVersionActions({
   const check = async (revisionId: string, path: string): Promise<GetVersionCheck> => {
     const folder = working();
     if (!vaultDir || !folder)
-      throw new Error("Reconnect the working folder to get this version.");
+      throw new FolderAccessError("Reconnect the working folder to get this version.");
     const result = await perform(
       "apply",
       async (context) => {

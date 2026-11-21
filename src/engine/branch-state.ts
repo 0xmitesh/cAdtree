@@ -1,5 +1,5 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
-import { validateDirectoryIsolation } from "./fs-adapter";
+import { FolderAccessError, validateDirectoryIsolation } from "./fs-adapter";
 import type { RevisionManifest, VaultState } from "./types";
 import {
   comparisonEndpoint,
@@ -207,7 +207,7 @@ export async function validateWorkingFolderBindings(
     }
     if (!dir || !readable) {
       if (requireAll)
-        throw new Error(
+        throw new FolderAccessError(
           `Reconnect the working folder for "${branch.name}" to verify folder isolation. Select that case, then Connect folder.`,
         );
       continue;

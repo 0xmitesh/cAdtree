@@ -4,7 +4,7 @@ import type { VaultState } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { Modal, Notice } from "./ui";
 import type { ResolveFilePath } from "../utils/folder-path";
-import { CopyFolderPathButton, WorkspaceLocationSetting } from "./FilePathShortcuts";
+import { CopyFolderPathButton } from "./FilePathShortcuts";
 
 export interface DiagnosticsViewProps {
   vaultState: VaultState;
@@ -18,6 +18,8 @@ export interface DiagnosticsViewProps {
   missingConnections?: string[];
   /** Resolves the active case's working folder for the full-address copy. */
   resolveFolderPath?: ResolveFilePath;
+  /** Why the offline guide files could not be updated last time (plain words), or null. */
+  guideProblem?: string | null;
 }
 export function DiagnosticsView({
   vaultState: state,
@@ -29,6 +31,7 @@ export function DiagnosticsView({
   onReattachWorkingFolder,
   missingConnections = [],
   resolveFolderPath,
+  guideProblem = null,
 }: DiagnosticsViewProps) {
   const [troubleshootingOpen, setTroubleshootingOpen] = useState(false);
   const troubleshootingSummary = useRef<HTMLElement>(null);
@@ -100,6 +103,11 @@ export function DiagnosticsView({
         </div>
       </div>
       {error ? <Notice type="error">{error}</Notice> : null}
+      {guideProblem ? (
+        <Notice>
+          The offline guide couldn’t be updated: {guideProblem}. It will try again after your next save.
+        </Notice>
+      ) : null}
       <section className="panel">
         <div className="panel-heading">
           <h2>Folder connections</h2>
@@ -118,7 +126,6 @@ export function DiagnosticsView({
             {workingFolderRow(false)}
           </>
         )}
-        <WorkspaceLocationSetting />
       </section>
       {hasRecordIssues ? (
         <p className="settings-attention" role="status">

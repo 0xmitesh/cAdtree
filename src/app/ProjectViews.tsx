@@ -27,6 +27,7 @@ import type { useCaptureActions } from "./useCaptureActions";
 import type { useDiagnosticsActions } from "./useDiagnosticsActions";
 import type { useDiscardActions } from "./useDiscardActions";
 import type { DiscardController } from "../components/DiscardDialog";
+import { useGuideProblem } from "./offline-guide-refresh";
 import type { useReferenceActions } from "./useReferenceActions";
 import type { useReviewActions } from "./useReviewActions";
 
@@ -48,9 +49,10 @@ export type ProjectViewsProps = {
   workspace: WorkspaceState | null;
   managedWorkspaceKey: string | null;
   workspaceBudgetAddress: string | undefined;
+  /** The open home's folder, for the offline guide notice in Settings. */
+  homeRoot?: FileSystemDirectoryAdapter | null;
   draftCache: Map<string, CaptureDraft>;
   scanResult: ScanResult | null;
-  isScanStale: boolean;
   isScanning: boolean;
   isChecking: boolean;
   isCapturing: boolean;
@@ -111,9 +113,9 @@ export function ProjectViews({
   workspace,
   managedWorkspaceKey,
   workspaceBudgetAddress,
+  homeRoot,
   draftCache,
   scanResult,
-  isScanStale,
   isScanning,
   isChecking,
   isCapturing,
@@ -155,6 +157,7 @@ export function ProjectViews({
   onEnableComponentTracking,
   onPrepareWrite,
 }: ProjectViewsProps) {
+  const guideProblem = useGuideProblem(workspace?.root, managedProject?.record.containerPath, homeRoot);
   // The Undo link asks for Bring back: show History, where its dialog opens. A
   // request made before this view mounted is not replayed.
   const bringBackNonce = bringBackRequest?.nonce;
@@ -239,7 +242,6 @@ export function ProjectViews({
                 ? scanResult
                 : null
             }
-            isScanStale={isScanStale}
             isScanning={isScanning}
             isChecking={isChecking && branch.branchId === activeBranchId}
             checkFailed={checkFailed && branch.branchId === activeBranchId}
@@ -377,6 +379,7 @@ export function ProjectViews({
           onReattachWorkingFolder={handleReattachWorkingFolder}
           missingConnections={missingConnections}
           resolveFolderPath={workingFolderResolver(activeBranchId)}
+          guideProblem={guideProblem}
         />
       </div>
     </>

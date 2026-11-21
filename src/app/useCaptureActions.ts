@@ -1,4 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { FolderAccessError } from "../utils/folder-access";
 import type { AuthSnapshot } from "../auth/firebase-auth";
 import type { IdentityReview } from "../engine/component-identity";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
@@ -24,6 +25,8 @@ export type UseCaptureActionsArgs = {
   activeBranchId: string;
   managedProject: ManagedProject | null;
   workspace: WorkspaceState | null;
+  /** The open home's folder: its guide is refreshed after a save too, so an earlier failure there can clear. */
+  homeRoot?: FileSystemDirectoryAdapter | null;
   authStateRef: RefObject<AuthSnapshot>;
   /** The result on screen; the automatic scan reuses its hashes for files that did not change. */
   scanResult: ScanResult | null;
@@ -49,6 +52,7 @@ export function useCaptureActions({
   activeBranchId,
   managedProject,
   workspace,
+  homeRoot,
   authStateRef,
   scanResult,
   perform,
@@ -132,7 +136,7 @@ export function useCaptureActions({
     applyVaultState(state);
     await validateWorkingFolderBindings(state, vault, folders, false);
     if ((await folder.queryPermission("read")) !== "granted")
-      throw new Error(
+      throw new FolderAccessError(
         "Reconnect the selected case’s working folder to restore read permission.",
       );
     const baseline = getBranchBaseline(state, branchId);
@@ -254,7 +258,7 @@ export function useCaptureActions({
             onProgress: context.progress,
           });
           // The revision is published and its lock released: update the Map and the revision listing.
-          refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject) });
+          refreshGuidesAfter({ project: projectGuideTarget(workspace, managedProject), homeRoot });
           if (!context.current()) return;
           setVaultState(result.vaultState);
           setScanResult(null);

@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
+import { FolderAccessError } from "../utils/folder-access";
 import {
   buildReplacePlan,
   replacePlanHash,
@@ -129,7 +130,7 @@ export function useDiscardActions({
         if (!baseline)
           throw new Error("This case has no saved version yet, so there is nothing to go back to.");
         const working = workingFolders[branchId] ?? workingDir;
-        if (!working) throw new Error("Reconnect the working folder first.");
+        if (!working) throw new FolderAccessError("Reconnect the working folder first.");
         const scan = await scanForReplace(working, branchId, baseline, {
           signal: context.signal,
           onProgress: context.progress,
@@ -173,7 +174,7 @@ export function useDiscardActions({
           );
           if ((await projectFolder.queryPermission("readwrite")) !== "granted" &&
             (await projectFolder.requestPermission("readwrite")) !== "granted")
-            throw new Error("Read/write access to the project folder is required. Nothing was changed.");
+            throw new FolderAccessError("Read/write access to the project folder is required. Nothing was changed.");
           const result = await replaceWorkingFiles(vaultDir!, projectFolder, {
             mode: "discard",
             projectId: review.projectId,

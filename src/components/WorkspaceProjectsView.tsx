@@ -36,7 +36,6 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
   const [error, setError] = useState("");
   const nameHint = projectNameHint(props.workspaceAddress, name);
   const [pickerMessage, setPickerMessage] = useState("");
-  const [choosingLocation, setChoosingLocation] = useState<string | null>(null);
   const run = async (action: () => Promise<void>) => {
     setError("");
     setPickerMessage("");
@@ -138,23 +137,21 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                   {locations.length > 1 || locations[0].status !== "ready" ? (
                     <p className="small">
                       {locations.length > 1
-                        ? DUPLICATE_PROJECT_REASON
+                        ? `${locations.length === 2 ? "Two" : locations.length} folders in this workspace are copies of the same project, so cAdtree opens ${locations.length === 2 ? "neither" : "none of them"} to keep them from getting mixed up. Keep the one you want here and move the other ${locations.length === 2 ? "copy" : "copies"} out of the workspace folder; cAdtree checks again automatically.`
                         : locations[0].status === "incomplete"
                           ? "Unfinished copy · it was kept for inspection; a retry uses a fresh folder"
                           : "Connections or records need attention · Read-only inspection available"}
                     </p>
                   ) : null}
+                  {locations.length > 1
+                    ? locations.map((entry) => (
+                        <p className="file-path small" key={entry.containerPath}>
+                          Folder in this workspace: {entry.containerPath}
+                        </p>
+                      ))
+                    : null}
                 </div>
-                {locations.length > 1 ? (
-                  <button
-                    className="button secondary"
-                    onClick={() =>
-                      setChoosingLocation(choosingLocation === id ? null : id)
-                    }
-                  >
-                    Choose location
-                  </button>
-                ) : locations[0].project ? (
+                {locations.length > 1 ? null : locations[0].project ? (
                   <button
                     className="button secondary"
                     disabled={busy}
@@ -176,44 +173,24 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
                       Project ID: {locations[0].projectId}
                     </p>
                   ) : null}
-                  {locations.map((entry) => (
-                    <p className="file-path" key={entry.containerPath}>
-                      Folder in this workspace: {entry.containerPath}
-                    </p>
-                  ))}
+                  {locations.length === 1
+                    ? locations.map((entry) => (
+                        <p className="file-path" key={entry.containerPath}>
+                          Folder in this workspace: {entry.containerPath}
+                        </p>
+                      ))
+                    : null}
                 </details>
               ) : null}
-              {locations.length > 1 && choosingLocation === id
-                ? locations.map((entry) => (
-                    <div
-                      className="workspace-location"
-                      key={entry.containerPath}
-                    >
-                      <p>
-                        {entry.containerPath} ·{" "}
-                        {entry.status === "ready"
-                          ? "Ready"
-                          : "Needs attention"}
-                      </p>
-                      <button
-                        className="button secondary"
-                        disabled={
-                          busy || !entry.project || entry.status === "duplicate"
-                        }
-                        onClick={() => run(() => props.onOpenProject(entry))}
-                      >
-                        Use this location
-                      </button>
-                    </div>
-                  ))
-                : null}
-              {locations.flatMap((entry) => entry.issues).length ? (
+              {locations.flatMap((entry) => entry.issues).filter((issue) => issue !== DUPLICATE_PROJECT_REASON).length ? (
                 <div className="workspace-issues">
                   {[
                     ...new Set(locations.flatMap((entry) => entry.issues)),
-                  ].map((issue) => (
-                    <p key={issue}>{issue}</p>
-                  ))}
+                  ]
+                    .filter((issue) => issue !== DUPLICATE_PROJECT_REASON)
+                    .map((issue) => (
+                      <p key={issue}>{issue}</p>
+                    ))}
                 </div>
               ) : null}
             </div>

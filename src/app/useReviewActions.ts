@@ -1,4 +1,5 @@
 import type { ExportReviewAction } from "../components/ReviewExportDialog";
+import { FolderAccessError } from "../utils/folder-access";
 import type { WorkingFolderBindings } from "../engine/branch-state";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
 import { retrieveReferenceAttachment } from "../engine/references";
@@ -47,7 +48,7 @@ export function useReviewActions({
   const handleRetrieveReference = async (referenceId: string, versionId: string) => {
     if (!vaultDir || !vaultState) throw new Error('Open a project first.');
     await perform('references', async context => {
-      if (await vaultDir.requestPermission('read') !== 'granted') throw new Error('Allow read access to the project folder, then retrieve the attachment again.');
+      if (await vaultDir.requestPermission('read') !== 'granted') throw new FolderAccessError('Allow read access to the project folder, then retrieve the attachment again.');
       const { version, bytes } = await retrieveReferenceAttachment(vaultDir, vaultState.project.projectId, referenceId, versionId);
       if (!context.current() || context.signal.aborted) throw new Error('Attachment retrieval cancelled.');
       const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }));

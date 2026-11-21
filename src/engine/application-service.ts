@@ -1,4 +1,4 @@
-import type { FileSystemDirectoryAdapter } from "./fs-adapter";
+import { FolderAccessError, type FileSystemDirectoryAdapter } from "./fs-adapter";
 import {
   FileConflictError,
   splitAndValidatePath,
@@ -96,16 +96,16 @@ export async function requestApplicationWriteAccess(
   working: FileSystemDirectoryAdapter | null,
 ) {
   if (!working)
-    throw new Error(
+    throw new FolderAccessError(
       "Reconnect the destination working folder first.",
     );
   for (const folder of [working, vault]) {
     if ((await folder.queryPermission("readwrite")) === "granted") continue;
     try {
       if ((await folder.requestPermission("readwrite")) !== "granted")
-        throw new Error("Permission was not granted.");
+        throw new FolderAccessError("Permission was not granted.");
     } catch (error) {
-      throw new Error(
+      throw new FolderAccessError(
         `Read/write access to "${folder.name}" is required. Try again to renew permission, or reconnect the folder. ${error instanceof Error ? error.message : String(error)}`,
       );
     }
@@ -159,12 +159,12 @@ async function connections(
     : options.workingFolders;
   await validateWorkingFolderBindings(state, vault, bindings);
   const working = bindings[branchId];
-  if (!working) throw new Error("Reconnect the destination working folder.");
+  if (!working) throw new FolderAccessError("Reconnect the destination working folder.");
   if (
     (await working.queryPermission("readwrite")) !== "granted" ||
     (await vault.queryPermission("readwrite")) !== "granted"
   )
-    throw new Error(
+    throw new FolderAccessError(
       "Read/write permission is required for the destination and vault. Reconnect explicitly.",
     );
   return working;
@@ -998,7 +998,7 @@ export async function replaceWorkingFiles(
         "The project folder does not hold this vault. Reopen the project. Nothing was changed.",
       );
     if ((await projectFolder.queryPermission("readwrite")) !== "granted")
-      throw new Error(
+      throw new FolderAccessError(
         "Read/write permission is required for the project folder. Reconnect explicitly.",
       );
     const scan = await scanForReplace(

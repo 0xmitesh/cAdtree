@@ -16,8 +16,12 @@ export function assertFolderAccess() {
   if (reason) throw new Error(reason);
 }
 
+import { FolderAccessError, isFolderAccessError, isPermissionDomError } from '../engine/fs-adapter';
+
+export { FolderAccessError, isFolderAccessError };
+
 export function folderPermissionError(error: unknown): unknown {
-  if (error && typeof error === 'object' && 'name' in error && ['NotAllowedError', 'SecurityError'].includes(String(error.name))) return new Error('Folder access was denied or revoked. Allow local folder access in your browser site settings, then reconnect the Cadtree home or choose the folder again.', { cause: error });
+  if (isPermissionDomError(error)) return new FolderAccessError('Folder access was denied or revoked. Allow local folder access in your browser site settings, then reconnect the Cadtree home or choose the folder again.', { cause: error });
   return error;
 }
 

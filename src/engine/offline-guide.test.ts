@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryFileSystemAdapter } from './fs-adapter';
+import { InMemoryFileSystemAdapter, type FileSystemDirectoryAdapter } from './fs-adapter';
 import { openExistingVault } from './vault-service';
 import { captureRevision } from './revision-service';
 import { copyVerifiedTree } from './copy-service';
@@ -520,4 +520,21 @@ test('workspace discovery is unaffected by the Map in the project folder', async
   assert.equal(state.projects[0]!.status, 'ready');
   const entries = (await (await f.root.getDirectory(f.containerPath.split('/'))).listEntries()).map((e: { name: string }) => e.name);
   assert.ok(entries.includes(MAP));
+});
+
+test('an unexpected error is reported as an error, never thrown; a normal skip carries no error', async () => {
+  const broken = { queryPermission: async () => { throw new Error('boom'); } } as unknown as FileSystemDirectoryAdapter;
+  const realWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const result = await refreshProjectGuide(broken, 'projects/X');
+    assert.equal(result.status, 'skipped');
+    assert.equal(result.error, 'boom');
+    const readOnly = { queryPermission: async () => 'prompt' } as unknown as FileSystemDirectoryAdapter;
+    const quiet = await refreshProjectGuide(readOnly, 'projects/X');
+    assert.equal(quiet.status, 'skipped');
+    assert.equal(quiet.error, undefined);
+  } finally {
+    console.warn = realWarn;
+  }
 });

@@ -29,6 +29,8 @@ export type StatusBanner = {
   action?: { label: string; run: () => void };
   /** A Copy path button for a folder named in the message (e.g. the Discarded copy). */
   copyFolder?: { label: string; resolve: ResolveFilePath };
+  /** The error was a folder-access problem (see FolderAccessError): offer Reconnect workspace. */
+  reconnect?: boolean;
 };
 
 export type PendingHome = {

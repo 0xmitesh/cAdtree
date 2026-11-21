@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ProgressUpdate } from "../engine/types";
-import { folderPermissionError } from "../utils/folder-access";
+import { folderPermissionError, isFolderAccessError } from "../utils/folder-access";
 import { presentPathBudgetError } from "../utils/path-budget-message";
 import { ProjectRenamedNotice } from "./project-lookup";
 import type { ActiveTab, BannerScope, Context, Operation, StatusBanner } from "./types";
@@ -66,6 +66,7 @@ export function useOperation({
     try {
       return await action(context);
     } catch (error) {
+      const reconnect = isFolderAccessError(error);
       error = folderPermissionError(error);
       // Over the path limit: the same wording in the banner and in any dialog that shows the rethrown error.
       error = presentPathBudgetError(error);
@@ -77,6 +78,7 @@ export function useOperation({
               ? "info"
               : "error",
           message: error instanceof Error ? error.message : String(error),
+          ...(reconnect ? { reconnect: true } : {}),
         });
       if (rethrow) throw error;
     } finally {

@@ -231,7 +231,6 @@ function changesView(discard?: DiscardController) {
       workingFolderName="main"
       vaultFolderName="vault"
       scanResult={scan}
-      isScanStale={false}
       isScanning={false}
       isCapturing={false}
       progress={null}

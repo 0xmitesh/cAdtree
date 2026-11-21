@@ -136,7 +136,6 @@ function Preview() {
               workingFolderName="Linear actuator — Working"
               vaultFolderName="Actuator vault"
               scanResult={scan}
-              isScanStale={true}
               isScanning={false}
               isCapturing={false}
               progress={null}

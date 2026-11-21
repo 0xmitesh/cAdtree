@@ -1,4 +1,5 @@
 import { assertCaseWritable } from "../engine/case-lifecycle";
+import { FolderAccessError } from "../utils/folder-access";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { CreateBranchParams } from "../components/CreateBranchDialog";
 import type { WorkingFolderBindings } from "../engine/branch-state";
@@ -160,7 +161,7 @@ export function useBranchActions({
             (await vaultDir.queryPermission("readwrite")) !== "granted" &&
             (await vaultDir.requestPermission("readwrite")) !== "granted"
           )
-            throw new Error(
+            throw new FolderAccessError(
               "Write access to the project is required to hide or unhide a case.",
             );
           const result = await changeCaseLifecycle(

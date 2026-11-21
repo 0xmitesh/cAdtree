@@ -807,6 +807,8 @@ export interface GuideRefreshResult {
   status: 'written' | 'partial' | 'skipped';
   /** Why nothing was written (status 'skipped' only). */
   reason?: string;
+  /** Set (status 'skipped') when the refresh was cut short by an error, not by a normal reason such as a read-only project. */
+  error?: string;
   /** Paths relative to the folder that was refreshed (the project folder, or the home folder) that were written and read back correctly. */
   written: string[];
   failed: { path: string; error: string }[];
@@ -869,7 +871,7 @@ export async function refreshProjectGuide(
   } catch (error) {
     const reason = errorText(error);
     console.warn(`cAdtree offline guide: could not refresh ${containerPath}: ${reason}`);
-    return { status: 'skipped', reason: `The project could not be read: ${reason}`, written: [], failed: [] };
+    return { status: 'skipped', reason: `The project could not be read: ${reason}`, error: reason, written: [], failed: [] };
   }
 }
 
@@ -989,7 +991,7 @@ export async function refreshHomeGuide(
   } catch (error) {
     const reason = errorText(error);
     console.warn(`cAdtree offline guide: could not refresh the home guide: ${reason}`);
-    return { status: 'skipped', reason: `The home could not be read: ${reason}`, written: [], failed: [] };
+    return { status: 'skipped', reason: `The home could not be read: ${reason}`, error: reason, written: [], failed: [] };
   }
 }
 
