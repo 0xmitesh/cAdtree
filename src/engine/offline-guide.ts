@@ -582,7 +582,7 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   steps(doc, 'Create a design case', [
     'Choose History and select the saved version to start from.',
     'Choose Create design case from this version.',
-    'Enter a Case name and a Why (the reason for the case), then choose Create design case.',
+    'Enter a Case name and, if you like, a Why (the reason for the case), then choose Create design case.',
     'cAdtree makes a new folder for the case under working/ with every file of that version. Open that folder in ' +
       'your CAD program. To work on the case, select it under the project in the Explorer.',
   ]);

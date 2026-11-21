@@ -71,6 +71,7 @@ function visibleChanges(container: HTMLElement) {
 async function createFromUI(
   ctx: Awaited<ReturnType<typeof setup>>,
   name: string,
+  why: string | null = `Explore ${name}`,
 ) {
   fireEvent.click(ctx.ui.getByRole("button", { name: "History" }));
   fireEvent.click(
@@ -85,10 +86,10 @@ async function createFromUI(
   fireEvent.change(dialog.getByRole("textbox", { name: "Case name" }), {
     target: { value: name },
   });
-  fireEvent.change(
-    dialog.getByRole("textbox", { name: "Why" }),
-    { target: { value: `Explore ${name}` } },
-  );
+  const whyBox = dialog.getByRole("textbox", { name: "Why" }) as HTMLTextAreaElement;
+  assert.equal(whyBox.required, false);
+  assert.equal(whyBox.placeholder, "Optional: why are you trying this?");
+  if (why !== null) fireEvent.change(whyBox, { target: { value: why } });
   fireEvent.click(dialog.getByRole("button", { name: "Create design case" }));
   await waitFor(() => assert.ok(!ctx.ui.queryByRole("dialog")));
   const state = await openExistingVault(ctx.vault);
@@ -282,6 +283,15 @@ test("App creates cases, preserves Main and case notes, and keeps graph highligh
   await selectBranch(ctx.ui, "branch-main");
   await waitFor(() => assert.equal(appBusy(ctx.ui), false));
   assert.ok(ctx.ui.getByText("Records and file contents checked"));
+});
+
+test("Create design case works without a Why and still stores one when given", async () => {
+  const ctx = await setup();
+  const without = await createFromUI(ctx, "Quiet case", null);
+  assert.equal(without.reason, "");
+  assert.equal(ctx.ui.queryByRole("alert"), null);
+  const withWhy = await createFromUI(ctx, "Loud case", "Try a thicker wall");
+  assert.equal(withWhy.reason, "Try a thicker wall");
 });
 
 test("App rejects case switching during an asynchronous scan", async () => {

@@ -69,10 +69,6 @@ export function CreateBranchDialog({
             setError("A design case with that name already exists.");
             return;
           }
-          if (!reason.trim()) {
-            setError("Add a short reason.");
-            return;
-          }
           try {
             await onCreate({
               sourceRevisionId: source.revisionId,
@@ -104,10 +100,9 @@ export function CreateBranchDialog({
           <label className="field">
             <span>Why</span>
             <textarea
-              required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="What design question will this case explore?"
+              placeholder="Optional: why are you trying this?"
             />
           </label>
           <p className="managed-destination">

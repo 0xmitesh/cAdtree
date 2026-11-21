@@ -23,6 +23,7 @@ import {
 } from "./recovery-service";
 import { getObjectPathSegments } from "./object-store";
 import { hashString } from "./hash";
+import { buildProjectMap } from "./offline-guide";
 import { layoutRevisions } from "../history/layout";
 import { MAIN_BRANCH_ID, type BranchRecord } from "./types";
 
@@ -475,6 +476,28 @@ test("name validation is case-insensitive, normalized, and rechecked under the p
   ) as PromiseRejectedResult;
   assert.match(rejected.reason.message, /already exists/);
   assert.equal((await openExistingVault(vault)).branches.length, 2);
+});
+
+test("a case can be created without a reason (it stores an empty one); a given reason is still stored", async () => {
+  const { create, vault, workingFolders } = await setup();
+  const plain = await create("No reason", undefined, { reason: "" });
+  workingFolders[plain.branch.branchId] = plain.workingDir;
+  assert.equal(plain.branch.reason, "");
+  const blank = await create("Blank reason", undefined, { reason: "   " });
+  workingFolders[blank.branch.branchId] = blank.workingDir;
+  assert.equal(blank.branch.reason, "");
+  const given = await create("With reason", undefined, { reason: "  Try a wider flange  " });
+  assert.equal(given.branch.reason, "Try a wider flange");
+  const state = await openExistingVault(vault);
+  assert.equal(state.corruptedRecords.length, 0);
+  assert.deepEqual(
+    ["No reason", "Blank reason", "With reason"].map((n) => state.branches.find((b) => b.name === n)?.reason),
+    ["", "", "Try a wider flange"],
+  );
+  // The offline Map copes with an empty reason.
+  const map = buildProjectMap({ generatedAt: "2026-11-21T10:00:00.000Z", projectName: "P", projectFolder: "P", state, workingLeaves: {} });
+  assert.match(map, /Reason: \(none\)/);
+  assert.match(map, /Reason: Try a wider flange/);
 });
 
 test("creation and capture serialize on one writer lock; cancellation while queued publishes nothing", async () => {

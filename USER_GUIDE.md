@@ -78,7 +78,7 @@ cAdtree skips untracked OS-generated files when scanning a working folder: `.DS_
 
 ## Work with cases
 
-Select a saved version in History and choose **Create design case from this version**. For a managed project, enter only a name and Why. cAdtree allocates the working folder automatically, restores and verifies the full baseline, saves its portable binding, and activates the case. Creation adds no version.
+Select a saved version in History and choose **Create design case from this version**. For a managed project, enter a name and, if you like, a **Why** (optional, but it helps you remember what the case was for). cAdtree allocates the working folder automatically, restores and verifies the full baseline, saves its portable binding, and activates the case. Creation adds no version.
 
 Use the **Explorer** to select the case. Open that case's displayed folder in the app you use. Selecting a case never replaces another folder's files or changes which files are open.
 

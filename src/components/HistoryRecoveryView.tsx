@@ -340,7 +340,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
           ) : (
             <span>Starting version is unavailable. Saving is blocked.</span>
           )}
-          <p>{activeBranch.reason}</p>
+          {activeBranch.reason.trim() ? <p>{activeBranch.reason}</p> : null}
         </section>
       ) : null}
       {props.operationsBlockedReason ? (
