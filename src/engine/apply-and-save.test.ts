@@ -312,3 +312,34 @@ test("the reason is optional: an empty reason gives a ready plan, a valid record
   assert.equal(op.status, "captured");
   assert.equal(op.record!.plan.reason, "");
 });
+
+test("an unreadable untracked lock file in the destination neither blocks nor strands Bring back or Copy", async () => {
+  const f = await project();
+  await f.w(f.main, "~$A.txt", "owner");
+  f.main.markFileUnreadable(["~$A.txt"]);
+  const result = await applyAndSave(f.vault, await f.review(f.r1.revisionId, "revert"), f.options);
+  assert.equal(result.status, "saved");
+  assert.equal(await f.main.readFileText(["A.txt"]), "a1");
+  assert.equal((await f.ops()).at(-1)!.status, "captured");
+  assert.ok(!(await openExistingVault(f.vault)).revisions.at(-1)!.manifest.files.some((x) => x.path === "~$A.txt"));
+  // Copy files from a case, with the lock file still unreadable.
+  const created = await createDesignBranch({
+    vaultDir: f.vault, destinationParent: f.cases, workingFolders: f.folders,
+    sourceRevisionId: f.r2.revisionId, name: "Lighter collar", reason: "Try",
+  });
+  f.folders[created.branch.branchId] = created.workingDir;
+  await f.w(created.workingDir, "Keep.txt", "case keep");
+  const caseRev = (await f.save(created.workingDir, created.branch.branchId, "Case change")).revision.manifest;
+  const copied = await applyAndSave(f.vault, await f.review(caseRev.revisionId, "merge"), f.options);
+  assert.equal(copied.status, "saved");
+  assert.equal(await f.main.readFileText(["Keep.txt"]), "case keep");
+});
+
+test("an unreadable tracked file still refuses Bring back before any write", async () => {
+  const f = await project();
+  f.main.markFileUnreadable(["Keep.txt"]);
+  const before = await f.main.readFileText(["A.txt"]);
+  await assert.rejects(applyAndSave(f.vault, await f.review(f.r1.revisionId, "revert"), f.options), /Keep\.txt/);
+  assert.equal(await f.main.readFileText(["A.txt"]), before);
+  assert.equal((await f.ops()).length, 0);
+});

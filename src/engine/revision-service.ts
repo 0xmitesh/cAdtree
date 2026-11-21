@@ -252,7 +252,7 @@ export async function captureUnderLock(
   if (freshScan.errors.length > 0) {
     const firstErr = freshScan.errors[0];
     throw new Error(
-      `Nothing was saved because a file could not be read (${firstErr.path}): ${firstErr.error} If it is open in another app, close it there, then try again.`
+      `Nothing was saved because a file could not be read (${firstErr.path}): ${firstErr.error.replace(/\.$/, '')}. If it is open in another app, close it there, then try again.`
     );
   }
 

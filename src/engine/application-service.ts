@@ -235,7 +235,7 @@ async function cleanDestination(
   );
   if (blocked.length)
     throw new Error(
-      `An untracked system or temporary file ${blocked.map((a) => a.path).join(", ")} exists at this path in the destination; remove it or save it first. No working files were changed.`,
+      `An untracked system or temporary file ${blocked.map((a) => a.path).join(", ")} is in the way at this path in the destination. Remove or rename it, then try again. No working files were changed.`,
     );
   if (scan.hasChanges)
     throw new Error(
@@ -748,13 +748,12 @@ export async function applyUnderLock(
       );
     await cleanDestination(working, reloaded, review, options);
     await writeOperation(vault, working, op, options);
-    const rawResult = await readVerifiedInventory(working, options);
+    const resultPaths = new Set(plan.resultFiles.map((f) => f.path));
+    // An unreadable untracked lock or temp file never blocks the check, as in a scan.
+    const rawResult = await readVerifiedInventory(working, options, resultPaths);
     const result = {
       ...rawResult,
-      files: partitionSystemFiles(
-        rawResult.files,
-        new Set(plan.resultFiles.map((f) => f.path)),
-      ).files,
+      files: partitionSystemFiles(rawResult.files, resultPaths).files,
     };
     if (
       inventorySignature(result) !==

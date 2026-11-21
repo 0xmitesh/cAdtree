@@ -838,7 +838,7 @@ test("a version that tracks .DS_Store still creates a case, applies and exports 
   await main.writeFileText([".DS_Store"], "untracked finder data");
   await assert.rejects(
     applyReviewed(vault, review, options),
-    /untracked system or temporary file \.DS_Store.*remove it or save it first/,
+    /untracked system or temporary file \.DS_Store.*Remove or rename it, then try again/,
   );
   assert.equal(await main.readFileText([".DS_Store"]), "untracked finder data");
   await main.removeEntry([".DS_Store"]);
