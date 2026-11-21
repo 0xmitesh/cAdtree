@@ -7,6 +7,8 @@ import type { ProgressUpdate } from "../engine/types";
 
 afterEach(cleanup);
 
+/** The hook's PROGRESS_INTERVAL_MS. */
+const PROGRESS_INTERVAL_MS = 100;
 const sleep = (ms: number) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
 const update = (processedFiles: number, phase: ProgressUpdate["phase"] = "writing_objects"): ProgressUpdate => ({
   phase,
@@ -40,18 +42,50 @@ function startHeld(result: ReturnType<typeof setup>["result"], report: (progress
   return { finish: () => act(async () => { finish(); await done; }) };
 }
 
-test("1,000 progress calls in one operation cause a handful of renders, and the latest value lands", async () => {
-  const { result, renders } = setup();
-  let before = 0;
+test("1,000 synchronous progress calls: the first shows at once and the newest lands after the interval", async () => {
+  const { result } = setup();
   const op = startHeld(result, (progress) => {
-    before = renders.count;
     for (let i = 1; i <= 1000; i++) progress(update(i));
   });
   assert.equal(result.current.progress?.processedFiles, 1, "the first update shows at once");
   await sleep(250);
   assert.equal(result.current.progress?.processedFiles, 1000, "the latest update lands after the interval");
-  assert.ok(renders.count - before <= 5, `expected only a few renders, got ${renders.count - before}`);
   await op.finish();
+});
+
+// As in the app: each file's update comes after real I/O, so each one is its own task and its own render.
+test("updates spread across separate tasks render far less often than they arrive, and the newest still lands", async () => {
+  const { result, renders } = setup();
+  const updates = 200;
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  let before = 0;
+  let elapsed = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const reportedAll = new Promise<void>((resolve) => {
+    const ended = result.current.perform("capture", async (context) => {
+      before = renders.count;
+      const started = Date.now();
+      for (let i = 1; i <= updates; i++) {
+        context.progress(update(i));
+        await tick();
+        await new Promise<void>((r) => queueMicrotask(r));
+      }
+      elapsed = Date.now() - started;
+      resolve();
+      await held;
+    });
+    void ended;
+  });
+  await reportedAll;
+  const rendered = renders.count - before;
+  await sleep(250);
+  assert.equal(result.current.progress?.processedFiles, updates, "the newest update lands after the interval");
+  // One render for the first update, then at most one per interval (plus slack for timer jitter).
+  const bound = Math.ceil(elapsed / PROGRESS_INTERVAL_MS) + 3;
+  assert.ok(rendered <= bound, `${updates} updates over ${elapsed} ms rendered ${rendered} times, expected at most ${bound}`);
+  release();
+  await sleep(0);
 });
 
 test("a phase change shows immediately", async () => {
