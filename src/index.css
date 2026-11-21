@@ -1504,8 +1504,7 @@ summary {
   color: var(--muted);
   line-height: 1.6;
 }
-.folder-path-field input,
-.workspace-path-setting p {
+.folder-path-field input {
   overflow-wrap: anywhere;
 }
 .change-file-actions {
@@ -1564,10 +1563,6 @@ summary {
   background: #edf7f1;
   color: #24624b;
   box-shadow: 0 4px 18px #25333815;
-}
-.workspace-path-setting {
-  gap: 16px;
-  flex-wrap: wrap;
 }
 @media (max-width: 760px) {
   .workspace-heading-actions {

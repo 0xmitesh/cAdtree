@@ -27,7 +27,6 @@ type CopyRequest = { resolve: ResolveFilePath; containingFolder: boolean };
 interface ShortcutContext {
   copy: (request: CopyRequest) => void;
   configure: () => void;
-  folderPath: string;
   home: boolean;
 }
 const Shortcuts = createContext<ShortcutContext | null>(null);
@@ -184,7 +183,6 @@ export function FilePathShortcutsProvider({
           void copy(request);
         },
         configure,
-        folderPath,
         home: Boolean(home),
       }}
     >
@@ -291,44 +289,6 @@ export function FilePathShortcutsProvider({
         </div>
       ) : null}
     </Shortcuts.Provider>
-  );
-}
-
-export function WorkspaceLocationSetting({
-  compact = false,
-}: {
-  compact?: boolean;
-}) {
-  const context = useContext(Shortcuts);
-  if (!context || context.home) return null;
-  return (
-    <div
-      className={
-        compact
-          ? "workspace-path-setting compact"
-          : "settings-row workspace-path-setting"
-      }
-    >
-      {!compact ? (
-        <div>
-          <strong>Local workspace location</strong>
-          <p className="file-path">
-            {context.folderPath || "Not set — path shortcuts are optional"}
-          </p>
-          <p>
-            Used for copying paths only. Clear this field or browser data to
-            remove this local setting.
-          </p>
-        </div>
-      ) : null}
-      <button
-        type="button"
-        className={compact ? "text-button" : "button secondary"}
-        onClick={context.configure}
-      >
-        Configure path shortcuts
-      </button>
-    </div>
   );
 }
 

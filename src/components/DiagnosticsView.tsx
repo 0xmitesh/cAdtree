@@ -4,7 +4,7 @@ import type { VaultState } from "../engine/types";
 import { formatRevisionNumber } from "../engine/vault-service";
 import { Modal, Notice } from "./ui";
 import type { ResolveFilePath } from "../utils/folder-path";
-import { CopyFolderPathButton, WorkspaceLocationSetting } from "./FilePathShortcuts";
+import { CopyFolderPathButton } from "./FilePathShortcuts";
 
 export interface DiagnosticsViewProps {
   vaultState: VaultState;
@@ -126,7 +126,6 @@ export function DiagnosticsView({
             {workingFolderRow(false)}
           </>
         )}
-        <WorkspaceLocationSetting />
       </section>
       {hasRecordIssues ? (
         <p className="settings-attention" role="status">

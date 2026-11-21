@@ -19,7 +19,6 @@ import {
 import {
   FilePathActions,
   FilePathShortcutsProvider,
-  WorkspaceLocationSetting,
 } from "./FilePathShortcuts";
 import {
   clearAllConvenienceMetadata,
@@ -86,7 +85,6 @@ function harness(
 ) {
   return (
     <FilePathShortcutsProvider workspace={ws} convenienceEpoch={epoch}>
-      <WorkspaceLocationSetting />
       <FilePathActions filePath={filePath} resolve={resolve} />
     </FilePathShortcutsProvider>
   );
@@ -234,7 +232,6 @@ test("clipboard feedback waits for success; denied or unavailable access offers 
   ]) {
     clipboard(write);
     ui = render(harness(workspace()));
-    await waitFor(() => assert.ok(ui.getByText("D:\\Workspace")));
     fireEvent.click(copyButton(ui));
     await waitFor(() =>
       assert.ok(ui.getByRole("dialog", { name: "Copy path manually" })),
@@ -262,14 +259,12 @@ test("workspace switching and clearing convenience data never reuse another work
     copied.push(value);
   });
   const ui = render(harness(workspace()));
-  await waitFor(() => assert.ok(ui.getByText("D:\\One")));
   ui.rerender(
     harness(workspace("ws-two"), async () => ({
       ...location,
       workspaceId: "ws-two",
     })),
   );
-  await waitFor(() => assert.ok(ui.getByText("E:\\Two")));
   fireEvent.click(copyButton(ui));
   await waitFor(() => assert.equal(copied.length, 1));
   assert.ok(copied[0].startsWith("E:\\Two\\"));
@@ -281,7 +276,6 @@ test("workspace switching and clearing convenience data never reuse another work
       1,
     ),
   );
-  await waitFor(() => assert.ok(ui.getByText(/Not set/)));
   fireEvent.click(copyButton(ui));
   await waitFor(() =>
     assert.ok(ui.getByRole("button", { name: "Save and copy" })),
