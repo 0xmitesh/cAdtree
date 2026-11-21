@@ -29,6 +29,7 @@ import {
   enumerateWorkingFolder,
   isEffectivelyEmpty,
   isSystemClutterName,
+  isTemporaryFileName,
   partitionSystemFiles,
   scanBranchChanges,
 } from './scanner';
@@ -1014,4 +1015,96 @@ test('read failures on untracked clutter never block capture; the same failure o
   const blocked = await scanBranchChanges(working, MAIN_BRANCH_ID, tracked);
   assert.equal(blocked.errors.length, 1);
   assert.equal(blocked.canCapture, false);
+});
+
+test('isTemporaryFileName matches lock, backup and in-progress names only, case-insensitively', () => {
+  for (const name of ['~$bracket.SLDPRT', '~$Report.docx', '.~lock.sheet.ods#', '.~LOCK.sheet.ods#', 'a.tmp', 'A.TMP', 'a.bak', 'plan.dwl', 'plan.DWL2', 'plan.sv$', 'frame.SLDASM.crswap'])
+    assert.equal(isTemporaryFileName(name), true, name);
+  for (const name of ['bracket~v2.SLDPRT', 'backup-plan.pdf', 'tmp-notes.txt', 'x.bakery', '.~lock.sheet.ods', 'a~$b.txt', 'bracket.SLDPRT', 'dwl', 'tmp'])
+    assert.equal(isTemporaryFileName(name), false, name);
+});
+
+test('untracked lock and temp files are skipped and never captured; tracked ones stay tracked', async () => {
+  const root = new InMemoryFileSystemAdapter('temp1');
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'Temp');
+  const b = new Uint8Array([1, 2, 3]);
+  const temps = ['~$bracket.SLDPRT', 'sub/.~lock.sheet.ods#', 'a.tmp', 'sub/a.bak', 'plan.dwl', 'plan.dwl2', 'plan.sv$', 'frame.SLDASM.crswap'];
+  const normal = ['bracket.SLDPRT', 'bracket~v2.SLDPRT', 'backup-plan.pdf', 'tmp-notes.txt', 'x.bakery'];
+  for (const path of [...temps, ...normal]) await working.writeFileBytes(path.split('/'), b);
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(scan.added.map((f) => f.path).sort(), [...normal].sort());
+  assert.deepEqual([...(scan.skippedSystemFiles ?? [])].sort(), [...temps].sort());
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'temp',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(cap.revision.manifest.files.map((f) => f.path).sort(), [...normal].sort());
+  // Tracked: a version that already holds a temp-named file keeps tracking it.
+  const entry = (await enumerateWorkingFolder(working)).files.find((f) => f.path === 'sub/a.bak')!;
+  const manifest = { revisionId: 'r', displayNumber: 1, files: [entry], directories: [] } as unknown as RevisionManifest;
+  const same = await scanBranchChanges(working, MAIN_BRANCH_ID, manifest);
+  assert.ok(same.unchanged.some((f) => f.path === 'sub/a.bak'));
+  assert.ok(!(same.skippedSystemFiles ?? []).includes('sub/a.bak'));
+  await working.removeEntry(['sub', 'a.bak']);
+  const gone = await scanBranchChanges(working, MAIN_BRANCH_ID, manifest);
+  assert.deepEqual(gone.deleted.map((f) => f.path), ['sub/a.bak']);
+});
+
+test('isEffectivelyEmpty does not treat a lock or temp file as clutter', () => {
+  assert.equal(isEffectivelyEmpty([{ name: '~$x.SLDPRT', kind: 'file' }]), false);
+  assert.equal(isEffectivelyEmpty([{ name: 'a.tmp', kind: 'file' }]), false);
+  assert.equal(isEffectivelyEmpty([{ name: '.DS_Store', kind: 'file' }, { name: '~$x', kind: 'file' }]), false);
+});
+
+test('read failures on an untracked lock file never block capture; the same failure on a tracked one does', async () => {
+  let fail = false;
+  const root = new InMemoryFileSystemAdapter('temp-err', null, {
+    onBeforeRead: (p) => {
+      if (fail && p.endsWith('/~$bracket.SLDPRT')) throw new Error('locked by SolidWorks');
+    },
+  });
+  const working = await root.getDirectory(['w'], { create: true });
+  const vault = await root.getDirectory(['v'], { create: true });
+  await initializeProjectVault(working, vault, 'TempErr');
+  await working.writeFileBytes(['bracket.SLDPRT'], new Uint8Array([1]));
+  await working.writeFileBytes(['~$bracket.SLDPRT'], new Uint8Array([2]));
+  fail = true;
+  const scan = await scanBranchChanges(working, MAIN_BRANCH_ID, null);
+  assert.deepEqual(scan.errors, []);
+  assert.equal(scan.canCapture, true);
+  assert.deepEqual(scan.skippedSystemFiles, ['~$bracket.SLDPRT']);
+  const cap = await captureRevision(working, vault, {
+    branchId: MAIN_BRANCH_ID,
+    summary: 'despite open document',
+    notes: { problem: '', modification: '', observations: '' },
+    workingFolders: { [MAIN_BRANCH_ID]: working },
+  });
+  assert.deepEqual(cap.revision.manifest.files.map((f) => f.path), ['bracket.SLDPRT']);
+  const tracked = {
+    revisionId: 'r', displayNumber: 1, directories: [],
+    files: [{ path: '~$bracket.SLDPRT', size: 1, sha256: 'x', lastModified: 0 }],
+  } as unknown as RevisionManifest;
+  const blocked = await scanBranchChanges(working, MAIN_BRANCH_ID, tracked);
+  assert.equal(blocked.errors.length, 1);
+  assert.equal(blocked.canCapture, false);
+  // A normal file that is open and unreadable still blocks a save, with a plain hint.
+  const root2 = new InMemoryFileSystemAdapter('temp-err2');
+  const w2 = await root2.getDirectory(['w'], { create: true });
+  const v2 = await root2.getDirectory(['v'], { create: true });
+  await initializeProjectVault(w2, v2, 'TempErr2');
+  await w2.writeFileBytes(['bracket.SLDPRT'], new Uint8Array([1]));
+  root2.markFileUnreadable(['w', 'bracket.SLDPRT']);
+  await assert.rejects(
+    captureRevision(w2, v2, {
+      branchId: MAIN_BRANCH_ID,
+      summary: 'open file',
+      notes: { problem: '', modification: '', observations: '' },
+      workingFolders: { [MAIN_BRANCH_ID]: w2 },
+    }),
+    /Nothing was saved because a file could not be read \(bracket\.SLDPRT\).*close it there, then try again/,
+  );
 });

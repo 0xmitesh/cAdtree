@@ -838,7 +838,7 @@ test("a version that tracks .DS_Store still creates a case, applies and exports 
   await main.writeFileText([".DS_Store"], "untracked finder data");
   await assert.rejects(
     applyReviewed(vault, review, options),
-    /untracked system file \.DS_Store.*remove it or save it first/,
+    /untracked system or temporary file \.DS_Store.*remove it or save it first/,
   );
   assert.equal(await main.readFileText([".DS_Store"]), "untracked finder data");
   await main.removeEntry([".DS_Store"]);
@@ -1593,7 +1593,7 @@ test("a folder holding only an untracked Thumbs.db stops the apply before any wr
     r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
     r2: async (m) => { await writeAt(m, "New/N.txt", "n"); },
   });
-  const expected = /Folder "New" holds only system files \(Thumbs\.db\)\. Delete them, or untick the folder, then try again\. No working files were changed\./;
+  const expected = /Folder "New" holds only system or temporary files \(Thumbs\.db\)\. Close the app that uses them or delete them, or untick the folder, then try again\. No working files were changed\./;
   // Present when the apply starts: refused up front.
   await writeAt(f.main, "New/Thumbs.db", "clutter");
   const before = await inventory(f.main);
@@ -1612,6 +1612,21 @@ test("a folder holding only an untracked Thumbs.db stops the apply before any wr
   assert.equal((await f.vault.listEntries()).some((e) => e.name === "applications"), false);
   // The user's file was never touched.
   assert.equal(await f.main.readFileText(["New", "Thumbs.db"]), "clutter");
+});
+
+test("a folder holding only an untracked lock file stops the apply before any write, with the system-or-temporary-files message", async () => {
+  const f = await folderFixture({
+    r1: async (m) => { await writeAt(m, "A.txt", "a1"); },
+    r2: async (m) => { await writeAt(m, "New/N.txt", "n"); },
+  });
+  const expected = /Folder "New" holds only system or temporary files \(~\$N\.SLDPRT\)\. Close the app that uses them or delete them, or untick the folder, then try again\. No working files were changed\./;
+  await writeAt(f.main, "New/~$N.SLDPRT", "owner");
+  const before = await inventory(f.main);
+  await assert.rejects(applyReviewed(f.vault, (await f.review()).review, f.options), expected);
+  assert.equal(await inventory(f.main), before);
+  const state = await openExistingVault(f.vault);
+  assert.equal(branchApplications(state, "branch-main").length, 0);
+  assert.equal(await f.main.readFileText(["New", "~$N.SLDPRT"]), "owner");
 });
 
 test("interrupted apply with folder changes recovers: created folders removed, removed folders recreated", async () => {

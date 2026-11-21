@@ -123,6 +123,16 @@ test('expectedSnapshot: untracked OS clutter that appears but is not listed is i
   assert.deepEqual(saved.revision.manifest.files.map((f) => f.path), ['Parts/Collar.SLDPRT']);
 });
 
+test('expectedSnapshot: a lock file that appears after the scan does not trip the "files changed while saving" check', async () => {
+  const p = await project();
+  await p.main.writeFileText(part, 'one');
+  const expected = await snapshotOf(p.main);
+  await p.main.writeFileText(['Parts', '~$Collar.SLDPRT'], 'owner');
+  await p.main.writeFileText(['Parts', 'Collar.SLDPRT.bak'], 'backup');
+  const saved = await captureRevision(p.main, p.vault, input(p, 'First', { expectedSnapshot: expected }));
+  assert.deepEqual(saved.revision.manifest.files.map((f) => f.path), ['Parts/Collar.SLDPRT']);
+});
+
 test('expectedSnapshot listing a path or folder twice is a programming error, not a working-folder change; nothing is written', async () => {
   const p = await project();
   await p.main.writeFileText(part, 'one');

@@ -30,7 +30,23 @@ export function isSystemClutterName(name: string): boolean {
 }
 
 /**
- * Splits scanned files into kept files and skipped untracked OS clutter. A file is
+ * Helper files that apps create next to an open document: owner and lock files
+ * (`~$x`, `.~lock.x#`, AutoCAD `.dwl`/`.dwl2`), autosave and backup files (`.sv$`,
+ * `.bak`, `.tmp`) and Chrome's in-progress write file (`.crswap`). Like OS clutter
+ * they are skipped only when untracked; a saved version that contains one keeps it.
+ */
+export function isTemporaryFileName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return (
+    lower.startsWith('~$') ||
+    (lower.startsWith('.~lock.') && lower.endsWith('#')) ||
+    ['.tmp', '.bak', '.dwl', '.dwl2', '.sv$', '.crswap'].some((suffix) => lower.endsWith(suffix))
+  );
+}
+
+/**
+ * Splits scanned files into kept files and skipped untracked OS clutter and
+ * temporary or lock files. A file is
  * skipped only when its path is not in `expectedPaths` and it is either a clutter
  * name or a macOS AppleDouble `._x` companion whose `x` sibling exists (scanned or
  * expected). Anything the expected set contains is never hidden.
@@ -63,12 +79,13 @@ function isUntrackedSystemPath(
   const base = path.slice(slash + 1);
   return (
     isSystemClutterName(base) ||
+    isTemporaryFileName(base) ||
     (base.startsWith('._') && base.length > 2 && known.has(dir + base.slice(2)))
   );
 }
 
 /**
- * Splits file-read errors into those for untracked OS clutter (dropped, never block
+ * Splits file-read errors into those for untracked OS clutter and temporary or lock files (dropped, never block
  * a capture) and the rest. Errors for tracked paths and for directories are kept.
  */
 export function partitionSystemErrors(

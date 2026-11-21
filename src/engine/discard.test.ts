@@ -447,6 +447,18 @@ test("untracked OS clutter in a discarded folder is moved with it, never left be
   );
 });
 
+test("untracked lock files follow the clutter rule: left alone outside the selection, moved with a discarded folder", async () => {
+  const f = await setup();
+  await f.w(f.main, "Added/x.txt", "x");
+  await f.w(f.main, "Added/~$x.SLDPRT", "owner");
+  await f.w(f.main, "~$root.SLDPRT", "owner root");
+  const { plan } = await f.plan(["Added"]);
+  assert.deepEqual(plan.actions.map((a) => a.path), ["Added/~$x.SLDPRT", "Added/x.txt"]);
+  await f.discard(["Added"]);
+  assert.equal(await f.main.hasDirectory(["Added"]), false);
+  assert.equal(await f.main.readFileText(["~$root.SLDPRT"]), "owner root");
+});
+
 test("plans: nothing selected, no change, unknown path and unrelated scan errors", async () => {
   const f = await setup();
   await edit(f);

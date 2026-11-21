@@ -155,9 +155,9 @@ test("Discard dialog: a blocked plan or a blocked case disables Discard", async 
   assert.ok(ui2.getByRole("button", { name: "Discard" }).hasAttribute("disabled"));
 });
 
-test("discardAllPaths takes every change but leaves untracked OS clutter outside discarded folders alone", () => {
+test("discardAllPaths takes every change but leaves untracked OS clutter and lock files outside discarded folders alone", () => {
   const scan = {
-    added: [entry("New.txt"), entry(".DS_Store"), entry("Added/.DS_Store")],
+    added: [entry("New.txt"), entry(".DS_Store"), entry("~$New.SLDPRT"), entry("Added/.DS_Store"), entry("Added/~$x.SLDPRT")],
     modified: [{ previous: entry("A.txt"), current: entry("A.txt", "2") }],
     deleted: [entry("Gone.txt")],
     addedDirectories: ["Added"],
