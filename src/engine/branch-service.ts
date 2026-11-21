@@ -1,4 +1,5 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
+import { FolderAccessError } from '../utils/folder-access';
 import { FileConflictError, validateDirectoryIsolation } from "./fs-adapter";
 import { newRecordId } from "./ids";
 import {
@@ -125,9 +126,9 @@ export async function createDesignBranch(
     if (componentBlock) throw new Error(componentBlock);
     await validateWorkingFolderBindings(state, vaultDir, workingFolders);
     if ((await vaultDir.queryPermission("readwrite")) !== "granted")
-      throw new Error("Reconnect the saved versions folder with write permission.");
+      throw new FolderAccessError("Reconnect the saved versions folder with write permission.");
     if ((await destinationParent.queryPermission("readwrite")) !== "granted")
-      throw new Error(
+      throw new FolderAccessError(
         "Write permission is required for the destination parent folder.",
       );
     // Parents may contain sibling working folders/vaults; the new child itself must be isolated.

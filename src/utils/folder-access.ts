@@ -16,8 +16,31 @@ export function assertFolderAccess() {
   if (reason) throw new Error(reason);
 }
 
+/**
+ * Folder access is missing or was taken away. The app offers "Reconnect workspace" for this kind of error,
+ * so throw it (instead of a plain Error) wherever the fix really is to renew or reconnect folder access.
+ */
+export class FolderAccessError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'FolderAccessError';
+  }
+}
+
+const isPermissionDomError = (error: unknown): boolean =>
+  Boolean(error) && typeof error === 'object' && 'name' in (error as object) && ['NotAllowedError', 'SecurityError'].includes(String((error as { name: unknown }).name));
+
+/** True for a FolderAccessError or the browser's own permission errors (NotAllowedError, SecurityError), also when wrapped as a `cause`. */
+export function isFolderAccessError(error: unknown): boolean {
+  for (let depth = 0; depth < 4 && error; depth++) {
+    if (error instanceof FolderAccessError || isPermissionDomError(error)) return true;
+    error = typeof error === 'object' ? (error as { cause?: unknown }).cause : undefined;
+  }
+  return false;
+}
+
 export function folderPermissionError(error: unknown): unknown {
-  if (error && typeof error === 'object' && 'name' in error && ['NotAllowedError', 'SecurityError'].includes(String(error.name))) return new Error('Folder access was denied or revoked. Allow local folder access in your browser site settings, then reconnect the Cadtree home or choose the folder again.', { cause: error });
+  if (isPermissionDomError(error)) return new FolderAccessError('Folder access was denied or revoked. Allow local folder access in your browser site settings, then reconnect the Cadtree home or choose the folder again.', { cause: error });
   return error;
 }
 

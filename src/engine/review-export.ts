@@ -1,4 +1,5 @@
 import { checkCaseInsensitiveCollisions, splitAndValidatePath, validateDirectoryIsolation, type FileSystemDirectoryAdapter } from './fs-adapter';
+import { FolderAccessError } from '../utils/folder-access';
 import { validateWorkingFolderBindings, type WorkingFolderBindings } from './branch-state';
 import { computeRequiredParentDirectories } from './recovery-service';
 import { partitionSystemFiles } from './scanner';
@@ -295,7 +296,7 @@ export async function exportRevisionForReview(options: ReviewExportOptions): Pro
       if (splitAndValidatePath(folderName).length !== 1) throw new Error('The export must be one fresh child folder.');
       const bindings = options.resolveWorkingFolders ? await options.resolveWorkingFolders(state) : options.workingFolders;
       await validateWorkingFolderBindings(state, vaultDir, bindings);
-      if (await parent.queryPermission('readwrite') !== 'granted') throw new Error('Allow read/write access to the export destination, then choose it again.');
+      if (await parent.queryPermission('readwrite') !== 'granted') throw new FolderAccessError('Allow read/write access to the export destination, then choose it again.');
       // An ancestor parent is allowed when the proposed child is a separate sibling.
       // Never create anything in a protected vault or working tree.
       const protectedRoots = [vaultDir, ...state.branches.map(b => bindings[b.branchId]!)];

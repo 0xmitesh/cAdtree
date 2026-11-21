@@ -38,7 +38,7 @@ import {
 } from "./engine/types";
 import { useViewHistory, type AppView, type ProjectView } from "./utils/view-history";
 import { useSidebarWidth } from "./components/SidebarResize";
-import { assertFolderAccess, pickDirectory } from "./utils/folder-access";
+import { assertFolderAccess, pickDirectory, FolderAccessError } from "./utils/folder-access";
 import { WorkspaceProjectsView } from "./components/WorkspaceProjectsView";
 import { HomeWorkspacesView } from "./components/HomeWorkspacesView";
 import type { WorkspaceTreeProps } from "./components/WorkspaceTree";
@@ -362,7 +362,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
           }
         }
         if ((await root.requestPermission("readwrite")) !== "granted")
-          throw new Error("Read/write folder access was denied. Allow local folder access in your browser site settings, then reconnect your Cadtree home.");
+          throw new FolderAccessError("Read/write folder access was denied. Allow local folder access in your browser site settings, then reconnect your Cadtree home.");
         if (create) {
           if (!isEffectivelyEmpty(await root.listEntries()))
             throw new Error(
@@ -452,7 +452,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       "connect",
       async (context) => {
         if ((await home.root.requestPermission("readwrite")) !== "granted")
-          throw new Error("Reconnect the Cadtree home to renew access.");
+          throw new FolderAccessError("Reconnect the Cadtree home to renew access.");
         const next = await openHome(home.root);
         if (next.identity.homeId !== home.identity.homeId)
           throw new Error(
@@ -608,7 +608,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
     if (!workspace) return;
     await perform("connect", async (context) => {
       if ((await workspace.root.requestPermission("readwrite")) !== "granted")
-        throw new Error("Reconnect the workspace to renew its permission.");
+        throw new FolderAccessError("Reconnect the workspace to renew its permission.");
       const current = await openWorkspace(workspace.root);
       if (context.current()) setWorkspace(current);
       if (managedProject) {
@@ -740,7 +740,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
       async (context) => {
         if (!home) throw new Error("Open a Cadtree home first.");
         if ((await home.root.requestPermission("readwrite")) !== "granted")
-          throw new Error("Reconnect the Cadtree home to renew access.");
+          throw new FolderAccessError("Reconnect the Cadtree home to renew access.");
         const discovered = await openHome(home.root);
         if (discovered.identity.homeId !== home.identity.homeId)
           throw new Error("The Cadtree home changed. Reopen it.");

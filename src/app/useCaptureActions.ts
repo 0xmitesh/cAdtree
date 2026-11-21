@@ -1,4 +1,5 @@
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { FolderAccessError } from "../utils/folder-access";
 import type { AuthSnapshot } from "../auth/firebase-auth";
 import type { IdentityReview } from "../engine/component-identity";
 import type { FileSystemDirectoryAdapter } from "../engine/fs-adapter";
@@ -132,7 +133,7 @@ export function useCaptureActions({
     applyVaultState(state);
     await validateWorkingFolderBindings(state, vault, folders, false);
     if ((await folder.queryPermission("read")) !== "granted")
-      throw new Error(
+      throw new FolderAccessError(
         "Reconnect the selected case’s working folder to restore read permission.",
       );
     const baseline = getBranchBaseline(state, branchId);

@@ -1,4 +1,5 @@
 import type { FileSystemDirectoryAdapter } from "./fs-adapter";
+import { FolderAccessError } from "../utils/folder-access";
 import { withProjectWriterLock } from "./locks";
 import { openExistingVault } from "./vault-service";
 import {
@@ -92,7 +93,7 @@ export async function changeCaseLifecycle(
         "This case was hidden or unhidden since you looked. Refresh and check its current state before trying again.",
       );
     if ((await vault.queryPermission("readwrite")) !== "granted")
-      throw new Error(
+      throw new FolderAccessError(
         "Reconnect the vault with write permission before hiding or unhiding a case.",
       );
     let unsavedAtHide: number | undefined;
