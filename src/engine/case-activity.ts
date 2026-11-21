@@ -1,6 +1,5 @@
-import type { ReconstructedRevision, VaultState } from "./types";
+import type { VaultState } from "./types";
 import {
-  getBranchBaseline,
   getBranchComparisonEndpoint,
   branchNameKey,
   hasUnattributedSavedEvidence,
@@ -9,11 +8,6 @@ import {
   comparisonEndpoint,
   type ComparisonEndpoint,
 } from "./snapshot-comparison";
-import {
-  ancestryOf,
-  layoutRevisions,
-  type RevisionGraph,
-} from "../history/layout";
 
 type Evidence<T> =
   { status: "available"; value: T } | { status: "unavailable"; reason: string };
@@ -22,11 +16,6 @@ export interface CaseActivity {
   baseline: ComparisonEndpoint;
   main: ComparisonEndpoint;
   ownSaves: Evidence<number>;
-  divergence: Evidence<{
-    ancestor: ReconstructedRevision;
-    mainCount: number;
-    caseCount: number;
-  }>;
 }
 const unavailable = (
   reason: string,
@@ -55,7 +44,6 @@ function branchIdentity(state: VaultState, id: string) {
 export function caseActivity(
   state: VaultState,
   branchId: string,
-  graph = layoutRevisions(state, branchId),
 ): CaseActivity {
   let branch;
   try {
@@ -67,7 +55,6 @@ export function caseActivity(
       baseline: failed,
       main: mainEndpoint(state),
       ownSaves: failed,
-      divergence: failed,
     };
   }
   let origin = comparisonEndpoint(state, branch.startingRevisionId ?? "");
@@ -98,46 +85,7 @@ export function caseActivity(
   } catch (error) {
     ownSaves = unavailable(message(error));
   }
-  let divergence: CaseActivity["divergence"];
-  try {
-    if (baseline.status !== "available")
-      throw new Error(`Case baseline: ${baseline.reason}`);
-    if (main.status !== "available")
-      throw new Error(`Main baseline: ${main.reason}`);
-    const mainBranch = mainIdentity(state);
-    // The existing canonical resolver validates each branch's complete ancestry
-    // and connection to its recorded origin. Endpoint-only Compare is separate.
-    const savedCase = getBranchBaseline(state, branchId);
-    const savedMain = getBranchBaseline(state, mainBranch.branchId);
-    if (
-      savedCase?.revisionId !== baseline.revision.manifest.revisionId ||
-      savedMain?.revisionId !== main.revision.manifest.revisionId
-    )
-      throw new Error(
-        "The canonical saved baselines are unavailable or inconsistent.",
-      );
-    const casePath = validatedPath(state, graph, savedCase.revisionId);
-    const mainPath = validatedPath(state, graph, savedMain.revisionId);
-    const caseIds = new Set(casePath);
-    const sharedId = mainPath.find((id) => caseIds.has(id));
-    if (!sharedId)
-      throw new Error(
-        "No validated shared ancestor connects the current saved baselines.",
-      );
-    const ancestor = comparisonEndpoint(state, sharedId);
-    if (ancestor.status !== "available") throw new Error(ancestor.reason);
-    divergence = {
-      status: "available",
-      value: {
-        ancestor: ancestor.revision,
-        mainCount: mainPath.indexOf(sharedId),
-        caseCount: casePath.indexOf(sharedId),
-      },
-    };
-  } catch (error) {
-    divergence = unavailable(message(error));
-  }
-  return { origin, baseline, main, ownSaves, divergence };
+  return { origin, baseline, main, ownSaves };
 }
 
 function mainIdentity(state: VaultState) {
@@ -153,36 +101,12 @@ function mainEndpoint(state: VaultState): ComparisonEndpoint {
     return unavailable(message(error));
   }
 }
-function validatedPath(
-  state: VaultState,
-  graph: RevisionGraph,
-  headId: string,
-): string[] {
-  const path = [...ancestryOf(graph, headId)];
-  for (let index = 0; index < path.length; index++) {
-    const endpoint = comparisonEndpoint(state, path[index]);
-    if (endpoint.status !== "available")
-      throw new Error(`Ancestry unavailable: ${endpoint.reason}`);
-    branchIdentity(state, endpoint.revision.manifest.branchId);
-    if (
-      (endpoint.revision.manifest.parentRevisionId ?? undefined) !==
-      path[index + 1]
-    )
-      throw new Error("A saved parent edge is missing, cyclic or ambiguous.");
-  }
-  return path;
-}
-
 export function designCaseActivities(
   state: VaultState,
 ): Map<string, CaseActivity> {
-  const graph = layoutRevisions(state, "branch-main");
   return new Map(
     state.branches
       .filter((branch) => !branch.isMain)
-      .map((branch) => [
-        branch.branchId,
-        caseActivity(state, branch.branchId, graph),
-      ]),
+      .map((branch) => [branch.branchId, caseActivity(state, branch.branchId)]),
   );
 }
