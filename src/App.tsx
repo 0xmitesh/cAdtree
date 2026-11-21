@@ -1436,6 +1436,7 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   workspace={workspace}
                   managedWorkspaceKey={managedWorkspaceKey}
                   workspaceBudgetAddress={workspaceBudgetAddress}
+                  homeRoot={home?.root ?? null}
                   draftCache={draftCache.current}
                   scanResult={scanResult}
                   isScanning={isScanning}
