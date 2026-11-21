@@ -36,6 +36,9 @@ export interface WorkspaceTreeProps {
   activeBranchId: string;
   projectView: boolean;
   busy: boolean;
+  /** The one "Show hidden cases" switch, kept by App so History and every Explorer agree. */
+  showHiddenCases: boolean;
+  onShowHiddenCasesChange: (show: boolean) => void;
   onWorkspace: (entry: HomeWorkspaceEntry) => Promise<void> | void;
   onProject: (
     workspace: HomeWorkspaceEntry,
@@ -81,7 +84,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     () => new Set(["home"]),
   );
   const [focusedKey, setFocusedKey] = useState("home");
-  const [showHidden, setShowHidden] = useState(false);
+  const showHidden = props.showHiddenCases;
+  const setShowHidden = props.onShowHiddenCasesChange;
   const rows = useRef(new Map<string, HTMLDivElement>());
   const workspaceKey =
     props.workspace && props.managedWorkspaceKey
@@ -99,9 +103,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   let hasHidden = Boolean(props.activeVault?.branches.some(
     branch => caseLifecycle(props.activeVault!, branch.branchId).status === "archived",
   ));
-  // Reset the switch once no hidden case is known (computed while building the tree below).
+  // Turn the shared switch off once no hidden case is known anywhere (computed while building the
+  // tree below). This is the one place that does it; the Explorer is always mounted next to History.
   useEffect(() => {
-    if (!hasHidden) setShowHidden(false);
+    if (!hasHidden && showHidden) setShowHidden(false);
   });
   const projects = (
     workspace: WorkspaceState,
@@ -156,9 +161,11 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
               caseLifecycle(vault, branch.branchId).status === "archived",
             ),
             issue:
-              vault && caseLifecycle(vault, branch.branchId).status !== "active"
-                ? "Unhide hidden cases in History → Design cases. Cases whose state cannot be read need a look in Settings → Troubleshooting."
-                : undefined,
+              vault && caseLifecycle(vault, branch.branchId).status === "archived"
+                ? "Hidden case: you can look but not change it. Unhide it in History → Design cases."
+                : vault && caseLifecycle(vault, branch.branchId).status !== "active"
+                  ? "Cases whose state cannot be read need a look in Settings → Troubleshooting."
+                  : undefined,
             open: () => props.onProject(homeEntry, entry, branch.branchId),
           })),
       };
@@ -231,7 +238,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       return next;
     });
   const open = (node: TreeNode) => {
-    if (props.busy || node.unavailable || node.readOnly) return;
+    if (props.busy || node.unavailable) return;
     focus(node.key);
     if (node.kind === "home") { toggle(node); return; }
     void Promise.resolve(node.open?.()).catch(() => {
@@ -285,7 +292,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       </label> : null}
       {hasHidden && showHidden ? (
         <p className="tree-hidden-help">
-          Unhide cases in History → Design cases.
+          A hidden case opens read-only. Unhide cases in History → Design cases.
         </p>
       ) : null}
       <div
@@ -324,9 +331,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
               aria-setsize={node.siblings}
               aria-expanded={node.children.length ? isExpanded : undefined}
               aria-selected={node.key === selectedKey}
-              aria-disabled={
-                props.busy || node.unavailable || node.readOnly || undefined
-              }
+              aria-disabled={props.busy || node.unavailable || undefined}
               tabIndex={node.key === tabKey ? 0 : -1}
               className={`tree-row ${node.kind}${node.unavailable ? " unavailable" : ""}${node.readOnly ? " hidden-case" : ""}`}
               title={node.issue ? `${node.label} — ${node.issue}` : node.label}

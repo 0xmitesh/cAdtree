@@ -105,6 +105,8 @@ test("An Explorer case row with unavailable lifecycle evidence is disabled and c
       activeBranchId="branch-main"
       projectView
       busy={false}
+      showHiddenCases={false}
+      onShowHiddenCasesChange={() => {}}
       onWorkspace={() => {}}
       onProject={async (_workspace, _project, branchId) => { picked.push(branchId); }}
     />,

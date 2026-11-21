@@ -233,7 +233,8 @@ for (const width of [1366, 390])
       name: "Part-X redesign · Hidden, Actuator preview, Application preview review",
       exact: true,
     });
-    await expect(archivedNode).toHaveAttribute("aria-disabled", "true");
+    // A shown hidden case can be opened (read-only), so its row is not disabled.
+    await expect(archivedNode).not.toHaveAttribute("aria-disabled", "true");
     if (width === 390)
       await page
         .getByRole("dialog", { name: "Browse folders" })
