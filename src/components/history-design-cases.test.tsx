@@ -225,6 +225,8 @@ test('One Show hidden cases switch: History and the Explorer always agree',async
 test('A shown hidden case opens read-only: you can look and export, but nothing can be saved or changed in it',async()=>{
   const {s,ui,nav}=await openAndHideCase();
   await s.caseFolder.writeFileText(['Bracket.SLDPRT'],'An edit made while hidden');
+  // Every byte of the test home (workspaces, projects, vaults, working folders) before the hidden case is opened.
+  const homeBefore=inventorySignature(await readVerifiedInventory(s.home));
   fireEvent.click(ui.container.querySelector<HTMLInputElement>('.history-hidden-toggle input')!);
   await selectBranch(ui,s.caseId);
   assert.equal(currentBranchId(ui),s.caseId);
@@ -235,11 +237,13 @@ test('A shown hidden case opens read-only: you can look and export, but nothing 
   await waitFor(()=>assert.ok(ui.getByRole('button',{name:'Discard all…'})));
   assert.equal((ui.getByRole('button',{name:'Save version'}) as HTMLButtonElement).disabled,true);
   assert.equal((ui.getByRole('button',{name:'Discard all…'}) as HTMLButtonElement).disabled,true);
+  // Try them anyway: nothing may happen.
+  fireEvent.click(ui.getByRole('button',{name:'Discard all…'}));
+  fireEvent.click(ui.getByRole('button',{name:'Save version'}));
+  assert.equal(ui.queryByRole('dialog'),null);
   assert.ok(ui.getAllByText('This case is hidden. Unhide it in History → Design cases before saving or changing its files.').length>=1);
   // History: Get this version, Bring back and Copy are refused; Export a copy and Compare still work.
   fireEvent.click(nav.getByRole('button',{name:'History'}));
-  const own=ui.container.querySelectorAll('.hidden-case, .graph-row');
-  assert.ok(own.length);
   fireEvent.click(ui.getByRole('button',{name:/^V3:/}));
   assert.equal(ui.container.querySelector('.revision-detail')!.textContent!.includes('Export a copy'),true);
   assert.equal((ui.getByRole('button',{name:'Export a copy'}) as HTMLButtonElement).disabled,false);
@@ -248,8 +252,13 @@ test('A shown hidden case opens read-only: you can look and export, but nothing 
   const mainCopy=ui.getByRole('button',{name:/^Copy files from Main…|^Bring back onto/});
   fireEvent.click(mainCopy);
   await waitFor(()=>assert.match(ui.getByRole('dialog').textContent!,/This case is hidden\. Unhide it in History/));
-  // Nothing was written to the case or its saved history.
+  // The case has unsaved changes, so the dialog offers Discard them; it is refused too.
+  const discardThem=within(ui.getByRole('dialog')).getByRole('button',{name:'Discard them'}) as HTMLButtonElement;
+  assert.equal(discardThem.disabled,true);
+  fireEvent.click(discardThem);
+  // Nothing was written anywhere: the whole home is byte for byte what it was before.
   assert.equal(await s.caseFolder.readFileText(['Bracket.SLDPRT']),'An edit made while hidden');
+  assert.equal(inventorySignature(await readVerifiedInventory(s.home)),homeBefore);
   assert.equal(caseLifecycle((await resolveManagedProject(s.workspace.root,s.project.record.containerPath)).vaultState,s.caseId).status,'archived');
 });
 
