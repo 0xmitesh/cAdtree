@@ -50,7 +50,6 @@ export type ProjectViewsProps = {
   workspaceBudgetAddress: string | undefined;
   draftCache: Map<string, CaptureDraft>;
   scanResult: ScanResult | null;
-  isScanStale: boolean;
   isScanning: boolean;
   isChecking: boolean;
   isCapturing: boolean;
@@ -113,7 +112,6 @@ export function ProjectViews({
   workspaceBudgetAddress,
   draftCache,
   scanResult,
-  isScanStale,
   isScanning,
   isChecking,
   isCapturing,
@@ -239,7 +237,6 @@ export function ProjectViews({
                 ? scanResult
                 : null
             }
-            isScanStale={isScanStale}
             isScanning={isScanning}
             isChecking={isChecking && branch.branchId === activeBranchId}
             checkFailed={checkFailed && branch.branchId === activeBranchId}

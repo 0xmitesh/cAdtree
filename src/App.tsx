@@ -152,7 +152,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
   const [activeBranchId, setActiveBranchId] = useState(MAIN_BRANCH_ID);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [isScanStale, setIsScanStale] = useState(false);
   // The last check of the files failed (quiet "Couldn't check files" line); cleared by the next successful scan.
   const [checkFailed, setCheckFailed] = useState(false);
 
@@ -207,12 +206,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
   } = useOperation({
     activeTab,
   });
-  useEffect(() => {
-    setIsScanStale(false);
-    if (!scanResult) return;
-    const timer = setTimeout(() => setIsScanStale(true), 5000);
-    return () => clearTimeout(timer);
-  }, [scanResult]);
 
   const pickFolder = async (mode: "read" | "readwrite") => new RealFileSystemAdapter(await pickDirectory(mode));
   const applyVaultState = (next: VaultState) => {
@@ -1445,7 +1438,6 @@ export default function App({ auth }: { auth?: AuthAdapter } = {}) {
                   workspaceBudgetAddress={workspaceBudgetAddress}
                   draftCache={draftCache.current}
                   scanResult={scanResult}
-                  isScanStale={isScanStale}
                   isScanning={isScanning}
                   isChecking={isChecking}
                   isCapturing={isCapturing}

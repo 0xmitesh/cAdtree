@@ -287,7 +287,7 @@ test('Changes attaches new reference files with notes to the whole version or a 
   const before = inventorySignature(await readVerifiedInventory(f.project.vaultDir));
   let savedId = '';
   const cache = new Map<string, import('./ChangesCaptureView').CaptureDraft>();
-  const props = { vaultState: f.first.vaultState, activeBranchId: branchId, workingFolderName: 'Main', vaultFolderName: 'Vault', scanResult: scan, draftCache: cache, draftKey: 'draft', isScanStale: false, isScanning: false, isCapturing: false, progress: null, statusBanner: null, onScan: async () => {}, onCancelOperation: () => {}, onReattachWorkingFolder: async () => {}, onCapture: async (params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0]) => {
+  const props = { vaultState: f.first.vaultState, activeBranchId: branchId, workingFolderName: 'Main', vaultFolderName: 'Vault', scanResult: scan, draftCache: cache, draftKey: 'draft', isScanning: false, isCapturing: false, progress: null, statusBanner: null, onScan: async () => {}, onCancelOperation: () => {}, onReattachWorkingFolder: async () => {}, onCapture: async (params: Parameters<import('./ChangesCaptureView').ChangesCaptureViewProps['onCapture']>[0]) => {
     const saved = await captureRevision(f.working, f.project.vaultDir, { ...params, branchId, workingFolders: f.project.workingFolders, referenceAuthor: { id: 'engineer-a', displayName: 'Asha' } });
     savedId = saved.revision.manifest.revisionId;
   } };
@@ -331,7 +331,7 @@ test('already-saved references stay behind a collapsed Manage references disclos
   const ref = state.references!.library[0], scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
   const review = createReferenceReview(state, scan, [{ referenceId: ref.referenceId, versionId: ref.versions[0].versionId, locator: 'page 1', explanation: 'Kept note' }]);
   const cache = new Map([['draft', { summary: '', notes, fileNotes: {}, notePath: null, referenceReview: review, showAttachments: true }]]);
-  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
+  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
   assert.equal(ui.queryByText(/Reference selections are stale/), null);
   const toggle = ui.getByRole('button', { name: 'Manage references (1)' });
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
@@ -353,7 +353,7 @@ test('stale reference decisions remain visible until explicitly reviewed and leg
   const review = createReferenceReview(state, scan, [{ referenceId: ref.referenceId, versionId: ref.versions[0].versionId, locator: 'page 2', explanation: 'Decision' }]);
   state = await updateProjectReference(f.project.vaultDir, f.project.record.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
   const cache = new Map([['draft', { summary: 'Reference update', notes, fileNotes: {}, notePath: null, referenceReview: review }]]);
-  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
+  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
   assert.ok(ui.getByText(/Reference selections are stale/));
   assert.ok(ui.getByText('Location: page 2'));
   assert.equal((ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf 1' }) as HTMLTextAreaElement).value, 'Decision');
@@ -373,7 +373,7 @@ test('Changes shows one muted line naming skipped system files, with at most thr
   const f = await fixture();
   await f.working.writeFileText(['.DS_Store'], 'finder');
   const scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
-  const props = { vaultState: f.first.vaultState, activeBranchId: branchId, workingFolderName: 'Main', vaultFolderName: 'Vault', scanResult: scan, draftCache: new Map(), draftKey: 'skipped', isScanStale: false, isScanning: false, isCapturing: false, progress: null, statusBanner: null, onScan: async () => {}, onCancelOperation: () => {}, onReattachWorkingFolder: async () => {}, onCapture: async () => {} };
+  const props = { vaultState: f.first.vaultState, activeBranchId: branchId, workingFolderName: 'Main', vaultFolderName: 'Vault', scanResult: scan, draftCache: new Map(), draftKey: 'skipped', isScanning: false, isCapturing: false, progress: null, statusBanner: null, onScan: async () => {}, onCancelOperation: () => {}, onReattachWorkingFolder: async () => {}, onCapture: async () => {} };
   let ui = render(<ChangesCaptureView {...props} />);
   assert.equal(ui.getByTestId('skipped-system-files').textContent, 'Skipped 1 system file: .DS_Store');
   ui.unmount();

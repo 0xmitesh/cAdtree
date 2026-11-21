@@ -30,7 +30,6 @@ export interface ChangesCaptureViewProps {
   workingFolderName: string | null;
   vaultFolderName: string;
   scanResult: ScanResult | null;
-  isScanStale: boolean;
   isScanning: boolean;
   /** A quiet background check of the files is running (shown as a small line, never blocks anything). */
   isChecking?: boolean;
@@ -80,7 +79,6 @@ export function ChangesCaptureView({
   activeBranchId,
   workingFolderName,
   scanResult: scan,
-  isScanStale,
   isScanning,
   isChecking = false,
   checkFailed = false,
@@ -316,11 +314,7 @@ export function ChangesCaptureView({
           {scan
             ? "Checked " +
               formatTimestamp(scan.scannedAt) +
-              (checkFailed
-                ? " · Not up to date"
-                : isScanStale
-                  ? " · Not checked since your last change"
-                  : " · Up to date")
+              (checkFailed ? " · Not up to date" : isChecking ? "" : " · Up to date")
             : checkFailed || isChecking
               ? null
               : "Not checked yet"}

@@ -110,7 +110,7 @@ test('legacy projects show no identity controls and no enable-tracking button', 
   assert.ok(changes.getByText("Renames aren't tracked for this project."));
 });
 function changesProps(state:VaultState,scan:ScanResult,extra:object={}) {
-  return {vaultState:state,activeBranchId:'branch-main',workingFolderName:'Main',vaultFolderName:'Vault',scanResult:scan,isScanStale:false,isScanning:false,isCapturing:false,progress:null,statusBanner:null,onScan:async()=>{},onCancelOperation:()=>{},onReattachWorkingFolder:async()=>{},onCapture:async()=>{},...extra};
+  return {vaultState:state,activeBranchId:'branch-main',workingFolderName:'Main',vaultFolderName:'Vault',scanResult:scan,isScanning:false,isCapturing:false,progress:null,statusBanner:null,onScan:async()=>{},onCancelOperation:()=>{},onReattachWorkingFolder:async()=>{},onCapture:async()=>{},...extra};
 }
 test('Treat as a new file lives in each modified or unchanged file menu and needs confirmation', async()=>{
   const f = await fixture();
@@ -176,7 +176,7 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
   const state = await openExistingVault(f.vault);
   const scan = await scanBranchChanges(f.working, branchId, f.state.revisions[0].manifest);
   let captures = 0;
-  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} onCapture={async input => {
+  const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} onCapture={async input => {
     await captureRevision(f.working, f.vault, { ...input, branchId, workingFolders: bindings });
     captures++;
   }} />);

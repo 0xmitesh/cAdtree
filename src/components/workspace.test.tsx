@@ -377,7 +377,7 @@ function changesProps(
     workingFolderName: "CAD working",
     vaultFolderName: "Vault",
     scanResult: scan,
-    isScanStale: false,
+   
     isScanning: false,
     isCapturing: false,
     progress: null,
