@@ -140,7 +140,7 @@ test("no quiet scan starts while an operation runs or a dialog is open", async (
   assert.ok(nav);
 });
 
-test("Copy files saves by itself; the quiet rescan then shows no changes and Undo opens Bring back", async () => {
+test("Copy files saves by itself; the quiet rescan then shows no changes and the Bring back button opens Bring back", async () => {
   const { sample, ui, nav } = await openSample();
   fireEvent.click(nav.getByRole("button", { name: "History" }));
   fireEvent.click(await ui.findByRole("button", { name: /Reinforced mounting rib/ }));
@@ -159,7 +159,7 @@ test("Copy files saves by itself; the quiet rescan then shows no changes and Und
   assert.ok(await sample.main.hasFile(["Rib.SLDPRT"]));
   assert.equal(ui.queryByRole("dialog", { name: /^Copy files from / }), null);
   const previous = banner.match(/bring back (V\d+)\./)![1];
-  fireEvent.click(ui.getByRole("button", { name: "Undo" }));
+  fireEvent.click(ui.getByRole("button", { name: `Bring back ${previous}` }));
   assert.ok(await ui.findByRole("dialog", { name: `Bring back ${previous} onto Main` }));
   fireEvent.click(ui.getByRole("button", { name: "Cancel" }));
   // Nothing clicked: the quiet rescan shows the folder matches the new revision.

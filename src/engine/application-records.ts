@@ -648,7 +648,7 @@ export function applicationCaptureBlock(
     (op) => op.status === "applied",
   );
   return blocked.length || pending.length > 1
-    ? "An unfinished or unreadable Bring back or Copy blocks saving. Recover it, or look at its kept records, first."
+    ? "An unfinished or unreadable Bring back or Copy blocks saving. Put the files back as they were, or look at the kept copies, first."
     : undefined;
 }
 export async function appendApplicationEvent(

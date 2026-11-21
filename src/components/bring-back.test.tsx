@@ -262,6 +262,10 @@ test("AppliedFrom is one plain line: Brought back <rev> / Copied from <rev> on <
   const revertDetails = render(<AppliedFromDetails state={capturedOperation("revert")} revisionId="final" />);
   assert.doesNotMatch(revertDetails.container.textContent!, /Base:/);
   assert.match(revertDetails.container.textContent!, /Version it was applied to:/);
+  assert.equal(revertDetails.getByRole("heading", { level: 3, name: "Brought back files" }).textContent, "Brought back files");
+  cleanup();
+  const mergeDetails = render(<AppliedFromDetails state={capturedOperation("merge")} revisionId="final" />);
+  assert.ok(mergeDetails.getByRole("heading", { level: 3, name: "Copied files" }));
 });
 
 // ---- The hook with a real in-memory project ----
@@ -322,7 +326,7 @@ const revertReview = (state: VaultState, sourceId: string, reason = "") => {
   return applicationReview(buildApplyPreview(prep.context, choices, reason), choices);
 };
 
-test("success: saved automatically, reloads and rescans, and says Saved as V3. To undo, bring back V2 (Undo opens Bring back)", async () => {
+test("success: saved automatically, reloads and rescans, and says Saved as V3. To undo, bring back V2 (the button opens Bring back)", async () => {
   const f = await project();
   const h = hook(f, await openExistingVault(f.vault));
   let result: any;
@@ -335,7 +339,7 @@ test("success: saved automatically, reloads and rescans, and says Saved as V3. T
   assert.equal(h.refreshes(), 1, "an automatic rescan was asked for");
   const banner = h.banners.at(-1)!;
   assert.equal(banner.message, "Saved as V3. To undo, bring back V2.");
-  assert.equal(banner.action?.label, "Undo");
+  assert.equal(banner.action?.label, "Bring back V2");
   act(() => banner.action!.run());
   assert.equal(h.rendered.result.current.bringBackRequest?.revisionId, f.r2.revisionId);
 });
@@ -448,7 +452,7 @@ test("Don't save it: the files stay, the case is no longer blocked and a later B
   assert.equal(await f.main.readFileText(["A.txt"]), "a1");
 });
 
-test("an interrupted write is labelled Undo the unfinished Bring back and needs the CAD-close acknowledgement", async () => {
+test("an interrupted write is labelled Put files back as they were and needs the app-close acknowledgement", async () => {
   const state = capturedOperation("revert");
   const op = state.applicationOperations![0];
   op.status = "unresolved";
@@ -458,11 +462,11 @@ test("an interrupted write is labelled Undo the unfinished Bring back and needs 
   );
   assert.match(ui.getByRole("region").textContent!, /A Bring back was interrupted/);
   assert.equal(ui.queryByRole("button", { name: "Save now" }), null);
-  fireEvent.click(ui.getByRole("button", { name: "Undo the unfinished Bring back" }));
-  const dialog = ui.getByRole("dialog", { name: "Undo the unfinished Bring back" });
-  const confirm = within(dialog).getByRole("button", { name: "Undo the unfinished Bring back" }) as HTMLButtonElement;
+  fireEvent.click(ui.getByRole("button", { name: "Put files back as they were" }));
+  const dialog = ui.getByRole("dialog", { name: "Put files back as they were" });
+  const confirm = within(dialog).getByRole("button", { name: "Put files back as they were" }) as HTMLButtonElement;
   assert.equal(confirm.disabled, true);
-  fireEvent.click(within(dialog).getByRole("checkbox", { name: "I have saved and closed these files in my CAD program." }));
+  fireEvent.click(within(dialog).getByRole("checkbox", { name: "I have saved and closed these files in the app I use." }));
   fireEvent.click(confirm);
   await waitFor(() => assert.equal(recovers, 1));
 });

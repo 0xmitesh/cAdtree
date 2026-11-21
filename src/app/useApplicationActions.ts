@@ -136,7 +136,7 @@ export function useApplicationActions({
         : `Saved as ${saved}.`,
       action: previous
         ? {
-            label: "Undo",
+            label: `Bring back ${formatRevisionNumber(previous.manifest.displayNumber)}`,
             run: () =>
               requestBringBack(state.project.projectId, previous.manifest.revisionId),
           }
@@ -237,7 +237,7 @@ export function useApplicationActions({
             setStatusBanner({
               type: "success",
               message:
-                "The unfinished change was undone: the affected files are back as they were. Other files were not touched.",
+                "The files are back as they were before the interrupted change. Other files were not touched.",
             });
         } finally {
           if (context.current()) await refreshApplicationState();

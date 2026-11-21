@@ -175,7 +175,7 @@ export function ProjectViews({
     : 0;
   const unfinishedBlock = (branchId: string) =>
     branchApplications(vaultState, branchId).some((op) => !isFinishedOperation(op))
-      ? "Finish the earlier Bring back, Copy or Discard on this case first (see the notice at the top)."
+      ? "Finish the earlier change to your files on this case first (see the notice at the top)."
       : undefined;
   const discardController = (branchId: string): DiscardController => ({
     review: reviewDiscard,
@@ -309,7 +309,7 @@ export function ProjectViews({
               (branchApplications(vaultState, activeBranchId).some(
                 (op) => !isFinishedOperation(op),
               )
-                ? "Finish the earlier Bring back or Copy on this case first (see the notice at the top)."
+                ? "Finish the earlier change to your files on this case first (see the notice at the top)."
                 : undefined),
           }}
           getVersion={
@@ -324,7 +324,7 @@ export function ProjectViews({
                     (branchApplications(vaultState, activeBranchId).some(
                       (op) => !isFinishedOperation(op),
                     )
-                      ? "Finish the earlier Bring back or Copy on this case first (see the notice at the top)."
+                      ? "Finish the earlier change to your files on this case first (see the notice at the top)."
                       : undefined),
                 }
               : undefined

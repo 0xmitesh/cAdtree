@@ -189,13 +189,13 @@ function noUnfinished(state: VaultState, branchId: string) {
   if (!op) return;
   if (!op.record)
     throw new Error(
-      "This case has an unfinished operation whose record can't be read. See the notice at the top before starting another Bring back, Copy, Discard or Get this version.",
+      "This case has an unfinished operation whose record can't be read. See the notice at the top before making another change to your files.",
     );
   const name = operationName(op.record.plan.mode);
   throw new Error(
     op.status === "applied"
       ? `This case has an unfinished ${name}: its files were written but not saved. Choose Save now or Don't save it before starting another.`
-      : `This case has an unfinished ${name}. Undo the unfinished ${name} before starting another.`,
+      : `This case has an unfinished ${name}. Choose Put files back as they were (see the notice at the top) before starting another.`,
   );
 }
 async function cleanDestination(
@@ -1386,7 +1386,7 @@ async function assertReplaceRemovalsReady(
   if (!startedMode) throw new ReplacePlanChangedError(appeared);
   const name = operationName(startedMode);
   throw new Error(
-    `Changes differ from what you saw: ${appeared.join(", ")}. No working files were changed. Undo the unfinished ${name}, then try again.`,
+    `Changes differ from what you saw: ${appeared.join(", ")}. No working files were changed. Choose Put files back as they were (see the notice at the top), then try again.`,
   );
 }
 export async function recoverApplication(

@@ -343,14 +343,14 @@ test("a file that appears in a folder being removed after the copy is kept stops
   assert.ok(!(error instanceof ReplacePlanChangedError), "not a stale plan: the operation has started");
   assert.equal(
     error.message,
-    "Changes differ from what you saw: Added/late.txt. No working files were changed. Undo the unfinished Discard, then try again.",
+    "Changes differ from what you saw: Added/late.txt. No working files were changed. Choose Put files back as they were (see the notice at the top), then try again.",
   );
   const [op] = await f.ops();
   assert.equal(op.status, "unresolved");
   assert.equal(await f.main.readFileText(["Added", "x.txt"]), "x");
   assert.equal(await f.main.readFileText(["Added", "late.txt"]), "late");
   // Another Discard is refused until this one is undone, and says which one.
-  await assert.rejects(f.discard(["Added"]), /^Error: This case has an unfinished Discard\. Undo the unfinished Discard before starting another\.$/);
+  await assert.rejects(f.discard(["Added"]), /^Error: This case has an unfinished Discard\. Choose Put files back as they were \(see the notice at the top\) before starting another\.$/);
   const recovered = await recoverApplication(f.vault, f.projectId, "branch-main", op.operationId, {
     workingFolders: f.folders,
   });
