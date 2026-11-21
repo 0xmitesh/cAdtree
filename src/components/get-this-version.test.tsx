@@ -33,7 +33,7 @@ function spy(overrides: Partial<GetVersionCheck> = {}, extra: Partial<GetVersion
       checks.push([revisionId, path]);
       return {
         projectId: "visual-project", branchId: "branch-main", revisionId, path,
-        revisionLabel: `V${revisionId.slice(1)}`, fromLabel: `V${revisionId.slice(1)}`, planHash: "h", blockers: [],
+        revisionLabel: `V${revisionId.slice(1)}`, fromLabel: `V${revisionId.slice(1)}`, fromCase: null, intoCase: "Main", planHash: "h", blockers: [],
         hasUnsavedEdits: false, keptFolder: "Discarded/2026-11-20 09.30", ...overrides,
       };
     },
@@ -109,6 +109,21 @@ test("File history: the picked file's row offers Get this version for an older v
   await waitFor(() => assert.deepEqual(checks, [["r2", HOUSING]]));
 });
 
+test("confirm dialog: a version from another case says which case the file comes from and where it goes", async () => {
+  const { controller } = spy({ revisionLabel: "V3", fromLabel: "V3 on Lighter collar", fromCase: "Lighter collar", intoCase: "Main" });
+  const ui = render(<HistoryRecoveryView {...props(controller)} />);
+  fireEvent.click(revBtn(ui, "002"));
+  fireEvent.click(within(files(ui)).getByRole("button", { name: "Get this version" }));
+  const dialog = await waitFor(() => ui.getByRole("dialog", { name: "Get this version" }));
+  await waitFor(() =>
+    assert.match(
+      within(dialog).getByTestId("get-version-other-case").textContent!,
+      /^Get V3 of Parts\/Housing\.SLDPRT from Lighter collar\. It goes into Main's working folder as an unsaved change\.$/,
+    ),
+  );
+  assert.doesNotMatch(dialog.textContent!, /Put Parts/);
+});
+
 test("confirm dialog: the question, no warning without unsaved edits, and Confirm sends the checked plan", async () => {
   const { controller, confirmed } = spy();
   const ui = render(<HistoryRecoveryView {...props(controller)} />);
@@ -121,6 +136,7 @@ test("confirm dialog: the question, no warning without unsaved edits, and Confir
       /Put Parts\/Housing\.SLDPRT from V2 into your working folder\? It will show as an unsaved change\./,
     ),
   );
+  assert.equal(within(dialog).queryByTestId("get-version-other-case"), null);
   assert.doesNotMatch(dialog.textContent!, /current edits/);
   fireEvent.click(within(dialog).getByRole("button", { name: "Get this version" }));
   await waitFor(() => assert.equal(confirmed.length, 1));
@@ -282,7 +298,10 @@ test("the hook checks with a fresh scan, writes through perform, rescans and say
   ).revision.manifest;
   const other = await result.current.check(caseRev.revisionId, "A.txt");
   assert.equal(other.fromLabel, `V${caseRev.displayNumber} on Lighter`);
+  assert.equal(other.fromCase, "Lighter");
+  assert.equal(other.intoCase, "Main");
   assert.equal(check.fromLabel, "V1");
+  assert.equal(check.fromCase, null);
 });
 
 test("an interrupted Get this version is labelled Put files back as they were", () => {
