@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ancestryOf, layoutRevisions } from "./layout";
+import { ancestryOf, copyBaseOf, layoutRevisions, sharedHistoryOf } from "./layout";
 import {
   historyState,
   revision,
@@ -268,4 +268,38 @@ test("Hide case: a shown version's damaged parent on a hidden case stays visible
   assert.ok(ids.includes("r2"), "the damaged parent's own ancestors stay too");
   assert.ok(!ids.includes("p2"));
   assert.ok(graph.nodes.find((n) => n.id === "m7")!.warnings.some((w) => /damaged/.test(w)));
+});
+test("copyBaseOf: earlier copies count as shared history; ambiguity, loops and no link fall back to the parent line", () => {
+  const plain = layoutRevisions(scenarioState("branches"), "branch-main");
+  assert.deepEqual(copyBaseOf(plain, "p2", "r6"), { baseId: "r2", viaCopy: false });
+  const copied = layoutRevisions(
+    withCopy(scenarioState("branches"), "r6", "p1"),
+    "branch-main",
+  );
+  assert.deepEqual(copyBaseOf(copied, "p2", "r6"), { baseId: "p1", viaCopy: true });
+  assert.deepEqual([...sharedHistoryOf(copied, "r6")].sort(), ["p1", "r1", "r2", "r3", "r4", "r5", "r6"]);
+  // A Bring back restarts from its source: r4 and r5 stop counting.
+  const reverted = layoutRevisions(
+    withCopy(scenarioState("branches"), "r6", "r3", "revert", "captured", "branch-main"),
+    "branch-main",
+  );
+  assert.deepEqual(copyBaseOf(reverted, "p2", "r6"), { baseId: "r2", viaCopy: false });
+  assert.deepEqual([...sharedHistoryOf(reverted, "r6")].sort(), ["r1", "r2", "r3", "r6"]);
+  // An earlier copy saved before the Bring back no longer counts either.
+  const undone = withCopy(
+    withCopy(scenarioState("branches"), "r4", "p2"),
+    "r6",
+    "r3",
+    "revert",
+    "captured",
+    "branch-main",
+  );
+  const g2 = layoutRevisions(undone, "branch-main");
+  assert.equal(sharedHistoryOf(g2, "r6").has("p2"), false);
+  assert.deepEqual(copyBaseOf(g2, "p2", "r6"), { baseId: "r2", viaCopy: false });
+  // Copies that point at each other do not loop and settle nothing.
+  const loop = withCopy(withCopy(scenarioState("branches"), "r6", "p2"), "p2", "r6");
+  const looped = layoutRevisions(loop, "branch-main");
+  assert.ok(sharedHistoryOf(looped, "r6").has("p2"));
+  assert.equal(copyBaseOf(looped, "p2", "r6")?.viaCopy ?? false, false);
 });

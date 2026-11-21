@@ -6,7 +6,12 @@ import {
   compareSnapshotContents,
   comparisonEndpoint,
 } from "./snapshot-comparison";
-import { ancestryOf, layoutRevisions } from "../history/layout";
+import {
+  ancestryOf,
+  copyBaseOf,
+  layoutRevisions,
+  sharedHistoryOf,
+} from "../history/layout";
 import { componentWriteBlock } from './component-identity';
 import {
   checkCaseInsensitiveCollisions,
@@ -48,6 +53,9 @@ export interface ApplyPreviewContext {
   base: ReconstructedRevision;
   source: ReconstructedRevision;
   destination: ReconstructedRevision;
+  /** Copy only: the base was reached through an earlier Copy, not the parent
+   * line alone. Display only; nothing is stored. */
+  baseViaCopy: boolean;
   rows: PreviewFileRow[];
 }
 export type ApplyPreviewPreparation =
@@ -253,18 +261,28 @@ export function prepareApplyPreview(
         `${versionLabel} is already the latest saved version of this case; there is nothing to bring back or copy.`,
       );
     const graph = layoutRevisions(state, destinationBranchId);
+    // Revert uses the parent line only. Copy also counts earlier Copies as
+    // shared history (`copyBaseOf`), and falls back to the parent line when
+    // that is ambiguous.
     const sourceAncestors = ancestryOf(graph, sourceId);
-    const destinationAncestors = ancestryOf(graph, baseline.revisionId);
-    const baseId = [...destinationAncestors].find((id) =>
-      sourceAncestors.has(id),
+    const parentBaseId = [...ancestryOf(graph, baseline.revisionId)].find(
+      (id) => sourceAncestors.has(id),
     );
+    const copyBase =
+      mode === "merge"
+        ? copyBaseOf(graph, sourceId, baseline.revisionId)
+        : null;
+    const baseId = copyBase?.baseId ?? parentBaseId;
+    const baseViaCopy = copyBase?.viaCopy ?? false;
     if (!baseId)
       throw new Error(
         "cAdtree could not find a common starting version. The history may be missing, damaged or unclear. No plan was guessed.",
       );
     if (mode === "merge" && baseId === sourceId)
       throw new Error(
-        `${versionLabel} is an earlier version in this case's history, so copying it would change nothing. Use "Bring back" to put its files back.`,
+        baseViaCopy
+          ? `Everything in ${versionLabel} is already in this case from an earlier copy. There's nothing new to copy.`
+          : `${versionLabel} is an earlier version in this case's history, so copying it would change nothing. Use "Bring back" to put its files back.`,
       );
     if (mode === "revert" && baseId !== sourceId)
       throw new Error(
@@ -273,6 +291,22 @@ export function prepareApplyPreview(
     const parents = new Map(
       graph.edges.map((edge) => [edge.child, edge.parent]),
     );
+    const checkVersion = (id: string) => {
+      const endpoint = comparisonEndpoint(state, id);
+      if (endpoint.status !== "available")
+        throw new Error(
+          `The shared history is unavailable at "${id}". ${endpoint.reason}`,
+        );
+      assertBranch(endpoint.revision.manifest.branchId);
+      if (
+        graph.nodes
+          .find((node) => node.id === id)
+          ?.warnings.some((warning) =>
+            /Duplicate|Cyclic|Damaged/.test(warning),
+          )
+      )
+        throw new Error("The shared history is unclear or damaged.");
+    };
     const validatePath = (start: string) => {
       let id = start;
       const seen = new Set<string>();
@@ -280,20 +314,7 @@ export function prepareApplyPreview(
         if (seen.has(id))
           throw new Error("The shared history loops back on itself.");
         seen.add(id);
-        const endpoint = comparisonEndpoint(state, id);
-        if (endpoint.status !== "available")
-          throw new Error(
-            `The shared history is unavailable at "${id}". ${endpoint.reason}`,
-          );
-        assertBranch(endpoint.revision.manifest.branchId);
-        if (
-          graph.nodes
-            .find((node) => node.id === id)
-            ?.warnings.some((warning) =>
-              /Duplicate|Cyclic|Damaged/.test(warning),
-            )
-        )
-          throw new Error("The shared history is unclear or damaged.");
+        checkVersion(id);
         if (id === baseId) return;
         const parentId = parents.get(id);
         if (!parentId)
@@ -303,8 +324,18 @@ export function prepareApplyPreview(
         id = parentId;
       }
     };
-    validatePath(sourceId);
-    validatePath(baseline.revisionId);
+    if (baseViaCopy) {
+      // Every version on the way from either end to the base, through earlier
+      // copies too, must be readable and unambiguous.
+      const baseHistory = sharedHistoryOf(graph, baseId);
+      checkVersion(baseId);
+      for (const head of [sourceId, baseline.revisionId])
+        for (const id of sharedHistoryOf(graph, head))
+          if (!baseHistory.has(id)) checkVersion(id);
+    } else {
+      validatePath(sourceId);
+      validatePath(baseline.revisionId);
+    }
     // Revert: the destination baseline is the base, so every difference to the
     // older source is an ordinary, conflict-free source change.
     const baseEndpoint = comparisonEndpoint(
@@ -385,6 +416,7 @@ export function prepareApplyPreview(
         base,
         source,
         destination,
+        baseViaCopy,
         rows,
       },
     };

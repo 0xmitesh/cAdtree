@@ -70,6 +70,46 @@ test("files changed on both sides need Keep mine or Take theirs (no default) bef
   assert.equal(JSON.stringify(state), before, "the dialog never changes saved state");
 });
 
+test("the Copy dialog says what it compares with: where histories meet, or an earlier copy", () => {
+  const first = render(
+    <ApplyPreviewDialog state={fixture()} sourceId="p2" destinationBranchId="branch-main" onClose={() => {}} />,
+  );
+  assert.equal(
+    first.getByLabelText("Compared with").textContent,
+    "Compared with V2, where these cases' histories meet.",
+  );
+  cleanup();
+  // The case saved again after V8 was copied into Main as V6.
+  const state = fixture();
+  state.revisions.push(revision("p3", "p2", 9, "prototype"));
+  state.revisions.find((r) => r.manifest.revisionId === "p3")!.manifest.files.push({
+    path: "Later/Part.SLDPRT", sha256: "later", size: 5, lastModified: 0,
+  });
+  state.branchHeads.prototype = "p3";
+  state.applicationOperations = [
+    {
+      operationId: "apply-r6-p2",
+      destinationBranchId: "branch-main",
+      relativePath: "applications/branch-main/x",
+      status: "captured",
+      capturedRevisionId: "r6",
+      events: [],
+      record: { sourceBranchId: "prototype", plan: { sourceRevisionId: "p2", mode: "merge" } },
+    } as never,
+  ];
+  const second = render(
+    <ApplyPreviewDialog state={state} sourceId="p3" destinationBranchId="branch-main" onClose={() => {}} />,
+  );
+  assert.equal(second.getByLabelText("Compared with").textContent, "Compared with V8, from an earlier copy.");
+  assert.ok(second.getByRole("checkbox", { name: "Copy Later/Part.SLDPRT" }));
+  cleanup();
+  // Bring back has no such line.
+  const revert = render(
+    <ApplyPreviewDialog state={fixture()} sourceId="r3" destinationBranchId="branch-main" mode="revert" onClose={() => {}} />,
+  );
+  assert.equal(revert.queryByLabelText("Compared with"), null);
+});
+
 test("unticking every file and keeping mine leaves nothing to copy and the button disabled", () => {
   const { controller } = spy();
   const ui = render(

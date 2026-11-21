@@ -330,3 +330,113 @@ export function ancestryOf(graph: RevisionGraph, headId: string): Set<string> {
   }
   return ids;
 }
+
+/**
+ * What counts as "already in" a version, one step back, for Copy: its parent,
+ * plus the source of every earlier Copy saved as that version (usable
+ * `graph.copies` links, merge mode). A saved Bring back makes its version equal
+ * its source, so its steps back are the Bring back source(s) only (when that
+ * source is an earlier version on the child's own parent line; any other revert
+ * link is ignored): the versions
+ * between them, and any copies saved there, no longer count.
+ */
+function sharedPredecessors(graph: RevisionGraph): Map<string, string[]> {
+  const parent = new Map(graph.edges.map((e) => [e.child, e.parent]));
+  const merges = new Map<string, string[]>();
+  const reverts = new Map<string, string[]>();
+  // A real Bring back always names an earlier version on its own parent line;
+  // a revert link that does not is damaged evidence and is ignored.
+  const onOwnLine = (child: string, source: string) => {
+    const seen = new Set<string>();
+    let id = parent.get(child);
+    while (id && !seen.has(id)) {
+      if (id === source) return true;
+      seen.add(id);
+      id = parent.get(id);
+    }
+    return false;
+  };
+  for (const link of graph.copies) {
+    if (link.mode === "revert" && !onOwnLine(link.child, link.source)) continue;
+    const into = link.mode === "revert" ? reverts : merges;
+    into.set(link.child, [...(into.get(link.child) ?? []), link.source]);
+  }
+  const result = new Map<string, string[]>();
+  for (const id of new Set([...parent.keys(), ...merges.keys(), ...reverts.keys()])) {
+    const back = reverts.get(id);
+    result.set(
+      id,
+      back ?? [...(parent.has(id) ? [parent.get(id)!] : []), ...(merges.get(id) ?? [])],
+    );
+  }
+  return result;
+}
+
+function historyFrom(
+  predecessors: Map<string, string[]>,
+  headId: string,
+): Set<string> {
+  const ids = new Set<string>();
+  const pending = [headId];
+  while (pending.length) {
+    const id = pending.pop()!;
+    if (ids.has(id)) continue;
+    ids.add(id);
+    for (const back of predecessors.get(id) ?? []) pending.push(back);
+  }
+  return ids;
+}
+
+/**
+ * A version's shared history for Copy: itself and everything it counts as
+ * already containing, following `sharedPredecessors` (parent line plus earlier
+ * Copies, restarting from the source at a Bring back). Loop-safe, linear.
+ */
+export function sharedHistoryOf(graph: RevisionGraph, headId: string): Set<string> {
+  return historyFrom(sharedPredecessors(graph), headId);
+}
+
+export interface CopyBase {
+  baseId: string;
+  /** True when the base is not on both parent lines, so it was reached through
+   * an earlier Copy. */
+  viaCopy: boolean;
+}
+
+/**
+ * The starting point for copying `sourceId` into the branch whose newest
+ * version is `destinationHeadId`: the latest version both sides share, where
+ * earlier Copies count as shared history and a Bring back restarts from its
+ * source. Exactly one latest shared version is used; if copies cross back and
+ * forth and there are several candidates (or none), it falls back to the first
+ * shared version on the parent lines. Returns null when nothing settles it.
+ * Linear in the size of the history.
+ */
+export function copyBaseOf(
+  graph: RevisionGraph,
+  sourceId: string,
+  destinationHeadId: string,
+): CopyBase | null {
+  const sourceLine = ancestryOf(graph, sourceId);
+  const destinationLine = ancestryOf(graph, destinationHeadId);
+  const parentBase = [...destinationLine].find((id) => sourceLine.has(id)) ?? null;
+  const predecessors = sharedPredecessors(graph);
+  const sourceShared = historyFrom(predecessors, sourceId);
+  const shared = [...historyFrom(predecessors, destinationHeadId)].filter((id) =>
+    sourceShared.has(id),
+  );
+  // Shared history is closed downward, so a shared version is non-latest
+  // exactly when it is a step back from another shared version.
+  const behind = new Set<string>();
+  for (const id of shared)
+    for (const back of predecessors.get(id) ?? []) if (back !== id) behind.add(back);
+  const latest = shared.filter((id) => !behind.has(id));
+  if (latest.length === 1) {
+    const baseId = latest[0];
+    return {
+      baseId,
+      viaCopy: !(sourceLine.has(baseId) && destinationLine.has(baseId)),
+    };
+  }
+  return parentBase ? { baseId: parentBase, viaCopy: false } : null;
+}
