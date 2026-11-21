@@ -278,12 +278,25 @@ test("copyBaseOf: earlier copies count as shared history; ambiguity, loops and n
   );
   assert.deepEqual(copyBaseOf(copied, "p2", "r6"), { baseId: "p1", viaCopy: true });
   assert.deepEqual([...sharedHistoryOf(copied, "r6")].sort(), ["p1", "r1", "r2", "r3", "r4", "r5", "r6"]);
-  // A Bring back link adds nothing.
+  // A Bring back restarts from its source: r4 and r5 stop counting.
   const reverted = layoutRevisions(
     withCopy(scenarioState("branches"), "r6", "r3", "revert", "captured", "branch-main"),
     "branch-main",
   );
   assert.deepEqual(copyBaseOf(reverted, "p2", "r6"), { baseId: "r2", viaCopy: false });
+  assert.deepEqual([...sharedHistoryOf(reverted, "r6")].sort(), ["r1", "r2", "r3", "r6"]);
+  // An earlier copy saved before the Bring back no longer counts either.
+  const undone = withCopy(
+    withCopy(scenarioState("branches"), "r4", "p2"),
+    "r6",
+    "r3",
+    "revert",
+    "captured",
+    "branch-main",
+  );
+  const g2 = layoutRevisions(undone, "branch-main");
+  assert.equal(sharedHistoryOf(g2, "r6").has("p2"), false);
+  assert.deepEqual(copyBaseOf(g2, "p2", "r6"), { baseId: "r2", viaCopy: false });
   // Copies that point at each other do not loop and settle nothing.
   const loop = withCopy(withCopy(scenarioState("branches"), "r6", "p2"), "p2", "r6");
   const looped = layoutRevisions(loop, "branch-main");

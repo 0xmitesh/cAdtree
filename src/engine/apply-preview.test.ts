@@ -8,6 +8,7 @@ import {
   type ApplyPreviewContext,
   type ConflictDecision,
 } from "./apply-preview";
+import { layoutRevisions, copyBaseOf } from "../history/layout";
 import { compareSavedRevisions } from "./snapshot-comparison";
 import type { FileEntry, VaultState } from "./types";
 const part = "Parts/Part-X.SLDPRT";
@@ -526,6 +527,7 @@ function addCopy(
   destinationBranchId: string,
   sourceBranchId: string,
   status = "captured",
+  mode: "merge" | "revert" = "merge",
 ) {
   state.applicationOperations = [
     ...(state.applicationOperations ?? []),
@@ -536,7 +538,7 @@ function addCopy(
       status,
       capturedRevisionId: child,
       events: [],
-      record: { sourceBranchId, plan: { sourceRevisionId: source, mode: "merge" } },
+      record: { sourceBranchId, plan: { sourceRevisionId: source, mode } },
     } as never,
   ];
 }
@@ -703,4 +705,44 @@ test("already copied: the source is the base only because of the copy, so there 
   assert.equal(ancestor.status, "unavailable");
   if (ancestor.status === "unavailable")
     assert.match(ancestor.reason, /Use "Bring back"/);
+});
+test("an undone copy no longer counts: after Bring back, copying again offers everything the undo removed", () => {
+  const state = copiedOnce();
+  // "To undo, bring back m1": m3 on Main has m1's files again.
+  state.revisions.push(
+    version("m3", "m2", 6, "branch-main", { "Bracket.txt": "b0", "Other.txt": "o0" }),
+  );
+  state.branchHeads["branch-main"] = "m3";
+  addCopy(state, "m3", "m1", "branch-main", "branch-main", "captured", "revert");
+  // Copying X2 again is an ordinary copy, not "already copied".
+  const again = context(state, "x2");
+  assert.equal(again.base.manifest.revisionId, "m1");
+  assert.equal(again.baseViaCopy, false);
+  assert.equal(kindOf(again, "New.txt"), "available");
+  assert.equal(kindOf(again, "Bracket.txt"), "available");
+  // Copying X3: the file the undo removed is offered again.
+  const next = context(state, "x3");
+  assert.equal(next.base.manifest.revisionId, "m1");
+  assert.equal(kindOf(next, "New.txt"), "available");
+  assert.equal(kindOf(next, "Bracket.txt"), "available");
+  // Without the Bring back link the earlier copy would still count.
+  state.applicationOperations = state.applicationOperations!.slice(0, 1);
+  assert.equal(context(state, "x3").base.manifest.revisionId, "x2");
+});
+test("copyBaseOf is linear: 2,000 versions with a copy and a Bring back run well under the bound", () => {
+  const state = historyState(2000);
+  addCase(state, "x", "r1");
+  state.revisions.push(
+    version("x1", "r1", 2001, "x", { "X.txt": "x1" }),
+    version("x2", "x1", 2002, "x", { "X.txt": "x2" }),
+  );
+  state.branchHeads.x = "x2";
+  addCopy(state, "r1000", "x1", "branch-main", "x");
+  addCopy(state, "r1500", "r1200", "branch-main", "branch-main", "captured", "revert");
+  const graph = layoutRevisions(state, "branch-main");
+  const started = performance.now();
+  const result = copyBaseOf(graph, "x2", "r2000");
+  const elapsed = performance.now() - started;
+  assert.deepEqual(result, { baseId: "x1", viaCopy: true });
+  assert.ok(elapsed < 200, `took ${elapsed} ms`);
 });
