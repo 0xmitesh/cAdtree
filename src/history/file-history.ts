@@ -9,8 +9,8 @@ export interface FileHistoryRecord {
     | "Renamed"
     | "Deleted"
     | "Reintroduced"
-    | "Inherited state"
-    | "Inherited absence"
+    | "Unchanged"
+    | "File not present"
     | "History unavailable";
   previousPath?: string;
   file?: FileEntry;
@@ -158,7 +158,7 @@ export function fileHistory(
   if (contextId && nodes.has(contextId) && !records.has(contextId))
     records.set(contextId, {
       kind: "context",
-      status: files.get(contextId) ? "Inherited state" : "Inherited absence",
+      status: files.get(contextId) ? "Unchanged" : "File not present",
       file: files.get(contextId),
       origins: [],
     });
@@ -184,7 +184,7 @@ export function fileHistory(
     )
       records.set(id, {
         kind: "context",
-        status: files.get(id) ? "Inherited state" : "Inherited absence",
+        status: files.get(id) ? "Unchanged" : "File not present",
         file: files.get(id),
         origins: [],
       });

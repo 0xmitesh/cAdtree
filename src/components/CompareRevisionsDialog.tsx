@@ -327,7 +327,7 @@ export function CompareRevisionsDialog({
                 {scopePath
                   ? "No byte differences for this file."
                   : directoryCount
-                    ? "No file differences. Project directory changes are listed below."
+                    ? "No file differences. Project folder changes are listed below."
                     : "No file or folder differences between these versions."}
               </Notice>
             ) : null}
@@ -433,9 +433,9 @@ export function CompareRevisionsDialog({
               </section>
             </details>
             <details className="disclosure comparison-directories">
-              <summary>Project directory changes ({directoryCount})</summary>
+              <summary>Project folder changes ({directoryCount})</summary>
               <p className="muted small">
-                All project directories, including empty folders; independent of
+                All project folders, including empty folders; independent of
                 file scope.
               </p>
               {diff!.addedDirectories.map((path) => (
@@ -449,7 +449,7 @@ export function CompareRevisionsDialog({
                 </p>
               ))}
               {!directoryCount ? (
-                <p>No directory additions or deletions.</p>
+                <p>No folders were added or deleted.</p>
               ) : null}
             </details>
           </>

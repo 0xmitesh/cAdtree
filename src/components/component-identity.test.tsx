@@ -40,7 +40,7 @@ test('ambiguous suggestions require an explicit target and confirmation; cancell
   assert.equal(review,undefined);
   fireEvent.click(ui.getByRole('button',{name:'Confirm rename'}));
   assert.deepEqual((review as IdentityReview | undefined)?.renames,[{from:'old',to:'second'}]);
-  fireEvent.click(ui.getByRole('button',{name:'Cancel association'}));
+  fireEvent.click(ui.getByRole('button',{name:'Cancel rename'}));
   assert.deepEqual((review as IdentityReview | undefined)?.renames,[]);
 });
 test('changed scan does not silently renew old identity decisions', async()=>{
@@ -95,7 +95,7 @@ test('files whose name and bytes both changed are not suggested in the panel; a 
   fireEvent.click(ui.getByRole('button',{name:/^Save version$/}));
   await waitFor(()=>assert.ok(captured));
   assert.deepEqual(captured.identityReview.renames,[{from:'old',to:'first'}]);
-  fireEvent.click(panel.getByRole('button',{name:'Cancel association'}));
+  fireEvent.click(panel.getByRole('button',{name:'Cancel rename'}));
   assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null);
 });
 test('legacy projects show no identity controls and no enable-tracking button', async()=>{
@@ -106,7 +106,7 @@ test('legacy projects show no identity controls and no enable-tracking button', 
   cleanup();
   const changes = render(<ChangesCaptureView {...changesProps(state,f.scan)}/>);
   assert.equal(changes.queryByRole('region',{name:'Renamed files'}),null);
-  assert.equal(changes.queryByText(/Enable component tracking/),null);
+  assert.equal(changes.queryByText(/Rename tracking is not turned on/),null);
   assert.ok(changes.getByText("Renames aren't tracked for this project."));
 });
 function changesProps(state:VaultState,scan:ScanResult,extra:object={}) {
@@ -135,7 +135,7 @@ test('Treat as a new file lives in each modified or unchanged file menu and need
   const panel = within(ui.getByRole('region',{name:'Renamed files'}));
   assert.ok(panel.getByText('New file at old'));
   assert.equal(ui.queryByRole('button',{name:'Treat as a new file — old'}),null);
-  fireEvent.click(panel.getByRole('button',{name:'Cancel replacement'}));
+  fireEvent.click(panel.getByRole('button',{name:'Cancel new-file choice'}));
   assert.equal(ui.queryByRole('region',{name:'Renamed files'}),null);
   assert.ok(ui.getByRole('button',{name:'Treat as a new file — old'}));
 });
@@ -155,7 +155,7 @@ test('only an incomplete enrollment offers a retry, inside the error notice', as
   assert.equal(without.queryByRole('button',{name:'Retry turning on rename tracking'}),null);
 });
 
-test('Changes exposes an applied-addition rename conflict and allows saving after cancelling the association', async () => {
+test('Changes exposes an applied-addition rename conflict and allows saving after cancelling the rename', async () => {
   const f = await fixture();
   const notes = { problem: '', modification: '', observations: '' };
   const branchId = 'branch-main';
@@ -185,13 +185,13 @@ test('Changes exposes an applied-addition rename conflict and allows saving afte
   const match = within(ui.getByRole('dialog', { name: 'Match to a new file' }));
   fireEvent.change(match.getByRole('combobox'), { target: { value: 'first' } });
   fireEvent.click(match.getByRole('button', { name: 'Confirm rename' }));
-  assert.match(ui.getByRole('alert').textContent!, /Component identity conflict.*first.*confirmed rename/);
+  assert.match(ui.getByRole('alert').textContent!, /Rename conflict.*first.*confirmed rename/);
   const save = ui.getByRole('button', { name: /^Save version$/ }) as HTMLButtonElement;
   assert.equal(save.disabled, true);
   fireEvent.submit(save.closest('form')!);
   assert.equal(captures, 0, 'submission cannot bypass the conflict block');
   assert.equal((await openExistingVault(f.vault)).revisions.length, state.revisions.length);
-  fireEvent.click(ui.getByRole('button', { name: 'Cancel association' }));
+  fireEvent.click(ui.getByRole('button', { name: 'Cancel rename' }));
   assert.equal(ui.queryByRole('alert'), null);
   assert.equal(save.disabled, false);
   fireEvent.click(save);

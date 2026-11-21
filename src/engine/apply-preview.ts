@@ -1,5 +1,6 @@
 import type { FileEntry, ReconstructedRevision, ScanResult, VaultState } from "./types";
 import { hashString } from "./hash";
+import { formatRevisionNumber } from "./vault-service";
 import { getBranchBaseline } from "./branch-state";
 import {
   compareSnapshotContents,
@@ -244,9 +245,12 @@ export function prepareApplyPreview(
       throw new Error(
         `The destination’s saved version is unavailable. ${destinationEndpoint.reason}`,
       );
+    const versionLabel = formatRevisionNumber(
+      sourceEndpoint.revision.manifest.displayNumber,
+    );
     if (sourceId === baseline.revisionId)
       throw new Error(
-        `${sourceId} is already the latest saved version of this case; there is nothing to bring back or apply.`,
+        `${versionLabel} is already the latest saved version of this case; there is nothing to bring back or copy.`,
       );
     const graph = layoutRevisions(state, destinationBranchId);
     const sourceAncestors = ancestryOf(graph, sourceId);
@@ -260,11 +264,11 @@ export function prepareApplyPreview(
       );
     if (mode === "merge" && baseId === sourceId)
       throw new Error(
-        `${sourceId} is an earlier version in this case's history, so applying it would change nothing. Use "Bring back" to restore files from it.`,
+        `${versionLabel} is an earlier version in this case's history, so copying it would change nothing. Use "Bring back" to put its files back.`,
       );
     if (mode === "revert" && baseId !== sourceId)
       throw new Error(
-        `${sourceId} is not an earlier version in this case's history. Bringing back is only for earlier versions in the same history; use Apply changes instead.`,
+        `${versionLabel} is not an earlier version in this case's history. Bringing back is only for earlier versions of the same case; use "Copy files from…" to take changes from another case.`,
       );
     const parents = new Map(
       graph.edges.map((edge) => [edge.child, edge.parent]),

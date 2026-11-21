@@ -84,7 +84,7 @@ test("deleted file shows its absence and links to the parent version; export is 
   assert.ok(
     ui
       .getByRole("region", { name: "Selected file history" })
-      .textContent?.includes("Context only"),
+      .textContent?.includes("shown for context"),
   );
   assert.equal(ui.queryByRole("button", { name: /Copy selected files/ }), null);
   assert.equal(ui.queryByRole("button", { name: "Restore project copy" }), null);

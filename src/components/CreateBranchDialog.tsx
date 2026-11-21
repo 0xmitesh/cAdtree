@@ -49,8 +49,8 @@ export function CreateBranchDialog({
       </p>
       <p className="muted">
         Creates an independent working copy of all {source.files.length} files
-        and {source.directories.length} directories, including empty folders.
-        The vault and saved version are shared.
+        and {source.directories.length} folders, including empty folders. The
+        saved version itself is shared and is not copied again.
       </p>
       {error ? <Notice type="error"><MessageLines text={error} /></Notice> : null}
       <form
@@ -117,7 +117,7 @@ export function CreateBranchDialog({
           </p>
           <p className="muted small">
             After creation, open the new design case folder in the app you use.
-            cAdtree does not change which CAD documents are open.
+            cAdtree does not change which files are open.
           </p>
           <div className="modal-actions">
             <button

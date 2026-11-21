@@ -242,9 +242,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
             status:
               fileRecord.kind === "unavailable"
                 ? "In this version"
-                : fileRecord.status === "Inherited state"
-                  ? "Unchanged"
-                  : fileRecord.status,
+                : fileRecord.status,
           },
         ]
       : []
@@ -383,8 +381,8 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     {selected.latest ? (
                       <span className="latest-label">
                         {filePath
-                          ? "Working case file state"
-                          : "Latest on working case"}
+                          ? "File as it is on this case"
+                          : "Latest on this case"}
                       </span>
                     ) : null}
                   </div>
@@ -413,15 +411,16 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                     <p>
                       <StatusBadge status={fileRecord.status} />
                       {fileRecord.origins.length
-                        ? ` · Origin of ${fileRecord.origins.join(", ")}`
+                        ? ` · Where ${fileRecord.origins.join(", ")} started`
                         : ""}
                     </p>
                     {fileRecord.kind === "context" ? (
                       <p className="muted small">
-                        Context only; this version did not change the file.{" "}
+                        This version did not change the file; it is shown for
+                        context.{" "}
                         {fileRecord.file
-                          ? "The case inherits this saved file state."
-                          : "The file is absent at this origin."}
+                          ? "The case starts with the file as it was here."
+                          : "The file did not exist at this point."}
                       </p>
                     ) : null}
                     {fileRecord.kind === "unavailable" ? (

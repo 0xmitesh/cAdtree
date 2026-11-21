@@ -109,7 +109,7 @@ export async function captureRevision(
     totalFiles: 0,
     processedBytes: 0,
     totalBytes: 0,
-    message: 'Acquiring single-writer project lock...',
+    message: 'Waiting for other cAdtree work on this project to finish...',
   });
 
   return withProjectWriterLock(projectId, (lock) => captureUnderLock(workingDir, vaultDir, input, projectId, lock));
@@ -147,12 +147,12 @@ export async function captureUnderLock(
   const expectedPaths = input.expectedSnapshot?.files.map((f) => f.path) ?? [];
 
   if (input.signal?.aborted) {
-    throw new DOMException('Capture cancelled before starting.', 'AbortError');
+    throw new DOMException('Saving was cancelled before it started.', 'AbortError');
   }
 
   // Step 1: Reload validated vault and branch state under the writer lock
   let vaultState = await openExistingVault(vaultDir);
-  if (vaultState.project.projectId !== projectId) throw new Error('The vault changed while waiting for the writer lock.');
+  if (vaultState.project.projectId !== projectId) throw new Error('The project changed while waiting for another cAdtree task to finish.');
   assertCaseWritable(vaultState,input.branchId);
   const applicationBlock = applicationCaptureBlock(vaultState, input.branchId);
   if (applicationBlock) throw new Error(applicationBlock);
@@ -170,7 +170,7 @@ export async function captureUnderLock(
   await validateOperationWorkingFolders(vaultState, vaultDir, workingFolders);
   if (workingFolders) {
     const connected = workingFolders[input.branchId];
-    if (!connected || !await connected.isSameEntry(workingDir)) throw new Error('The capture folder does not match the selected case connection.');
+    if (!connected || !await connected.isSameEntry(workingDir)) throw new Error('The working folder does not match the selected case.');
   }
   const branch = vaultState.branches.find((b) => b.branchId === input.branchId);
   if (!branch) {
@@ -185,7 +185,7 @@ export async function captureUnderLock(
     throw new Error(
       `Case "${branch.name}" has competing heads (${vaultState.competingHeads[
         branch.branchId
-      ].join(', ')}). Resolve repository inconsistency before capturing new versions.`
+      ].join(', ')}). Fix this before saving new versions.`
     );
   }
 
@@ -225,7 +225,7 @@ export async function captureUnderLock(
     totalFiles: 0,
     processedBytes: 0,
     totalBytes: 0,
-    message: 'Validating working folder inventory...',
+    message: 'Checking your files...',
   });
 
   const freshScan = await scanBranchChanges(
@@ -243,7 +243,7 @@ export async function captureUnderLock(
           totalFiles: count,
           processedBytes: bytes,
           totalBytes: bytes,
-          message: `Scanning ${filePath}...`,
+          message: `Reading ${filePath}...`,
         });
       },
     }
@@ -252,7 +252,7 @@ export async function captureUnderLock(
   if (freshScan.errors.length > 0) {
     const firstErr = freshScan.errors[0];
     throw new Error(
-      `Capture aborted due to unreadable or invalid source file (${firstErr.path}): ${firstErr.error}`
+      `Nothing was saved because a file could not be read (${firstErr.path}): ${firstErr.error}`
     );
   }
 
@@ -265,7 +265,7 @@ export async function captureUnderLock(
   // Refresh the scan through the existing review path before validating either
   // identity or reference selections bound to that scan.
   if (input.reviewedChangesSignature && freshScan.changesSignature !== input.reviewedChangesSignature) {
-    throw new ReviewStaleError('Working folder changes differ from the file list you reviewed. The change list has been refreshed - please review your file changes and note associations before saving.', freshScan);
+    throw new ReviewStaleError('Working folder changes differ from the file list you reviewed. The change list has been refreshed - please review your file changes and notes before saving.', freshScan);
   }
   const componentDraft = prepareComponentRecord(vaultState, freshScan, input.identityReview);
   let referenceDraft = prepareReferenceContext(vaultState, freshScan, componentDraft?.files ?? [], input.referenceReview);
@@ -294,7 +294,7 @@ export async function captureUnderLock(
     for (const fn of sanitizedFileNotes) {
       if (!validPaths.has(fn.path)) {
         throw new ReviewStaleError(
-          `File-specific note refers to "${fn.path}", which is not in the current snapshot or deleted file set. Please review your file note associations.`,
+          `File-specific note refers to "${fn.path}", which is not in the current snapshot or deleted file set. Please review your file notes.`,
           freshScan
         );
       }
@@ -346,7 +346,7 @@ export async function captureUnderLock(
 
   for (let i = 0; i < allSnapshotFiles.length; i++) {
     if (input.signal?.aborted) {
-      throw new DOMException('Capture cancelled by user.', 'AbortError');
+      throw new DOMException('Saving was cancelled.', 'AbortError');
     }
     const entry = allSnapshotFiles[i];
     const segments = splitAndValidatePath(entry.path);
@@ -358,7 +358,7 @@ export async function captureUnderLock(
       totalFiles: allSnapshotFiles.length,
       processedBytes,
       totalBytes,
-      message: `Storing and verifying ${entry.path}...`,
+      message: `Saving ${entry.path}...`,
     });
 
     await writeAndVerifyObject(
@@ -380,7 +380,7 @@ export async function captureUnderLock(
     totalFiles: allSnapshotFiles.length,
     processedBytes: totalBytes,
     totalBytes,
-    message: 'Checking source stability after object capture...',
+    message: 'Checking your files did not change while saving...',
   });
 
   const rawPostCapture = await enumerateWorkingFolder(workingDir, {
@@ -395,27 +395,27 @@ export async function captureUnderLock(
 
   if (postCaptureInventory.errors.length > 0) {
     throw new Error(
-      `Source stability check failed: file "${postCaptureInventory.errors[0].path}" became unreadable during capture.`
+      `Nothing was saved because the file "${postCaptureInventory.errors[0].path}" became unreadable while saving.`
     );
   }
 
   if (postCaptureInventory.files.length !== allSnapshotFiles.length) {
     throw new Error(
-      `Source instability detected: file count changed during capture (${allSnapshotFiles.length} -> ${postCaptureInventory.files.length}). Save and close CAD documents before capturing.`
+      `Nothing was saved because the number of files changed while saving (${allSnapshotFiles.length} -> ${postCaptureInventory.files.length}). Save and close your files in the app you use, then try again.`
     );
   }
 
   // Compare complete normalized directory-path sets before and after capture, not just their lengths
   if (postCaptureInventory.directories.length !== freshScan.directories.length) {
     throw new Error(
-      `Source instability detected: directory count changed during capture (${freshScan.directories.length} -> ${postCaptureInventory.directories.length}).`
+      `Nothing was saved because the number of folders changed while saving (${freshScan.directories.length} -> ${postCaptureInventory.directories.length}). Try again.`
     );
   }
 
   for (let i = 0; i < freshScan.directories.length; i++) {
     if (freshScan.directories[i] !== postCaptureInventory.directories[i]) {
       throw new Error(
-        `Source instability detected: directory path set changed during capture ("${freshScan.directories[i]}" vs "${postCaptureInventory.directories[i]}").`
+        `Nothing was saved because the folders changed while saving ("${freshScan.directories[i]}" vs "${postCaptureInventory.directories[i]}"). Try again.`
       );
     }
   }
@@ -429,7 +429,7 @@ export async function captureUnderLock(
       before.sha256 !== after.sha256
     ) {
       throw new Error(
-        `Source instability detected: "${before.path}" changed while capture was in progress. Ensure CAD documents are saved and closed.`
+        `Nothing was saved because "${before.path}" changed while saving. Save and close your files in the app you use, then try again.`
       );
     }
   }
@@ -441,7 +441,7 @@ export async function captureUnderLock(
     totalFiles: allSnapshotFiles.length,
     processedBytes: totalBytes,
     totalBytes,
-    message: 'Writing and verifying version manifest...',
+    message: 'Writing the version...',
   });
 
   const captureCompletedAt = new Date().toISOString();
@@ -485,7 +485,7 @@ export async function captureUnderLock(
   }
 
   if (input.signal?.aborted) {
-    throw new DOMException('Capture cancelled before completion publication.', 'AbortError');
+    throw new DOMException('Saving was cancelled before it finished.', 'AbortError');
   }
 
   // Step 6: Publish and verify completion record tied to that manifest's hash
@@ -495,7 +495,7 @@ export async function captureUnderLock(
     totalFiles: allSnapshotFiles.length,
     processedBytes: totalBytes,
     totalBytes,
-    message: 'Publishing version completion record...',
+    message: 'Finishing the version...',
   });
 
   const completion: CompletionRecord = {
@@ -518,7 +518,7 @@ export async function captureUnderLock(
   // Same completion marker commits both the immutable manifest and its mapping.
   // Uncompleted sidecars are never visible as component history.
   if (componentDraft) await publishComponentRecord(vaultDir, componentDraft, revisionId, actualManifestFileSha256);
-  if (input.signal?.aborted) throw new DOMException('Capture cancelled before completion publication.', 'AbortError');
+  if (input.signal?.aborted) throw new DOMException('Saving was cancelled before it finished.', 'AbortError');
 
   const completionJson = JSON.stringify(completion, null, 2);
   const expectedCompletionSha256 = hashString(completionJson);
@@ -558,7 +558,7 @@ export async function captureUnderLock(
     );
     await vaultDir.writeFileText(['cache', 'index.json'], cachePayload);
   } catch (cacheErr) {
-    cacheWarning = `Version was published and verified, but optional cache update failed: ${
+    cacheWarning = `The version was saved and checked, but a speed-up copy could not be updated: ${
       cacheErr instanceof Error ? cacheErr.message : String(cacheErr)
     }`;
   }

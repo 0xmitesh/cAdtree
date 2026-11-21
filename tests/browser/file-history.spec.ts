@@ -87,7 +87,7 @@ test("actual App: file history follows parents across cases, retains deleted pat
   await page.getByRole("button", { name: /V2:/ }).click();
   await expect(
     page.getByRole("region", { name: "Selected file history" }),
-  ).toContainText("Context only");
+  ).toContainText("shown for context");
   await expect(current).toHaveAttribute("data-branch-id", "branch-main");
   await page.getByRole("button", { name: "List", exact: true }).click();
   await expect(page.locator(".revision-list-row")).toHaveCount(3);

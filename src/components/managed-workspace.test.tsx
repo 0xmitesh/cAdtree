@@ -233,7 +233,7 @@ test("UI surfaces missing managed leaves before case actions and preserves read-
   );
   fireEvent.click(ui.getByRole("button", { name: "Inspect project" }));
   await idle(ui);
-  assert.match(ui.container.textContent!, /Managed project is read-only/);
+  assert.match(ui.container.textContent!, /This project is read-only/);
   assert.ok(ui.getByRole("heading", { name: "History survives" }));
   assert.equal(
     (
@@ -284,7 +284,7 @@ test("managed action preflight notices a folder lost after opening, before it di
   await waitFor(() =>
     assert.match(
       ui.container.querySelector(".global-integrity")!.textContent!,
-      /Managed project is read-only/,
+      /This project is read-only/,
     ),
   );
   assert.ok(!ui.queryByRole("dialog"));
@@ -311,6 +311,6 @@ test("path messages name the real workspace folder, not the display name", async
   await waitFor(() => assert.ok(!ui.queryByRole("dialog")));
   await idle(ui);
   const text = ui.container.textContent!;
-  assert.match(text, /Save your CAD files in Acme- Rigs\/projects\//);
+  assert.match(text, /Put your files in Acme- Rigs\/projects\//);
   assert.ok(!text.includes("Acme: Rigs/"));
 });

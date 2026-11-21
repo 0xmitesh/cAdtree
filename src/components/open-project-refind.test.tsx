@@ -23,7 +23,7 @@ afterEach(async () => {
 const OLD = "projects/Bracket Assembly";
 const NEW = "projects/Bracket Assembly (renamed in Explorer)";
 const NEW_LEAF = "Bracket Assembly (renamed in Explorer)";
-const RENAMED = `This project's folder was renamed to '${NEW_LEAF}'. cAdtree found it by its project ID.`;
+const RENAMED = `This project's folder was renamed to '${NEW_LEAF}'. cAdtree found it again from its saved identity.`;
 const sleep = (ms: number) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)); });
 const idle = (ui: ReturnType<typeof render>) => waitFor(() => assert.equal(appBusy(ui), false));
 
@@ -136,7 +136,7 @@ test("A copy made while the project is open: saving is refused with the duplicat
   toWorkspacePage(ui);
   await refresh(ui);
   nav(ui, "Changes");
-  assert.match(ui.container.textContent!, /Managed project is read-only\. This project's ID exists at more than one location/);
+  assert.match(ui.container.textContent!, /This project is read-only\. This project's ID exists at more than one location/);
   assert.ok(ui.container.querySelector(".project-context-header"));
 });
 
@@ -147,7 +147,7 @@ test("The open project's folder is removed from the workspace: the quiet refresh
   toWorkspacePage(ui);
   await refresh(ui);
   nav(ui, "Changes");
-  assert.match(ui.container.textContent!, /Managed project is read-only\. This project's folder can't be found in the workspace any more\./);
+  assert.match(ui.container.textContent!, /This project is read-only\. This project's folder can't be found in the workspace any more\./);
   await sample.main.writeFileText(["Late.txt"], "x").catch(() => {});
   await refresh(ui);
   assert.equal(await exists(root, OLD), false, "nothing was recreated");
@@ -217,12 +217,12 @@ test("A read-only state clears: after the copy is removed, Refresh lifts it and 
   toWorkspacePage(ui);
   await refresh(ui);
   nav(ui, "Changes");
-  assert.match(ui.container.textContent!, /Managed project is read-only\. This project's ID exists at more than one location/);
+  assert.match(ui.container.textContent!, /This project is read-only\. This project's ID exists at more than one location/);
   toWorkspacePage(ui);
   await root.removeEntry(NEW.split("/"), { recursive: true });
   await refresh(ui);
   nav(ui, "Changes");
-  assert.equal(ui.container.textContent!.includes("Managed project is read-only"), false);
+  assert.equal(ui.container.textContent!.includes("This project is read-only"), false);
   await sample.main.writeFileText(["Pending.txt"], "work in progress");
   await scanAndDraft(ui, "Saved after the copy was removed");
   fireEvent.click(ui.getByRole("button", { name: "Save version" }));

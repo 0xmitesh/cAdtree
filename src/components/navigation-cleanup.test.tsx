@@ -26,7 +26,7 @@ async function openSample() {
   return { sample, ui, nav: within(ui.getByRole("navigation", { name: "Primary navigation" })) };
 }
 
-test("Troubleshooting's reset explains its browser-wide scope, cancels without changes and resets connections without deleting CAD history", async () => {
+test("Troubleshooting's reset explains its browser-wide scope, cancels without changes and resets connections without deleting saved history", async () => {
   const { sample, ui, nav } = await openSample();
   const other = nativeDirectory(new InMemoryFileSystemAdapter("Other workspace"));
   const foreignPath = () => getWorkspacePath("foreign-workspace", other);
@@ -41,7 +41,7 @@ test("Troubleshooting's reset explains its browser-wide scope, cancels without c
   fireEvent.click(reset);
   let dialog = within(ui.getByRole("dialog", { name: "Reset all remembered folder connections?" }));
   assert.match(ui.getByRole("dialog").textContent!, /across all workspaces/);
-  assert.match(ui.getByRole("dialog").textContent!, /does not delete CAD files/);
+  assert.match(ui.getByRole("dialog").textContent!, /does not delete your files/);
   fireEvent.click(dialog.getByRole("button", { name: "Cancel" }));
   assert.equal(await foreignPath(), "D:\\Other");
   assert.equal(await signature(sample.home), before);

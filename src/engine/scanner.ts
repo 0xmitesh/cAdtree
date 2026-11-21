@@ -210,7 +210,7 @@ export async function enumerateWorkingFolder(
           if (size !== stat.size) {
             errors.push({
               path: relPath,
-              error: `File size changed while reading (${stat.size} -> ${size} bytes). Save and close CAD files before scanning.`,
+              error: `File size changed while reading (${stat.size} -> ${size} bytes). Save and close your files in the app you use, then try again.`,
             });
             continue;
           }

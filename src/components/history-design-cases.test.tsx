@@ -180,5 +180,5 @@ test('Hiding the working case: if switching to Main fails, the banner says so an
   // The case did change to Main, but checking Main failed: that failure stays in the banner
   // (before the fix, a plain success message replaced it).
   assert.equal(currentBranchId(ui),'branch-main');
-  assert.match(text,/You are now working on Main\. This managed project is read-only\..*Directory "main" not found/);
+  assert.match(text,/You are now working on Main\. This project is read-only\..*Directory "main" not found/);
 });

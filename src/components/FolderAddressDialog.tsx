@@ -123,7 +123,7 @@ export function FolderAddressDialog({
               required={required}
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder={"D:\\Cadtree or /Users/mitesh/Documents/Cadtree"}
+              placeholder={"C:\\Users\\you\\Documents\\Cadtree or /Users/you/Documents/Cadtree"}
               aria-labelledby={`${id}-label`}
               aria-describedby={id}
               autoComplete="off"
@@ -138,7 +138,7 @@ export function FolderAddressDialog({
             <p><strong>Windows:</strong> In File Explorer, select the folder address bar (Ctrl+L), then copy. Paste a copied folder path into that bar and press Enter.</p>
             <p><strong>macOS:</strong> In Finder, select the folder and press Option+Command+C to copy its pathname. To use a copied folder path, press Shift+Command+G, paste and press Return.</p>
             <p><strong>Linux:</strong> In your file manager, open the folder, select the location bar (usually Ctrl+L) and copy. Paste a copied folder path into the location bar to open it.</p>
-            <p>Examples: {"D:\\Cadtree, \\\\server\\share\\Cadtree, /Users/mitesh/Documents/Cadtree, /home/mitesh/Documents/Cadtree"}. Moving this folder may require updating this local address.</p>
+            <p>Examples: {"C:\\Users\\you\\Documents\\Cadtree, \\\\server\\share\\Cadtree, /Users/you/Documents/Cadtree, /home/you/Documents/Cadtree"}. Moving this folder may require updating this local address.</p>
           </details>
           {longHome ? (
             <Notice type="info">

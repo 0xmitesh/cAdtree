@@ -81,7 +81,7 @@ function ProjectReferencesView({ state, busy, progress, onCancel, onRetrieve, on
       <label className="field"><span>Reference files</span><input key={pickerKey} type="file" multiple disabled={addPending || busy} onChange={event => setAddFiles(Array.from(event.currentTarget.files ?? []))} /></label>
       {addFiles.length ? <ul className="muted small">{addFiles.map((file, index) => <li key={`${file.name}:${index}`}>{file.name} · {formatBytes(file.size)}</li>)}</ul> : null}
       <label className="field"><span>Note (optional)</span><textarea maxLength={8000} rows={3} value={addNote} disabled={addPending || busy} placeholder="What is this reference for?" onChange={event => setAddNote(event.target.value)} /></label>
-      <p className="muted small">Applies to the whole project. It is included whenever you save a version. To tie a file to one part, attach it when you save a version.</p>
+      <p className="muted small">Applies to the whole project. It is included whenever you save a version. To link a reference to one specific file, attach it when you save a version.</p>
       {addError ? <Notice type="error">{addError}</Notice> : null}
       <div className="button-row">
         <button className="button primary" type="button" disabled={!addFiles.length || addPending || busy || Boolean(addBlockReason)} onClick={() => void submitAdd()}>Add</button>
@@ -106,7 +106,7 @@ function ProjectReferencesView({ state, busy, progress, onCancel, onRetrieve, on
       {uses.length ? <ul className="reference-uses" aria-label={`Where ${version.originalFilename} is used`}>{uses.map((use, index) => <li key={`${use.revisionId}:${index}`}>
         <strong>{use.branchName} · {formatRevisionNumber(use.displayNumber)}</strong>
         <span>{use.summary}</span>
-        <span>{use.partPath ? `Part: ${use.partPath}` : 'Whole version'}</span>
+        <span>{use.partPath ? `File: ${use.partPath}` : 'Whole version'}</span>
         {use.locator ? <span>Location: {use.locator}</span> : null}
         {use.explanation ? <span>{use.explanation}</span> : null}
       </li>)}</ul> : reference.projectVersionId === version.versionId && !reference.removed ? <p className="muted small">Applies to the whole project. It is included in the next version you save.</p> : <p className="muted small">Not attached to a saved version yet.</p>}

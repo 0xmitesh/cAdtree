@@ -167,7 +167,7 @@ test("an addition on a case connects to inherited absence before Main introduced
     result.graph.nodes.map((n) => n.id),
     ["alt1", "r2"],
   );
-  assert.equal(result.records.get("r2")?.status, "Inherited absence");
+  assert.equal(result.records.get("r2")?.status, "File not present");
   assert.equal(
     result.graph.edges.find((e) => e.child === "alt1")?.parent,
     "r2",

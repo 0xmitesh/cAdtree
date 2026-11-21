@@ -94,7 +94,7 @@ export function useBranchActions({
       if (!context.current()) return;
       applyVaultState(state);
       if (!state.branches.some((b) => b.branchId === branchId))
-        throw new Error("Selected case is missing. Reopen the vault.");
+        throw new Error("Selected case is missing. Reopen the project.");
       assertCaseWritable(state, branchId);
       setActiveBranchId(branchId);
       if (outcome) outcome.switched = true;
@@ -131,7 +131,7 @@ export function useBranchActions({
           ? {
               type: "info",
               message:
-                `${readable ? "" : "Connect this case’s working folder explicitly to scan or save."} ${warning}`.trim(),
+                `${readable ? "" : "Connect this case’s working folder explicitly to check for changes or save."} ${warning}`.trim(),
             }
           : null;
       if (outcome) outcome.notice = notice;
