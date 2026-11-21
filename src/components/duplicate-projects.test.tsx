@@ -40,22 +40,28 @@ async function fixture() {
   return { home, root: workspace.root, shared, normal };
 }
 
-test("Projects list: Use this location is disabled for every copy sharing a project identity, and the reason is shown", async () => {
+test("Projects list: copies sharing a project identity get a plain explanation, show each folder, and offer no way to open either", async () => {
   const f = await fixture();
   await copyProject(f.root, f.shared.record.containerPath, "projects/Actuator copy");
   const ui = render(<App />);
   await openHomeWorkspace(ui, f.home);
   // The normal project is a single location with its own Open button; the duplicates are grouped.
-  assert.ok(within(ui.getByRole("heading", { name: "Actuator" }).closest(".workspace-project") as HTMLElement).getByText("Needs attention"));
-  fireEvent.click(ui.getByRole("button", { name: "Choose location" }));
-  const buttons = ui.getAllByRole("button", { name: "Use this location" }) as HTMLButtonElement[];
-  assert.equal(buttons.length, 2);
-  assert.ok(buttons.every((button) => button.disabled));
-  assert.ok(
-    ui.getAllByText(/every copy stays read-only/).length >= 1,
-  );
-  for (const button of buttons) fireEvent.click(button);
-  await waitFor(() => assert.equal(appBusy(ui), false));
+  const card = within(ui.getByRole("heading", { name: "Actuator" }).closest(".workspace-project") as HTMLElement);
+  assert.ok(card.getByText("Needs attention"));
+  assert.ok(card.getByText(/Two folders in this workspace are copies of the same project, so cAdtree opens neither/));
+  assert.ok(card.getByText(/move the other copy out of the workspace folder; cAdtree checks again automatically/));
+  assert.ok(card.getByText("Folder in this workspace: projects/Actuator"));
+  assert.ok(card.getByText("Folder in this workspace: projects/Actuator copy"));
+  // Nothing to choose: no location buttons and no open button for any copy.
+  assert.equal(card.queryAllByRole("button").length, 0);
+  assert.equal(ui.queryByRole("button", { name: "Choose location" }), null);
+  assert.equal(ui.queryByRole("button", { name: "Use this location" }), null);
+  // The project ID stays in the collapsed details.
+  const details = ui.container.querySelector(".project-location-details") as HTMLDetailsElement;
+  assert.equal(details.open, false);
+  assert.match(details.textContent!, /Project ID: /);
+  // The engine's own wording is not repeated as a second line.
+  assert.equal(ui.queryAllByText(/every copy stays read-only/).length, 0);
   assert.equal(projectOpen(ui), false);
 });
 
