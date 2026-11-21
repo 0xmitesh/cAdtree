@@ -298,7 +298,7 @@ test('Changes attaches new reference files with notes to the whole version or a 
   fireEvent.change(ui.getByRole('textbox', { name: 'Reference note for Requirement.pdf' }), { target: { value: 'Increase clearance' } });
   fireEvent.change(ui.getByRole('combobox', { name: 'Applies to Requirement.pdf' }), { target: { value: 'path:New.SLDPRT' } });
   fireEvent.change(ui.getByRole('textbox', { name: 'Reference note for Brief.txt' }), { target: { value: 'Overall design intent' } });
-  fireEvent.change(ui.getByRole('textbox', { name: /Version summary/ }), { target: { value: 'Follow source' } });
+  fireEvent.change(ui.getByRole('textbox', { name: /What changed/ }), { target: { value: 'Follow source' } });
   assert.equal(await inventorySignature(await readVerifiedInventory(f.project.vaultDir)), before, 'Choosing files must not write anything before Save');
   ui.unmount();
   ui = render(<ChangesCaptureView {...props} />);
@@ -330,7 +330,7 @@ test('already-saved references stay behind a collapsed Manage references disclos
   const state = await importReferenceAttachment(f.project.vaultDir, f.project.record.projectId, source(), { title: 'Requirement', description: '', tags: [] });
   const ref = state.references!.library[0], scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
   const review = createReferenceReview(state, scan, [{ referenceId: ref.referenceId, versionId: ref.versions[0].versionId, locator: 'page 1', explanation: 'Kept note' }]);
-  const cache = new Map([['draft', { summary: '', notes, fileNotes: {}, notePath: null, showOverall: false, referenceReview: review, showAttachments: true }]]);
+  const cache = new Map([['draft', { summary: '', notes, fileNotes: {}, notePath: null, referenceReview: review, showAttachments: true }]]);
   const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
   assert.equal(ui.queryByText(/Reference selections are stale/), null);
   const toggle = ui.getByRole('button', { name: 'Manage references (1)' });
@@ -352,7 +352,7 @@ test('stale reference decisions remain visible until explicitly reviewed and leg
   const ref = state.references!.library[0], scan = await scanBranchChanges(f.working, branchId, f.first.revision.manifest);
   const review = createReferenceReview(state, scan, [{ referenceId: ref.referenceId, versionId: ref.versions[0].versionId, locator: 'page 2', explanation: 'Decision' }]);
   state = await updateProjectReference(f.project.vaultDir, f.project.record.projectId, ref.referenceId, { projectVersionId: ref.versions[0].versionId });
-  const cache = new Map([['draft', { summary: 'Reference update', notes, fileNotes: {}, notePath: null, showOverall: false, referenceReview: review }]]);
+  const cache = new Map([['draft', { summary: 'Reference update', notes, fileNotes: {}, notePath: null, referenceReview: review }]]);
   const ui = render(<ChangesCaptureView vaultState={state} activeBranchId={branchId} workingFolderName="Main" vaultFolderName="Vault" scanResult={scan} draftCache={cache} draftKey="draft" isScanStale={false} isScanning={false} isCapturing={false} progress={null} statusBanner={null} onScan={async () => {}} onCapture={async () => {}} onCancelOperation={() => {}} onReattachWorkingFolder={async () => {}} />);
   assert.ok(ui.getByText(/Reference selections are stale/));
   assert.ok(ui.getByText('Location: page 2'));

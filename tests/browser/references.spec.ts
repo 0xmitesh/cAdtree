@@ -97,7 +97,7 @@ for (const width of [1366, 390]) test(`reference browser: one search box, exact 
   await page.getByRole('combobox', { name: 'Applies to Clearance.pdf', exact: true }).selectOption({ label: 'B.SLDPRT' });
   await page.getByRole('textbox', { name: 'Reference note for Clearance.pdf', exact: true }).fill('Maintain the bearing clearance');
   await page.getByRole('textbox', { name: 'Reference note for Customer brief.txt', exact: true }).fill('Whole version intent');
-  await page.getByRole('textbox', { name: /Version summary/ }).fill('Attach client sources');
+  await page.getByRole('textbox', { name: /What changed/ }).fill('Attach client sources');
   expect(await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   await page.getByRole('button', { name: 'Save version', exact: true }).click();
   await expect(page.getByText(/Saved V4 on this case/)).toBeVisible();

@@ -150,7 +150,7 @@ test("current App: compact headings, case context, bounded resizing and mobile E
 
   const nav = page.getByRole("navigation");
   await nav.getByRole("button", { name: "Changes", exact: true }).click();
-  const summary = page.getByRole("textbox", { name: /Version summary/ });
+  const summary = page.getByRole("textbox", { name: /What changed/ });
   await summary.fill("Main scoped layout review");
   await tree
     .getByRole("treeitem", {

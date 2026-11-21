@@ -173,12 +173,9 @@ test("App creates cases, preserves Main and case notes, and keeps graph highligh
     assert.ok(ctx.ui.getByRole("heading", { name: "1 changed file" })),
   );
   let changes = visibleChanges(ctx.ui.container);
-  fireEvent.change(changes.getByRole("textbox", { name: /Version summary/ }), {
+  fireEvent.change(changes.getByRole("textbox", { name: /What changed/ }), {
     target: { value: "Main draft" },
   });
-  fireEvent.click(
-    changes.getByRole("button", { name: /Add a description/ }),
-  );
   fireEvent.change(changes.getByRole("textbox", { name: "Overall: Why" }), {
     target: { value: "Main intent" },
   });
@@ -209,18 +206,15 @@ test("App creates cases, preserves Main and case notes, and keeps graph highligh
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: /Version summary/,
+        name: /What changed/,
       }) as HTMLInputElement
     ).value,
     "",
   );
   assert.equal(changes.queryByText("Main file note"), null);
-  fireEvent.change(changes.getByRole("textbox", { name: /Version summary/ }), {
+  fireEvent.change(changes.getByRole("textbox", { name: /What changed/ }), {
     target: { value: "Case A draft" },
   });
-  fireEvent.click(
-    changes.getByRole("button", { name: /Add a description/ }),
-  );
   fireEvent.change(changes.getByRole("textbox", { name: "Overall: Why" }), {
     target: { value: "Alternative intent" },
   });
@@ -230,7 +224,7 @@ test("App creates cases, preserves Main and case notes, and keeps graph highligh
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: /Version summary/,
+        name: /What changed/,
       }) as HTMLInputElement
     ).value,
     "Main draft",
@@ -257,7 +251,7 @@ test("App creates cases, preserves Main and case notes, and keeps graph highligh
   assert.equal(
     (
       changes.getByRole("textbox", {
-        name: /Version summary/,
+        name: /What changed/,
       }) as HTMLInputElement
     ).value,
     "Case A draft",

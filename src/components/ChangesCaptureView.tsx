@@ -67,7 +67,6 @@ export interface CaptureDraft {
   notes: RevisionNotes;
   fileNotes: Record<string, FileSpecificNote>;
   notePath: string | null;
-  showOverall: boolean;
   attachments?: DraftReferenceAttachment[];
   showAttachments?: boolean;
 }
@@ -116,9 +115,6 @@ export function ChangesCaptureView({
   const [notePath, setNotePath] = useState<string | null>(
     savedDraft?.notePath ?? null,
   );
-  const [showOverall, setShowOverall] = useState(
-    savedDraft?.showOverall ?? false,
-  );
   useEffect(() => {
     if (draftKey)
       draftCache?.set(draftKey, {
@@ -126,13 +122,12 @@ export function ChangesCaptureView({
         notes,
         fileNotes,
         notePath,
-        showOverall,
         identityReview,
         referenceReview,
         attachments,
         showAttachments,
       });
-  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, showOverall, identityReview, referenceReview, attachments, showAttachments]);
+  }, [draftCache, draftKey, summary, notes, fileNotes, notePath, identityReview, referenceReview, attachments, showAttachments]);
   const prefillKey = prefill?.key;
   useEffect(() => {
     if (!prefill) return;
@@ -144,8 +139,6 @@ export function ChangesCaptureView({
         if (!next[key]?.trim()) next[key] = prefill.notes[key];
       return next;
     });
-    if (Object.values(prefill.notes).some((value) => value.trim()))
-      setShowOverall(true);
     // Only a new Save now request fills the form again.
   }, [prefillKey]);
   const [showUnchanged, setShowUnchanged] = useState(false);
@@ -258,7 +251,7 @@ export function ChangesCaptureView({
       return;
     }
     if (!scan || !summary.trim()) {
-      setError("Add a short version summary.");
+      setError("Say what changed in one line.");
       return;
     }
     if (staleNotes.length) {
@@ -575,7 +568,7 @@ export function ChangesCaptureView({
               </p>
               <label className="field">
                 <span>
-                  Version summary <span className="required">*</span>
+                  What changed <span className="required">*</span>
                 </span>
                 <input
                   required
@@ -585,23 +578,13 @@ export function ChangesCaptureView({
                   placeholder="e.g. Refine housing clearance"
                 />
               </label>
-              <button
-                className="text-button"
-                type="button"
-                aria-expanded={showOverall}
-                onClick={() => setShowOverall((v) => !v)}
-              >
-                {showOverall ? "− Hide description" : "+ Add a description"}
-              </button>
-              {showOverall ? (
-                <NoteEditor
-                  label="Description"
-                  value={notes}
-                  onChange={setNotes}
-                  disabled={busy}
-                  scope="Overall"
-                />
-              ) : null}
+              <NoteEditor
+                label={null}
+                value={notes}
+                onChange={setNotes}
+                disabled={busy}
+                scope="Overall"
+              />
               <button className="text-button" type="button" disabled={busy} aria-expanded={showAttachments} onClick={() => { setShowAttachments(value => !value); if (!referenceReview && effectiveReferences) setReferenceReview(effectiveReferences); }}>
                 {showAttachments ? '− Hide reference files' : '+ Attach reference files'}{attachments.length ? ` (${attachments.length})` : ''}
               </button>

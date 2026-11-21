@@ -23,7 +23,7 @@ test('History owns the existing case activity/Compare panel without changing ins
   await waitFor(()=>assert.equal(appBusy(ui),false));
   const nav=within(ui.getByRole('navigation',{name:'Primary navigation'}));
   fireEvent.click(nav.getByRole('button',{name:'Changes'}));
-  const summary=ui.getByRole('textbox',{name:/Version summary/});
+  const summary=ui.getByRole('textbox',{name:/What changed/});
   fireEvent.change(summary,{target:{value:'Keep this engineering draft'}});
   fireEvent.click(nav.getByRole('button',{name:'History'}));
   pickFile(ui, 'Bracket.SLDPRT');

@@ -46,3 +46,16 @@ test("saved notes read back as Description for a version and Note for a file", (
   assert.ok(file.getByText("Note"));
   assert.equal(file.queryByText("Description"), null);
 });
+
+test("with no main label (the version's overall notes) only More detail is shown and an old Description is untouched", () => {
+  let latest: RevisionNotes = { ...empty, modification: "Description from an earlier version" };
+  function Overall() {
+    const [value, setValue] = useState(latest);
+    return <NoteEditor scope="Overall" label={null} value={value} onChange={(next) => { setValue(next); latest = next; }} />;
+  }
+  const ui = render(<Overall />);
+  assert.equal(ui.queryByRole("textbox", { name: /Description|Note/ }), null);
+  fireEvent.change(ui.getByRole("textbox", { name: "Overall: Why" }), { target: { value: "Reason" } });
+  assert.deepEqual(latest, { problem: "Reason", modification: "Description from an earlier version", observations: "" });
+  assert.equal((ui.getByText("More detail").closest("details") as HTMLDetailsElement).open, true);
+});

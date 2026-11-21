@@ -50,13 +50,14 @@ for (const width of [1366, 390])
     await nav.getByRole("button", { name: "Changes", exact: true }).click();
     await waitForScan(page);
     await expect(page.locator("main")).toHaveAttribute("aria-busy", "false");
-    const summary = page.getByRole("textbox", { name: /Version summary/ });
+    const summary = page.getByRole("textbox", { name: /What changed/ });
     await summary.fill("Main draft stays intact during case review");
     await page
-      .getByRole("button", { name: /Add a description/ })
+      .locator(".capture-form summary", { hasText: "More detail" })
+      .first()
       .click();
     await page
-      .getByRole("textbox", { name: "Overall: Description", exact: true })
+      .getByRole("textbox", { name: "Overall: Why", exact: true })
       .fill("Overall session draft");
     await page
       .getByRole("button", {
@@ -173,7 +174,7 @@ for (const width of [1366, 390])
       "Main draft stays intact during case review",
     );
     await expect(
-      page.getByRole("textbox", { name: "Overall: Description", exact: true }),
+      page.getByRole("textbox", { name: "Overall: Why", exact: true }),
     ).toHaveValue("Overall session draft");
     await expect(
       page.getByRole("textbox", {

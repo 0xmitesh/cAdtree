@@ -72,6 +72,8 @@ Scan/capture starts at the active `working/.../` leaf. The enclosing project con
 
 cAdtree checks the working folder for changes by itself: when you return to the browser tab or window, and after Apply or Bring back. It also re-reads the home and workspace lists when you return to those pages, so there are no Scan or Refresh buttons. A quiet **Checking files…** line shows while it runs; it never blocks what you do next (your own action stops it), keeps the previous list on screen until the new one is ready, and only reads files. To go quicker it reuses the stored fingerprint of a file whose size and modified time did not change; **Save version** always reads and fingerprints every file again.
 
+In **Changes**, the **Save version** panel asks for one line: **What changed** (required). Open **More detail** to add **Why** and **What you noticed**; both are optional. Each changed file can also have its own **Note** (with its own **More detail**). There is no separate Description field. Versions saved earlier with a Description still show it under **Notes** in History, in Compare and in the files' history. **Save now** (after a Bring back or Copy that was not saved) fills **What changed** and, if you gave a reason, opens **More detail** with **Why** filled in.
+
 cAdtree skips untracked OS-generated files when scanning a working folder: `.DS_Store`, `Thumbs.db`, `desktop.ini`, and macOS `._name` companion files that sit beside `name`. The Changes view lists them as skipped and never saves them in a version. A file that is already part of a version is tracked normally, even with one of these names.
 
 ## Work with cases

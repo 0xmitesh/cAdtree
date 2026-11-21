@@ -40,7 +40,7 @@ for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/
   }, original);
   const nav = (name: string) => page.getByRole('navigation').getByRole('button', { name, exact: true }).click();
   const save = async (summary: string) => {
-    await page.getByRole('textbox', { name: /Version summary/ }).fill(summary);
+    await page.getByRole('textbox', { name: /What changed/ }).fill(summary);
     await page.getByRole('button', { name: 'Save version', exact: true }).click();
     await expect(page.locator('main')).toHaveAttribute('aria-busy', 'false');
     await expect(page.getByRole('heading', { name: '0 changed files' })).toBeVisible();

@@ -135,7 +135,7 @@ test("UI imports into a workspace, creates cases without parent pickers, and rec
   assert.equal(project.record.name, source.name);
   assert.equal(await snap(source), before);
   fireEvent.change(
-    changes(ui.container).getByRole("textbox", { name: /Version summary/ }),
+    changes(ui.container).getByRole("textbox", { name: /What changed/ }),
     { target: { value: "Managed baseline" } },
   );
   fireEvent.click(

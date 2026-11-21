@@ -514,7 +514,7 @@ test("Save now fills the normal save once per request: summary, and Why with the
   );
   const notes = { problem: "Wrong turn", modification: "", observations: "" };
   const ui = render(view());
-  const summary = () => ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement;
+  const summary = () => ui.getByRole("textbox", { name: /What changed/ }) as HTMLInputElement;
   assert.equal(summary().value, "");
   ui.rerender(view({ summary: "Brought back V1", notes, key: "op:1" }));
   assert.equal(summary().value, "Brought back V1");

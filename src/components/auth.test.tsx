@@ -422,7 +422,7 @@ async function saveRevisionOffline(user: AccountUser | null) {
     assert.ok(changesPage.getByText(/Bracket\.SLDPRT/)),
   );
   fireEvent.change(
-    changesPage.getByRole("textbox", { name: /Version summary/ }),
+    changesPage.getByRole("textbox", { name: /What changed/ }),
     { target: { value: "Initial offline capture" } },
   );
 

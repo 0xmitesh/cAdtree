@@ -178,10 +178,10 @@ test("a version draft survives a quiet rescan", async () => {
   const { sample, ui } = await openSample();
   await sample.main.writeFileText(["Draft-file.txt"], "one");
   await waitForScan(ui);
-  fireEvent.change(ui.getByRole("textbox", { name: /Version summary/ }), { target: { value: "My unsaved draft" } });
+  fireEvent.change(ui.getByRole("textbox", { name: /What changed/ }), { target: { value: "My unsaved draft" } });
   await sample.main.writeFileText(["Draft-file.txt"], "two, longer");
   await waitForScan(ui);
-  assert.equal((ui.getByRole("textbox", { name: /Version summary/ }) as HTMLInputElement).value, "My unsaved draft");
+  assert.equal((ui.getByRole("textbox", { name: /What changed/ }) as HTMLInputElement).value, "My unsaved draft");
 });
 
 test("the quiet scan never asks for folder access", async () => {

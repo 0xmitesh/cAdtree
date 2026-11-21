@@ -46,7 +46,7 @@ for (const viewport of [
       .getByRole("button", { name: "Changes", exact: true })
       .click();
     await page
-      .getByRole("textbox", { name: /Version summary/ })
+      .getByRole("textbox", { name: /What changed/ })
       .fill("Refine housing clearance");
     await page
       .getByRole("button", { name: "Add note for Parts/Housing.SLDPRT" })

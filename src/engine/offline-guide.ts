@@ -575,8 +575,8 @@ export function buildHomeReadme(input: HomeReadmeInput): string {
   );
   steps(doc, 'Save a version', [
     'Close your CAD documents, then choose Changes on the left. cAdtree checks your files by itself and lists what changed.',
-    'Check the changed files. Enter a Version summary (required). Optionally choose + Add a description ' +
-      '(with More detail for Why and What you noticed) or + Attach reference files.',
+    'Check the changed files. Enter What changed (required, one line). Optionally open More detail ' +
+      '(Why and What you noticed) or choose + Attach reference files.',
     'Choose Save version. The new version appears in History.',
   ]);
   steps(doc, 'Create a design case', [

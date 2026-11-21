@@ -1,10 +1,13 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { RevisionNotes } from "../engine/types";
 
 /**
  * One main field bound to `modification`, with a "More detail" disclosure for
  * `problem` ("Why") and `observations` ("What you noticed"). The disclosure
- * starts open when either of those already has text.
+ * starts open when either of those already has text, and opens by itself when
+ * text arrives later (Save now fills Why). With `label={null}` there is no main
+ * field: only the More detail disclosure is shown (the version's overall notes,
+ * whose one required line is the version summary).
  */
 export function NoteEditor({
   value,
@@ -17,29 +20,33 @@ export function NoteEditor({
   onChange: (value: RevisionNotes) => void;
   disabled?: boolean;
   scope: string;
-  label: "Note" | "Description";
+  label: "Note" | null;
 }) {
   const id = useId();
-  const [detailOpen, setDetailOpen] = useState(
-    Boolean(value.problem.trim() || value.observations.trim()),
-  );
+  const hasDetail = Boolean(value.problem.trim() || value.observations.trim());
+  const [detailOpen, setDetailOpen] = useState(hasDetail);
+  useEffect(() => {
+    if (hasDetail) setDetailOpen(true);
+  }, [hasDetail]);
   const extra = [
     ["problem", "Why"],
     ["observations", "What you noticed"],
   ] as const;
   return (
     <div className="notes-fields" data-testid={`note-${scope}`}>
-      <label htmlFor={`${id}-modification`}>
-        <span>{label}</span>
-        <textarea
-          id={`${id}-modification`}
-          aria-label={`${scope}: ${label}`}
-          value={value.modification}
-          onChange={(e) => onChange({ ...value, modification: e.target.value })}
-          disabled={disabled}
-          rows={3}
-        />
-      </label>
+      {label ? (
+        <label htmlFor={`${id}-modification`}>
+          <span>{label}</span>
+          <textarea
+            id={`${id}-modification`}
+            aria-label={`${scope}: ${label}`}
+            value={value.modification}
+            onChange={(e) => onChange({ ...value, modification: e.target.value })}
+            disabled={disabled}
+            rows={3}
+          />
+        </label>
+      ) : null}
       <details
         className="note-more-detail"
         open={detailOpen}
