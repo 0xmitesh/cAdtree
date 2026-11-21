@@ -189,8 +189,8 @@ export function DiagnosticsView({
                     two latest versions
                   </strong>
                   <p>
-                    Saving is blocked. This case has {heads.length} latest
-                    versions for this case.
+                    Saving is blocked. There are {heads.length} latest
+                    versions on this case.
                   </p>
                   <details>
                     <summary>Version IDs</summary>

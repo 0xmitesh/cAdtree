@@ -143,6 +143,8 @@ test("file-scoped comparison expands to all files, labels endpoint notes and cas
   );
   assert.ok(dialog.getByText("Main endpoint note"));
   assert.ok(dialog.getByText("File notes at V6"));
+  // A saved file note reads back as "Note" (a version's notes say "Description").
+  assert.equal(dialog.getByText("Main bytes").closest("div")!.querySelector("dt")!.textContent, "Note");
   assert.ok(
     dialog.getByText(/Notes are shown for the two chosen versions only/),
   );

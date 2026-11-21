@@ -97,7 +97,7 @@ export async function captureRevision(
     throw new Error('Version summary is required.');
   }
 
-  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Version vault');
+  await validateDirectoryIsolation(workingDir, vaultDir, 'Working folder', 'Saved versions folder');
 
   // Peek project ID first so we can lock on the exact projectId
   const initialVaultState = await openExistingVault(vaultDir);

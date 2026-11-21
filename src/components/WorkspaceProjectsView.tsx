@@ -171,6 +171,11 @@ export function WorkspaceProjectsView(props: WorkspaceProjectsViewProps) {
               {locations.length > 1 || locations[0].status !== "ready" ? (
                 <details className="disclosure project-location-details">
                   <summary>Location details</summary>
+                  {locations[0].projectId ? (
+                    <p className="file-path">
+                      Project ID: {locations[0].projectId}
+                    </p>
+                  ) : null}
                   {locations.map((entry) => (
                     <p className="file-path" key={entry.containerPath}>
                       Folder in this workspace: {entry.containerPath}

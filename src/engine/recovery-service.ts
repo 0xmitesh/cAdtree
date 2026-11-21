@@ -63,7 +63,7 @@ async function executeVerifiedRecovery(params: {
   await validateDirectoryIsolation(
     vaultDir,
     destinationDir,
-    'Version vault',
+    'Saved versions folder',
     'Recovery destination'
   );
 

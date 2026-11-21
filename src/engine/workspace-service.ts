@@ -893,7 +893,7 @@ async function publishProject(
     totalFiles: 0,
     processedBytes: 0,
     totalBytes: 0,
-    message: "Publishing the verified managed project…",
+    message: "Finishing the project copy…",
   });
   throwIfCancelled(options.signal);
   try {

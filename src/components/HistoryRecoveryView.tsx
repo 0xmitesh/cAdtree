@@ -618,7 +618,7 @@ function ProjectHistoryRecoveryView(props: HistoryRecoveryViewProps) {
                       0 ? (
                       <details className="disclosure">
                         <summary>
-                          Directory changes (
+                          Folder changes (
                           {diff.addedDirectories.length +
                             diff.deletedDirectories.length}
                           )

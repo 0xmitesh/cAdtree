@@ -80,20 +80,20 @@ export function ApplicationStatus({
                   ? `${op.record ? applySaveSummary(state, op.record) : "Files were copied"}, but it wasn't saved${reason ? `: ${reason}` : ""}. Your working files are fine.`
                   : op.status === "unresolved"
                     ? `A ${what(op)} was interrupted. Saving and any other change to your files are blocked until you put the files back as they were.`
-                    : "cAdtree can't read the note it kept about a change to your files. Saving and any other change to your files are blocked."}
+                    : "cAdtree can't read the saved details of a change to your files. Saving and any other change to your files are blocked."}
               </strong>
               {op.status === "applied" ? null : (
                 <p>
                   {op.status === "unresolved"
-                    ? "Putting the files back as they were restores them from the copies cAdtree kept. Files you edited since then are left as they are for you to check. Don't delete the note about it."
-                    : "Look at the details below; the note is kept on disk. Don't delete it."}
+                    ? "Putting the files back as they were restores them from the copies cAdtree kept. Files you edited since then are left as they are for you to check. Don't delete its saved details file."
+                    : "Look at the details below; the saved details file is kept on disk. Don't delete it."}
                 </p>
               )}
               {op.error ? <p>{op.error}</p> : null}
               {op.status === "applied" ? null : (
                 <details className="disclosure">
                   <summary>Details</summary>
-                  <p className="file-path">Saved note: vault/{op.relativePath}</p>
+                  <p className="file-path">Saved details file: vault/{op.relativePath}</p>
                   {op.record ? (
                     <>
                       {op.record.plan.reason ? <p>{op.record.plan.reason}</p> : null}
@@ -118,7 +118,7 @@ export function ApplicationStatus({
                       </ul>
                       <p className="small">
                         Copies of unexpected files, when readable, are kept under
-                        this record's unexpected/&lt;recovery ID&gt;/ folder with
+                        this saved details file's unexpected/&lt;recovery ID&gt;/ folder with
                         the same number. A partial file is never overwritten.
                         After putting affected files back by hand, try again.
                         New empty folders are kept.
