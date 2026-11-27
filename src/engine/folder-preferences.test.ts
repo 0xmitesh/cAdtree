@@ -13,9 +13,9 @@ test('saved Windows preferences remain readable and POSIX settings bind to the s
   await saveWorkspacePath('same-id', 'd:\\Old location\\', original);
   assert.equal(await getWorkspacePath('same-id', original), 'D:\\Old location');
   assert.equal(await getWorkspacePath('same-id', copy), '');
-  await saveWorkspacePath('same-id', '/home/mitesh/Documents/Cadtree', copy);
+  await saveWorkspacePath('same-id', '/home/you/Documents/Cadtree', copy);
   assert.equal(await getWorkspacePath('same-id', original), '');
-  assert.equal(await getWorkspacePath('same-id', copy), '/home/mitesh/Documents/Cadtree');
+  assert.equal(await getWorkspacePath('same-id', copy), '/home/you/Documents/Cadtree');
 });
 
 test('an unbound legacy address requires confirmation unless original remembered access proves the location', async () => {
@@ -35,9 +35,9 @@ test('an unbound legacy address requires confirmation unless original remembered
 
 test('failed handle comparison or noncloneable preference writes never authorize another address', async () => {
   const original = nativeDirectory(new InMemoryFileSystemAdapter('Original'));
-  await saveWorkspacePath('w', '/Users/mitesh/Cadtree', original);
+  await saveWorkspacePath('w', '/Users/you/Cadtree', original);
   const inaccessible = { isSameEntry: async () => { throw new DOMException('Revoked', 'NotAllowedError'); } } as unknown as FileSystemDirectoryHandle;
   assert.equal(await getWorkspacePath('w', inaccessible), '');
   await assert.rejects(saveWorkspacePath('w', '/home/wrong', { bad: () => {} } as unknown as FileSystemDirectoryHandle));
-  assert.equal(await getWorkspacePath('w', original), '/Users/mitesh/Cadtree', 'preference write is atomic');
+  assert.equal(await getWorkspacePath('w', original), '/Users/you/Cadtree', 'preference write is atomic');
 });

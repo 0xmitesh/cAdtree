@@ -12,8 +12,8 @@ import {
   projectWorstCase, projectWorstPath, workspaceWorstPath,
 } from './path-budget';
 
-const WIN_HOME = 'C:\\Users\\Mitesh\\Documents\\Cadtree';
-const POSIX_HOME = '/Users/mitesh/Cadtree';
+const WIN_HOME = 'C:\\Users\\You\\Documents\\Cadtree';
+const POSIX_HOME = '/Users/you/Cadtree';
 const notes = { problem: 'p', modification: 'm', observations: 'o' };
 
 async function tree(dir: FileSystemDirectoryAdapter, prefix = ''): Promise<string[]> {
@@ -40,7 +40,7 @@ test('joinAddress uses the address style without double separators', () => {
   assert.equal(joinAddress('C:\\Users\\Me\\Cadtree\\', 'Acme'), 'C:\\Users\\Me\\Cadtree\\Acme');
   assert.equal(joinAddress('C:\\', 'Acme'), 'C:\\Acme');
   assert.equal(joinAddress('\\\\server\\share\\Cadtree', 'Acme'), '\\\\server\\share\\Cadtree\\Acme');
-  assert.equal(joinAddress('/Users/mitesh/Cadtree/', 'Acme', 'projects/Gripper'), '/Users/mitesh/Cadtree/Acme/projects/Gripper');
+  assert.equal(joinAddress('/Users/you/Cadtree/', 'Acme', 'projects/Gripper'), '/Users/you/Cadtree/Acme/projects/Gripper');
   assert.equal(joinAddress('/', 'Acme'), '/Acme');
   assert.equal(addressSeparator(POSIX_HOME), '/');
   assert.equal(addressSeparator(WIN_HOME), '\\');

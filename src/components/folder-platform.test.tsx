@@ -16,7 +16,7 @@ Object.assign(globalThis, { indexedDB });
 afterEach(async () => { cleanup(); await clearAllConvenienceMetadata(); Reflect.deleteProperty(window, 'showDirectoryPicker'); Reflect.deleteProperty(window, 'isSecureContext'); });
 const ready = (ui: ReturnType<typeof render>) => waitFor(() => assert.equal((ui.getByRole('button', { name: 'Create workspace' }) as HTMLButtonElement).disabled, false));
 
-for (const address of ['/Users/mitesh/Documents/Cadtree', '/home/mitesh/工程/Cadtree']) test(`required creation accepts ${address}, persists locally and reopens the same handle`, async () => {
+for (const address of ['/Users/you/Documents/Cadtree', '/home/you/工程/Cadtree']) test(`required creation accepts ${address}, persists locally and reopens the same handle`, async () => {
   const folder = new InMemoryFileSystemAdapter('Cadtree');
   Object.assign(window, { showDirectoryPicker: async () => nativeDirectory(folder) });
   let ui = render(<App />);
@@ -49,9 +49,9 @@ test('a relocated copy of the same home requires a new address instead of reusin
   fireEvent.click(ui.getByRole('button', { name: 'Open my Cadtree home' }));
   await waitFor(() => assert.ok(ui.getByRole('dialog', { name: 'Complete home setup' })));
   assert.equal((ui.getByRole('textbox', { name: 'Cadtree home folder address' }) as HTMLInputElement).value, '');
-  await completeHomeAddress(ui, '/home/mitesh/Relocated');
+  await completeHomeAddress(ui, '/home/you/Relocated');
   await ready(ui);
-  assert.equal(await getWorkspacePath(home.identity.homeId, nativeDirectory(relocated)), '/home/mitesh/Relocated');
+  assert.equal(await getWorkspacePath(home.identity.homeId, nativeDirectory(relocated)), '/home/you/Relocated');
   assert.equal(await getWorkspacePath(home.identity.homeId, nativeDirectory(original)), '');
 });
 
@@ -76,7 +76,7 @@ test('remembered access cannot bypass capability checks and revoked permission l
   const home = await createHome(folder);
   const handle = nativeDirectory(folder);
   await rememberHome({ homeId: home.identity.homeId, name: 'Cadtree', rootHandle: handle });
-  await saveWorkspacePath(home.identity.homeId, '/Users/mitesh/Cadtree', handle);
+  await saveWorkspacePath(home.identity.homeId, '/Users/you/Cadtree', handle);
   Object.assign(window, { showDirectoryPicker: undefined });
   let ui = render(<App />);
   await waitFor(() => assert.ok(ui.getByRole('button', { name: 'Return to Cadtree' })));
