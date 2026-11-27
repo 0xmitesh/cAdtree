@@ -6,16 +6,16 @@ It is made for people without enterprise file-management systems: individual eng
 
 ## Status
 
-Early. cAdtree is in a building phase and has no stable release yet. It works only in **Chrome or Edge on a desktop computer**, because it uses the browser's File System Access API. Safari and Firefox don't support it. The first qualification target is SolidWorks parts, assemblies and drawings on Windows.
+Early. cAdtree is in a building phase and has no stable release yet. It works only in **Chrome or Edge on a desktop computer**, because those are the browsers that let a web page work on a folder you choose. Safari and Firefox don't. So far it is being tested mainly with SolidWorks parts, assemblies and drawings on Windows.
 
-cAdtree does not read or compare the contents of CAD files. A changed checksum tells you a file changed, not what changed in the geometry.
+cAdtree does not read or compare the contents of CAD files. It can tell you that a file changed (its checksum, a short fingerprint of its contents, is different), not what changed inside it.
 
 ## What it does today
 
 - **Save versions.** Each version asks for a "What changed" line, with optional detail on why and what you noticed.
 - **Design cases.** Start from a saved version and work on an alternative in its own folder, without disturbing the main line.
 - **Copy files from a case.** Bring one case's changes into another, after reviewing the list. Files changed on both sides need a deliberate choice.
-- **Bring back.** Make a case match one of its earlier versions again.
+- **Bring back.** Make a case (or Main) match one of its earlier versions.
 - **Discard.** Put unsaved changes back to the latest saved version. What was replaced is kept in a `Discarded` folder.
 - **Get this version.** Take a single file from an earlier version.
 - **Export a copy.** Write out any version, optionally with its references, to share or inspect.
