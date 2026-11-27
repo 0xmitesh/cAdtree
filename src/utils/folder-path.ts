@@ -32,7 +32,7 @@ export function parseAbsoluteFolderPath(input: string): AbsoluteFolderPath {
     prefix = `\\\\${unc[0]}\\${unc[1]}`;
     parts = unc.slice(2);
   } else {
-    throw new Error('Enter an absolute folder address, such as D:\\Cadtree, \\\\server\\share, /Users/mitesh/Documents/Cadtree or /home/mitesh/Documents/Cadtree. Use the full address; ~ and environment variables are not expanded.');
+    throw new Error('Enter an absolute folder address, such as D:\\Cadtree, \\\\server\\share, /Users/you/Documents/Cadtree or /home/you/Documents/Cadtree. Use the full address; ~ and environment variables are not expanded.');
   }
   validateWindowsSegments(parts);
   return { path: prefix + (parts.length ? (prefix.endsWith('\\') ? '' : '\\') + parts.join('\\') : ''), syntax: 'windows' };

@@ -50,7 +50,7 @@ test('classifyPathLength warns from 200 and blocks above 240', () => {
   assert.equal(classifyPathLength(241), 'block');
 });
 
-const EXAMPLE = 'C:\\Users\\Mitesh\\Documents\\Cadtree\\Acme Rigs\\projects\\Packaging Gripper';
+const EXAMPLE = 'C:\\Users\\Person\\Documents\\Cadtree\\Acme Rigs\\projects\\Packaging Gripper';
 
 test('projectWorstCase for the example project path', () => {
   assert.equal(EXAMPLE.length, 70);

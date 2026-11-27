@@ -57,7 +57,7 @@ async function fixture() {
 
 test('baseline capture and reference publication fit the Windows directory limit in a managed project and recover interrupted enrollment', async () => {
   const f = await fixture();
-  f.fault.absoluteRoot = 'C:\\Users\\1\\Documents\\cadtree home 8.11\\solidworks-59ab5028-797d-47b5-b011-d99fcdfd14e6\\projects\\shaft-56c180be-4c6b-4fac-868f-16f05de36aa9\\vault';
+  f.fault.absoluteRoot = 'C:\\Users\\You\\Documents\\Cadtree test-01\\solidworks-59ab5028-797d-47b5-b011-d99fcdfd14e6\\projects\\shaft-56c180be-4c6b-4fac-868f-16f05de36aa9\\vault';
   for (let attempt = 0; attempt < 3; attempt++) {
     await f.disk.writeFileText(['references', 'enrollment', `${newRecordId()}.json`], '{"interrupted":');
   }

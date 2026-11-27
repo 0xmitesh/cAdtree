@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 // These addresses simulate platform syntax. The browser runs on the host OS;
 // OPFS and substituted pickers do not qualify native macOS/Linux directories.
-for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/mitesh/Documents/Cadtree', '/home/mitesh/工程/Cadtree']) test(`folder setup and shortcuts: ${rootAddress}`, async ({ page }) => {
+for (const rootAddress of ['D:\\Cadtree', '\\\\server\\share\\Cadtree', '/Users/you/Documents/Cadtree', '/home/you/工程/Cadtree']) test(`folder setup and shortcuts: ${rootAddress}`, async ({ page }) => {
   test.setTimeout(90000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
