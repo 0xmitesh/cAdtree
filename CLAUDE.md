@@ -196,16 +196,10 @@ node tests/tutorial-{3,4,5}-capture.cjs   # regenerate tutorial screenshots (nee
 - **Browser tests in the cloud sandbox:** run `npm run test:ui` with Playwright's own Chromium (`npx playwright install chromium`, no `CADTREE_BROWSER_CHANNEL`) and `LC_ALL=C.UTF-8`. The sandbox's system Chrome crashes when it reads stored OPFS handles. On Windows or Mac, `CADTREE_BROWSER_CHANNEL=chrome` is fine.
 - **AI Studio leftovers (kept on purpose):** the repo still syncs with Google AI Studio, so the package name `react-example`, `metadata.json` and the Gemini placeholder in `.env.example` stay. The unused dependencies (`@google/genai`, `express`, `dotenv`, `motion`) were removed, and the stale status-doc copy in `public/assets/aistudio/` is gone.
 
-**Local checkouts**
-| Machine | Location |
-|---|---|
-| Windows | `C:\Users\1\Documents\cAdtree\{main,_test-home}` |
-| Mac | `~/Documents/cadtree/main` (an old `knowledge-lab` checkout there is retired and can be removed) |
-
-On Windows, `_test-home` has a deliberately deep path for reproducing path-budget problems.
+Local checkout locations and the dev-server launcher are in the Project doc **cAdtree — Agent environment (private)**.
 
 **Agent environment** (Claude sessions with a connected folder):
-- **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server: in Terminal on the Mac, or on Windows by double-clicking `C:\Users\1\Documents\cAdtree\start-cadtree-dev.cmd` (outside the repo; it checks Node, installs packages if missing, runs `npm.cmd run dev` and keeps its window open on errors). Computer use can't type into terminals, so agents can't start it.
+- **The device shell is a Linux sandbox.** It has no GitHub credentials, can't install Windows or macOS software, can't serve to Chrome, and kills background processes when each call ends. The founder starts the dev server: in Terminal on the Mac, or on Windows by double-clicking the launcher script named in that Project doc (outside the repo; it checks Node, installs packages if missing, runs `npm.cmd run dev` and keeps its window open on errors). Computer use can't type into terminals, so agents can't start it.
 - **Claude in Chrome checks:** an injected script can't reliably open the native folder picker. Let the founder click buttons that open pickers, and don't inspect the tab while a picker is open.
 - **Playwright ports and git stash:** set `CADTREE_TEST_PORT` per worktree so parallel `npm run test:ui` runs don't collide. `git stash` is shared across worktrees; executors commit instead.
 - **Running tests:** run them in the cloud session's own clone of GitHub `main`, with Node 24 (`/opt/node24/bin` on PATH), so they are never stale. Push, PR and merge go through the GitHub REST API from there (GraphQL is blocked). The session's proxy supplies the GitHub credentials; send `Content-Type: application/json` with every write request, or PR creation fails without a clear error.
