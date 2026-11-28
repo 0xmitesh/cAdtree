@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   checkPackages,
   declaredLicense,
+  lockfileEntries,
   LICENSE_EXCEPTIONS,
   evaluateLicenseExpression,
 } from "../../scripts/check-licenses.mjs";
@@ -27,8 +28,10 @@ test("licence check: OR passes if any part is allowed, AND only if all are", () 
   assert.equal(ok("(GPL-3.0 OR LGPL-2.1) AND ISC"), false);
 });
 
-test("licence check: a trailing + is ignored and exceptions need review", () => {
-  assert.equal(ok("Apache-2.0+"), true);
+test("licence check: or-later forms only for the GPL family, exceptions need review", () => {
+  assert.equal(evaluateLicenseExpression("GPL-3.0+", ["GPL-3.0"]).ok, true);
+  assert.equal(ok("Apache-2.0+"), false);
+  assert.equal(ok("MIT-or-later"), false);
   assert.equal(ok("MIT WITH Classpath-exception-2.0"), false);
 });
 
@@ -61,6 +64,7 @@ test("licence check: checkPackages skips the root, honours exceptions and report
     exceptions: [{ match: (name: string) => name === "d", licence: "UNLICENSED", label: "d", reason: "test" }],
   });
   assert.equal(result.checked, 4);
+  assert.equal(result.lockfileOnly, 0);
   assert.deepEqual(
     result.failures.map((f: { name: string }) => f.name),
     ["a", "b"],
@@ -79,4 +83,43 @@ test("licence check: the lightningcss exception is narrow", () => {
   assert.equal(failing("lightningcss-darwin-arm64", "MPL-2.0").excepted.get("lightningcss"), 1);
   assert.equal(failing("lightningcss", "GPL-3.0").failures.length, 1);
   assert.equal(failing("some-other-pkg", "MPL-2.0").failures.length, 1);
+});
+
+test("licence check: an entry without a location is checked, not skipped", () => {
+  const result = checkPackages([{ name: "x", version: "1.0.0", license: "GPL-3.0" }], { allowed });
+  assert.equal(result.checked, 1);
+  assert.equal(result.failures.length, 1);
+});
+
+test("licence check: lockfile entries are checked and merged with installed ones", () => {
+  const lock = {
+    packages: {
+      "": { name: "root", version: "1.0.0", license: "AGPL-3.0-only" },
+      "node_modules/mit-pkg": { version: "1.0.0", license: "MIT" },
+      "node_modules/@scope/win-bin": { version: "2.0.0", license: "GPL-3.0", optional: true },
+      "node_modules/lightningcss-win32-x64-msvc": { version: "1.0.0", license: "MPL-2.0" },
+      "node_modules/a/node_modules/nolic": { version: "1.0.0" },
+      "node_modules/fallback": { version: "1.0.0" },
+      "node_modules/alias": { name: "real-name", version: "3.0.0", license: "ISC" },
+    },
+  };
+  const entries = lockfileEntries(lock, (key: string) =>
+    key === "node_modules/fallback" ? "MIT" : null,
+  );
+  assert.deepEqual(
+    entries.map((e: { name: string }) => e.name),
+    ["mit-pkg", "@scope/win-bin", "lightningcss-win32-x64-msvc", "nolic", "fallback", "real-name"],
+  );
+  const installed = [{ name: "mit-pkg", version: "1.0.0", license: "MIT", location: "node_modules/mit-pkg" }];
+  const result = checkPackages([...installed, ...entries], {
+    allowed,
+    exceptions: LICENSE_EXCEPTIONS,
+  });
+  assert.equal(result.checked, 6); // mit-pkg is counted once
+  assert.equal(result.lockfileOnly, 5);
+  assert.deepEqual(
+    result.failures.map((f: { name: string }) => f.name),
+    ["@scope/win-bin", "nolic"],
+  );
+  assert.equal(result.excepted.get("lightningcss"), 1);
 });

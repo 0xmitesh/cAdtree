@@ -1,7 +1,8 @@
 // Dependency licence check (run in CI as `npm run check:licenses`).
 //
 // Lists every installed package with `npm query "*" --json` (built into npm,
-// no network, no extra packages) and checks its declared licence against an
+// no network, no extra packages), adds every package-lock.json entry (optional
+// platform binaries are not installed on every machine), and checks its declared licence against an
 // allowlist of permissive licences. A missing licence, UNLICENSED, SEE LICENSE
 // IN ... or an expression we cannot parse is a failure, unless the package is
 // in LICENSE_EXCEPTIONS below. The root package itself is skipped.
@@ -10,6 +11,7 @@
 // projectDir defaults to the repository root (the folder above this script).
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -57,10 +59,12 @@ function tokenize(expression) {
   return tokens ?? [];
 }
 
-// Normalise one licence id: drop a trailing "+" or "-or-later" (an "or later"
-// licence is accepted when its base licence is allowed).
+// Normalise one licence id. Only the GPL family (GPL, LGPL, AGPL) has "or
+// later" forms in SPDX, so only there is a trailing "+" or "-or-later" dropped;
+// anything else (for example "MIT-or-later") stays as written and is unknown.
 function normalizeId(id) {
-  return id.replace(/\+$/, "").replace(/-or-later$/i, "");
+  if (/^(A|L)?GPL-/i.test(id)) return id.replace(/\+$/, "").replace(/-or-later$/i, "");
+  return id;
 }
 
 /**
@@ -134,6 +138,37 @@ export function evaluateLicenseExpression(expression, allowed = ALLOWED_LICENSES
   }
 }
 
+// Entries of package-lock.json's `packages` map as check entries (the root
+// "" entry is skipped). The name is the entry's `name` or the last
+// node_modules/ segment of its key. `readInstalledLicense(key)` is consulted
+// only when the entry has no licence field.
+/**
+ * @param {any} lock
+ * @param {(key: string) => string | null} [readInstalledLicense]
+ */
+export function lockfileEntries(lock, readInstalledLicense = (_key) => null) {
+  const entries = [];
+  for (const [key, value] of Object.entries(lock?.packages ?? {})) {
+    if (key === "") continue;
+    const name = value.name ?? key.split("node_modules/").pop();
+    const entry = {
+      name,
+      version: value.version,
+      license: value.license,
+      licenses: value.licenses,
+      location: key,
+      dev: value.dev === true,
+      lockfileOnly: true,
+    };
+    if (declaredLicense(entry) === null) {
+      const fallback = readInstalledLicense(key);
+      if (fallback) entry.license = fallback;
+    }
+    entries.push(entry);
+  }
+  return entries;
+}
+
 // Declared licence of one package.json-like object, as an SPDX string or null.
 export function declaredLicense(pkg) {
   const field = pkg.license;
@@ -153,7 +188,8 @@ export function declaredLicense(pkg) {
 }
 
 /**
- * Check a list of `npm query` entries. Returns { checked, seen, excepted, failures }.
+ * Check a list of `npm query` entries. Returns { checked, lockfileOnly, seen, excepted, failures }. Entries are
+ * deduplicated by name@version (the first one wins, so list installed ones first).
  * `seen` maps a licence string to a package count; `excepted` maps an
  * exception label to the number of packages accepted through it.
  */
@@ -163,10 +199,16 @@ export function checkPackages(entries, options = {}) {
   const failures = [];
   const seen = new Map();
   const excepted = new Map();
+  const done = new Set();
   let checked = 0;
+  let lockfileOnly = 0;
   for (const entry of entries) {
-    if (entry.location === "" || entry.location === undefined) continue; // root package
+    if (entry.location === "") continue; // root package
+    const id = `${entry.name}@${entry.version}`;
+    if (done.has(id)) continue; // installed and lockfile entries are one package
+    done.add(id);
     checked += 1;
+    if (entry.lockfileOnly) lockfileOnly += 1;
     const licence = declaredLicense(entry);
     const label = licence ?? "(none)";
     seen.set(label, (seen.get(label) ?? 0) + 1);
@@ -191,7 +233,7 @@ export function checkPackages(entries, options = {}) {
   failures.sort((a, b) =>
     `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`),
   );
-  return { checked, seen, excepted, failures };
+  return { checked, lockfileOnly, seen, excepted, failures };
 }
 
 // --- Command line ----------------------------------------------------------
@@ -207,12 +249,32 @@ function listInstalledPackages(projectDir) {
   return JSON.parse(output);
 }
 
+function readLockfile(projectDir) {
+  try {
+    return JSON.parse(readFileSync(path.join(projectDir, "package-lock.json"), "utf8"));
+  } catch {
+    return null; // no lockfile: only installed packages are checked
+  }
+}
+
 function main() {
   const root = path.resolve(
     process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."),
   );
-  const entries = listInstalledPackages(root);
-  const { checked, seen, excepted, failures } = checkPackages(entries);
+  const installed = listInstalledPackages(root);
+  const lock = readLockfile(root);
+  // Optional platform binaries (win32, darwin, ...) are not installed on this
+  // machine but are in the lockfile, so check the lockfile entries too.
+  const readInstalledLicense = (key) => {
+    try {
+      const pkg = JSON.parse(readFileSync(path.join(root, key, "package.json"), "utf8"));
+      return declaredLicense(pkg);
+    } catch {
+      return null;
+    }
+  };
+  const entries = [...installed, ...lockfileEntries(lock, readInstalledLicense)];
+  const { checked, lockfileOnly, seen, excepted, failures } = checkPackages(entries);
   if (failures.length > 0) {
     console.error(`Licence check failed: ${failures.length} of ${checked} packages.`);
     for (const f of failures) {
@@ -232,7 +294,7 @@ function main() {
       .join(", ");
     viaExceptions = `, ${total} via exceptions: ${names}`;
   }
-  console.log(`Licence check passed: ${checked} packages (${summary}${viaExceptions}).`);
+  console.log(`Licence check passed: ${checked} packages (${lockfileOnly} from the lockfile only; ${summary}${viaExceptions}).`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
