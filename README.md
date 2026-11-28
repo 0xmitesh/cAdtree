@@ -1,6 +1,6 @@
 # cAdtree
 
-cAdtree keeps a version history for files that stay on your computer. You keep working in the apps you already use (SolidWorks, AutoCAD, or anything else that saves files); cAdtree saves versions of your project folder, lets you branch off to try alternatives, and records why you made each change.
+cAdtree™ keeps a version history for files that stay on your computer. You keep working in the apps you already use (SolidWorks, AutoCAD, or anything else that saves files); cAdtree saves versions of your project folder, lets you branch off to try alternatives, and records why you made each change.
 
 It is made for people without enterprise file-management systems: individual engineers, students, freelancers and small teams, and also designers, artists, scientists and accountants. It is inspired by Git, but you don't need to know Git. It runs entirely in the browser, with nothing to install, and your files are never uploaded.
 
@@ -53,4 +53,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 cAdtree is licensed under the GNU Affero General Public License v3.0 (see [LICENSE](LICENSE)). Code in any directory named `ee/` is not covered by the AGPL and is licensed separately under the terms in that directory's own LICENSE file. There is no such directory yet.
 
-The "cAdtree" name and logo are not licensed for use by forks.
+"cAdtree" is an unregistered trademark (cAdtree™). The name and logo are not licensed for use by forks.
