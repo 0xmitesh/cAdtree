@@ -17,7 +17,8 @@
     "lint": "tsc --noEmit",
     "test": "tsx --test src/engine/*.test.ts src/history/*.test.ts src/knowledge/*.test.ts src/components/*.test.tsx",
     "test:ui": "playwright test",
-    "test:knowledge-lab": "tsx --test tests/knowledge-lab/*.test.ts tests/knowledge-lab/*.test.tsx"
+    "test:knowledge-lab": "tsx --test tests/knowledge-lab/*.test.ts tests/knowledge-lab/*.test.tsx",
+    "check:licenses": "node scripts/check-licenses.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

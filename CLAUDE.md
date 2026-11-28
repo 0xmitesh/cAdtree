@@ -181,6 +181,7 @@ npm run dev                  # app, http://127.0.0.1:2500 (real Firebase sign-in
 npm run dev:synthetic        # synthetic preview, :2517 (fake "Test Engineer" sign-in; seeds 4 workspaces/9 projects)
 npm run dev:knowledge-lab    # :2727, Knowledge Explorer at /tests/knowledge-lab.html
 npm run lint                 # tsc --noEmit
+npm run check:licenses       # dependency licences against the allowlist
 npm test                     # engine/history/knowledge/components (~630 tests)
 npm run test:knowledge-lab   # 27 tests
 npm run build
