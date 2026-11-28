@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   checkPackages,
   declaredLicense,
+  LICENSE_EXCEPTIONS,
   evaluateLicenseExpression,
 } from "../../scripts/check-licenses.mjs";
 
@@ -55,11 +56,27 @@ test("licence check: checkPackages skips the root, honours exceptions and report
     { name: "c", version: "1.0.0", license: "MIT", location: "node_modules/c" },
     { name: "d", version: "1.0.0", license: "UNLICENSED", location: "node_modules/d" },
   ];
-  const result = checkPackages(entries, { allowed, exceptions: { d: "verified MIT" } });
+  const result = checkPackages(entries, {
+    allowed,
+    exceptions: [{ match: (name: string) => name === "d", licence: "UNLICENSED", label: "d", reason: "test" }],
+  });
   assert.equal(result.checked, 4);
   assert.deepEqual(
     result.failures.map((f: { name: string }) => f.name),
     ["a", "b"],
   );
   assert.equal(result.failures[1].dev, true);
+});
+
+test("licence check: the lightningcss exception is narrow", () => {
+  const failing = (name: string, license: string) =>
+    checkPackages([{ name, version: "1.0.0", license, location: `node_modules/${name}` }], {
+      allowed,
+      exceptions: LICENSE_EXCEPTIONS,
+    });
+  assert.equal(failing("lightningcss", "MPL-2.0").failures.length, 0);
+  assert.equal(failing("lightningcss-win32-x64-msvc", "MPL-2.0").failures.length, 0);
+  assert.equal(failing("lightningcss-darwin-arm64", "MPL-2.0").excepted.get("lightningcss"), 1);
+  assert.equal(failing("lightningcss", "GPL-3.0").failures.length, 1);
+  assert.equal(failing("some-other-pkg", "MPL-2.0").failures.length, 1);
 });

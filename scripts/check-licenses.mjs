@@ -31,12 +31,24 @@ export const ALLOWED_LICENSES = [
   "Unlicense",
 ];
 
-// Packages accepted despite a licence the check would reject: name -> reason.
-// Each entry must say which licence was verified by reading the package's
-// LICENSE file. Keep this empty unless there is a verified reason.
-export const LICENSE_EXCEPTIONS = {
-  // "example-package": "No license field; LICENSE file read and is MIT.",
-};
+// Packages accepted despite a licence the check would reject. Each entry
+// matches by package name and accepts only when the declared licence is
+// exactly `licence`; any other licence on a matching name still fails.
+// Every entry must say which licence text was verified by reading the
+// package's LICENSE file. Keep this list short and narrow.
+export const LICENSE_EXCEPTIONS = [
+  {
+    // lightningcss and its per-platform binary packages (lightningcss-linux-x64-gnu,
+    // lightningcss-win32-x64-msvc, lightningcss-darwin-arm64, ...).
+    match: (name) => name === "lightningcss" || name.startsWith("lightningcss-"),
+    licence: "MPL-2.0",
+    label: "lightningcss",
+    reason:
+      "Build-time CSS engine pulled in by Tailwind and Vite; not shipped in the app bundle. " +
+      "MPL-2.0 is file-level copyleft and lists AGPL-3.0 as a compatible secondary licence (section 3.3). " +
+      "LICENSE text verified on 28 Nov 2026.",
+  },
+];
 
 // --- SPDX expression evaluation -------------------------------------------
 
@@ -141,14 +153,16 @@ export function declaredLicense(pkg) {
 }
 
 /**
- * Check a list of `npm query` entries. Returns { checked, seen, failures }.
- * `seen` maps a licence string to a package count.
+ * Check a list of `npm query` entries. Returns { checked, seen, excepted, failures }.
+ * `seen` maps a licence string to a package count; `excepted` maps an
+ * exception label to the number of packages accepted through it.
  */
 export function checkPackages(entries, options = {}) {
   const allowed = options.allowed ?? ALLOWED_LICENSES;
   const exceptions = options.exceptions ?? LICENSE_EXCEPTIONS;
   const failures = [];
   const seen = new Map();
+  const excepted = new Map();
   let checked = 0;
   for (const entry of entries) {
     if (entry.location === "" || entry.location === undefined) continue; // root package
@@ -156,7 +170,13 @@ export function checkPackages(entries, options = {}) {
     const licence = declaredLicense(entry);
     const label = licence ?? "(none)";
     seen.set(label, (seen.get(label) ?? 0) + 1);
-    if (Object.prototype.hasOwnProperty.call(exceptions, entry.name)) continue;
+    const exception = exceptions.find(
+      (item) => item.match(entry.name) && licence === item.licence,
+    );
+    if (exception) {
+      excepted.set(exception.label, (excepted.get(exception.label) ?? 0) + 1);
+      continue;
+    }
     const result = evaluateLicenseExpression(licence, allowed);
     if (!result.ok) {
       failures.push({
@@ -171,7 +191,7 @@ export function checkPackages(entries, options = {}) {
   failures.sort((a, b) =>
     `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`),
   );
-  return { checked, seen, failures };
+  return { checked, seen, excepted, failures };
 }
 
 // --- Command line ----------------------------------------------------------
@@ -192,7 +212,7 @@ function main() {
     process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."),
   );
   const entries = listInstalledPackages(root);
-  const { checked, seen, failures } = checkPackages(entries);
+  const { checked, seen, excepted, failures } = checkPackages(entries);
   if (failures.length > 0) {
     console.error(`Licence check failed: ${failures.length} of ${checked} packages.`);
     for (const f of failures) {
@@ -204,7 +224,15 @@ function main() {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([licence, count]) => `${licence} ${count}`)
     .join(", ");
-  console.log(`Licence check passed: ${checked} packages (${summary}).`);
+  let viaExceptions = "";
+  if (excepted.size > 0) {
+    const total = [...excepted.values()].reduce((sum, count) => sum + count, 0);
+    const names = LICENSE_EXCEPTIONS.filter((item) => excepted.has(item.label))
+      .map((item) => `${item.label} (${item.licence})`)
+      .join(", ");
+    viaExceptions = `, ${total} via exceptions: ${names}`;
+  }
+  console.log(`Licence check passed: ${checked} packages (${summary}${viaExceptions}).`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
